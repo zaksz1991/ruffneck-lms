@@ -3,21 +3,10 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { CompleteLessonButton } from "@/components/CompleteLessonButton";
 
-type Resource = {
-  id: string;
-  title: string;
-  resource_type: "file" | "link" | "pdf" | "audio";
-  url: string;
-  sort_order: number;
-};
-
 export default async function LessonPage({
   params,
 }: {
-  params: Promise<{
-    courseSlug: string;
-    lessonSlug: string;
-  }>;
+  params: Promise<{ courseSlug: string; lessonSlug: string }>;
 }) {
   const { courseSlug, lessonSlug } = await params;
 
@@ -55,6 +44,7 @@ export default async function LessonPage({
     .eq("slug", lessonSlug)
     .maybeSingle();
 
+  // Preview lessons may load without enrollment via RLS.
   if (!lesson) {
     if (!enrollment) {
       redirect(`/courses/${courseSlug}`);
@@ -76,21 +66,38 @@ export default async function LessonPage({
 
   const { data: progress } = await supabase
     .from("lesson_progress")
-    .select("completed, watched_seconds, last_position_seconds")
+    .select("completed")
     .eq("student_id", user.id)
     .eq("lesson_id", lesson.id)
     .maybeSingle();
 
-  const { data: resources } = await supabase
-    .from("lesson_resources")
-    .select(
-      "id, title, resource_type, url, sort_order"
-    )
-    .eq("lesson_id", lesson.id)
-    .order("sort_order")
-    .order("created_at");
+  /*
+   * Record a learning activity whenever an enrolled learner
+   * opens a lesson.
+   *
+   * This is intentionally non-blocking. If activity logging
+   * fails, the lesson itself still loads normally.
+   */
+  if (enrollment) {
+    const { error: activityError } = await supabase
+      .from("learning_activity")
+      .insert({
+        student_id: user.id,
+        course_id: course.id,
+        lesson_id: lesson.id,
+        activity_type: "lesson_viewed",
+        metadata: {
+          lesson_slug: lesson.slug,
+        },
+      });
 
-  const typedResources = (resources || []) as Resource[];
+    if (activityError) {
+      console.error(
+        "Lesson activity logging failed:",
+        activityError
+      );
+    }
+  }
 
   return (
     <section className="section">
@@ -132,139 +139,34 @@ export default async function LessonPage({
                   }
                 >
                   {row.lesson_title}
-
-                  {row.is_preview
-                    ? " · Preview"
-                    : ""}
+                  {row.is_preview ? " · Preview" : ""}
                 </Link>
               )
             )}
           </aside>
 
           <article className="lesson-content">
-            <div className="lesson-heading">
-              <div>
-                <span className="badge">
-                  {lesson.is_preview
-                    ? "Preview"
-                    : "Course lesson"}
-                </span>
-
-                <h1>{lesson.title}</h1>
-              </div>
-
-              {lesson.duration_minutes > 0 && (
-                <span className="lesson-duration">
-                  {lesson.duration_minutes} min
-                </span>
-              )}
-            </div>
+            <h1>{lesson.title}</h1>
 
             {lesson.video_url && (
-              <div className="lesson-video-card">
-                <div>
-                  <strong>Lesson video</strong>
-                  <p className="muted">
-                    Watch the lesson video before completing
-                    this lesson.
-                  </p>
-                </div>
-
+              <p>
                 <a
                   href={lesson.video_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="btn btn-primary"
                 >
-                  Watch video
+                  Open video
                 </a>
-              </div>
+              </p>
             )}
 
             <div
-              className="lesson-html"
               dangerouslySetInnerHTML={{
                 __html:
                   lesson.content_html ||
                   "<p>No content yet.</p>",
               }}
             />
-
-            {typedResources.length > 0 && (
-              <section className="resource-center">
-                <div className="resource-heading">
-                  <div>
-                    <span className="badge">
-                      Learning resources
-                    </span>
-
-                    <h2>Resources for this lesson</h2>
-
-                    <p className="muted">
-                      Download, read or open supporting
-                      materials for this lesson.
-                    </p>
-                  </div>
-
-                  <span className="resource-count">
-                    {typedResources.length}{" "}
-                    {typedResources.length === 1
-                      ? "resource"
-                      : "resources"}
-                  </span>
-                </div>
-
-                <div className="resource-grid">
-                  {typedResources.map((resource) => {
-                    const icon =
-                      resource.resource_type === "pdf"
-                        ? "PDF"
-                        : resource.resource_type === "audio"
-                        ? "AUDIO"
-                        : resource.resource_type === "link"
-                        ? "LINK"
-                        : "FILE";
-
-                    return (
-                      <a
-                        key={resource.id}
-                        href={resource.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="resource-card"
-                      >
-                        <div className="resource-icon">
-                          {icon}
-                        </div>
-
-                        <div className="resource-body">
-                          <strong>
-                            {resource.title}
-                          </strong>
-
-                          <span>
-                            {resource.resource_type ===
-                            "pdf"
-                              ? "Open PDF"
-                              : resource.resource_type ===
-                                "audio"
-                              ? "Listen to audio"
-                              : resource.resource_type ===
-                                "link"
-                              ? "Open resource"
-                              : "Open file"}
-                          </span>
-                        </div>
-
-                        <span className="resource-arrow">
-                          →
-                        </span>
-                      </a>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
 
             {enrollment && (
               <div style={{ marginTop: 24 }}>
