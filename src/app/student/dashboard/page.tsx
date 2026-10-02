@@ -158,9 +158,6 @@ export default async function StudentDashboardPage() {
   /*
    * --------------------------------------------------------------------------
    * ENROLLED COURSES
-   *
-   * Deliberately queried separately instead of using nested Supabase
-   * relationships. This keeps the TypeScript build predictable.
    * --------------------------------------------------------------------------
    */
 
@@ -273,14 +270,6 @@ export default async function StudentDashboardPage() {
   /*
    * --------------------------------------------------------------------------
    * PERSONALIZED COURSE RECOMMENDATIONS
-   *
-   * Uses separate queries:
-   * learner_skill_profiles
-   * -> lesson_skills
-   * -> lessons
-   * -> courses
-   *
-   * No nested Supabase relation typing is used.
    * --------------------------------------------------------------------------
    */
 
@@ -397,10 +386,8 @@ export default async function StudentDashboardPage() {
               lessonSkill.relevance_weight ?? 1
             );
 
-            const score = Math.max(
-              0,
-              100 - confidence
-            ) * relevance;
+            const score =
+              Math.max(0, 100 - confidence) * relevance;
 
             const existing = recommendationMap.get(course.id);
 
@@ -455,6 +442,8 @@ export default async function StudentDashboardPage() {
           ) / skillProfiles.length
         )
       : 0;
+
+  const hasLearningProfile = skillProfiles.length > 0;
 
   return (
     <main className="container rn-dashboard-shell">
@@ -594,26 +583,51 @@ export default async function StudentDashboardPage() {
           <div className="rn-dashboard-card-header">
             <div>
               <span className="rn-eyebrow">
-                NEXT STEP
+                {hasLearningProfile
+                  ? "KEEP DEVELOPING"
+                  : "NEXT STEP"}
               </span>
 
-              <h2>Build your learning profile</h2>
+              <h2>
+                {hasLearningProfile
+                  ? "Keep developing your skills"
+                  : "Build your learning profile"}
+              </h2>
             </div>
           </div>
 
           <p className="rn-dashboard-card-text">
-            Complete the diagnostic assessment to identify
-            your current strengths and development areas.
-            Your results can be used to personalize your
-            learning path.
+            {hasLearningProfile
+              ? "Your learning profile is already active. Review your current strengths, continue learning, or retake the assessment as your skills develop."
+              : "Complete the diagnostic assessment to identify your current strengths and development areas. Your results can be used to personalize your learning path."}
           </p>
 
-          <Link
-            href="/student/assessment"
-            className="rn-button rn-button-primary"
-          >
-            Take Diagnostic Assessment
-          </Link>
+          <div className="rn-dashboard-inline-actions">
+            {hasLearningProfile ? (
+              <>
+                <Link
+                  href="/student/skills"
+                  className="rn-button rn-button-primary"
+                >
+                  View Skills
+                </Link>
+
+                <Link
+                  href="/student/assessment"
+                  className="rn-button rn-button-secondary"
+                >
+                  Retake Assessment
+                </Link>
+              </>
+            ) : (
+              <Link
+                href="/student/assessment"
+                className="rn-button rn-button-primary"
+              >
+                Take Diagnostic Assessment
+              </Link>
+            )}
+          </div>
         </article>
       </section>
 
@@ -697,7 +711,9 @@ export default async function StudentDashboardPage() {
 
                   <div className="rn-course-card-body">
                     <div className="rn-course-card-meta">
-                      <span>{formatLevel(course.level)}</span>
+                      <span>
+                        {formatLevel(course.level)}
+                      </span>
 
                       {course.category ? (
                         <span>{course.category}</span>
@@ -949,6 +965,12 @@ export default async function StudentDashboardPage() {
           </div>
         )}
       </section>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* LEARNING INTELLIGENCE                                               */}
+      {/* ------------------------------------------------------------------ */}
+
+      <LearningIntelligence />
 
       {/* ------------------------------------------------------------------ */}
       {/* QUICK ACTIONS                                                       */}
