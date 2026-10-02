@@ -517,3 +517,412 @@ textarea:focus {
     padding: 7px 10px !important;
   }
 }
+
+/* =========================================================
+   RuffNeck Learn — Brand Upgrade
+   ========================================================= */
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.site-header .inner {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.brand {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 11px;
+  color: inherit;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.rn-brand-mark {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #0b1f3a, #123d68);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: -0.06em;
+  box-shadow: 0 8px 22px rgba(11, 31, 58, 0.18);
+}
+
+.brand-text {
+  display: flex !important;
+  flex-direction: column;
+  gap: 3px;
+  line-height: 1 !important;
+  white-space: nowrap;
+}
+
+.brand-text strong {
+  display: block;
+  font-size: 1.05rem;
+  line-height: 1;
+  font-weight: 850;
+  letter-spacing: -0.025em;
+}
+
+.brand-text span {
+  display: block;
+  color: #64748b;
+  font-size: 0.63rem;
+  line-height: 1;
+  font-weight: 750;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.nav > a,
+.rn-nav-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 7px 11px;
+  border-radius: 9px;
+  text-decoration: none;
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 650;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.nav > a:hover,
+.rn-nav-button:hover {
+  background: #f1f5f9;
+  transform: translateY(-1px);
+}
+
+.rn-nav-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.82rem;
+  line-height: 1;
+}
+
+.rn-signout-form {
+  margin: 0;
+}
+
+.rn-nav-button {
+  border: 0;
+  cursor: pointer;
+}
+
+.rn-signup-button {
+  min-height: 38px;
+  padding: 8px 15px !important;
+}
+
+/* =========================================================
+   HOME PAGE BRANDING
+   ========================================================= */
+
+.rn-brand-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #1769aa;
+  font-size: 0.69rem;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.rn-brand-kicker::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #06b6d4;
+}
+
+.rn-hero-brand-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.rn-hero-mark {
+  width: 58px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 18px;
+  border-radius: 16px;
+  background: #0b1f3a;
+  color: white;
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+}
+
+.rn-hero-brand-card strong {
+  font-size: 1.25rem;
+}
+
+.rn-hero-brand-card span {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.rn-course-card {
+  overflow: hidden;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.rn-course-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 35px rgba(15, 23, 42, 0.09);
+}
+
+.rn-course-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+}
+
+.rn-thumb-mark {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #0b1f3a;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.rn-course-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.rn-empty-state {
+  padding: 45px 20px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 16px;
+  background: #f8fafc;
+  text-align: center;
+}
+
+.rn-empty-icon {
+  margin-bottom: 10px;
+  font-size: 1.7rem;
+  color: #1769aa;
+}
+
+.rn-empty-state strong {
+  display: block;
+}
+
+.rn-empty-state p {
+  margin: 6px 0 0;
+  color: #64748b;
+}
+
+/* =========================================================
+   FOUNDER
+   ========================================================= */
+
+.rn-founder-section {
+  padding: 80px 0;
+  background: #f8fafc;
+}
+
+.rn-founder-card {
+  display: grid;
+  grid-template-columns: 0.72fr 1.28fr;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 22px;
+  background: white;
+  box-shadow: 0 20px 55px rgba(15, 23, 42, 0.08);
+}
+
+.rn-founder-image-panel {
+  position: relative;
+  min-height: 440px;
+  background: #0b1f3a;
+}
+
+.rn-founder-photo {
+  width: 100%;
+  height: 100%;
+  min-height: 440px;
+  display: block;
+  object-fit: cover;
+  object-position: center top;
+}
+
+.rn-founder-image-caption {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  bottom: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(11, 31, 58, 0.86);
+  color: white;
+  backdrop-filter: blur(10px);
+}
+
+.rn-founder-image-caption strong {
+  font-size: 0.95rem;
+}
+
+.rn-founder-image-caption span {
+  color: #cbd5e1;
+  font-size: 0.73rem;
+}
+
+.rn-founder-content {
+  padding: 48px;
+}
+
+.rn-founder-content h2 {
+  margin: 10px 0 16px;
+  color: #0f172a;
+  font-size: clamp(1.8rem, 3vw, 2.7rem);
+  line-height: 1.12;
+  letter-spacing: -0.035em;
+}
+
+.rn-founder-lead {
+  font-size: 1.02rem;
+  line-height: 1.75;
+}
+
+.rn-founder-name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 24px 0;
+  padding-left: 15px;
+  border-left: 3px solid #06b6d4;
+}
+
+.rn-founder-name strong {
+  color: #0f172a;
+  font-size: 1rem;
+}
+
+.rn-founder-name span {
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 820px) {
+  .rn-founder-card {
+    grid-template-columns: 1fr;
+  }
+
+  .rn-founder-image-panel,
+  .rn-founder-photo {
+    min-height: 360px;
+    max-height: 450px;
+  }
+
+  .rn-founder-content {
+    padding: 32px;
+  }
+}
+
+@media (max-width: 680px) {
+  .site-header .inner {
+    min-height: 64px;
+    gap: 10px;
+  }
+
+  .rn-brand-mark {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+  }
+
+  .brand-text strong {
+    font-size: 0.95rem;
+  }
+
+  .brand-text span {
+    font-size: 0.58rem;
+  }
+
+  .nav {
+    gap: 2px;
+  }
+
+  .nav > a,
+  .rn-nav-button {
+    padding: 7px 8px;
+    font-size: 0;
+  }
+
+  .rn-nav-icon {
+    width: 20px;
+    height: 20px;
+    font-size: 0.9rem;
+  }
+
+  .rn-signup-button {
+    font-size: 0.76rem !important;
+    padding: 7px 10px !important;
+  }
+
+  .rn-founder-content {
+    padding: 24px;
+  }
+}
