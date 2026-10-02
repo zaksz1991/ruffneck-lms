@@ -1,4 +1,3 @@
-```tsx
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -47,14 +46,6 @@ type SkillProfile = {
   strengths: string | null;
   gaps: string | null;
   updated_at: string;
-};
-
-type Skill = {
-  id: string;
-  name: string;
-  slug: string;
-  category: string | null;
-  description: string | null;
 };
 
 function formatLevel(level: string) {
@@ -174,25 +165,6 @@ export default async function StudentDashboardPage() {
 
   const skillProfiles = (skillProfileData || []) as SkillProfile[];
 
-  const skillIds = [
-    ...new Set(
-      skillProfiles.map(
-        (skillProfile) => skillProfile.skill_id
-      )
-    ),
-  ];
-
-  let skills: Skill[] = [];
-
-  if (skillIds.length > 0) {
-    const { data: skillData } = await supabase
-      .from("learning_skills")
-      .select("id, name, slug, category, description")
-      .in("id", skillIds);
-
-    skills = (skillData || []) as Skill[];
-  }
-
   const totalCourses = enrollments.length;
 
   const completedCourses = enrollments.filter(
@@ -229,10 +201,6 @@ export default async function StudentDashboardPage() {
 
   return (
     <main className="container rn-dashboard-shell">
-      {/* ------------------------------------------------------------ */}
-      {/* DASHBOARD HEADER                                             */}
-      {/* ------------------------------------------------------------ */}
-
       <section className="rn-dashboard-header">
         <div>
           <div className="rn-eyebrow">RUFFNECK LEARN</div>
@@ -265,10 +233,6 @@ export default async function StudentDashboardPage() {
           </Link>
         </div>
       </section>
-
-      {/* ------------------------------------------------------------ */}
-      {/* SUMMARY STATS                                                */}
-      {/* ------------------------------------------------------------ */}
 
       <section className="rn-dashboard-stats">
         <article className="rn-dashboard-stat">
@@ -311,10 +275,6 @@ export default async function StudentDashboardPage() {
           <small>Skills below 50%</small>
         </article>
       </section>
-
-      {/* ------------------------------------------------------------ */}
-      {/* PROFILE + NEXT STEP                                         */}
-      {/* ------------------------------------------------------------ */}
 
       <section className="rn-dashboard-grid">
         <article className="rn-dashboard-card">
@@ -412,10 +372,6 @@ export default async function StudentDashboardPage() {
           </div>
         </article>
       </section>
-
-      {/* ------------------------------------------------------------ */}
-      {/* MY COURSES                                                   */}
-      {/* ------------------------------------------------------------ */}
 
       <section className="rn-dashboard-section">
         <div className="rn-dashboard-section-header">
@@ -554,15 +510,7 @@ export default async function StudentDashboardPage() {
         )}
       </section>
 
-      {/* ------------------------------------------------------------ */}
-      {/* LEARNING INTELLIGENCE                                       */}
-      {/* ------------------------------------------------------------ */}
-
       <LearningIntelligence />
-
-      {/* ------------------------------------------------------------ */}
-      {/* QUICK ACTIONS                                               */}
-      {/* ------------------------------------------------------------ */}
 
       <section className="rn-dashboard-section">
         <div className="rn-dashboard-section-header">
@@ -612,10 +560,6 @@ export default async function StudentDashboardPage() {
         </div>
       </section>
 
-      {/* ------------------------------------------------------------ */}
-      {/* FOOTER NOTE                                                  */}
-      {/* ------------------------------------------------------------ */}
-
       <section className="rn-dashboard-footer-note">
         <p>
           RuffNeck Learn helps you build practical digital
@@ -633,4 +577,3 @@ export default async function StudentDashboardPage() {
     </main>
   );
 }
-```
