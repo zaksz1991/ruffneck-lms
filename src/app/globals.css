@@ -2269,3 +2269,358 @@ a.rn-admin-stat:hover {
     flex-direction: column;
   }
 }
+
+/* =========================================================
+   RUFFNECK LEARN — DIAGNOSTIC ASSESSMENT
+   ========================================================= */
+
+.rn-assessment-shell {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 36px 0 64px;
+}
+
+.rn-assessment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.rn-assessment-header h1 {
+  margin: 4px 0 8px;
+  font-size: clamp(30px, 5vw, 46px);
+  line-height: 1.08;
+}
+
+.rn-assessment-header p {
+  max-width: 680px;
+  margin: 0;
+  color: var(--muted, #667085);
+  line-height: 1.7;
+}
+
+.rn-eyebrow {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #667085;
+}
+
+.rn-assessment-info {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.rn-assessment-info > div {
+  padding: 18px;
+  border: 1px solid #e4e7ec;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.rn-assessment-info strong {
+  display: block;
+  font-size: 17px;
+  margin-bottom: 4px;
+}
+
+.rn-assessment-info span {
+  display: block;
+  color: #667085;
+  font-size: 13px;
+}
+
+.rn-assessment-card {
+  padding: 28px;
+  border: 1px solid #e4e7ec;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 10px 35px rgba(16, 24, 40, 0.06);
+}
+
+.rn-assessment-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.rn-assessment-progress-row div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rn-assessment-progress-row span {
+  color: #667085;
+  font-size: 13px;
+}
+
+.rn-assessment-progress {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eaecf0;
+  margin-bottom: 34px;
+}
+
+.rn-assessment-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #111827;
+  transition: width 0.25s ease;
+}
+
+.rn-question-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.rn-question-meta span {
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #f2f4f7;
+  color: #475467;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rn-question h2 {
+  max-width: 760px;
+  margin: 0 0 24px;
+  font-size: clamp(22px, 3vw, 30px);
+  line-height: 1.35;
+}
+
+.rn-answer-list {
+  display: grid;
+  gap: 12px;
+}
+
+.rn-answer-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+  padding: 17px;
+  border: 1px solid #d0d5dd;
+  border-radius: 13px;
+  background: #fff;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.rn-answer-option:hover {
+  border-color: #98a2b3;
+  transform: translateY(-1px);
+}
+
+.rn-answer-option.selected {
+  border-color: #111827;
+  background: #f8fafc;
+}
+
+.rn-answer-radio {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #98a2b3;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.rn-answer-option.selected .rn-answer-radio {
+  border-color: #111827;
+  background: #111827;
+  color: #fff;
+}
+
+.rn-assessment-error {
+  margin-top: 18px;
+}
+
+.rn-assessment-navigation {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 30px;
+  padding-top: 22px;
+  border-top: 1px solid #eaecf0;
+}
+
+.rn-assessment-course {
+  margin: 20px 0 0;
+  text-align: center;
+  color: #667085;
+  font-size: 12px;
+}
+
+.rn-assessment-result {
+  display: grid;
+  gap: 24px;
+}
+
+.rn-result-hero {
+  padding: 36px 28px;
+  text-align: center;
+  border: 1px solid #e4e7ec;
+  border-radius: 20px;
+  background: #fff;
+}
+
+.rn-result-hero h2 {
+  margin: 8px auto 24px;
+  max-width: 650px;
+  font-size: clamp(26px, 4vw, 38px);
+}
+
+.rn-score-circle {
+  width: 150px;
+  height: 150px;
+  margin: 0 auto 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 10px solid #eaecf0;
+  border-radius: 50%;
+}
+
+.rn-score-circle strong {
+  font-size: 34px;
+  line-height: 1;
+}
+
+.rn-score-circle span {
+  margin-top: 6px;
+  color: #667085;
+  font-size: 11px;
+}
+
+.rn-result-hero p {
+  margin: 0;
+  color: #667085;
+}
+
+.rn-skill-results {
+  padding: 28px;
+  border: 1px solid #e4e7ec;
+  border-radius: 20px;
+  background: #fff;
+}
+
+.rn-section-heading {
+  margin-bottom: 20px;
+}
+
+.rn-section-heading h2 {
+  margin: 4px 0 0;
+}
+
+.rn-skill-result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.rn-skill-result-card {
+  padding: 18px;
+  border: 1px solid #eaecf0;
+  border-radius: 14px;
+}
+
+.rn-skill-result-top,
+.rn-skill-result-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rn-skill-result-top span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f2f4f7;
+  color: #475467;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.rn-skill-bar {
+  height: 8px;
+  margin: 14px 0 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eaecf0;
+}
+
+.rn-skill-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #111827;
+}
+
+.rn-skill-result-meta {
+  color: #667085;
+  font-size: 12px;
+}
+
+.rn-assessment-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 700px) {
+  .rn-assessment-shell {
+    padding: 24px 0 48px;
+  }
+
+  .rn-assessment-header {
+    flex-direction: column;
+  }
+
+  .rn-assessment-info {
+    grid-template-columns: 1fr;
+  }
+
+  .rn-assessment-card,
+  .rn-skill-results {
+    padding: 20px;
+  }
+
+  .rn-skill-result-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rn-assessment-navigation {
+    flex-direction: column-reverse;
+  }
+
+  .rn-assessment-navigation .btn {
+    width: 100%;
+  }
+}
