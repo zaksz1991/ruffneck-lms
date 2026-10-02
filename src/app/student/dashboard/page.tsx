@@ -1,3 +1,4 @@
+```tsx
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -56,33 +57,6 @@ type Skill = {
   description: string | null;
 };
 
-type LessonSkill = {
-  lesson_id: string;
-  skill_id: string;
-  relevance_weight: number;
-};
-
-type Lesson = {
-  id: string;
-  course_id: string;
-  title: string;
-  slug: string;
-  is_published: boolean;
-  is_preview: boolean;
-  sort_order: number;
-};
-
-type Recommendation = {
-  course_id: string;
-  title: string;
-  slug: string;
-  level: Course["level"];
-  category: string | null;
-  short_description: string | null;
-  matched_skills: string[];
-  score: number;
-};
-
 function formatLevel(level: string) {
   return level.charAt(0).toUpperCase() + level.slice(1);
 }
@@ -112,12 +86,6 @@ export default async function StudentDashboardPage() {
     redirect("/login?next=/student/dashboard");
   }
 
-  /*
-   * --------------------------------------------------------------------------
-   * PROFILE
-   * --------------------------------------------------------------------------
-   */
-
   const { data: profileData } = await supabase
     .from("profiles")
     .select("id, email, full_name, role")
@@ -125,12 +93,6 @@ export default async function StudentDashboardPage() {
     .maybeSingle();
 
   const profile = profileData as Profile | null;
-
-  /*
-   * --------------------------------------------------------------------------
-   * ENROLLMENTS
-   * --------------------------------------------------------------------------
-   */
 
   const { data: enrollmentData } = await supabase
     .from("enrollments")
@@ -154,12 +116,6 @@ export default async function StudentDashboardPage() {
     });
 
   const enrollments = (enrollmentData || []) as Enrollment[];
-
-  /*
-   * --------------------------------------------------------------------------
-   * ENROLLED COURSES
-   * --------------------------------------------------------------------------
-   */
 
   const enrolledCourseIds = [
     ...new Set(enrollments.map((item) => item.course_id)),
@@ -196,12 +152,6 @@ export default async function StudentDashboardPage() {
     courseMap.set(course.id, course);
   });
 
-  /*
-   * --------------------------------------------------------------------------
-   * SKILL PROFILE
-   * --------------------------------------------------------------------------
-   */
-
   const { data: skillProfileData } = await supabase
     .from("learner_skill_profiles")
     .select(
@@ -225,7 +175,11 @@ export default async function StudentDashboardPage() {
   const skillProfiles = (skillProfileData || []) as SkillProfile[];
 
   const skillIds = [
-    ...new Set(skillProfiles.map((profileItem) => profileItem.skill_id)),
+    ...new Set(
+      skillProfiles.map(
+        (skillProfile) => skillProfile.skill_id
+      )
+    ),
   ];
 
   let skills: Skill[] = [];
@@ -238,18 +192,6 @@ export default async function StudentDashboardPage() {
 
     skills = (skillData || []) as Skill[];
   }
-
-  const skillMap = new Map<string, Skill>();
-
-  skills.forEach((skill) => {
-    skillMap.set(skill.id, skill);
-  });
-
-  /*
-   * --------------------------------------------------------------------------
-   * BASIC STATS
-   * --------------------------------------------------------------------------
-   */
 
   const totalCourses = enrollments.length;
 
@@ -266,166 +208,6 @@ export default async function StudentDashboardPage() {
   const developmentCount = skillProfiles.filter(
     (skill) => Number(skill.confidence_score) < 50
   ).length;
-
-  /*
-   * --------------------------------------------------------------------------
-   * PERSONALIZED COURSE RECOMMENDATIONS
-   * --------------------------------------------------------------------------
-   */
-
-  const weakSkillProfiles = skillProfiles
-    .filter((skill) => Number(skill.confidence_score) < 70)
-    .sort(
-      (a, b) =>
-        Number(a.confidence_score) - Number(b.confidence_score)
-    );
-
-  const weakSkillIds = [
-    ...new Set(weakSkillProfiles.map((skill) => skill.skill_id)),
-  ];
-
-  let recommendations: Recommendation[] = [];
-
-  if (weakSkillIds.length > 0) {
-    const { data: lessonSkillData } = await supabase
-      .from("lesson_skills")
-      .select("lesson_id, skill_id, relevance_weight")
-      .in("skill_id", weakSkillIds);
-
-    const lessonSkills = (lessonSkillData || []) as LessonSkill[];
-
-    const lessonIds = [
-      ...new Set(lessonSkills.map((item) => item.lesson_id)),
-    ];
-
-    if (lessonIds.length > 0) {
-      const { data: lessonData } = await supabase
-        .from("lessons")
-        .select(
-          `
-            id,
-            course_id,
-            title,
-            slug,
-            is_published,
-            is_preview,
-            sort_order
-          `
-        )
-        .in("id", lessonIds)
-        .eq("is_published", true);
-
-      const lessons = (lessonData || []) as Lesson[];
-
-      const recommendationCourseIds = [
-        ...new Set(lessons.map((lesson) => lesson.course_id)),
-      ].filter((courseId) => !enrolledCourseIds.includes(courseId));
-
-      if (recommendationCourseIds.length > 0) {
-        const { data: recommendationCourseData } = await supabase
-          .from("courses")
-          .select(
-            `
-              id,
-              title,
-              slug,
-              short_description,
-              category,
-              level,
-              thumbnail_url,
-              duration_minutes,
-              is_free,
-              price_ngn,
-              status
-            `
-          )
-          .in("id", recommendationCourseIds)
-          .eq("status", "published");
-
-        const recommendationCourses =
-          (recommendationCourseData || []) as Course[];
-
-        const recommendationCourseMap = new Map<string, Course>();
-
-        recommendationCourses.forEach((course) => {
-          recommendationCourseMap.set(course.id, course);
-        });
-
-        const recommendationMap = new Map<
-          string,
-          Recommendation
-        >();
-
-        lessons.forEach((lesson) => {
-          const course = recommendationCourseMap.get(lesson.course_id);
-
-          if (!course) {
-            return;
-          }
-
-          const matchingLessonSkills = lessonSkills.filter(
-            (lessonSkill) =>
-              lessonSkill.lesson_id === lesson.id &&
-              weakSkillIds.includes(lessonSkill.skill_id)
-          );
-
-          matchingLessonSkills.forEach((lessonSkill) => {
-            const skill = skillMap.get(lessonSkill.skill_id);
-
-            const skillName = skill?.name || "Skill development";
-
-            const profileForSkill = weakSkillProfiles.find(
-              (item) => item.skill_id === lessonSkill.skill_id
-            );
-
-            const confidence = Number(
-              profileForSkill?.confidence_score ?? 0
-            );
-
-            const relevance = Number(
-              lessonSkill.relevance_weight ?? 1
-            );
-
-            const score =
-              Math.max(0, 100 - confidence) * relevance;
-
-            const existing = recommendationMap.get(course.id);
-
-            if (existing) {
-              if (!existing.matched_skills.includes(skillName)) {
-                existing.matched_skills.push(skillName);
-              }
-
-              existing.score += score;
-            } else {
-              recommendationMap.set(course.id, {
-                course_id: course.id,
-                title: course.title,
-                slug: course.slug,
-                level: course.level,
-                category: course.category,
-                short_description: course.short_description,
-                matched_skills: [skillName],
-                score,
-              });
-            }
-          });
-        });
-
-        recommendations = Array.from(
-          recommendationMap.values()
-        )
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 6);
-      }
-    }
-  }
-
-  /*
-   * --------------------------------------------------------------------------
-   * DISPLAY DATA
-   * --------------------------------------------------------------------------
-   */
 
   const displayName =
     profile?.full_name ||
@@ -447,9 +229,9 @@ export default async function StudentDashboardPage() {
 
   return (
     <main className="container rn-dashboard-shell">
-      {/* ------------------------------------------------------------------ */}
-      {/* HEADER                                                             */}
-      {/* ------------------------------------------------------------------ */}
+      {/* ------------------------------------------------------------ */}
+      {/* DASHBOARD HEADER                                             */}
+      {/* ------------------------------------------------------------ */}
 
       <section className="rn-dashboard-header">
         <div>
@@ -484,9 +266,9 @@ export default async function StudentDashboardPage() {
         </div>
       </section>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* STATS                                                              */}
-      {/* ------------------------------------------------------------------ */}
+      {/* ------------------------------------------------------------ */}
+      {/* SUMMARY STATS                                                */}
+      {/* ------------------------------------------------------------ */}
 
       <section className="rn-dashboard-stats">
         <article className="rn-dashboard-stat">
@@ -530,9 +312,9 @@ export default async function StudentDashboardPage() {
         </article>
       </section>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* PROFILE SUMMARY                                                    */}
-      {/* ------------------------------------------------------------------ */}
+      {/* ------------------------------------------------------------ */}
+      {/* PROFILE + NEXT STEP                                         */}
+      {/* ------------------------------------------------------------ */}
 
       <section className="rn-dashboard-grid">
         <article className="rn-dashboard-card">
@@ -598,7 +380,7 @@ export default async function StudentDashboardPage() {
 
           <p className="rn-dashboard-card-text">
             {hasLearningProfile
-              ? "Your learning profile is already active. Review your current strengths, continue learning, or retake the assessment as your skills develop."
+              ? "Your learning profile is already active. Review your current skills, continue learning, or retake the assessment as your skills develop."
               : "Complete the diagnostic assessment to identify your current strengths and development areas. Your results can be used to personalize your learning path."}
           </p>
 
@@ -631,9 +413,9 @@ export default async function StudentDashboardPage() {
         </article>
       </section>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* MY COURSES                                                         */}
-      {/* ------------------------------------------------------------------ */}
+      {/* ------------------------------------------------------------ */}
+      {/* MY COURSES                                                   */}
+      {/* ------------------------------------------------------------ */}
 
       <section className="rn-dashboard-section">
         <div className="rn-dashboard-section-header">
@@ -772,209 +554,15 @@ export default async function StudentDashboardPage() {
         )}
       </section>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* SKILL PROFILE                                                       */}
-      {/* ------------------------------------------------------------------ */}
-
-      <section className="rn-dashboard-section">
-        <div className="rn-dashboard-section-header">
-          <div>
-            <span className="rn-eyebrow">
-              SKILL INTELLIGENCE
-            </span>
-
-            <h2>Your Skill Profile</h2>
-
-            <p>
-              Your current confidence levels across tracked
-              learning skills.
-            </p>
-          </div>
-
-          <Link
-            href="/student/skills"
-            className="rn-text-link"
-          >
-            View full profile
-          </Link>
-        </div>
-
-        {skillProfiles.length === 0 ? (
-          <article className="rn-empty-state">
-            <h3>No skill profile yet</h3>
-
-            <p>
-              Take the diagnostic assessment to create your
-              first learning skill profile.
-            </p>
-
-            <Link
-              href="/student/assessment"
-              className="rn-button rn-button-primary"
-            >
-              Start Assessment
-            </Link>
-          </article>
-        ) : (
-          <div className="rn-skill-dashboard-grid">
-            {skillProfiles.slice(0, 8).map((skillProfile) => {
-              const skill = skillMap.get(
-                skillProfile.skill_id
-              );
-
-              const score = Math.min(
-                100,
-                Math.max(
-                  0,
-                  Number(skillProfile.confidence_score || 0)
-                )
-              );
-
-              return (
-                <article
-                  key={skillProfile.id}
-                  className="rn-skill-dashboard-card"
-                >
-                  <div className="rn-skill-dashboard-header">
-                    <div>
-                      <h3>
-                        {skill?.name || "Learning Skill"}
-                      </h3>
-
-                      <span>
-                        {skillProfile.skill_level ||
-                          "beginner"}
-                      </span>
-                    </div>
-
-                    <strong>{score}%</strong>
-                  </div>
-
-                  <div className="rn-skill-bar">
-                    <div
-                      style={{
-                        width: `${score}%`,
-                      }}
-                    />
-                  </div>
-
-                  {skill?.category ? (
-                    <small>{skill.category}</small>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      {/* ------------------------------------------------------------------ */}
-      {/* PERSONALIZED RECOMMENDATIONS                                        */}
-      {/* ------------------------------------------------------------------ */}
-
-      <section className="rn-dashboard-section">
-        <div className="rn-dashboard-section-header">
-          <div>
-            <span className="rn-eyebrow">
-              PERSONALIZED LEARNING
-            </span>
-
-            <h2>Recommended Courses</h2>
-
-            <p>
-              Courses connected to skills that can strengthen
-              your current learning profile.
-            </p>
-          </div>
-        </div>
-
-        {recommendations.length === 0 ? (
-          <article className="rn-empty-state">
-            <h3>
-              No major skill gaps were identified from your
-              current profile.
-            </h3>
-
-            <p>
-              Complete more lessons or retake the diagnostic
-              assessment as your skills develop. New
-              recommendations will appear when relevant.
-            </p>
-
-            <div className="rn-dashboard-inline-actions">
-              <Link
-                href="/student/assessment"
-                className="rn-button rn-button-secondary"
-              >
-                Retake Assessment
-              </Link>
-
-              <Link
-                href="/courses"
-                className="rn-button rn-button-primary"
-              >
-                Explore Courses
-              </Link>
-            </div>
-          </article>
-        ) : (
-          <div className="rn-recommendation-grid">
-            {recommendations.map((recommendation) => (
-              <article
-                key={recommendation.course_id}
-                className="rn-recommendation-card"
-              >
-                <div className="rn-recommendation-top">
-                  <span className="rn-recommendation-badge">
-                    Recommended
-                  </span>
-
-                  <span>
-                    {formatLevel(recommendation.level)}
-                  </span>
-                </div>
-
-                <h3>{recommendation.title}</h3>
-
-                <p>
-                  {recommendation.short_description ||
-                    "Build practical skills through this course."}
-                </p>
-
-                {recommendation.matched_skills.length >
-                0 ? (
-                  <div className="rn-recommendation-skills">
-                    {recommendation.matched_skills
-                      .slice(0, 4)
-                      .map((skillName) => (
-                        <span key={skillName}>
-                          {skillName}
-                        </span>
-                      ))}
-                  </div>
-                ) : null}
-
-                <Link
-                  href={`/courses/${recommendation.slug}`}
-                  className="rn-button rn-button-primary"
-                >
-                  View Course
-                </Link>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* ------------------------------------------------------------------ */}
-      {/* LEARNING INTELLIGENCE                                               */}
-      {/* ------------------------------------------------------------------ */}
+      {/* ------------------------------------------------------------ */}
+      {/* LEARNING INTELLIGENCE                                       */}
+      {/* ------------------------------------------------------------ */}
 
       <LearningIntelligence />
 
-      {/* ------------------------------------------------------------------ */}
-      {/* QUICK ACTIONS                                                       */}
-      {/* ------------------------------------------------------------------ */}
+      {/* ------------------------------------------------------------ */}
+      {/* QUICK ACTIONS                                               */}
+      {/* ------------------------------------------------------------ */}
 
       <section className="rn-dashboard-section">
         <div className="rn-dashboard-section-header">
@@ -1024,9 +612,9 @@ export default async function StudentDashboardPage() {
         </div>
       </section>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* FOOTER NOTE                                                        */}
-      {/* ------------------------------------------------------------------ */}
+      {/* ------------------------------------------------------------ */}
+      {/* FOOTER NOTE                                                  */}
+      {/* ------------------------------------------------------------ */}
 
       <section className="rn-dashboard-footer-note">
         <p>
@@ -1045,3 +633,4 @@ export default async function StudentDashboardPage() {
     </main>
   );
 }
+```
