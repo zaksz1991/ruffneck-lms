@@ -123,6 +123,136 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+function statusLabel(status: Course["status"]) {
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function formatDuration(minutes: number, seconds = 0) {
+  const totalSeconds = Math.max(
+    0,
+    Number(minutes || 0) * 60 + Number(seconds || 0)
+  );
+
+  if (!totalSeconds) return "No duration";
+
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+
+  return secs ? `${mins}m ${secs}s` : `${mins} min`;
+}
+
+const styles = {
+  shell: {
+    display: "grid",
+    gap: 20,
+  } as React.CSSProperties,
+
+  panel: {
+    border: "1px solid rgba(15, 23, 42, .10)",
+    borderRadius: 14,
+    background: "#fff",
+    padding: 20,
+    boxShadow: "0 2px 8px rgba(15, 23, 42, .04)",
+  } as React.CSSProperties,
+
+  panelSoft: {
+    border: "1px solid rgba(15, 23, 42, .08)",
+    borderRadius: 12,
+    background: "#f8fafc",
+    padding: 16,
+  } as React.CSSProperties,
+
+  field: {
+    display: "grid",
+    gap: 7,
+  } as React.CSSProperties,
+
+  label: {
+    display: "block",
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#334155",
+  } as React.CSSProperties,
+
+  input: {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "10px 12px",
+    borderRadius: 9,
+    border: "1px solid #cbd5e1",
+    background: "#fff",
+    color: "#0f172a",
+    fontSize: 14,
+    outline: "none",
+  } as React.CSSProperties,
+
+  textarea: {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "11px 12px",
+    borderRadius: 9,
+    border: "1px solid #cbd5e1",
+    background: "#fff",
+    color: "#0f172a",
+    fontSize: 14,
+    lineHeight: 1.6,
+    resize: "vertical",
+  } as React.CSSProperties,
+
+  select: {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "10px 12px",
+    borderRadius: 9,
+    border: "1px solid #cbd5e1",
+    background: "#fff",
+    color: "#0f172a",
+    fontSize: 14,
+  } as React.CSSProperties,
+
+  button: {
+    borderRadius: 9,
+    padding: "9px 13px",
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer",
+  } as React.CSSProperties,
+
+  actionRow: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
+  } as React.CSSProperties,
+
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 16,
+  } as React.CSSProperties,
+
+  muted: {
+    color: "#64748b",
+    fontSize: 13,
+  } as React.CSSProperties,
+
+  divider: {
+    height: 1,
+    background: "#e2e8f0",
+    margin: "16px 0",
+  } as React.CSSProperties,
+
+  badge: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "4px 8px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 800,
+    lineHeight: 1.2,
+  } as React.CSSProperties,
+};
+
 export default function AdminLmsEditor({
   initialCourses,
   userId,
@@ -159,16 +289,23 @@ export default function AdminLmsEditor({
 
   const [lessonForm, setLessonForm] =
     useState<Partial<Lesson>>(emptyLesson);
+
   const [editingLessonId, setEditingLessonId] = useState<string | null>(
     null
   );
+
   const [lessonSectionId, setLessonSectionId] = useState("");
 
   const [selectedLessonId, setSelectedLessonId] = useState<string>("");
   const [resourceForm, setResourceForm] =
     useState<Partial<LessonResource>>(emptyResource);
+
   const [editingResourceId, setEditingResourceId] =
     useState<string | null>(null);
+
+  const [coursePreview, setCoursePreview] = useState(false);
+  const [lessonPreview, setLessonPreview] = useState(false);
+  const [contentPreview, setContentPreview] = useState(false);
 
   const selectedCourse = useMemo(
     () => courses.find((course) => course.id === selectedCourseId) ?? null,
@@ -179,6 +316,16 @@ export default function AdminLmsEditor({
     () => lessons.find((lesson) => lesson.id === selectedLessonId) ?? null,
     [lessons, selectedLessonId]
   );
+
+  const selectedInstructor = useMemo(() => {
+    if (!selectedCourse?.instructor_id) return null;
+
+    return (
+      instructors.find(
+        (instructor) => instructor.id === selectedCourse.instructor_id
+      ) ?? null
+    );
+  }, [selectedCourse, instructors]);
 
   const lessonsBySection = useMemo(() => {
     const result: Record<string, Lesson[]> = {};
@@ -213,7 +360,6 @@ export default function AdminLmsEditor({
 
   useEffect(() => {
     if (role !== "admin") return;
-
     loadInstructors();
   }, [role]);
 
@@ -245,20 +391,22 @@ export default function AdminLmsEditor({
     setLoadingCurriculum(true);
     setError("");
 
-    const [{ data: sectionData, error: sectionError }, { data: lessonData, error: lessonError }] =
-      await Promise.all([
-        supabase
-          .from("course_sections")
-          .select("*")
-          .eq("course_id", courseId)
-          .order("sort_order", { ascending: true }),
+    const [
+      { data: sectionData, error: sectionError },
+      { data: lessonData, error: lessonError },
+    ] = await Promise.all([
+      supabase
+        .from("course_sections")
+        .select("*")
+        .eq("course_id", courseId)
+        .order("sort_order", { ascending: true }),
 
-        supabase
-          .from("lessons")
-          .select("*")
-          .eq("course_id", courseId)
-          .order("sort_order", { ascending: true }),
-      ]);
+      supabase
+        .from("lessons")
+        .select("*")
+        .eq("course_id", courseId)
+        .order("sort_order", { ascending: true }),
+    ]);
 
     if (sectionError) {
       setError(sectionError.message);
@@ -321,6 +469,7 @@ export default function AdminLmsEditor({
     setSections([]);
     setLessons([]);
     setSelectedLessonId("");
+    setCoursePreview(false);
   }
 
   function beginEditCourse(course: Course) {
@@ -328,6 +477,7 @@ export default function AdminLmsEditor({
     setSelectedCourseId(course.id);
     setCourseForm(course);
     setEditingCourse(true);
+    setCoursePreview(false);
   }
 
   function cancelCourseEdit() {
@@ -692,6 +842,8 @@ export default function AdminLmsEditor({
       slug: "",
     });
     setEditingLessonId(null);
+    setLessonPreview(false);
+    setContentPreview(false);
   }
 
   function beginEditLesson(lesson: Lesson) {
@@ -701,12 +853,16 @@ export default function AdminLmsEditor({
     setLessonForm(lesson);
     setEditingLessonId(lesson.id);
     setSelectedLessonId(lesson.id);
+    setLessonPreview(false);
+    setContentPreview(false);
   }
 
   function cancelLessonEdit() {
     setLessonSectionId("");
     setLessonForm(emptyLesson);
     setEditingLessonId(null);
+    setLessonPreview(false);
+    setContentPreview(false);
   }
 
   async function saveLesson() {
@@ -717,7 +873,8 @@ export default function AdminLmsEditor({
 
     const title = String(lessonForm.title ?? "").trim();
     const slug = String(lessonForm.slug ?? "").trim();
-    const sectionId = lessonSectionId || String(lessonForm.section_id ?? "");
+    const sectionId =
+      lessonSectionId || String(lessonForm.section_id ?? "");
 
     if (!title) {
       setError("Lesson title is required.");
@@ -771,6 +928,7 @@ export default function AdminLmsEditor({
       );
 
       setSelectedLessonId(data.id);
+      setLessonForm(data);
       setMessage("Lesson updated.");
     } else {
       const sectionLessons = lessons.filter(
@@ -811,10 +969,10 @@ export default function AdminLmsEditor({
       );
 
       setSelectedLessonId(data.id);
+      setLessonForm(data);
       setMessage("Lesson created.");
     }
 
-    setLessonForm(emptyLesson);
     setLessonSectionId("");
     setEditingLessonId(null);
     setSaving(false);
@@ -1207,53 +1365,78 @@ export default function AdminLmsEditor({
     }));
   }
 
+  function renderStatusBadge(
+    label: string,
+    kind: "green" | "blue" | "gray" | "amber"
+  ) {
+    const backgrounds = {
+      green: "#dcfce7",
+      blue: "#dbeafe",
+      gray: "#f1f5f9",
+      amber: "#fef3c7",
+    };
+
+    const colors = {
+      green: "#166534",
+      blue: "#1d4ed8",
+      gray: "#475569",
+      amber: "#92400e",
+    };
+
+    return (
+      <span
+        style={{
+          ...styles.badge,
+          background: backgrounds[kind],
+          color: colors[kind],
+        }}
+      >
+        {label}
+      </span>
+    );
+  }
+
   return (
-    <div>
+    <div style={styles.shell}>
       {message && (
         <div
-          className="panel"
           style={{
-            marginBottom: 16,
+            ...styles.panel,
             borderLeft: "4px solid #16a34a",
+            background: "#f0fdf4",
+            color: "#166534",
           }}
         >
-          {message}
+          <strong>{message}</strong>
         </div>
       )}
 
       {error && (
         <div
-          className="panel"
           style={{
-            marginBottom: 16,
+            ...styles.panel,
             borderLeft: "4px solid #dc2626",
+            background: "#fef2f2",
+            color: "#991b1b",
           }}
         >
           <strong>Error:</strong> {error}
         </div>
       )}
 
+      {/* COURSE SELECTOR */}
       <div
-        className="panel"
         style={{
-          marginBottom: 24,
+          ...styles.panel,
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center",
+          alignItems: "end",
           gap: 16,
           flexWrap: "wrap",
         }}
       >
-        <div style={{ minWidth: 260 }}>
-          <label
-            style={{
-              display: "block",
-              fontWeight: 600,
-              marginBottom: 6,
-            }}
-          >
-            Course
-          </label>
+        <div style={{ flex: "1 1 320px" }}>
+          <label style={styles.label}>Course</label>
 
           <select
             value={selectedCourseId}
@@ -1261,8 +1444,10 @@ export default function AdminLmsEditor({
               clearMessages();
               setSelectedCourseId(event.target.value);
               setEditingCourse(false);
+              setCoursePreview(false);
+              setSelectedLessonId("");
             }}
-            style={{ width: "100%", padding: 10 }}
+            style={{ ...styles.select, marginTop: 7 }}
           >
             <option value="">Select a course</option>
 
@@ -1278,20 +1463,53 @@ export default function AdminLmsEditor({
           type="button"
           onClick={beginCreateCourse}
           disabled={saving}
+          style={styles.button}
         >
           + New Course
         </button>
       </div>
 
+      {/* COURSE EDITOR */}
       {editingCourse && (
-        <div className="panel" style={{ marginBottom: 24 }}>
-          <h3 style={{ marginTop: 0 }}>
-            {selectedCourseId ? "Edit Course" : "Create Course"}
-          </h3>
-
-          <div className="grid">
+        <div style={styles.panel}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 16,
+              alignItems: "center",
+              flexWrap: "wrap",
+              marginBottom: 20,
+            }}
+          >
             <div>
-              <label>Title</label>
+              <h3 style={{ margin: 0 }}>
+                {selectedCourseId ? "Edit Course" : "Create Course"}
+              </h3>
+
+              <div style={{ ...styles.muted, marginTop: 5 }}>
+                Configure the course information, publishing state and
+                metadata.
+              </div>
+            </div>
+
+            {selectedCourse && (
+              <div style={styles.actionRow}>
+                {renderStatusBadge(
+                  statusLabel(selectedCourse.status),
+                  selectedCourse.status === "published"
+                    ? "green"
+                    : selectedCourse.status === "archived"
+                      ? "gray"
+                      : "amber"
+                )}
+              </div>
+            )}
+          </div>
+
+          <div style={styles.grid}>
+            <div style={styles.field}>
+              <label style={styles.label}>Title</label>
               <input
                 value={String(courseForm.title ?? "")}
                 onChange={(event) =>
@@ -1305,34 +1523,34 @@ export default function AdminLmsEditor({
                     );
                   }
                 }}
-                style={{ width: "100%", padding: 10 }}
+                style={styles.input}
               />
             </div>
 
-            <div>
-              <label>Slug</label>
+            <div style={styles.field}>
+              <label style={styles.label}>Slug</label>
               <input
                 value={String(courseForm.slug ?? "")}
                 onChange={(event) =>
                   updateCourseField("slug", event.target.value)
                 }
-                style={{ width: "100%", padding: 10 }}
+                style={styles.input}
               />
             </div>
 
-            <div>
-              <label>Category</label>
+            <div style={styles.field}>
+              <label style={styles.label}>Category</label>
               <input
                 value={String(courseForm.category ?? "")}
                 onChange={(event) =>
                   updateCourseField("category", event.target.value)
                 }
-                style={{ width: "100%", padding: 10 }}
+                style={styles.input}
               />
             </div>
 
-            <div>
-              <label>Level</label>
+            <div style={styles.field}>
+              <label style={styles.label}>Level</label>
               <select
                 value={courseForm.level ?? "beginner"}
                 onChange={(event) =>
@@ -1341,7 +1559,7 @@ export default function AdminLmsEditor({
                     event.target.value as Course["level"]
                   )
                 }
-                style={{ width: "100%", padding: 10 }}
+                style={styles.select}
               >
                 <option value="beginner">Beginner</option>
                 <option value="intermediate">Intermediate</option>
@@ -1349,8 +1567,8 @@ export default function AdminLmsEditor({
               </select>
             </div>
 
-            <div>
-              <label>Price (NGN)</label>
+            <div style={styles.field}>
+              <label style={styles.label}>Price (NGN)</label>
               <input
                 type="number"
                 min="0"
@@ -1361,12 +1579,12 @@ export default function AdminLmsEditor({
                     Number(event.target.value)
                   )
                 }
-                style={{ width: "100%", padding: 10 }}
+                style={styles.input}
               />
             </div>
 
-            <div>
-              <label>Status</label>
+            <div style={styles.field}>
+              <label style={styles.label}>Status</label>
               <select
                 value={courseForm.status ?? "draft"}
                 onChange={(event) =>
@@ -1375,7 +1593,7 @@ export default function AdminLmsEditor({
                     event.target.value as Course["status"]
                   )
                 }
-                style={{ width: "100%", padding: 10 }}
+                style={styles.select}
               >
                 <option value="draft">Draft</option>
                 <option value="published">Published</option>
@@ -1384,8 +1602,8 @@ export default function AdminLmsEditor({
             </div>
 
             {role === "admin" && (
-              <div>
-                <label>Instructor</label>
+              <div style={styles.field}>
+                <label style={styles.label}>Instructor</label>
                 <select
                   value={courseForm.instructor_id ?? ""}
                   onChange={(event) =>
@@ -1394,21 +1612,23 @@ export default function AdminLmsEditor({
                       event.target.value || null
                     )
                   }
-                  style={{ width: "100%", padding: 10 }}
+                  style={styles.select}
                 >
                   <option value="">No instructor assigned</option>
 
                   {instructors.map((instructor) => (
                     <option key={instructor.id} value={instructor.id}>
-                      {instructor.full_name || instructor.email || instructor.id}
+                      {instructor.full_name ||
+                        instructor.email ||
+                        instructor.id}
                     </option>
                   ))}
                 </select>
               </div>
             )}
 
-            <div>
-              <label>Duration (minutes)</label>
+            <div style={styles.field}>
+              <label style={styles.label}>Duration (minutes)</label>
               <input
                 type="number"
                 min="0"
@@ -1419,13 +1639,13 @@ export default function AdminLmsEditor({
                     Number(event.target.value)
                   )
                 }
-                style={{ width: "100%", padding: 10 }}
+                style={styles.input}
               />
             </div>
           </div>
 
-          <div style={{ marginTop: 16 }}>
-            <label>Short description</label>
+          <div style={{ ...styles.field, marginTop: 18 }}>
+            <label style={styles.label}>Short description</label>
             <textarea
               value={String(courseForm.short_description ?? "")}
               onChange={(event) =>
@@ -1435,25 +1655,25 @@ export default function AdminLmsEditor({
                 )
               }
               rows={3}
-              style={{ width: "100%", padding: 10 }}
+              style={styles.textarea}
             />
           </div>
 
-          <div style={{ marginTop: 16 }}>
-            <label>Description</label>
+          <div style={{ ...styles.field, marginTop: 18 }}>
+            <label style={styles.label}>Description</label>
             <textarea
               value={String(courseForm.description ?? "")}
               onChange={(event) =>
                 updateCourseField("description", event.target.value)
               }
-              rows={6}
-              style={{ width: "100%", padding: 10 }}
+              rows={7}
+              style={styles.textarea}
             />
           </div>
 
-          <div className="grid" style={{ marginTop: 16 }}>
-            <div>
-              <label>Thumbnail URL</label>
+          <div style={{ ...styles.grid, marginTop: 18 }}>
+            <div style={styles.field}>
+              <label style={styles.label}>Thumbnail URL</label>
               <input
                 value={String(courseForm.thumbnail_url ?? "")}
                 onChange={(event) =>
@@ -1462,12 +1682,12 @@ export default function AdminLmsEditor({
                     event.target.value
                   )
                 }
-                style={{ width: "100%", padding: 10 }}
+                style={styles.input}
               />
             </div>
 
-            <div>
-              <label>Intro video URL</label>
+            <div style={styles.field}>
+              <label style={styles.label}>Intro video URL</label>
               <input
                 value={String(courseForm.intro_video_url ?? "")}
                 onChange={(event) =>
@@ -1476,13 +1696,16 @@ export default function AdminLmsEditor({
                     event.target.value
                   )
                 }
-                style={{ width: "100%", padding: 10 }}
+                style={styles.input}
               />
             </div>
           </div>
 
-          <div style={{ marginTop: 16 }}>
-            <label>Learning outcomes — one per line</label>
+          <div style={{ ...styles.field, marginTop: 18 }}>
+            <label style={styles.label}>
+              Learning outcomes — one per line
+            </label>
+
             <textarea
               value={(courseForm.learning_outcomes ?? []).join("\n")}
               onChange={(event) =>
@@ -1495,12 +1718,13 @@ export default function AdminLmsEditor({
                 )
               }
               rows={5}
-              style={{ width: "100%", padding: 10 }}
+              style={styles.textarea}
             />
           </div>
 
-          <div style={{ marginTop: 16 }}>
-            <label>Target audience</label>
+          <div style={{ ...styles.field, marginTop: 18 }}>
+            <label style={styles.label}>Target audience</label>
+
             <textarea
               value={String(courseForm.target_audience ?? "")}
               onChange={(event) =>
@@ -1510,24 +1734,24 @@ export default function AdminLmsEditor({
                 )
               }
               rows={3}
-              style={{ width: "100%", padding: 10 }}
+              style={styles.textarea}
             />
           </div>
 
-          <div className="grid" style={{ marginTop: 16 }}>
-            <div>
-              <label>SEO title</label>
+          <div style={{ ...styles.grid, marginTop: 18 }}>
+            <div style={styles.field}>
+              <label style={styles.label}>SEO title</label>
               <input
                 value={String(courseForm.seo_title ?? "")}
                 onChange={(event) =>
                   updateCourseField("seo_title", event.target.value)
                 }
-                style={{ width: "100%", padding: 10 }}
+                style={styles.input}
               />
             </div>
 
-            <div>
-              <label>SEO description</label>
+            <div style={styles.field}>
+              <label style={styles.label}>SEO description</label>
               <input
                 value={String(courseForm.seo_description ?? "")}
                 onChange={(event) =>
@@ -1536,23 +1760,24 @@ export default function AdminLmsEditor({
                     event.target.value
                   )
                 }
-                style={{ width: "100%", padding: 10 }}
+                style={styles.input}
               />
             </div>
           </div>
 
           <div
             style={{
-              display: "flex",
-              gap: 10,
-              marginTop: 20,
-              flexWrap: "wrap",
+              ...styles.actionRow,
+              marginTop: 22,
+              paddingTop: 18,
+              borderTop: "1px solid #e2e8f0",
             }}
           >
             <button
               type="button"
               onClick={saveCourse}
               disabled={saving}
+              style={styles.button}
             >
               {saving ? "Saving..." : "Save Course"}
             </button>
@@ -1561,6 +1786,7 @@ export default function AdminLmsEditor({
               type="button"
               onClick={cancelCourseEdit}
               disabled={saving}
+              style={styles.button}
             >
               Cancel
             </button>
@@ -1568,57 +1794,101 @@ export default function AdminLmsEditor({
         </div>
       )}
 
+      {/* COURSE SUMMARY */}
       {selectedCourse && !editingCourse && (
-        <div className="panel" style={{ marginBottom: 24 }}>
+        <div style={styles.panel}>
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
-              gap: 16,
+              gap: 20,
               flexWrap: "wrap",
             }}
           >
-            <div>
-              <h3 style={{ marginTop: 0 }}>
-                {selectedCourse.title}
-              </h3>
+            <div style={{ minWidth: 260, flex: 1 }}>
+              <div style={styles.actionRow}>
+                {renderStatusBadge(
+                  statusLabel(selectedCourse.status),
+                  selectedCourse.status === "published"
+                    ? "green"
+                    : selectedCourse.status === "archived"
+                      ? "gray"
+                      : "amber"
+                )}
 
-              <div className="muted">
-                {selectedCourse.status} ·{" "}
-                {selectedCourse.is_free
-                  ? "Free"
-                  : `₦${selectedCourse.price_ngn.toLocaleString()}`}
+                {renderStatusBadge(
+                  selectedCourse.is_free
+                    ? "Free"
+                    : `₦${selectedCourse.price_ngn.toLocaleString()}`,
+                  "blue"
+                )}
+              </div>
+
+              <h2 style={{ margin: "12px 0 6px" }}>
+                {selectedCourse.title}
+              </h2>
+
+              <div style={styles.muted}>
+                {selectedCourse.category || "Uncategorized"} ·{" "}
+                {selectedCourse.level}
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 16,
+                  flexWrap: "wrap",
+                  marginTop: 12,
+                  ...styles.muted,
+                }}
+              >
+                <span>
+                  {sections.length} section
+                  {sections.length === 1 ? "" : "s"}
+                </span>
+
+                <span>
+                  {lessons.length} lesson
+                  {lessons.length === 1 ? "" : "s"}
+                </span>
+
+                <span>
+                  {formatDuration(selectedCourse.duration_minutes)}
+                </span>
               </div>
 
               {role === "admin" && (
-                <div className="muted" style={{ marginTop: 6 }}>
+                <div style={{ ...styles.muted, marginTop: 10 }}>
                   Instructor:{" "}
-                  {selectedCourse.instructor_id
-                    ? instructors.find(
-                        (item) =>
-                          item.id === selectedCourse.instructor_id
-                      )?.full_name ||
-                      instructors.find(
-                        (item) =>
-                          item.id === selectedCourse.instructor_id
-                      )?.email ||
-                      "Assigned"
-                    : "Not assigned"}
+                  {selectedInstructor?.full_name ||
+                    selectedInstructor?.email ||
+                    (selectedCourse.instructor_id
+                      ? "Assigned"
+                      : "Not assigned")}
                 </div>
               )}
             </div>
 
             <div
               style={{
-                display: "flex",
-                gap: 8,
-                flexWrap: "wrap",
+                ...styles.actionRow,
+                alignSelf: "start",
               }}
             >
               <button
                 type="button"
+                onClick={() => setCoursePreview((value) => !value)}
+                disabled={saving}
+                style={styles.button}
+              >
+                {coursePreview ? "Close Preview" : "Preview"}
+              </button>
+
+              <button
+                type="button"
                 onClick={() => beginEditCourse(selectedCourse)}
                 disabled={saving}
+                style={styles.button}
               >
                 Edit
               </button>
@@ -1627,8 +1897,11 @@ export default function AdminLmsEditor({
                 href={`/courses/${selectedCourse.slug}`}
                 target="_blank"
                 rel="noreferrer"
+                style={{ textDecoration: "none" }}
               >
-                <button type="button">View</button>
+                <button type="button" style={styles.button}>
+                  Public View
+                </button>
               </a>
 
               {role === "admin" && (
@@ -1636,6 +1909,7 @@ export default function AdminLmsEditor({
                   type="button"
                   onClick={() => deleteCourse(selectedCourse.id)}
                   disabled={saving}
+                  style={styles.button}
                 >
                   Delete
                 </button>
@@ -1645,49 +1919,283 @@ export default function AdminLmsEditor({
         </div>
       )}
 
-      {selectedCourseId && (
-        <div className="panel">
-          <h3 style={{ marginTop: 0 }}>Curriculum</h3>
+      {/* COURSE PREVIEW */}
+      {selectedCourse && coursePreview && (
+        <div
+          style={{
+            ...styles.panel,
+            padding: 0,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              padding: "14px 18px",
+              background: "#0f172a",
+              color: "#fff",
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <strong>Admin Course Preview</strong>
+            <span style={{ opacity: 0.7, fontSize: 12 }}>
+              Preview does not change public RLS access.
+            </span>
+          </div>
 
-          {loadingCurriculum ? (
-            <p className="muted">Loading curriculum...</p>
-          ) : (
-            <>
-              <div className="muted" style={{ marginBottom: 20 }}>
-                {sections.length} section
-                {sections.length === 1 ? "" : "s"} ·{" "}
-                {lessons.length} lesson
-                {lessons.length === 1 ? "" : "s"}
-              </div>
-
-              <div
+          {selectedCourse.thumbnail_url && (
+            <div
+              style={{
+                width: "100%",
+                maxHeight: 280,
+                overflow: "hidden",
+                background: "#e2e8f0",
+              }}
+            >
+              <img
+                src={selectedCourse.thumbnail_url}
+                alt=""
                 style={{
-                  display: "flex",
-                  gap: 8,
-                  flexWrap: "wrap",
-                  marginBottom: 24,
+                  width: "100%",
+                  maxHeight: 280,
+                  objectFit: "cover",
+                  display: "block",
+                }}
+              />
+            </div>
+          )}
+
+          <div
+            style={{
+              padding: 24,
+              maxWidth: 900,
+              margin: "0 auto",
+            }}
+          >
+            <div style={styles.actionRow}>
+              {renderStatusBadge(
+                statusLabel(selectedCourse.status),
+                selectedCourse.status === "published"
+                  ? "green"
+                  : selectedCourse.status === "archived"
+                    ? "gray"
+                    : "amber"
+              )}
+
+              {selectedCourse.category &&
+                renderStatusBadge(selectedCourse.category, "blue")}
+            </div>
+
+            <h1 style={{ margin: "14px 0 8px" }}>
+              {selectedCourse.title}
+            </h1>
+
+            {selectedCourse.short_description && (
+              <p
+                style={{
+                  color: "#475569",
+                  fontSize: 16,
+                  lineHeight: 1.7,
                 }}
               >
-                <input
-                  value={sectionTitle}
-                  placeholder={
-                    editingSectionId
+                {selectedCourse.short_description}
+              </p>
+            )}
+
+            {selectedCourse.description && (
+              <div
+                style={{
+                  marginTop: 22,
+                  whiteSpace: "pre-wrap",
+                  lineHeight: 1.7,
+                  color: "#334155",
+                }}
+              >
+                {selectedCourse.description}
+              </div>
+            )}
+
+            {selectedCourse.learning_outcomes &&
+              selectedCourse.learning_outcomes.length > 0 && (
+                <div style={{ marginTop: 26 }}>
+                  <h3>Learning outcomes</h3>
+
+                  <ul style={{ lineHeight: 1.8 }}>
+                    {selectedCourse.learning_outcomes.map(
+                      (outcome, index) => (
+                        <li key={`${outcome}-${index}`}>{outcome}</li>
+                      )
+                    )}
+                  </ul>
+                </div>
+              )}
+
+            {selectedCourse.target_audience && (
+              <div style={{ marginTop: 26 }}>
+                <h3>Target audience</h3>
+                <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.7 }}>
+                  {selectedCourse.target_audience}
+                </p>
+              </div>
+            )}
+
+            {selectedCourse.intro_video_url && (
+              <div style={{ marginTop: 26 }}>
+                <h3>Introduction video</h3>
+
+                <a
+                  href={selectedCourse.intro_video_url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open introduction video
+                </a>
+              </div>
+            )}
+
+            <div style={{ marginTop: 30 }}>
+              <h3>Course curriculum</h3>
+
+              {sections.length === 0 ? (
+                <p style={styles.muted}>No curriculum yet.</p>
+              ) : (
+                <div style={{ display: "grid", gap: 12 }}>
+                  {sections.map((section, index) => {
+                    const sectionLessons =
+                      lessonsBySection[section.id] ?? [];
+
+                    return (
+                      <div key={section.id} style={styles.panelSoft}>
+                        <strong>
+                          {index + 1}. {section.title}
+                        </strong>
+
+                        <div
+                          style={{
+                            marginTop: 10,
+                            display: "grid",
+                            gap: 7,
+                          }}
+                        >
+                          {sectionLessons.map(
+                            (lesson, lessonIndex) => (
+                              <div
+                                key={lesson.id}
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  gap: 12,
+                                  padding: "8px 0",
+                                  borderTop:
+                                    lessonIndex === 0
+                                      ? "none"
+                                      : "1px solid #e2e8f0",
+                                }}
+                              >
+                                <span>
+                                  {lessonIndex + 1}. {lesson.title}
+                                </span>
+
+                                <span style={styles.muted}>
+                                  {formatDuration(
+                                    lesson.duration_minutes,
+                                    lesson.duration_seconds
+                                  )}
+                                </span>
+                              </div>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CURRICULUM */}
+      {selectedCourseId && (
+        <div style={styles.panel}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 16,
+              alignItems: "center",
+              flexWrap: "wrap",
+              marginBottom: 18,
+            }}
+          >
+            <div>
+              <h3 style={{ margin: 0 }}>Curriculum</h3>
+
+              <div style={{ ...styles.muted, marginTop: 5 }}>
+                Build and organize sections, lessons and resources.
+              </div>
+            </div>
+
+            <div style={styles.actionRow}>
+              <span style={styles.muted}>
+                {sections.length} section
+                {sections.length === 1 ? "" : "s"} · {lessons.length}{" "}
+                lesson
+                {lessons.length === 1 ? "" : "s"}
+              </span>
+            </div>
+          </div>
+
+          {loadingCurriculum ? (
+            <div style={styles.panelSoft}>
+              <p style={{ margin: 0, ...styles.muted }}>
+                Loading curriculum...
+              </p>
+            </div>
+          ) : (
+            <>
+              <div
+                style={{
+                  ...styles.panelSoft,
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "end",
+                  flexWrap: "wrap",
+                  marginBottom: 18,
+                }}
+              >
+                <div style={{ flex: "1 1 260px" }}>
+                  <label style={styles.label}>
+                    {editingSectionId
                       ? "Rename section"
-                      : "New section title"
-                  }
-                  onChange={(event) =>
-                    setSectionTitle(event.target.value)
-                  }
-                  style={{
-                    padding: 10,
-                    minWidth: 240,
-                  }}
-                />
+                      : "New section"}
+                  </label>
+
+                  <input
+                    value={sectionTitle}
+                    placeholder={
+                      editingSectionId
+                        ? "Section name"
+                        : "New section title"
+                    }
+                    onChange={(event) =>
+                      setSectionTitle(event.target.value)
+                    }
+                    style={{
+                      ...styles.input,
+                      marginTop: 7,
+                    }}
+                  />
+                </div>
 
                 <button
                   type="button"
                   onClick={saveSection}
                   disabled={saving}
+                  style={styles.button}
                 >
                   {editingSectionId
                     ? "Rename Section"
@@ -1699,6 +2207,7 @@ export default function AdminLmsEditor({
                     type="button"
                     onClick={cancelSectionEdit}
                     disabled={saving}
+                    style={styles.button}
                   >
                     Cancel
                   </button>
@@ -1712,14 +2221,17 @@ export default function AdminLmsEditor({
                 return (
                   <div
                     key={section.id}
-                    className="panel"
                     style={{
-                      marginBottom: 16,
-                      background: "transparent",
+                      border: "1px solid #dbe3ed",
+                      borderRadius: 12,
+                      marginBottom: 14,
+                      overflow: "hidden",
                     }}
                   >
                     <div
                       style={{
+                        padding: "14px 16px",
+                        background: "#f8fafc",
                         display: "flex",
                         justifyContent: "space-between",
                         gap: 12,
@@ -1732,19 +2244,13 @@ export default function AdminLmsEditor({
                           {sectionIndex + 1}. {section.title}
                         </strong>
 
-                        <div className="muted">
+                        <div style={{ ...styles.muted, marginTop: 3 }}>
                           {sectionLessons.length} lesson
                           {sectionLessons.length === 1 ? "" : "s"}
                         </div>
                       </div>
 
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: 6,
-                          flexWrap: "wrap",
-                        }}
-                      >
+                      <div style={styles.actionRow}>
                         <button
                           type="button"
                           onClick={() =>
@@ -1753,6 +2259,7 @@ export default function AdminLmsEditor({
                           disabled={
                             saving || sectionIndex === 0
                           }
+                          style={styles.button}
                         >
                           ↑
                         </button>
@@ -1766,6 +2273,7 @@ export default function AdminLmsEditor({
                             saving ||
                             sectionIndex === sections.length - 1
                           }
+                          style={styles.button}
                         >
                           ↓
                         </button>
@@ -1774,6 +2282,7 @@ export default function AdminLmsEditor({
                           type="button"
                           onClick={() => editSection(section)}
                           disabled={saving}
+                          style={styles.button}
                         >
                           Rename
                         </button>
@@ -1782,6 +2291,7 @@ export default function AdminLmsEditor({
                           type="button"
                           onClick={() => deleteSection(section)}
                           disabled={saving}
+                          style={styles.button}
                         >
                           Delete
                         </button>
@@ -1792,444 +2302,795 @@ export default function AdminLmsEditor({
                             beginCreateLesson(section.id)
                           }
                           disabled={saving}
+                          style={styles.button}
                         >
                           + Lesson
                         </button>
                       </div>
                     </div>
 
-                    {sectionLessons.length === 0 && (
-                      <p
-                        className="muted"
-                        style={{ marginBottom: 0 }}
-                      >
-                        No lessons in this section.
-                      </p>
-                    )}
+                    <div style={{ padding: "0 16px 16px" }}>
+                      {sectionLessons.length === 0 && (
+                        <p style={{ ...styles.muted, marginBottom: 0 }}>
+                          No lessons in this section.
+                        </p>
+                      )}
 
-                    {sectionLessons.map(
-                      (lesson, lessonIndex) => (
-                        <div
-                          key={lesson.id}
-                          style={{
-                            borderTop: "1px solid rgba(0,0,0,.1)",
-                            marginTop: 12,
-                            paddingTop: 12,
-                          }}
-                        >
+                      {sectionLessons.map(
+                        (lesson, lessonIndex) => (
                           <div
+                            key={lesson.id}
                             style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              gap: 12,
-                              alignItems: "center",
-                              flexWrap: "wrap",
+                              padding: "14px 0",
+                              borderTop:
+                                "1px solid #e2e8f0",
                             }}
                           >
-                            <div>
-                              <strong>
-                                {lessonIndex + 1}.{" "}
-                                {lesson.title}
-                              </strong>
-
-                              <div className="muted">
-                                {lesson.is_published
-                                  ? "Published"
-                                  : "Draft"}{" "}
-                                ·{" "}
-                                {lesson.is_preview
-                                  ? "Preview"
-                                  : "Members only"}
-                              </div>
-                            </div>
-
                             <div
                               style={{
                                 display: "flex",
-                                gap: 6,
+                                justifyContent:
+                                  "space-between",
+                                gap: 12,
+                                alignItems: "center",
                                 flexWrap: "wrap",
                               }}
                             >
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  moveLesson(lesson, "up")
-                                }
-                                disabled={
-                                  saving ||
-                                  lessonIndex === 0
-                                }
+                              <div
+                                style={{
+                                  minWidth: 220,
+                                  flex: 1,
+                                }}
                               >
-                                ↑
-                              </button>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    gap: 8,
+                                    alignItems: "center",
+                                    flexWrap: "wrap",
+                                  }}
+                                >
+                                  <strong>
+                                    {lessonIndex + 1}.{" "}
+                                    {lesson.title}
+                                  </strong>
 
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  moveLesson(lesson, "down")
-                                }
-                                disabled={
-                                  saving ||
-                                  lessonIndex ===
-                                    sectionLessons.length - 1
-                                }
-                              >
-                                ↓
-                              </button>
+                                  {lesson.is_published
+                                    ? renderStatusBadge(
+                                        "Published",
+                                        "green"
+                                      )
+                                    : renderStatusBadge(
+                                        "Draft",
+                                        "amber"
+                                      )}
 
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  beginEditLesson(lesson)
-                                }
-                                disabled={saving}
-                              >
-                                Edit
-                              </button>
+                                  {lesson.is_preview &&
+                                    renderStatusBadge(
+                                      "Preview",
+                                      "blue"
+                                    )}
+                                </div>
 
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  deleteLesson(lesson)
-                                }
-                                disabled={saving}
-                              >
-                                Delete
-                              </button>
+                                <div
+                                  style={{
+                                    ...styles.muted,
+                                    marginTop: 5,
+                                  }}
+                                >
+                                  {formatDuration(
+                                    lesson.duration_minutes,
+                                    lesson.duration_seconds
+                                  )}{" "}
+                                  ·{" "}
+                                  {lesson.is_preview
+                                    ? "Public preview"
+                                    : "Members only"}
+                                </div>
+                              </div>
 
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  beginCreateResource(lesson.id)
-                                }
-                                disabled={saving}
-                              >
-                                Resources
-                              </button>
+                              <div style={styles.actionRow}>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    moveLesson(
+                                      lesson,
+                                      "up"
+                                    )
+                                  }
+                                  disabled={
+                                    saving ||
+                                    lessonIndex === 0
+                                  }
+                                  style={styles.button}
+                                >
+                                  ↑
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    moveLesson(
+                                      lesson,
+                                      "down"
+                                    )
+                                  }
+                                  disabled={
+                                    saving ||
+                                    lessonIndex ===
+                                      sectionLessons.length - 1
+                                  }
+                                  style={styles.button}
+                                >
+                                  ↓
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    beginEditLesson(lesson)
+                                  }
+                                  disabled={saving}
+                                  style={styles.button}
+                                >
+                                  Edit
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setLessonPreview(
+                                      selectedLessonId ===
+                                        lesson.id
+                                        ? !lessonPreview
+                                        : true
+                                    )
+                                  }
+                                  disabled={saving}
+                                  style={styles.button}
+                                >
+                                  Preview
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    deleteLesson(lesson)
+                                  }
+                                  disabled={saving}
+                                  style={styles.button}
+                                >
+                                  Delete
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    beginCreateResource(
+                                      lesson.id
+                                    )
+                                  }
+                                  disabled={saving}
+                                  style={styles.button}
+                                >
+                                  Resources
+                                </button>
+                              </div>
                             </div>
-                          </div>
 
-                          {selectedLessonId === lesson.id && (
-                            <div
-                              className="panel"
-                              style={{
-                                marginTop: 12,
-                                background: "transparent",
-                              }}
-                            >
-                              <strong>
-                                Lesson Resources
-                              </strong>
+                            {/* MOVE LESSON */}
+                            {sections.length > 1 && (
+                              <div
+                                style={{
+                                  marginTop: 10,
+                                  display: "flex",
+                                  gap: 8,
+                                  alignItems: "center",
+                                  flexWrap: "wrap",
+                                }}
+                              >
+                                <span style={styles.muted}>
+                                  Move to:
+                                </span>
 
-                              {loadingResources ? (
-                                <p className="muted">
-                                  Loading resources...
-                                </p>
-                              ) : (
-                                <>
-                                  {resources.length === 0 && (
-                                    <p className="muted">
-                                      No resources added.
-                                    </p>
-                                  )}
-
-                                  {resources.map(
-                                    (
-                                      resource,
-                                      resourceIndex
-                                    ) => (
-                                      <div
-                                        key={resource.id}
-                                        style={{
-                                          borderTop:
-                                            "1px solid rgba(0,0,0,.1)",
-                                          paddingTop: 10,
-                                          marginTop: 10,
-                                        }}
+                                <select
+                                  value={lesson.section_id}
+                                  onChange={(event) =>
+                                    moveLessonToSection(
+                                      lesson,
+                                      event.target.value
+                                    )
+                                  }
+                                  disabled={saving}
+                                  style={{
+                                    ...styles.select,
+                                    width: "auto",
+                                    minWidth: 180,
+                                  }}
+                                >
+                                  {sections.map(
+                                    (targetSection) => (
+                                      <option
+                                        key={
+                                          targetSection.id
+                                        }
+                                        value={
+                                          targetSection.id
+                                        }
                                       >
-                                        <div
-                                          style={{
-                                            display: "flex",
-                                            justifyContent:
-                                              "space-between",
-                                            gap: 12,
-                                            flexWrap: "wrap",
-                                          }}
-                                        >
-                                          <div>
-                                            <strong>
-                                              {resourceIndex +
-                                                1}
-                                              .{" "}
-                                              {resource.title}
-                                            </strong>
-
-                                            <div className="muted">
-                                              {
-                                                resource.resource_type
-                                              }{" "}
-                                              ·{" "}
-                                              <a
-                                                href={
-                                                  resource.url
-                                                }
-                                                target="_blank"
-                                                rel="noreferrer"
-                                              >
-                                                Open
-                                              </a>
-                                            </div>
-                                          </div>
-
-                                          <div
-                                            style={{
-                                              display: "flex",
-                                              gap: 6,
-                                            }}
-                                          >
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                moveResource(
-                                                  resource,
-                                                  "up"
-                                                )
-                                              }
-                                              disabled={
-                                                saving ||
-                                                resourceIndex ===
-                                                  0
-                                              }
-                                            >
-                                              ↑
-                                            </button>
-
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                moveResource(
-                                                  resource,
-                                                  "down"
-                                                )
-                                              }
-                                              disabled={
-                                                saving ||
-                                                resourceIndex ===
-                                                  resources.length -
-                                                    1
-                                              }
-                                            >
-                                              ↓
-                                            </button>
-
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                beginEditResource(
-                                                  resource
-                                                )
-                                              }
-                                              disabled={saving}
-                                            >
-                                              Edit
-                                            </button>
-
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                deleteResource(
-                                                  resource
-                                                )
-                                              }
-                                              disabled={saving}
-                                            >
-                                              Delete
-                                            </button>
-                                          </div>
-                                        </div>
-                                      </div>
+                                        {
+                                          targetSection.title
+                                        }
+                                      </option>
                                     )
                                   )}
+                                </select>
+                              </div>
+                            )}
+
+                            {/* LESSON PREVIEW */}
+                            {selectedLessonId === lesson.id &&
+                              lessonPreview && (
+                                <div
+                                  style={{
+                                    ...styles.panelSoft,
+                                    marginTop: 14,
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      justifyContent:
+                                        "space-between",
+                                      gap: 12,
+                                      alignItems:
+                                        "center",
+                                    }}
+                                  >
+                                    <div>
+                                      <strong>
+                                        Lesson Preview
+                                      </strong>
+
+                                      <div
+                                        style={{
+                                          ...styles.muted,
+                                          marginTop: 3,
+                                        }}
+                                      >
+                                        Admin preview of the
+                                        lesson content.
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setLessonPreview(
+                                          false
+                                        )
+                                      }
+                                      style={styles.button}
+                                    >
+                                      Close
+                                    </button>
+                                  </div>
+
+                                  <div
+                                    style={styles.divider}
+                                  />
+
+                                  <h2
+                                    style={{
+                                      marginTop: 0,
+                                    }}
+                                  >
+                                    {lesson.title}
+                                  </h2>
 
                                   <div
                                     style={{
-                                      marginTop: 16,
-                                      paddingTop: 16,
-                                      borderTop:
-                                        "1px solid rgba(0,0,0,.1)",
+                                      ...styles.muted,
+                                      marginBottom: 18,
                                     }}
                                   >
-                                    <h4
+                                    {formatDuration(
+                                      lesson.duration_minutes,
+                                      lesson.duration_seconds
+                                    )}
+                                  </div>
+
+                                  {lesson.video_url && (
+                                    <div
                                       style={{
-                                        marginTop: 0,
+                                        marginBottom: 20,
                                       }}
                                     >
-                                      {editingResourceId
-                                        ? "Edit Resource"
-                                        : "Add Resource"}
-                                    </h4>
+                                      <a
+                                        href={
+                                          lesson.video_url
+                                        }
+                                        target="_blank"
+                                        rel="noreferrer"
+                                      >
+                                        Open lesson video
+                                      </a>
+                                    </div>
+                                  )}
 
-                                    <div className="grid">
-                                      <div>
-                                        <label>
-                                          Title
+                                  {lesson.content_html ? (
+                                    <div
+                                      style={{
+                                        lineHeight: 1.75,
+                                        color: "#334155",
+                                      }}
+                                      dangerouslySetInnerHTML={{
+                                        __html:
+                                          lesson.content_html,
+                                      }}
+                                    />
+                                  ) : (
+                                    <p
+                                      style={
+                                        styles.muted
+                                      }
+                                    >
+                                      No lesson content has
+                                      been added.
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+
+                            {/* RESOURCES */}
+                            {selectedLessonId === lesson.id && (
+                              <div
+                                style={{
+                                  ...styles.panelSoft,
+                                  marginTop: 14,
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    justifyContent:
+                                      "space-between",
+                                    gap: 12,
+                                    alignItems: "center",
+                                    flexWrap: "wrap",
+                                  }}
+                                >
+                                  <div>
+                                    <strong>
+                                      Lesson Resources
+                                    </strong>
+
+                                    <div
+                                      style={{
+                                        ...styles.muted,
+                                        marginTop: 3,
+                                      }}
+                                    >
+                                      {resources.length}{" "}
+                                      resource
+                                      {resources.length ===
+                                      1
+                                        ? ""
+                                        : "s"}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {loadingResources ? (
+                                  <p style={styles.muted}>
+                                    Loading resources...
+                                  </p>
+                                ) : (
+                                  <>
+                                    {resources.length ===
+                                      0 && (
+                                      <p
+                                        style={
+                                          styles.muted
+                                        }
+                                      >
+                                        No resources added.
+                                      </p>
+                                    )}
+
+                                    {resources.map(
+                                      (
+                                        resource,
+                                        resourceIndex
+                                      ) => (
+                                        <div
+                                          key={
+                                            resource.id
+                                          }
+                                          style={{
+                                            marginTop: 10,
+                                            padding: 12,
+                                            background:
+                                              "#fff",
+                                            border:
+                                              "1px solid #e2e8f0",
+                                            borderRadius: 9,
+                                          }}
+                                        >
+                                          <div
+                                            style={{
+                                              display:
+                                                "flex",
+                                              justifyContent:
+                                                "space-between",
+                                              gap: 12,
+                                              flexWrap:
+                                                "wrap",
+                                              alignItems:
+                                                "center",
+                                            }}
+                                          >
+                                            <div>
+                                              <strong>
+                                                {resourceIndex +
+                                                  1}
+                                                .{" "}
+                                                {
+                                                  resource.title
+                                                }
+                                              </strong>
+
+                                              <div
+                                                style={{
+                                                  ...styles.muted,
+                                                  marginTop: 3,
+                                                }}
+                                              >
+                                                {
+                                                  resource.resource_type
+                                                }{" "}
+                                                ·{" "}
+                                                <a
+                                                  href={
+                                                    resource.url
+                                                  }
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                >
+                                                  Open
+                                                </a>
+                                              </div>
+                                            </div>
+
+                                            <div
+                                              style={
+                                                styles.actionRow
+                                              }
+                                            >
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  moveResource(
+                                                    resource,
+                                                    "up"
+                                                  )
+                                                }
+                                                disabled={
+                                                  saving ||
+                                                  resourceIndex ===
+                                                    0
+                                                }
+                                                style={
+                                                  styles.button
+                                                }
+                                              >
+                                                ↑
+                                              </button>
+
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  moveResource(
+                                                    resource,
+                                                    "down"
+                                                  )
+                                                }
+                                                disabled={
+                                                  saving ||
+                                                  resourceIndex ===
+                                                    resources.length -
+                                                      1
+                                                }
+                                                style={
+                                                  styles.button
+                                                }
+                                              >
+                                                ↓
+                                              </button>
+
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  beginEditResource(
+                                                    resource
+                                                  )
+                                                }
+                                                disabled={
+                                                  saving
+                                                }
+                                                style={
+                                                  styles.button
+                                                }
+                                              >
+                                                Edit
+                                              </button>
+
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  deleteResource(
+                                                    resource
+                                                  )
+                                                }
+                                                disabled={
+                                                  saving
+                                                }
+                                                style={
+                                                  styles.button
+                                                }
+                                              >
+                                                Delete
+                                              </button>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )
+                                    )}
+
+                                    <div
+                                      style={{
+                                        marginTop: 16,
+                                        paddingTop: 16,
+                                        borderTop:
+                                          "1px solid #e2e8f0",
+                                      }}
+                                    >
+                                      <h4
+                                        style={{
+                                          marginTop: 0,
+                                          marginBottom: 14,
+                                        }}
+                                      >
+                                        {editingResourceId
+                                          ? "Edit Resource"
+                                          : "Add Resource"}
+                                      </h4>
+
+                                      <div
+                                        style={styles.grid}
+                                      >
+                                        <div
+                                          style={
+                                            styles.field
+                                          }
+                                        >
+                                          <label
+                                            style={
+                                              styles.label
+                                            }
+                                          >
+                                            Title
+                                          </label>
+
+                                          <input
+                                            value={String(
+                                              resourceForm.title ??
+                                                ""
+                                            )}
+                                            onChange={(
+                                              event
+                                            ) =>
+                                              updateResourceField(
+                                                "title",
+                                                event
+                                                  .target
+                                                  .value
+                                              )
+                                            }
+                                            style={
+                                              styles.input
+                                            }
+                                          />
+                                        </div>
+
+                                        <div
+                                          style={
+                                            styles.field
+                                          }
+                                        >
+                                          <label
+                                            style={
+                                              styles.label
+                                            }
+                                          >
+                                            Type
+                                          </label>
+
+                                          <select
+                                            value={
+                                              resourceForm.resource_type ??
+                                              "link"
+                                            }
+                                            onChange={(
+                                              event
+                                            ) =>
+                                              updateResourceField(
+                                                "resource_type",
+                                                event
+                                                  .target
+                                                  .value as LessonResource["resource_type"]
+                                              )
+                                            }
+                                            style={
+                                              styles.select
+                                            }
+                                          >
+                                            <option value="file">
+                                              File
+                                            </option>
+                                            <option value="link">
+                                              Link
+                                            </option>
+                                            <option value="pdf">
+                                              PDF
+                                            </option>
+                                            <option value="audio">
+                                              Audio
+                                            </option>
+                                          </select>
+                                        </div>
+                                      </div>
+
+                                      <div
+                                        style={{
+                                          ...styles.field,
+                                          marginTop: 14,
+                                        }}
+                                      >
+                                        <label
+                                          style={
+                                            styles.label
+                                          }
+                                        >
+                                          URL
                                         </label>
 
                                         <input
+                                          type="url"
                                           value={String(
-                                            resourceForm.title ??
+                                            resourceForm.url ??
                                               ""
                                           )}
-                                          onChange={(event) =>
+                                          onChange={(
+                                            event
+                                          ) =>
                                             updateResourceField(
-                                              "title",
-                                              event.target.value
+                                              "url",
+                                              event
+                                                .target
+                                                .value
                                             )
                                           }
-                                          style={{
-                                            width: "100%",
-                                            padding: 10,
-                                          }}
+                                          placeholder="https://..."
+                                          style={
+                                            styles.input
+                                          }
                                         />
                                       </div>
 
-                                      <div>
-                                        <label>
-                                          Type
-                                        </label>
-
-                                        <select
-                                          value={
-                                            resourceForm.resource_type ??
-                                            "link"
-                                          }
-                                          onChange={(event) =>
-                                            updateResourceField(
-                                              "resource_type",
-                                              event.target
-                                                .value as LessonResource["resource_type"]
-                                            )
-                                          }
-                                          style={{
-                                            width: "100%",
-                                            padding: 10,
-                                          }}
-                                        >
-                                          <option value="file">
-                                            File
-                                          </option>
-                                          <option value="link">
-                                            Link
-                                          </option>
-                                          <option value="pdf">
-                                            PDF
-                                          </option>
-                                          <option value="audio">
-                                            Audio
-                                          </option>
-                                        </select>
-                                      </div>
-                                    </div>
-
-                                    <div
-                                      style={{
-                                        marginTop: 12,
-                                      }}
-                                    >
-                                      <label>
-                                        URL
-                                      </label>
-
-                                      <input
-                                        type="url"
-                                        value={String(
-                                          resourceForm.url ?? ""
-                                        )}
-                                        onChange={(event) =>
-                                          updateResourceField(
-                                            "url",
-                                            event.target.value
-                                          )
-                                        }
-                                        placeholder="https://..."
+                                      <div
                                         style={{
-                                          width: "100%",
-                                          padding: 10,
+                                          ...styles.actionRow,
+                                          marginTop: 14,
                                         }}
-                                      />
-                                    </div>
-
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        gap: 8,
-                                        marginTop: 12,
-                                        flexWrap: "wrap",
-                                      }}
-                                    >
-                                      <button
-                                        type="button"
-                                        onClick={saveResource}
-                                        disabled={saving}
                                       >
-                                        {saving
-                                          ? "Saving..."
-                                          : editingResourceId
-                                            ? "Update Resource"
-                                            : "Add Resource"}
-                                      </button>
-
-                                      {editingResourceId && (
                                         <button
                                           type="button"
                                           onClick={
-                                            cancelResourceEdit
+                                            saveResource
                                           }
                                           disabled={saving}
+                                          style={
+                                            styles.button
+                                          }
                                         >
-                                          Cancel
+                                          {saving
+                                            ? "Saving..."
+                                            : editingResourceId
+                                              ? "Update Resource"
+                                              : "Add Resource"}
                                         </button>
-                                      )}
+
+                                        {editingResourceId && (
+                                          <button
+                                            type="button"
+                                            onClick={
+                                              cancelResourceEdit
+                                            }
+                                            disabled={saving}
+                                            style={
+                                              styles.button
+                                            }
+                                          >
+                                            Cancel
+                                          </button>
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    )}
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      )}
+                    </div>
                   </div>
                 );
               })}
 
               {sections.length === 0 && (
-                <p className="muted">
-                  No sections yet. Add the first section above.
-                </p>
+                <div style={styles.panelSoft}>
+                  <p style={{ margin: 0, ...styles.muted }}>
+                    No sections yet. Add the first section above.
+                  </p>
+                </div>
               )}
             </>
           )}
         </div>
       )}
 
+      {/* LESSON EDITOR */}
       {editingLessonId && (
-        <div className="panel" style={{ marginTop: 24 }}>
-          <h3 style={{ marginTop: 0 }}>Edit Lesson</h3>
-
-          <div className="grid">
+        <div style={styles.panel}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 16,
+              alignItems: "center",
+              flexWrap: "wrap",
+              marginBottom: 18,
+            }}
+          >
             <div>
-              <label>Section</label>
+              <h3 style={{ margin: 0 }}>Edit Lesson</h3>
+
+              <div style={{ ...styles.muted, marginTop: 5 }}>
+                Edit lesson content, media, visibility and access.
+              </div>
+            </div>
+
+            <div style={styles.actionRow}>
+              {Boolean(lessonForm.is_published) &&
+                renderStatusBadge("Published", "green")}
+
+              {Boolean(lessonForm.is_preview) &&
+                renderStatusBadge("Preview", "blue")}
+            </div>
+          </div>
+
+          <div style={styles.grid}>
+            <div style={styles.field}>
+              <label style={styles.label}>Section</label>
 
               <select
                 value={lessonSectionId}
                 onChange={(event) =>
                   setLessonSectionId(event.target.value)
                 }
-                style={{
-                  width: "100%",
-                  padding: 10,
-                }}
+                style={styles.select}
               >
                 <option value="">Select section</option>
 
@@ -2241,8 +3102,8 @@ export default function AdminLmsEditor({
               </select>
             </div>
 
-            <div>
-              <label>Title</label>
+            <div style={styles.field}>
+              <label style={styles.label}>Title</label>
 
               <input
                 value={String(lessonForm.title ?? "")}
@@ -2255,15 +3116,12 @@ export default function AdminLmsEditor({
                     updateLessonField("slug", slugify(title));
                   }
                 }}
-                style={{
-                  width: "100%",
-                  padding: 10,
-                }}
+                style={styles.input}
               />
             </div>
 
-            <div>
-              <label>Slug</label>
+            <div style={styles.field}>
+              <label style={styles.label}>Slug</label>
 
               <input
                 value={String(lessonForm.slug ?? "")}
@@ -2273,15 +3131,12 @@ export default function AdminLmsEditor({
                     event.target.value
                   )
                 }
-                style={{
-                  width: "100%",
-                  padding: 10,
-                }}
+                style={styles.input}
               />
             </div>
 
-            <div>
-              <label>Video URL</label>
+            <div style={styles.field}>
+              <label style={styles.label}>Video URL</label>
 
               <input
                 value={String(lessonForm.video_url ?? "")}
@@ -2291,15 +3146,15 @@ export default function AdminLmsEditor({
                     event.target.value
                   )
                 }
-                style={{
-                  width: "100%",
-                  padding: 10,
-                }}
+                placeholder="https://..."
+                style={styles.input}
               />
             </div>
 
-            <div>
-              <label>Duration (minutes)</label>
+            <div style={styles.field}>
+              <label style={styles.label}>
+                Duration (minutes)
+              </label>
 
               <input
                 type="number"
@@ -2313,15 +3168,14 @@ export default function AdminLmsEditor({
                     Number(event.target.value)
                   )
                 }
-                style={{
-                  width: "100%",
-                  padding: 10,
-                }}
+                style={styles.input}
               />
             </div>
 
-            <div>
-              <label>Duration (seconds)</label>
+            <div style={styles.field}>
+              <label style={styles.label}>
+                Duration (seconds)
+              </label>
 
               <input
                 type="number"
@@ -2335,45 +3189,128 @@ export default function AdminLmsEditor({
                     Number(event.target.value)
                   )
                 }
-                style={{
-                  width: "100%",
-                  padding: 10,
-                }}
+                style={styles.input}
               />
             </div>
           </div>
 
-          <div style={{ marginTop: 16 }}>
-            <label>Lesson HTML content</label>
-
-            <textarea
-              value={String(
-                lessonForm.content_html ?? ""
-              )}
-              onChange={(event) =>
-                updateLessonField(
-                  "content_html",
-                  event.target.value
-                )
-              }
-              rows={12}
+          <div
+            style={{
+              ...styles.field,
+              marginTop: 18,
+            }}
+          >
+            <div
               style={{
-                width: "100%",
-                padding: 10,
-                fontFamily: "monospace",
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                alignItems: "center",
+                flexWrap: "wrap",
               }}
-            />
+            >
+              <label style={styles.label}>
+                Lesson HTML content
+              </label>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setContentPreview((value) => !value)
+                }
+                style={styles.button}
+              >
+                {contentPreview
+                  ? "Edit HTML"
+                  : "Preview Content"}
+              </button>
+            </div>
+
+            {contentPreview ? (
+              <div
+                style={{
+                  ...styles.panelSoft,
+                  minHeight: 260,
+                  lineHeight: 1.75,
+                  color: "#334155",
+                }}
+              >
+                {lessonForm.content_html ? (
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html: String(
+                        lessonForm.content_html
+                      ),
+                    }}
+                  />
+                ) : (
+                  <p style={styles.muted}>
+                    No lesson content has been entered.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <textarea
+                value={String(
+                  lessonForm.content_html ?? ""
+                )}
+                onChange={(event) =>
+                  updateLessonField(
+                    "content_html",
+                    event.target.value
+                  )
+                }
+                rows={16}
+                placeholder="<h2>Lesson heading</h2><p>Lesson content...</p>"
+                style={{
+                  ...styles.textarea,
+                  fontFamily:
+                    "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  fontSize: 13,
+                }}
+              />
+            )}
           </div>
+
+          {lessonForm.video_url && (
+            <div
+              style={{
+                ...styles.panelSoft,
+                marginTop: 18,
+              }}
+            >
+              <strong>Video</strong>
+
+              <div style={{ marginTop: 6 }}>
+                <a
+                  href={String(lessonForm.video_url)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open video URL
+                </a>
+              </div>
+            </div>
+          )}
 
           <div
             style={{
-              display: "flex",
-              gap: 20,
-              marginTop: 16,
-              flexWrap: "wrap",
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: 12,
+              marginTop: 18,
             }}
           >
-            <label>
+            <label
+              style={{
+                ...styles.panelSoft,
+                cursor: "pointer",
+                display: "flex",
+                gap: 10,
+                alignItems: "flex-start",
+              }}
+            >
               <input
                 type="checkbox"
                 checked={Boolean(
@@ -2385,11 +3322,35 @@ export default function AdminLmsEditor({
                     event.target.checked
                   )
                 }
-              />{" "}
-              Preview lesson
+                style={{
+                  marginTop: 3,
+                }}
+              />
+
+              <span>
+                <strong>Preview lesson</strong>
+                <span
+                  style={{
+                    ...styles.muted,
+                    display: "block",
+                    marginTop: 3,
+                  }}
+                >
+                  Allow the lesson to be accessible as a public
+                  preview when the course is published.
+                </span>
+              </span>
             </label>
 
-            <label>
+            <label
+              style={{
+                ...styles.panelSoft,
+                cursor: "pointer",
+                display: "flex",
+                gap: 10,
+                alignItems: "flex-start",
+              }}
+            >
               <input
                 type="checkbox"
                 checked={Boolean(
@@ -2401,23 +3362,39 @@ export default function AdminLmsEditor({
                     event.target.checked
                   )
                 }
-              />{" "}
-              Published
+                style={{
+                  marginTop: 3,
+                }}
+              />
+
+              <span>
+                <strong>Published</strong>
+                <span
+                  style={{
+                    ...styles.muted,
+                    display: "block",
+                    marginTop: 3,
+                  }}
+                >
+                  Include this lesson in the published curriculum.
+                </span>
+              </span>
             </label>
           </div>
 
           <div
             style={{
-              display: "flex",
-              gap: 8,
+              ...styles.actionRow,
               marginTop: 20,
-              flexWrap: "wrap",
+              paddingTop: 18,
+              borderTop: "1px solid #e2e8f0",
             }}
           >
             <button
               type="button"
               onClick={saveLesson}
               disabled={saving}
+              style={styles.button}
             >
               {saving ? "Saving..." : "Save Lesson"}
             </button>
@@ -2426,6 +3403,7 @@ export default function AdminLmsEditor({
               type="button"
               onClick={cancelLessonEdit}
               disabled={saving}
+              style={styles.button}
             >
               Cancel
             </button>
@@ -2433,36 +3411,69 @@ export default function AdminLmsEditor({
         </div>
       )}
 
+      {/* SELECTED LESSON SUMMARY */}
       {selectedLesson && !editingLessonId && (
-        <div className="panel" style={{ marginTop: 24 }}>
+        <div style={styles.panel}>
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
-              gap: 12,
+              gap: 16,
               flexWrap: "wrap",
+              alignItems: "center",
             }}
           >
             <div>
-              <strong>{selectedLesson.title}</strong>
-
-              <div className="muted">
+              <div style={styles.actionRow}>
                 {selectedLesson.is_published
-                  ? "Published"
-                  : "Draft"}{" "}
-                ·{" "}
-                {selectedLesson.is_preview
-                  ? "Preview"
-                  : "Members only"}
+                  ? renderStatusBadge("Published", "green")
+                  : renderStatusBadge("Draft", "amber")}
+
+                {selectedLesson.is_preview &&
+                  renderStatusBadge("Preview", "blue")}
+              </div>
+
+              <strong
+                style={{
+                  display: "block",
+                  marginTop: 8,
+                  fontSize: 16,
+                }}
+              >
+                {selectedLesson.title}
+              </strong>
+
+              <div
+                style={{
+                  ...styles.muted,
+                  marginTop: 4,
+                }}
+              >
+                {formatDuration(
+                  selectedLesson.duration_minutes,
+                  selectedLesson.duration_seconds
+                )}
               </div>
             </div>
 
-            <div>
+            <div style={styles.actionRow}>
+              <button
+                type="button"
+                onClick={() => {
+                  setLessonPreview(true);
+                  setSelectedLessonId(selectedLesson.id);
+                }}
+                style={styles.button}
+              >
+                Preview Lesson
+              </button>
+
               <button
                 type="button"
                 onClick={() =>
                   beginEditLesson(selectedLesson)
                 }
+                style={styles.button}
               >
                 Edit Lesson
               </button>
