@@ -1,100 +1,100 @@
+"use client";
+
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { usePathname } from "next/navigation";
 
-function BrandMark() {
-  return (
-    <span className="rn-brand-mark" aria-hidden="true">
-      RN
-    </span>
-  );
-}
+export default function Header() {
+  const pathname = usePathname();
 
-function NavIcon({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="rn-nav-icon" aria-hidden="true">
-      {children}
-    </span>
-  );
-}
-
-export async function Header() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  let role: string | null = null;
-
-  if (user) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    role = data?.role ?? null;
-  }
+  const isActive = (path: string) => {
+    if (path === "/") return pathname === "/";
+    return pathname.startsWith(path);
+  };
 
   return (
-    <header className="site-header">
-      <div className="inner">
-        <Link href="/" className="brand" aria-label="RuffNeck Learn home">
-          <BrandMark />
+    <>
+      <header className="site-header">
+        <div className="inner">
+          <Link href="/" className="brand">
+            <span className="rn-brand-mark">RN</span>
 
-          <span className="brand-text">
-            <strong>RuffNeck</strong>
-            <span>Learn</span>
-          </span>
-        </Link>
-
-        <nav className="nav" aria-label="Main navigation">
-          <Link href="/courses">
-            <NavIcon>▦</NavIcon>
-            <span>Courses</span>
+            <span className="rn-brand-copy">
+              <strong>RuffNeck</strong>
+              <small>Learn</small>
+            </span>
           </Link>
 
-          {user ? (
-            <>
-              <Link href="/student/dashboard">
-                <NavIcon>◉</NavIcon>
-                <span>My learning</span>
-              </Link>
+          <nav className="nav" aria-label="Main navigation">
+            <Link
+              href="/courses"
+              className={isActive("/courses") ? "active" : ""}
+            >
+              <span className="rn-nav-icon">▦</span>
+              Courses
+            </Link>
 
-              {(role === "admin" || role === "instructor") && (
-                <Link href="/admin/lms">
-                  <NavIcon>⚙</NavIcon>
-                  <span>Admin</span>
-                </Link>
-              )}
+            <Link
+              href="/student/dashboard"
+              className={
+                isActive("/student/dashboard") ? "active" : ""
+              }
+            >
+              <span className="rn-nav-icon">◉</span>
+              My learning
+            </Link>
 
-              <form
-                action="/auth/signout"
-                method="post"
-                className="rn-signout-form"
-              >
-                <button type="submit" className="btn btn-ghost rn-nav-button">
-                  <NavIcon>↪</NavIcon>
-                  <span>Sign out</span>
-                </button>
-              </form>
-            </>
-          ) : (
-            <>
-              <Link href="/login">
-                <span>Log in</span>
-              </Link>
-
+            {pathname.startsWith("/admin") ? (
               <Link
-                href="/signup"
-                className="btn btn-primary rn-signup-button"
+                href="/admin/lms?view=courses"
+                className="active"
               >
-                <span>Sign up</span>
+                <span className="rn-nav-icon">⚙</span>
+                Admin
               </Link>
-            </>
-          )}
-        </nav>
-      </div>
-    </header>
+            ) : null}
+
+            <form
+              action="/api/auth/logout"
+              method="post"
+              className="rn-signout-form"
+            >
+              <button type="submit" className="nav-button rn-nav-button">
+                <span className="rn-nav-icon">↪</span>
+                Sign out
+              </button>
+            </form>
+          </nav>
+        </div>
+
+        <div className="rn-header-learning-banner">
+          <Link href="/courses" aria-label="Explore RuffNeck Learn courses">
+            <img
+              src="/brand/ruffneck-learn-banner.png"
+              alt="RuffNeck Learn — Learn, Build, Grow"
+            />
+
+            <div className="rn-header-banner-overlay">
+              <div>
+                <span className="rn-header-banner-kicker">
+                  RUFFNECK LEARN
+                </span>
+
+                <strong>
+                  Practical AI &amp; Digital Skills
+                </strong>
+
+                <span>
+                  Learn • Build • Grow
+                </span>
+              </div>
+
+              <span className="rn-header-banner-cta">
+                Explore courses →
+              </span>
+            </div>
+          </Link>
+        </div>
+      </header>
+    </>
   );
 }
