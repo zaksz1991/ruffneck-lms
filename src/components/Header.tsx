@@ -85,7 +85,10 @@ export async function Header() {
                 <span>Log in</span>
               </Link>
 
-              <Link href="/signup" className="btn btn-primary rn-signup-button">
+              <Link
+                href="/signup"
+                className="btn btn-primary rn-signup-button"
+              >
                 <span>Sign up</span>
               </Link>
             </>
