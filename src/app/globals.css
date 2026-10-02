@@ -3270,3 +3270,547 @@ a.rn-admin-stat:hover {
     min-height: 120px;
   }
 }
+
+/* ================================================================
+   RUFFNECK LEARN — DASHBOARD POLISH
+   Alignment, spacing, hierarchy and responsive layout
+   ================================================================ */
+
+/* Main dashboard rhythm */
+.rn-dashboard-section {
+  margin-top: 48px;
+}
+
+.rn-dashboard-section:first-of-type {
+  margin-top: 32px;
+}
+
+/* Section headers */
+.rn-dashboard-section-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+
+.rn-dashboard-section-header > div {
+  min-width: 0;
+}
+
+.rn-dashboard-section-header h2 {
+  margin: 5px 0 7px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.rn-dashboard-section-header p {
+  margin: 0;
+  max-width: 720px;
+  line-height: 1.6;
+  opacity: 0.68;
+}
+
+.rn-dashboard-section-header .rn-text-link {
+  flex-shrink: 0;
+  margin-bottom: 3px;
+}
+
+/* Eyebrows */
+.rn-eyebrow {
+  display: inline-block;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Dashboard cards */
+.rn-dashboard-card {
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 18px;
+  background: var(--card, #ffffff);
+}
+
+.rn-dashboard-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.rn-dashboard-card-header > div {
+  min-width: 0;
+}
+
+.rn-dashboard-card-header h2 {
+  margin: 5px 0 0;
+  line-height: 1.25;
+}
+
+/* ================================================================
+   LEARNER PROFILE
+   ================================================================ */
+
+.rn-profile-card {
+  padding: 26px;
+}
+
+.rn-profile-card h2,
+.rn-profile-card h3 {
+  line-height: 1.25;
+}
+
+.rn-profile-card p {
+  line-height: 1.6;
+}
+
+.rn-profile-card .rn-text-link {
+  margin-top: 8px;
+}
+
+/* Profile metric alignment */
+.rn-profile-stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100px;
+  padding: 18px;
+  border-radius: 14px;
+  background: var(--muted, #f7f7f8);
+}
+
+.rn-profile-stat strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.rn-profile-stat span {
+  font-size: 0.8rem;
+  line-height: 1.4;
+  opacity: 0.65;
+}
+
+/* ================================================================
+   COURSE CARDS
+   ================================================================ */
+
+.rn-course-card {
+  overflow: hidden;
+}
+
+.rn-course-card-content {
+  padding: 22px;
+}
+
+.rn-course-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.rn-course-card-meta span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  line-height: 1;
+  font-weight: 700;
+  background: var(--muted, #f3f4f6);
+}
+
+.rn-course-card h3 {
+  margin: 8px 0;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.rn-course-card p {
+  margin: 0;
+  line-height: 1.6;
+  opacity: 0.7;
+}
+
+.rn-course-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+/* ================================================================
+   PROGRESS
+   ================================================================ */
+
+.rn-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.rn-progress-row strong {
+  white-space: nowrap;
+}
+
+.rn-progress-track {
+  flex: 1;
+  min-width: 0;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--muted, #e5e7eb);
+}
+
+.rn-progress-track > div {
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+}
+
+/* ================================================================
+   SKILL INTELLIGENCE
+   ================================================================ */
+
+.rn-skill-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.rn-skill-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 14px;
+  background: var(--card, #ffffff);
+}
+
+.rn-skill-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.rn-skill-card-header > div {
+  min-width: 0;
+}
+
+.rn-skill-card h3 {
+  margin: 0;
+  line-height: 1.3;
+}
+
+.rn-skill-card small {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  opacity: 0.6;
+}
+
+.rn-skill-card-score {
+  flex-shrink: 0;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.rn-skill-card-level {
+  margin-top: 3px;
+  font-size: 0.75rem;
+  opacity: 0.65;
+}
+
+.rn-skill-card-bar {
+  width: 100%;
+  height: 7px;
+  margin-top: 15px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--muted, #e5e7eb);
+}
+
+.rn-skill-card-bar > div {
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+  transition: width 0.45s ease;
+}
+
+/* ================================================================
+   PERSONALIZED LEARNING
+   ================================================================ */
+
+.rn-recommendation-card {
+  min-width: 0;
+}
+
+.rn-recommendation-card h3 {
+  line-height: 1.3;
+}
+
+.rn-recommendation-card p {
+  line-height: 1.6;
+}
+
+.rn-empty-state {
+  padding: 28px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 18px;
+  background: var(--card, #ffffff);
+  text-align: center;
+}
+
+.rn-empty-state h3 {
+  margin: 0 0 8px;
+  line-height: 1.3;
+}
+
+.rn-empty-state p {
+  max-width: 620px;
+  margin: 0 auto 20px;
+  line-height: 1.65;
+  opacity: 0.68;
+}
+
+/* ================================================================
+   LEARNING INTELLIGENCE
+   ================================================================ */
+
+.rn-intelligence-metrics {
+  margin-top: 24px;
+}
+
+.rn-intelligence-score-card,
+.rn-intelligence-metric {
+  min-width: 0;
+}
+
+.rn-intelligence-score-card h3 {
+  line-height: 1.3;
+}
+
+.rn-intelligence-score-card p {
+  max-width: 560px;
+}
+
+.rn-intelligence-grid {
+  align-items: start;
+}
+
+.rn-intelligence-skill-header {
+  min-width: 0;
+}
+
+.rn-intelligence-skill-header div {
+  min-width: 0;
+}
+
+.rn-intelligence-skill-header strong {
+  line-height: 1.3;
+}
+
+.rn-intelligence-skill-header > strong {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ================================================================
+   QUICK ACTIONS
+   ================================================================ */
+
+.rn-dashboard-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.rn-dashboard-inline-actions .rn-button {
+  white-space: nowrap;
+}
+
+.rn-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.rn-quick-action {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 16px;
+  background: var(--card, #ffffff);
+  text-decoration: none;
+}
+
+.rn-quick-action strong {
+  margin-bottom: 7px;
+  line-height: 1.3;
+}
+
+.rn-quick-action span {
+  line-height: 1.55;
+  font-size: 0.88rem;
+  opacity: 0.68;
+}
+
+/* ================================================================
+   BUTTON ALIGNMENT
+   ================================================================ */
+
+.rn-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 9px 16px;
+  border-radius: 10px;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ================================================================
+   FOOTER SPACING
+   ================================================================ */
+
+.rn-dashboard-footer {
+  margin-top: 56px;
+  padding-top: 28px;
+  border-top: 1px solid var(--border, #e5e7eb);
+}
+
+.rn-dashboard-footer p {
+  line-height: 1.6;
+}
+
+/* ================================================================
+   RESPONSIVE
+   ================================================================ */
+
+@media (max-width: 1000px) {
+  .rn-quick-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .rn-skill-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .rn-dashboard-section {
+    margin-top: 38px;
+  }
+
+  .rn-dashboard-section-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .rn-dashboard-section-header .rn-text-link {
+    margin-bottom: 0;
+  }
+
+  .rn-dashboard-card {
+    padding: 20px;
+  }
+
+  .rn-dashboard-card-header {
+    gap: 12px;
+  }
+
+  .rn-profile-card {
+    padding: 20px;
+  }
+
+  .rn-course-card-content {
+    padding: 20px;
+  }
+
+  .rn-course-card-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .rn-course-card-actions .rn-button {
+    width: 100%;
+  }
+
+  .rn-progress-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .rn-progress-track {
+    width: 100%;
+  }
+
+  .rn-empty-state {
+    padding: 22px 18px;
+  }
+
+  .rn-dashboard-inline-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .rn-dashboard-inline-actions .rn-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 520px) {
+  .rn-dashboard-section {
+    margin-top: 32px;
+  }
+
+  .rn-dashboard-card {
+    padding: 18px;
+    border-radius: 15px;
+  }
+
+  .rn-dashboard-card-header {
+    flex-direction: column;
+  }
+
+  .rn-intelligence-summary {
+    gap: 8px;
+  }
+
+  .rn-intelligence-summary > div {
+    padding: 13px;
+  }
+
+  .rn-intelligence-score-card {
+    padding: 20px;
+  }
+
+  .rn-intelligence-metric {
+    padding: 18px;
+  }
+
+  .rn-quick-action {
+    padding: 18px;
+  }
+}
