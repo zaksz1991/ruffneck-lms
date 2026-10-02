@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import LearningRecommendations from "@/components/LearningRecommendations";
 
 type SkillProfile = {
   id: string;
@@ -518,6 +519,8 @@ export default async function StudentDashboardPage() {
             </div>
           )}
         </section>
+
+        <LearningRecommendations />
 
         {normalisedSkills.length > 0 && (
           <section className="dashboard-section">
