@@ -27,34 +27,24 @@ type SkillProfile = {
     | null;
 };
 
+type CourseData = {
+  id: string;
+  title: string;
+  slug: string;
+  short_description: string | null;
+  is_free: boolean;
+  level: string;
+  category: string | null;
+  duration_minutes: number | null;
+};
+
 type Enrollment = {
   id: string;
   progress_percent: number;
   enrollment_status: string;
   course_id: string;
   enrolled_at: string;
-  courses:
-    | {
-        id: string;
-        title: string;
-        slug: string;
-        short_description: string | null;
-        is_free: boolean;
-        level: string;
-        category: string | null;
-        duration_minutes: number | null;
-      }
-    | {
-        id: string;
-        title: string;
-        slug: string;
-        short_description: string | null;
-        is_free: boolean;
-        level: string;
-        category: string | null;
-        duration_minutes: number | null;
-      }[]
-    | null;
+  courses: CourseData | CourseData[] | null;
 };
 
 type Activity = {
@@ -92,7 +82,7 @@ export default async function StudentDashboardPage() {
     .eq("id", user.id)
     .maybeSingle();
 
-  const { data: enrollments } = await supabase
+  const { data: enrollmentRows } = await supabase
     .from("enrollments")
     .select(
       `
@@ -118,7 +108,10 @@ export default async function StudentDashboardPage() {
       ascending: false,
     });
 
-  const { data: skillProfiles } = await supabase
+  const enrollments =
+    (enrollmentRows || []) as unknown as Enrollment[];
+
+  const { data: skillRows } = await supabase
     .from("learner_skill_profiles")
     .select(
       `
@@ -144,7 +137,10 @@ export default async function StudentDashboardPage() {
       ascending: false,
     });
 
-  const { data: activities } = await supabase
+  const skillProfiles =
+    (skillRows || []) as unknown as SkillProfile[];
+
+  const { data: activityRows } = await supabase
     .from("learning_activity")
     .select(
       "id, activity_type, created_at, course_id, lesson_id"
@@ -155,15 +151,15 @@ export default async function StudentDashboardPage() {
     })
     .limit(8);
 
-  const normalisedSkills =
-    (skillProfiles || []) as SkillProfile[];
+  const activities =
+    (activityRows || []) as Activity[];
 
-  const strengths = normalisedSkills.filter(
+  const strengths = skillProfiles.filter(
     (skill) =>
       Number(skill.confidence_score) >= 70
   );
 
-  const developmentAreas = normalisedSkills
+  const developmentAreas = skillProfiles
     .filter(
       (skill) =>
         Number(skill.confidence_score) < 70
@@ -175,7 +171,7 @@ export default async function StudentDashboardPage() {
     );
 
   const enrolledCourseIds = new Set(
-    ((enrollments || []) as Enrollment[]).map(
+    enrollments.map(
       (enrollment) => enrollment.course_id
     )
   );
@@ -183,41 +179,104 @@ export default async function StudentDashboardPage() {
   let recommendations: RecommendationCourse[] =
     [];
 
-  /*
-   * Build course recommendations from the learner's
-   * actual weak skill IDs.
-   *
-   * Important:
-   * learner_skill_profiles.id is the profile-row ID.
-   * learner_skill_profiles.skill_id is the ID that
-   * connects to lesson_skills.skill_id.
-   */
   if (developmentAreas.length > 0) {
+    /*
+     * IMPORTANT:
+     * Use skill_id from learner_skill_profiles.
+     * Do not use learner_skill_profiles.id.
+     */
     const skillIds = developmentAreas
       .map((skill) => skill.skill_id)
       .filter(Boolean);
 
     if (skillIds.length > 0) {
-      const { data: lessonSkills } = await supabase
-        .from("lesson_skills")
-        .select(
-          `
-            skill_id,
-            lessons (
-              course_id,
-              courses (
-                id,
-                title,
-                slug,
-                level,
-                category,
-                short_description,
-                status
+      const { data: lessonSkillRows } =
+        await supabase
+          .from("lesson_skills")
+          .select(
+            `
+              skill_id,
+              lessons (
+                course_id,
+                courses (
+                  id,
+                  title,
+                  slug,
+                  level,
+                  category,
+                  short_description,
+                  status
+                )
               )
-            )
-          `
-        )
-        .in("skill_id", skillIds);
+            `
+          )
+          .in("skill_id", skillIds);
+
+      /*
+       * Supabase's generated nested relation type can
+       * vary depending on the relationship definition.
+       * Normalize it through unknown before processing.
+       */
+      const lessonSkills =
+        (lessonSkillRows || []) as unknown as Array<{
+          skill_id: string;
+          lessons:
+            | {
+                course_id: string;
+                courses:
+                  | {
+                      id: string;
+                      title: string;
+                      slug: string;
+                      level: string;
+                      category: string | null;
+                      short_description:
+                        | string
+                        | null;
+                      status: string;
+                    }
+                  | {
+                      id: string;
+                      title: string;
+                      slug: string;
+                      level: string;
+                      category: string | null;
+                      short_description:
+                        | string
+                        | null;
+                      status: string;
+                    }[]
+                  | null;
+              }
+            | {
+                course_id: string;
+                courses:
+                  | {
+                      id: string;
+                      title: string;
+                      slug: string;
+                      level: string;
+                      category: string | null;
+                      short_description:
+                        | string
+                        | null;
+                      status: string;
+                    }
+                  | {
+                      id: string;
+                      title: string;
+                      slug: string;
+                      level: string;
+                      category: string | null;
+                      short_description:
+                        | string
+                        | null;
+                      status: string;
+                    }[]
+                  | null;
+              }[]
+            | null;
+        }>;
 
       const recommendationMap = new Map<
         string,
@@ -232,12 +291,16 @@ export default async function StudentDashboardPage() {
         }
       >();
 
-      for (const item of lessonSkills || []) {
-        const lesson = Array.isArray(item.lessons)
+      for (const item of lessonSkills) {
+        const lesson = Array.isArray(
+          item.lessons
+        )
           ? item.lessons[0]
           : item.lessons;
 
-        if (!lesson) continue;
+        if (!lesson) {
+          continue;
+        }
 
         const course = Array.isArray(
           lesson.courses
@@ -245,7 +308,9 @@ export default async function StudentDashboardPage() {
           ? lesson.courses[0]
           : lesson.courses;
 
-        if (!course) continue;
+        if (!course) {
+          continue;
+        }
 
         if (course.status !== "published") {
           continue;
@@ -260,7 +325,9 @@ export default async function StudentDashboardPage() {
             candidate.skill_id === item.skill_id
         );
 
-        if (!skill) continue;
+        if (!skill) {
+          continue;
+        }
 
         const skillData = Array.isArray(
           skill.learning_skills
@@ -269,7 +336,8 @@ export default async function StudentDashboardPage() {
           : skill.learning_skills;
 
         const skillName =
-          skillData?.name || "Skill development";
+          skillData?.name ||
+          "Skill development";
 
         const existing =
           recommendationMap.get(course.id);
@@ -312,26 +380,20 @@ export default async function StudentDashboardPage() {
     }
   }
 
-  const typedEnrollments =
-    (enrollments || []) as Enrollment[];
-
-  const typedActivities =
-    (activities || []) as Activity[];
-
   const hasSkillProfile =
-    normalisedSkills.length > 0;
+    skillProfiles.length > 0;
 
   const averageConfidence =
     hasSkillProfile
       ? Math.round(
-          normalisedSkills.reduce(
+          skillProfiles.reduce(
             (total, skill) =>
               total +
               Number(
                 skill.confidence_score || 0
               ),
             0
-          ) / normalisedSkills.length
+          ) / skillProfiles.length
         )
       : 0;
 
@@ -379,7 +441,7 @@ export default async function StudentDashboardPage() {
         <div className="rn-learning-overview">
           <div className="rn-learning-stat">
             <strong>
-              {typedEnrollments.length}
+              {enrollments.length}
             </strong>
             <span>Courses</span>
           </div>
@@ -387,7 +449,7 @@ export default async function StudentDashboardPage() {
           <div className="rn-learning-stat">
             <strong>
               {
-                typedEnrollments.filter(
+                enrollments.filter(
                   (item) =>
                     item.enrollment_status ===
                     "completed"
@@ -471,7 +533,7 @@ export default async function StudentDashboardPage() {
             <div className="rn-learning-overview">
               <div className="rn-learning-stat">
                 <strong>
-                  {normalisedSkills.length}
+                  {skillProfiles.length}
                 </strong>
                 <span>Assessed skills</span>
               </div>
@@ -607,7 +669,7 @@ export default async function StudentDashboardPage() {
             </div>
           </div>
 
-          {!typedEnrollments.length ? (
+          {!enrollments.length ? (
             <div className="panel">
               <p
                 style={{
@@ -627,7 +689,7 @@ export default async function StudentDashboardPage() {
             </div>
           ) : (
             <div className="grid">
-              {typedEnrollments.map(
+              {enrollments.map(
                 (enrollment) => {
                   const course =
                     Array.isArray(
@@ -708,7 +770,7 @@ export default async function StudentDashboardPage() {
 
         <LearningRecommendations />
 
-        {normalisedSkills.length > 0 && (
+        {skillProfiles.length > 0 && (
           <section className="dashboard-section">
             <div className="section-heading-row">
               <div>
@@ -729,7 +791,7 @@ export default async function StudentDashboardPage() {
             </div>
 
             <div className="skill-profile-grid">
-              {normalisedSkills
+              {skillProfiles
                 .slice(0, 6)
                 .map((skill) => {
                   const skillData =
@@ -795,7 +857,7 @@ export default async function StudentDashboardPage() {
           </section>
         )}
 
-        {typedActivities.length > 0 && (
+        {activities.length > 0 && (
           <section className="dashboard-section">
             <div className="section-heading-row">
               <div>
@@ -811,7 +873,7 @@ export default async function StudentDashboardPage() {
             </div>
 
             <div className="activity-list">
-              {typedActivities.map(
+              {activities.map(
                 (activity) => (
                   <div
                     key={activity.id}
