@@ -10,6 +10,7 @@ type Recommendation = {
   courseId: string;
   courseTitle: string;
   courseSlug: string;
+  skillId: string;
   score: number;
   priority: "high" | "medium";
 };
@@ -22,7 +23,7 @@ export default function LearningRecommendations() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function load() {
+    async function loadRecommendations() {
       try {
         const response = await fetch(
           "/api/student/recommendations",
@@ -35,7 +36,8 @@ export default function LearningRecommendations() {
 
         if (!response.ok) {
           setMessage(
-            data?.error || "Unable to load recommendations."
+            data?.error ||
+              "Unable to load recommendations."
           );
           return;
         }
@@ -43,13 +45,15 @@ export default function LearningRecommendations() {
         setRecommendations(data.recommendations || []);
         setMessage(data.message || null);
       } catch {
-        setMessage("Unable to load recommendations.");
+        setMessage(
+          "Unable to load recommendations."
+        );
       } finally {
         setLoading(false);
       }
     }
 
-    load();
+    loadRecommendations();
   }, []);
 
   if (loading) {
@@ -57,7 +61,10 @@ export default function LearningRecommendations() {
       <section className="rn-recommendations">
         <div className="rn-section-heading">
           <div>
-            <span className="rn-eyebrow">Personalized learning</span>
+            <span className="rn-eyebrow">
+              Personalized learning
+            </span>
+
             <h2>Recommended for you</h2>
           </div>
         </div>
@@ -73,10 +80,15 @@ export default function LearningRecommendations() {
     <section className="rn-recommendations">
       <div className="rn-section-heading">
         <div>
-          <span className="rn-eyebrow">Personalized learning</span>
+          <span className="rn-eyebrow">
+            Personalized learning
+          </span>
+
           <h2>Recommended for you</h2>
+
           <p>
-            Lessons selected from your current skill profile.
+            Lessons selected from your current skill
+            profile.
           </p>
         </div>
 
@@ -91,12 +103,13 @@ export default function LearningRecommendations() {
       {!recommendations.length ? (
         <div className="rn-recommendation-empty">
           <h3>
-            {message || "Your recommendations will appear here."}
+            {message ||
+              "Your recommendations will appear here."}
           </h3>
 
           <p>
-            Complete your diagnostic assessment to create a personalized
-            learning path.
+            Complete your diagnostic assessment to
+            create a personalized learning path.
           </p>
 
           <Link
@@ -126,7 +139,9 @@ export default function LearningRecommendations() {
                     : "Recommended"}
                 </span>
 
-                <span>{item.score}% skill score</span>
+                <span>
+                  {item.score}% skill score
+                </span>
               </div>
 
               <span className="rn-recommendation-course">
