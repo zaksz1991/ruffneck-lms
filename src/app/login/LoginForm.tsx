@@ -3,12 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 export default function LoginForm() {
   const router = useRouter();
   const search = useSearchParams();
   const next = search.get("next") || "/student/dashboard";
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -16,25 +16,42 @@ export default function LoginForm() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+
     setError(null);
     setLoading(true);
 
-    const supabase = createClient();
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+        }),
+      });
 
-    const { error: err } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+      const data = await response.json().catch(() => null);
 
-    setLoading(false);
+      if (!response.ok) {
+        setError(
+          data?.error ||
+            "Login failed. Please check your email and password."
+        );
+        return;
+      }
 
-    if (err) {
-      setError(err.message);
-      return;
+      router.push(data?.next || next);
+      router.refresh();
+    } catch {
+      setError(
+        "Unable to connect to the login service. Please try again."
+      );
+    } finally {
+      setLoading(false);
     }
-
-    router.push(next);
-    router.refresh();
   }
 
   return (
@@ -47,6 +64,7 @@ export default function LoginForm() {
 
         <form onSubmit={onSubmit}>
           <label htmlFor="email">Email</label>
+
           <input
             id="email"
             type="email"
@@ -57,6 +75,7 @@ export default function LoginForm() {
           />
 
           <label htmlFor="password">Password</label>
+
           <input
             id="password"
             type="password"
@@ -66,7 +85,11 @@ export default function LoginForm() {
             autoComplete="current-password"
           />
 
-          <button className="btn btn-primary btn-block" disabled={loading}>
+          <button
+            type="submit"
+            className="btn btn-primary btn-block"
+            disabled={loading}
+          >
             {loading ? "Signing in…" : "Log in"}
           </button>
         </form>
