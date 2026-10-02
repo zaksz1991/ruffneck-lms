@@ -4,9 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 
 export default async function StudentDashboardPage() {
   const supabase = await createClient();
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
   if (!user) redirect("/login?next=/student/dashboard");
 
   const { data: profile } = await supabase
@@ -39,6 +41,7 @@ export default async function StudentDashboardPage() {
     <section className="section">
       <div className="container">
         <h2>My learning</h2>
+
         <p className="muted">
           Welcome{profile?.full_name ? `, ${profile.full_name}` : ""}. Track your
           courses and continue where you left off.
@@ -46,38 +49,49 @@ export default async function StudentDashboardPage() {
 
         {!enrollments?.length ? (
           <div className="panel">
-            <p style={{ margin: "0 0 12px" }}>You are not enrolled in any course yet.</p>
+            <p style={{ margin: "0 0 12px" }}>
+              You are not enrolled in any course yet.
+            </p>
+
             <Link href="/courses" className="btn btn-primary">
               Browse courses
             </Link>
           </div>
         ) : (
           <div className="grid">
-            {enrollments.map((e: {
-              id: string;
-              progress_percent: number;
-              enrollment_status: string;
-              courses: {
-                title: string;
-                slug: string;
-                short_description: string | null;
-              } | null;
-            }) => {
+            {enrollments.map((e) => {
               const c = e.courses;
+
               if (!c) return null;
+
               return (
                 <article key={e.id} className="card">
                   <div className="card-body">
                     <span className="badge">
-                      {e.enrollment_status === "completed" ? "Completed" : "In progress"}
+                      {e.enrollment_status === "completed"
+                        ? "Completed"
+                        : "In progress"}
                     </span>
+
                     <h3>{c.title}</h3>
+
                     <p>{c.short_description}</p>
-                    <div className="progress" aria-label={`${e.progress_percent}% complete`}>
+
+                    <div
+                      className="progress"
+                      aria-label={`${e.progress_percent}% complete`}
+                    >
                       <span style={{ width: `${e.progress_percent}%` }} />
                     </div>
-                    <p className="muted">{e.progress_percent}% complete</p>
-                    <Link href={`/courses/${c.slug}`} className="btn btn-navy">
+
+                    <p className="muted">
+                      {e.progress_percent}% complete
+                    </p>
+
+                    <Link
+                      href={`/courses/${c.slug}`}
+                      className="btn btn-navy"
+                    >
                       {e.progress_percent > 0 ? "Continue" : "Start"}
                     </Link>
                   </div>
