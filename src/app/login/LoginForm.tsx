@@ -85,6 +85,15 @@ export default function LoginForm() {
             autoComplete="current-password"
           />
 
+          <div style={{ marginTop: -8, marginBottom: 16 }}>
+            <Link
+              href="/forgot-password"
+              className="text-link"
+            >
+              Forgot password?
+            </Link>
+          </div>
+
           <button
             type="submit"
             className="btn btn-primary btn-block"
