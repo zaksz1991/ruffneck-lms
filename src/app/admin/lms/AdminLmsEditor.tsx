@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type Role = "admin" | "instructor";
@@ -21,7 +20,7 @@ type Course = {
   is_free: boolean;
   status: "draft" | "published" | "archived";
   instructor_id: string | null;
-  duration_minutes: number | null;
+  duration_minutes: number;
   learning_outcomes: string[] | null;
   target_audience: string | null;
   seo_title: string | null;
@@ -48,13 +47,29 @@ type Lesson = {
   slug: string;
   content_html: string | null;
   video_url: string | null;
-  duration_minutes: number | null;
-  duration_seconds: number | null;
+  duration_minutes: number;
+  duration_seconds: number;
   sort_order: number;
   is_preview: boolean;
   is_published: boolean;
   created_at: string;
   updated_at: string;
+};
+
+type LessonResource = {
+  id: string;
+  lesson_id: string;
+  title: string;
+  resource_type: "file" | "link" | "pdf" | "audio";
+  url: string;
+  sort_order: number;
+  created_at: string;
+};
+
+type Instructor = {
+  id: string;
+  email: string | null;
+  full_name: string | null;
 };
 
 type Props = {
@@ -63,7 +78,7 @@ type Props = {
   role: Role;
 };
 
-const emptyCourse = {
+const emptyCourse: Partial<Course> = {
   title: "",
   slug: "",
   short_description: "",
@@ -71,15 +86,42 @@ const emptyCourse = {
   thumbnail_url: "",
   intro_video_url: "",
   category: "",
-  level: "beginner" as Course["level"],
+  level: "beginner",
   price_ngn: 0,
-  status: "draft" as Course["status"],
+  currency: "NGN",
+  status: "draft",
+  instructor_id: null,
   duration_minutes: 0,
-  learning_outcomes: "",
+  learning_outcomes: [],
   target_audience: "",
   seo_title: "",
   seo_description: "",
 };
+
+const emptyLesson: Partial<Lesson> = {
+  title: "",
+  slug: "",
+  content_html: "",
+  video_url: "",
+  duration_minutes: 0,
+  duration_seconds: 0,
+  is_preview: false,
+  is_published: true,
+};
+
+const emptyResource: Partial<LessonResource> = {
+  title: "",
+  resource_type: "link",
+  url: "",
+};
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 export default function AdminLmsEditor({
   initialCourses,
@@ -87,217 +129,274 @@ export default function AdminLmsEditor({
   role,
 }: Props) {
   const supabase = createClient();
-  const router = useRouter();
 
   const [courses, setCourses] = useState<Course[]>(initialCourses);
-
-  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(
-    initialCourses[0]?.id ?? null
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(
+    initialCourses[0]?.id ?? ""
   );
-
-  const [courseForm, setCourseForm] = useState(emptyCourse);
-  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
 
   const [sections, setSections] = useState<Section[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
-
-  const [newSectionTitle, setNewSectionTitle] = useState("");
-
-  const [editingSectionId, setEditingSectionId] = useState<string | null>(
-    null
-  );
-  const [editingSectionTitle, setEditingSectionTitle] = useState("");
-
-  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
-
-  const [lessonForm, setLessonForm] = useState({
-    section_id: "",
-    title: "",
-    slug: "",
-    content_html: "",
-    video_url: "",
-    duration_minutes: 0,
-    duration_seconds: 0,
-    is_preview: false,
-    is_published: true,
-  });
-
-  const [showCourseForm, setShowCourseForm] = useState(false);
-  const [showLessonForm, setShowLessonForm] = useState(false);
+  const [resources, setResources] = useState<LessonResource[]>([]);
+  const [instructors, setInstructors] = useState<Instructor[]>([]);
 
   const [loadingCurriculum, setLoadingCurriculum] = useState(false);
+  const [loadingResources, setLoadingResources] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  const [courseForm, setCourseForm] =
+    useState<Partial<Course>>(emptyCourse);
+
+  const [editingCourse, setEditingCourse] = useState(false);
+
+  const [sectionTitle, setSectionTitle] = useState("");
+  const [editingSectionId, setEditingSectionId] = useState<string | null>(
+    null
+  );
+
+  const [lessonForm, setLessonForm] =
+    useState<Partial<Lesson>>(emptyLesson);
+  const [editingLessonId, setEditingLessonId] = useState<string | null>(
+    null
+  );
+  const [lessonSectionId, setLessonSectionId] = useState("");
+
+  const [selectedLessonId, setSelectedLessonId] = useState<string>("");
+  const [resourceForm, setResourceForm] =
+    useState<Partial<LessonResource>>(emptyResource);
+  const [editingResourceId, setEditingResourceId] =
+    useState<string | null>(null);
+
   const selectedCourse = useMemo(
-    () =>
-      courses.find((course) => course.id === selectedCourseId) ?? null,
+    () => courses.find((course) => course.id === selectedCourseId) ?? null,
     [courses, selectedCourseId]
   );
+
+  const selectedLesson = useMemo(
+    () => lessons.find((lesson) => lesson.id === selectedLessonId) ?? null,
+    [lessons, selectedLessonId]
+  );
+
+  const lessonsBySection = useMemo(() => {
+    const result: Record<string, Lesson[]> = {};
+
+    for (const section of sections) {
+      result[section.id] = lessons
+        .filter((lesson) => lesson.section_id === section.id)
+        .sort((a, b) => a.sort_order - b.sort_order);
+    }
+
+    return result;
+  }, [sections, lessons]);
+
+  useEffect(() => {
+    if (selectedCourse) {
+      setCourseForm(selectedCourse);
+    } else {
+      setCourseForm(emptyCourse);
+    }
+  }, [selectedCourse]);
+
+  useEffect(() => {
+    if (!selectedCourseId) {
+      setSections([]);
+      setLessons([]);
+      setSelectedLessonId("");
+      return;
+    }
+
+    loadCurriculum(selectedCourseId);
+  }, [selectedCourseId]);
+
+  useEffect(() => {
+    if (role !== "admin") return;
+
+    loadInstructors();
+  }, [role]);
+
+  useEffect(() => {
+    if (!selectedLessonId) {
+      setResources([]);
+      return;
+    }
+
+    loadResources(selectedLessonId);
+  }, [selectedLessonId]);
+
+  async function loadInstructors() {
+    const { data, error: instructorError } = await supabase
+      .from("profiles")
+      .select("id, email, full_name")
+      .eq("role", "instructor")
+      .order("full_name", { ascending: true });
+
+    if (instructorError) {
+      setError(instructorError.message);
+      return;
+    }
+
+    setInstructors(data ?? []);
+  }
+
+  async function loadCurriculum(courseId: string) {
+    setLoadingCurriculum(true);
+    setError("");
+
+    const [{ data: sectionData, error: sectionError }, { data: lessonData, error: lessonError }] =
+      await Promise.all([
+        supabase
+          .from("course_sections")
+          .select("*")
+          .eq("course_id", courseId)
+          .order("sort_order", { ascending: true }),
+
+        supabase
+          .from("lessons")
+          .select("*")
+          .eq("course_id", courseId)
+          .order("sort_order", { ascending: true }),
+      ]);
+
+    if (sectionError) {
+      setError(sectionError.message);
+      setLoadingCurriculum(false);
+      return;
+    }
+
+    if (lessonError) {
+      setError(lessonError.message);
+      setLoadingCurriculum(false);
+      return;
+    }
+
+    const loadedSections = sectionData ?? [];
+    const loadedLessons = lessonData ?? [];
+
+    setSections(loadedSections);
+    setLessons(loadedLessons);
+
+    if (
+      selectedLessonId &&
+      !loadedLessons.some((lesson) => lesson.id === selectedLessonId)
+    ) {
+      setSelectedLessonId("");
+    }
+
+    setLoadingCurriculum(false);
+  }
+
+  async function loadResources(lessonId: string) {
+    setLoadingResources(true);
+    setError("");
+
+    const { data, error: resourceError } = await supabase
+      .from("lesson_resources")
+      .select("*")
+      .eq("lesson_id", lessonId)
+      .order("sort_order", { ascending: true });
+
+    if (resourceError) {
+      setError(resourceError.message);
+      setResources([]);
+    } else {
+      setResources(data ?? []);
+    }
+
+    setLoadingResources(false);
+  }
 
   function clearMessages() {
     setMessage("");
     setError("");
   }
 
-  function slugify(value: string) {
-    return value
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-");
-  }
-
-  async function loadCurriculum(courseId: string) {
+  function beginCreateCourse() {
     clearMessages();
-    setLoadingCurriculum(true);
-
-    const [sectionsResult, lessonsResult] = await Promise.all([
-      supabase
-        .from("course_sections")
-        .select("*")
-        .eq("course_id", courseId)
-        .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: true }),
-
-      supabase
-        .from("lessons")
-        .select("*")
-        .eq("course_id", courseId)
-        .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: true }),
-    ]);
-
-    if (sectionsResult.error) {
-      setError(sectionsResult.error.message);
-      setLoadingCurriculum(false);
-      return;
-    }
-
-    if (lessonsResult.error) {
-      setError(lessonsResult.error.message);
-      setLoadingCurriculum(false);
-      return;
-    }
-
-    setSections(sectionsResult.data ?? []);
-    setLessons(lessonsResult.data ?? []);
-    setLoadingCurriculum(false);
-  }
-
-  /*
-   * Automatically load the curriculum whenever a course is selected.
-   * This fixes the initial empty curriculum state.
-   */
-  useEffect(() => {
-    if (!selectedCourseId) {
-      setSections([]);
-      setLessons([]);
-      return;
-    }
-
-    void loadCurriculum(selectedCourseId);
-  }, [selectedCourseId]);
-
-  function startNewCourse() {
-    clearMessages();
-
-    setEditingCourse(null);
+    setEditingCourse(true);
     setCourseForm(emptyCourse);
-    setShowCourseForm(true);
-    setSelectedCourseId(null);
+    setSelectedCourseId("");
     setSections([]);
     setLessons([]);
+    setSelectedLessonId("");
   }
 
-  function startEditCourse(course: Course) {
+  function beginEditCourse(course: Course) {
     clearMessages();
-
-    setEditingCourse(course);
-
-    setCourseForm({
-      title: course.title,
-      slug: course.slug,
-      short_description: course.short_description ?? "",
-      description: course.description ?? "",
-      thumbnail_url: course.thumbnail_url ?? "",
-      intro_video_url: course.intro_video_url ?? "",
-      category: course.category ?? "",
-      level: course.level,
-      price_ngn: course.price_ngn ?? 0,
-      status: course.status,
-      duration_minutes: course.duration_minutes ?? 0,
-      learning_outcomes: (course.learning_outcomes ?? []).join("\n"),
-      target_audience: course.target_audience ?? "",
-      seo_title: course.seo_title ?? "",
-      seo_description: course.seo_description ?? "",
-    });
-
-    setShowCourseForm(true);
     setSelectedCourseId(course.id);
+    setCourseForm(course);
+    setEditingCourse(true);
+  }
+
+  function cancelCourseEdit() {
+    clearMessages();
+    setEditingCourse(false);
+
+    if (selectedCourse) {
+      setCourseForm(selectedCourse);
+    } else {
+      setCourseForm(emptyCourse);
+    }
   }
 
   async function saveCourse() {
     clearMessages();
 
-    if (!courseForm.title.trim()) {
+    const title = String(courseForm.title ?? "").trim();
+    const slug = String(courseForm.slug ?? "").trim();
+
+    if (!title) {
       setError("Course title is required.");
       return;
     }
 
-    if (!courseForm.slug.trim()) {
+    if (!slug) {
       setError("Course slug is required.");
-      return;
-    }
-
-    if (courseForm.price_ngn < 0) {
-      setError("Price cannot be negative.");
       return;
     }
 
     setSaving(true);
 
-    const learningOutcomes = courseForm.learning_outcomes
-      .split("\n")
-      .map((item) => item.trim())
-      .filter(Boolean);
-
-    const publishedAt =
-      courseForm.status === "published"
-        ? editingCourse?.published_at ?? new Date().toISOString()
-        : null;
+    const status = courseForm.status ?? "draft";
 
     const payload = {
-      title: courseForm.title.trim(),
-      slug: courseForm.slug.trim(),
-      short_description:
-        courseForm.short_description.trim() || null,
-      description: courseForm.description.trim() || null,
-      thumbnail_url: courseForm.thumbnail_url.trim() || null,
-      intro_video_url: courseForm.intro_video_url.trim() || null,
-      category: courseForm.category.trim() || null,
-      level: courseForm.level,
-      price_ngn: Number(courseForm.price_ngn) || 0,
-      status: courseForm.status,
-      duration_minutes:
-        Number(courseForm.duration_minutes) || 0,
-      learning_outcomes: learningOutcomes,
-      target_audience:
-        courseForm.target_audience.trim() || null,
-      seo_title: courseForm.seo_title.trim() || null,
-      seo_description:
-        courseForm.seo_description.trim() || null,
-      published_at: publishedAt,
+      title,
+      slug,
+      short_description: courseForm.short_description || null,
+      description: courseForm.description || null,
+      thumbnail_url: courseForm.thumbnail_url || null,
+      intro_video_url: courseForm.intro_video_url || null,
+      category: courseForm.category || null,
+      level: courseForm.level ?? "beginner",
+      price_ngn: Number(courseForm.price_ngn ?? 0),
+      currency: courseForm.currency || "NGN",
+      status,
+      instructor_id:
+        role === "admin"
+          ? courseForm.instructor_id || null
+          : editingCourse
+            ? selectedCourse?.instructor_id ?? userId
+            : userId,
+      duration_minutes: Number(courseForm.duration_minutes ?? 0),
+      learning_outcomes: Array.isArray(courseForm.learning_outcomes)
+        ? courseForm.learning_outcomes.filter(Boolean)
+        : [],
+      target_audience: courseForm.target_audience || null,
+      seo_title: courseForm.seo_title || null,
+      seo_description: courseForm.seo_description || null,
+      published_at:
+        status === "published"
+          ? selectedCourse?.published_at ?? new Date().toISOString()
+          : null,
     };
 
-    if (editingCourse) {
+    if (editingCourse && selectedCourseId) {
       const { data, error: updateError } = await supabase
         .from("courses")
         .update(payload)
-        .eq("id", editingCourse.id)
+        .eq("id", selectedCourseId)
         .select("*")
         .single();
 
@@ -309,22 +408,16 @@ export default function AdminLmsEditor({
 
       setCourses((current) =>
         current.map((course) =>
-          course.id === editingCourse.id ? data : course
+          course.id === selectedCourseId ? data : course
         )
       );
 
-      setSelectedCourseId(editingCourse.id);
-      setEditingCourse(data);
-      setMessage("Course updated.");
+      setCourseForm(data);
+      setMessage("Course updated successfully.");
     } else {
-      const insertPayload = {
-        ...payload,
-        instructor_id: role === "instructor" ? userId : null,
-      };
-
       const { data, error: insertError } = await supabase
         .from("courses")
-        .insert(insertPayload)
+        .insert(payload)
         .select("*")
         .single();
 
@@ -336,109 +429,156 @@ export default function AdminLmsEditor({
 
       setCourses((current) => [data, ...current]);
       setSelectedCourseId(data.id);
-      setEditingCourse(data);
-      setSections([]);
-      setLessons([]);
-      setMessage("Course created.");
+      setCourseForm(data);
+      setEditingCourse(true);
+      setMessage("Course created successfully.");
     }
 
-    setShowCourseForm(false);
-    setSaving(false);
-    router.refresh();
-  }
-
-  async function addSection() {
-    clearMessages();
-
-    if (!selectedCourseId) {
-      setError("Select a course first.");
-      return;
-    }
-
-    if (!newSectionTitle.trim()) {
-      setError("Section title is required.");
-      return;
-    }
-
-    setSaving(true);
-
-    const nextOrder =
-      sections.length > 0
-        ? Math.max(
-            ...sections.map((section) => section.sort_order)
-          ) + 1
-        : 1;
-
-    const { data, error: insertError } = await supabase
-      .from("course_sections")
-      .insert({
-        course_id: selectedCourseId,
-        title: newSectionTitle.trim(),
-        sort_order: nextOrder,
-      })
-      .select("*")
-      .single();
-
-    if (insertError) {
-      setError(insertError.message);
-      setSaving(false);
-      return;
-    }
-
-    setSections((current) => [...current, data]);
-    setNewSectionTitle("");
-    setMessage("Section added.");
     setSaving(false);
   }
 
-  async function saveSection(sectionId: string) {
-    clearMessages();
-
-    if (!editingSectionTitle.trim()) {
-      setError("Section title is required.");
+  async function deleteCourse(courseId: string) {
+    if (role !== "admin") {
+      setError("Only admins can delete courses.");
       return;
     }
-
-    setSaving(true);
-
-    const { data, error: updateError } = await supabase
-      .from("course_sections")
-      .update({
-        title: editingSectionTitle.trim(),
-      })
-      .eq("id", sectionId)
-      .select("*")
-      .single();
-
-    if (updateError) {
-      setError(updateError.message);
-      setSaving(false);
-      return;
-    }
-
-    setSections((current) =>
-      current.map((section) =>
-        section.id === sectionId ? data : section
-      )
-    );
-
-    setEditingSectionId(null);
-    setEditingSectionTitle("");
-    setMessage("Section updated.");
-    setSaving(false);
-  }
-
-  async function deleteSection(section: Section) {
-    clearMessages();
 
     if (
       !window.confirm(
-        `Delete "${section.title}"? Its lessons will also be deleted.`
+        "Delete this course? Its sections, lessons and lesson resources will also be deleted through the database relationships."
       )
     ) {
       return;
     }
 
+    clearMessages();
+    setSaving(true);
+
+    const { error: deleteError } = await supabase
+      .from("courses")
+      .delete()
+      .eq("id", courseId);
+
+    if (deleteError) {
+      setError(deleteError.message);
+      setSaving(false);
+      return;
+    }
+
+    const remaining = courses.filter((course) => course.id !== courseId);
+
+    setCourses(remaining);
+
+    if (selectedCourseId === courseId) {
+      const nextCourse = remaining[0];
+
+      setSelectedCourseId(nextCourse?.id ?? "");
+      setCourseForm(nextCourse ?? emptyCourse);
+      setSections([]);
+      setLessons([]);
+      setSelectedLessonId("");
+      setResources([]);
+    }
+
+    setMessage("Course deleted.");
+    setSaving(false);
+  }
+
+  async function saveSection() {
+    if (!selectedCourseId) {
+      setError("Select a course first.");
+      return;
+    }
+
+    const title = sectionTitle.trim();
+
+    if (!title) {
+      setError("Section title is required.");
+      return;
+    }
+
+    clearMessages();
+    setSaving(true);
+
+    if (editingSectionId) {
+      const { data, error: updateError } = await supabase
+        .from("course_sections")
+        .update({
+          title,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", editingSectionId)
+        .select("*")
+        .single();
+
+      if (updateError) {
+        setError(updateError.message);
+        setSaving(false);
+        return;
+      }
+
+      setSections((current) =>
+        current.map((section) =>
+          section.id === editingSectionId ? data : section
+        )
+      );
+
+      setMessage("Section renamed.");
+    } else {
+      const nextOrder =
+        sections.length > 0
+          ? Math.max(...sections.map((section) => section.sort_order)) + 1
+          : 1;
+
+      const { data, error: insertError } = await supabase
+        .from("course_sections")
+        .insert({
+          course_id: selectedCourseId,
+          title,
+          sort_order: nextOrder,
+        })
+        .select("*")
+        .single();
+
+      if (insertError) {
+        setError(insertError.message);
+        setSaving(false);
+        return;
+      }
+
+      setSections((current) =>
+        [...current, data].sort((a, b) => a.sort_order - b.sort_order)
+      );
+
+      setMessage("Section created.");
+    }
+
+    setSectionTitle("");
+    setEditingSectionId(null);
+    setSaving(false);
+  }
+
+  function editSection(section: Section) {
+    clearMessages();
+    setSectionTitle(section.title);
+    setEditingSectionId(section.id);
+  }
+
+  function cancelSectionEdit() {
+    setSectionTitle("");
+    setEditingSectionId(null);
+  }
+
+  async function deleteSection(section: Section) {
+    if (
+      !window.confirm(
+        `Delete "${section.title}" and all lessons inside it?`
+      )
+    ) {
+      return;
+    }
+
+    clearMessages();
     setSaving(true);
 
     const { error: deleteError } = await supabase
@@ -456,11 +596,20 @@ export default function AdminLmsEditor({
       current.filter((item) => item.id !== section.id)
     );
 
-    setLessons((current) =>
-      current.filter(
-        (lesson) => lesson.section_id !== section.id
-      )
+    const removedLessons = lessons.filter(
+      (lesson) => lesson.section_id === section.id
     );
+
+    setLessons((current) =>
+      current.filter((lesson) => lesson.section_id !== section.id)
+    );
+
+    if (
+      removedLessons.some((lesson) => lesson.id === selectedLessonId)
+    ) {
+      setSelectedLessonId("");
+      setResources([]);
+    }
 
     setMessage("Section deleted.");
     setSaving(false);
@@ -474,197 +623,138 @@ export default function AdminLmsEditor({
       (a, b) => a.sort_order - b.sort_order
     );
 
-    const index = ordered.findIndex(
-      (item) => item.id === section.id
-    );
+    const index = ordered.findIndex((item) => item.id === section.id);
 
-    const targetIndex =
-      direction === "up" ? index - 1 : index + 1;
+    if (index < 0) return;
 
-    if (
-      index < 0 ||
-      targetIndex < 0 ||
-      targetIndex >= ordered.length
-    ) {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+
+    if (targetIndex < 0 || targetIndex >= ordered.length) {
       return;
     }
 
     const target = ordered[targetIndex];
 
-    setSaving(true);
     clearMessages();
+    setSaving(true);
 
-    const first = await supabase
+    const firstOrder = section.sort_order;
+    const secondOrder = target.sort_order;
+
+    const { error: firstError } = await supabase
       .from("course_sections")
-      .update({
-        sort_order: target.sort_order,
-      })
+      .update({ sort_order: secondOrder })
       .eq("id", section.id);
 
-    if (first.error) {
-      setError(first.error.message);
+    if (firstError) {
+      setError(firstError.message);
       setSaving(false);
       return;
     }
 
-    const second = await supabase
+    const { error: secondError } = await supabase
       .from("course_sections")
-      .update({
-        sort_order: section.sort_order,
-      })
+      .update({ sort_order: firstOrder })
       .eq("id", target.id);
 
-    if (second.error) {
-      setError(second.error.message);
+    if (secondError) {
+      setError(secondError.message);
       setSaving(false);
       return;
     }
 
-    await loadCurriculum(selectedCourseId!);
+    setSections((current) =>
+      current
+        .map((item) => {
+          if (item.id === section.id) {
+            return { ...item, sort_order: secondOrder };
+          }
+
+          if (item.id === target.id) {
+            return { ...item, sort_order: firstOrder };
+          }
+
+          return item;
+        })
+        .sort((a, b) => a.sort_order - b.sort_order)
+    );
 
     setMessage("Section order updated.");
     setSaving(false);
   }
 
-  function lessonsForSection(sectionId: string) {
-    return lessons
-      .filter((lesson) => lesson.section_id === sectionId)
-      .sort((a, b) => a.sort_order - b.sort_order);
-  }
-
-  function startNewLesson(sectionId?: string) {
+  function beginCreateLesson(sectionId: string) {
     clearMessages();
 
-    const targetSection =
-      sectionId ?? sections[0]?.id ?? "";
-
-    setEditingLessonId(null);
-
+    setLessonSectionId(sectionId);
     setLessonForm({
-      section_id: targetSection,
-      title: "",
+      ...emptyLesson,
       slug: "",
-      content_html: "",
-      video_url: "",
-      duration_minutes: 0,
-      duration_seconds: 0,
-      is_preview: false,
-      is_published: true,
     });
-
-    setShowLessonForm(true);
+    setEditingLessonId(null);
   }
 
-  function startEditLesson(lesson: Lesson) {
+  function beginEditLesson(lesson: Lesson) {
     clearMessages();
 
+    setLessonSectionId(lesson.section_id);
+    setLessonForm(lesson);
     setEditingLessonId(lesson.id);
+    setSelectedLessonId(lesson.id);
+  }
 
-    setLessonForm({
-      section_id: lesson.section_id,
-      title: lesson.title,
-      slug: lesson.slug,
-      content_html: lesson.content_html ?? "",
-      video_url: lesson.video_url ?? "",
-      duration_minutes: lesson.duration_minutes ?? 0,
-      duration_seconds: lesson.duration_seconds ?? 0,
-      is_preview: lesson.is_preview,
-      is_published: lesson.is_published,
-    });
-
-    setShowLessonForm(true);
+  function cancelLessonEdit() {
+    setLessonSectionId("");
+    setLessonForm(emptyLesson);
+    setEditingLessonId(null);
   }
 
   async function saveLesson() {
-    clearMessages();
-
     if (!selectedCourseId) {
       setError("Select a course first.");
       return;
     }
 
-    if (!lessonForm.section_id) {
-      setError("Select a section.");
-      return;
-    }
+    const title = String(lessonForm.title ?? "").trim();
+    const slug = String(lessonForm.slug ?? "").trim();
+    const sectionId = lessonSectionId || String(lessonForm.section_id ?? "");
 
-    if (!lessonForm.title.trim()) {
+    if (!title) {
       setError("Lesson title is required.");
       return;
     }
 
-    if (!lessonForm.slug.trim()) {
+    if (!slug) {
       setError("Lesson slug is required.");
       return;
     }
 
-    setSaving(true);
-
-    let sortOrder = 1;
-
-    if (!editingLessonId) {
-      const existing = lessonsForSection(
-        lessonForm.section_id
-      );
-
-      sortOrder =
-        existing.length > 0
-          ? Math.max(
-              ...existing.map((lesson) => lesson.sort_order)
-            ) + 1
-          : 1;
-    } else {
-      const existingLesson = lessons.find(
-        (lesson) => lesson.id === editingLessonId
-      );
-
-      if (
-        existingLesson?.section_id ===
-        lessonForm.section_id
-      ) {
-        sortOrder = existingLesson.sort_order;
-      } else {
-        const existing = lessonsForSection(
-          lessonForm.section_id
-        );
-
-        sortOrder =
-          existing.length > 0
-            ? Math.max(
-                ...existing.map(
-                  (lesson) => lesson.sort_order
-                )
-              ) + 1
-            : 1;
-      }
+    if (!sectionId) {
+      setError("Lesson section is required.");
+      return;
     }
 
-    const payload = {
-      section_id: lessonForm.section_id,
-      course_id: selectedCourseId,
-      title: lessonForm.title.trim(),
-      slug: lessonForm.slug.trim(),
-      content_html:
-        lessonForm.content_html || null,
-      video_url:
-        lessonForm.video_url.trim() || null,
-      duration_minutes:
-        Number(lessonForm.duration_minutes) || 0,
-      duration_seconds:
-        Number(lessonForm.duration_seconds) || 0,
-      sort_order: sortOrder,
-      is_preview: lessonForm.is_preview,
-      is_published: lessonForm.is_published,
-    };
+    clearMessages();
+    setSaving(true);
 
     if (editingLessonId) {
-      const { data, error: updateError } =
-        await supabase
-          .from("lessons")
-          .update(payload)
-          .eq("id", editingLessonId)
-          .select("*")
-          .single();
+      const { data, error: updateError } = await supabase
+        .from("lessons")
+        .update({
+          section_id: sectionId,
+          title,
+          slug,
+          content_html: lessonForm.content_html || null,
+          video_url: lessonForm.video_url || null,
+          duration_minutes: Number(lessonForm.duration_minutes ?? 0),
+          duration_seconds: Number(lessonForm.duration_seconds ?? 0),
+          is_preview: Boolean(lessonForm.is_preview),
+          is_published: Boolean(lessonForm.is_published),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", editingLessonId)
+        .select("*")
+        .single();
 
       if (updateError) {
         setError(updateError.message);
@@ -673,21 +763,42 @@ export default function AdminLmsEditor({
       }
 
       setLessons((current) =>
-        current.map((lesson) =>
-          lesson.id === editingLessonId
-            ? data
-            : lesson
-        )
+        current
+          .map((lesson) =>
+            lesson.id === editingLessonId ? data : lesson
+          )
+          .sort((a, b) => a.sort_order - b.sort_order)
       );
 
+      setSelectedLessonId(data.id);
       setMessage("Lesson updated.");
     } else {
-      const { data, error: insertError } =
-        await supabase
-          .from("lessons")
-          .insert(payload)
-          .select("*")
-          .single();
+      const sectionLessons = lessons.filter(
+        (lesson) => lesson.section_id === sectionId
+      );
+
+      const nextOrder =
+        sectionLessons.length > 0
+          ? Math.max(...sectionLessons.map((lesson) => lesson.sort_order)) + 1
+          : 1;
+
+      const { data, error: insertError } = await supabase
+        .from("lessons")
+        .insert({
+          section_id: sectionId,
+          course_id: selectedCourseId,
+          title,
+          slug,
+          content_html: lessonForm.content_html || null,
+          video_url: lessonForm.video_url || null,
+          duration_minutes: Number(lessonForm.duration_minutes ?? 0),
+          duration_seconds: Number(lessonForm.duration_seconds ?? 0),
+          sort_order: nextOrder,
+          is_preview: Boolean(lessonForm.is_preview),
+          is_published: Boolean(lessonForm.is_published),
+        })
+        .select("*")
+        .single();
 
       if (insertError) {
         setError(insertError.message);
@@ -695,22 +806,26 @@ export default function AdminLmsEditor({
         return;
       }
 
-      setLessons((current) => [...current, data]);
-      setMessage("Lesson added.");
+      setLessons((current) =>
+        [...current, data].sort((a, b) => a.sort_order - b.sort_order)
+      );
+
+      setSelectedLessonId(data.id);
+      setMessage("Lesson created.");
     }
 
-    setShowLessonForm(false);
+    setLessonForm(emptyLesson);
+    setLessonSectionId("");
     setEditingLessonId(null);
     setSaving(false);
   }
 
   async function deleteLesson(lesson: Lesson) {
-    clearMessages();
-
     if (!window.confirm(`Delete "${lesson.title}"?`)) {
       return;
     }
 
+    clearMessages();
     setSaving(true);
 
     const { error: deleteError } = await supabase
@@ -728,6 +843,11 @@ export default function AdminLmsEditor({
       current.filter((item) => item.id !== lesson.id)
     );
 
+    if (selectedLessonId === lesson.id) {
+      setSelectedLessonId("");
+      setResources([]);
+    }
+
     setMessage("Lesson deleted.");
     setSaving(false);
   }
@@ -736,19 +856,271 @@ export default function AdminLmsEditor({
     lesson: Lesson,
     direction: "up" | "down"
   ) {
-    const ordered = lessonsForSection(
-      lesson.section_id
-    );
+    const sectionLessons = lessons
+      .filter((item) => item.section_id === lesson.section_id)
+      .sort((a, b) => a.sort_order - b.sort_order);
 
-    const index = ordered.findIndex(
+    const index = sectionLessons.findIndex(
       (item) => item.id === lesson.id
     );
 
-    const targetIndex =
-      direction === "up" ? index - 1 : index + 1;
+    if (index < 0) return;
+
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
 
     if (
-      index < 0 ||
+      targetIndex < 0 ||
+      targetIndex >= sectionLessons.length
+    ) {
+      return;
+    }
+
+    const target = sectionLessons[targetIndex];
+
+    clearMessages();
+    setSaving(true);
+
+    const firstOrder = lesson.sort_order;
+    const secondOrder = target.sort_order;
+
+    const { error: firstError } = await supabase
+      .from("lessons")
+      .update({ sort_order: secondOrder })
+      .eq("id", lesson.id);
+
+    if (firstError) {
+      setError(firstError.message);
+      setSaving(false);
+      return;
+    }
+
+    const { error: secondError } = await supabase
+      .from("lessons")
+      .update({ sort_order: firstOrder })
+      .eq("id", target.id);
+
+    if (secondError) {
+      setError(secondError.message);
+      setSaving(false);
+      return;
+    }
+
+    setLessons((current) =>
+      current
+        .map((item) => {
+          if (item.id === lesson.id) {
+            return { ...item, sort_order: secondOrder };
+          }
+
+          if (item.id === target.id) {
+            return { ...item, sort_order: firstOrder };
+          }
+
+          return item;
+        })
+        .sort((a, b) => a.sort_order - b.sort_order)
+    );
+
+    setMessage("Lesson order updated.");
+    setSaving(false);
+  }
+
+  async function moveLessonToSection(
+    lesson: Lesson,
+    targetSectionId: string
+  ) {
+    if (targetSectionId === lesson.section_id) {
+      return;
+    }
+
+    clearMessages();
+    setSaving(true);
+
+    const targetLessons = lessons.filter(
+      (item) => item.section_id === targetSectionId
+    );
+
+    const nextOrder =
+      targetLessons.length > 0
+        ? Math.max(...targetLessons.map((item) => item.sort_order)) + 1
+        : 1;
+
+    const { data, error: updateError } = await supabase
+      .from("lessons")
+      .update({
+        section_id: targetSectionId,
+        sort_order: nextOrder,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", lesson.id)
+      .select("*")
+      .single();
+
+    if (updateError) {
+      setError(updateError.message);
+      setSaving(false);
+      return;
+    }
+
+    setLessons((current) =>
+      current
+        .map((item) => (item.id === lesson.id ? data : item))
+        .sort((a, b) => a.sort_order - b.sort_order)
+    );
+
+    setMessage("Lesson moved.");
+    setSaving(false);
+  }
+
+  function beginCreateResource(lessonId: string) {
+    clearMessages();
+    setSelectedLessonId(lessonId);
+    setResourceForm(emptyResource);
+    setEditingResourceId(null);
+  }
+
+  function beginEditResource(resource: LessonResource) {
+    clearMessages();
+    setSelectedLessonId(resource.lesson_id);
+    setResourceForm(resource);
+    setEditingResourceId(resource.id);
+  }
+
+  function cancelResourceEdit() {
+    setResourceForm(emptyResource);
+    setEditingResourceId(null);
+  }
+
+  async function saveResource() {
+    if (!selectedLessonId) {
+      setError("Select a lesson first.");
+      return;
+    }
+
+    const title = String(resourceForm.title ?? "").trim();
+    const url = String(resourceForm.url ?? "").trim();
+    const resourceType = resourceForm.resource_type ?? "link";
+
+    if (!title) {
+      setError("Resource title is required.");
+      return;
+    }
+
+    if (!url) {
+      setError("Resource URL is required.");
+      return;
+    }
+
+    clearMessages();
+    setSaving(true);
+
+    if (editingResourceId) {
+      const { data, error: updateError } = await supabase
+        .from("lesson_resources")
+        .update({
+          title,
+          resource_type: resourceType,
+          url,
+        })
+        .eq("id", editingResourceId)
+        .select("*")
+        .single();
+
+      if (updateError) {
+        setError(updateError.message);
+        setSaving(false);
+        return;
+      }
+
+      setResources((current) =>
+        current
+          .map((resource) =>
+            resource.id === editingResourceId ? data : resource
+          )
+          .sort((a, b) => a.sort_order - b.sort_order)
+      );
+
+      setMessage("Resource updated.");
+    } else {
+      const nextOrder =
+        resources.length > 0
+          ? Math.max(...resources.map((resource) => resource.sort_order)) + 1
+          : 1;
+
+      const { data, error: insertError } = await supabase
+        .from("lesson_resources")
+        .insert({
+          lesson_id: selectedLessonId,
+          title,
+          resource_type: resourceType,
+          url,
+          sort_order: nextOrder,
+        })
+        .select("*")
+        .single();
+
+      if (insertError) {
+        setError(insertError.message);
+        setSaving(false);
+        return;
+      }
+
+      setResources((current) =>
+        [...current, data].sort((a, b) => a.sort_order - b.sort_order)
+      );
+
+      setMessage("Resource added.");
+    }
+
+    setResourceForm(emptyResource);
+    setEditingResourceId(null);
+    setSaving(false);
+  }
+
+  async function deleteResource(resource: LessonResource) {
+    if (!window.confirm(`Delete "${resource.title}"?`)) {
+      return;
+    }
+
+    clearMessages();
+    setSaving(true);
+
+    const { error: deleteError } = await supabase
+      .from("lesson_resources")
+      .delete()
+      .eq("id", resource.id);
+
+    if (deleteError) {
+      setError(deleteError.message);
+      setSaving(false);
+      return;
+    }
+
+    setResources((current) =>
+      current.filter((item) => item.id !== resource.id)
+    );
+
+    setMessage("Resource deleted.");
+    setSaving(false);
+  }
+
+  async function moveResource(
+    resource: LessonResource,
+    direction: "up" | "down"
+  ) {
+    const ordered = [...resources].sort(
+      (a, b) => a.sort_order - b.sort_order
+    );
+
+    const index = ordered.findIndex(
+      (item) => item.id === resource.id
+    );
+
+    if (index < 0) return;
+
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+
+    if (
       targetIndex < 0 ||
       targetIndex >= ordered.length
     ) {
@@ -757,83 +1129,82 @@ export default function AdminLmsEditor({
 
     const target = ordered[targetIndex];
 
-    setSaving(true);
     clearMessages();
+    setSaving(true);
 
-    const first = await supabase
-      .from("lessons")
-      .update({
-        sort_order: target.sort_order,
-      })
-      .eq("id", lesson.id);
+    const firstOrder = resource.sort_order;
+    const secondOrder = target.sort_order;
 
-    if (first.error) {
-      setError(first.error.message);
+    const { error: firstError } = await supabase
+      .from("lesson_resources")
+      .update({ sort_order: secondOrder })
+      .eq("id", resource.id);
+
+    if (firstError) {
+      setError(firstError.message);
       setSaving(false);
       return;
     }
 
-    const second = await supabase
-      .from("lessons")
-      .update({
-        sort_order: lesson.sort_order,
-      })
+    const { error: secondError } = await supabase
+      .from("lesson_resources")
+      .update({ sort_order: firstOrder })
       .eq("id", target.id);
 
-    if (second.error) {
-      setError(second.error.message);
+    if (secondError) {
+      setError(secondError.message);
       setSaving(false);
       return;
     }
 
-    await loadCurriculum(selectedCourseId!);
+    setResources((current) =>
+      current
+        .map((item) => {
+          if (item.id === resource.id) {
+            return { ...item, sort_order: secondOrder };
+          }
 
-    setMessage("Lesson order updated.");
+          if (item.id === target.id) {
+            return { ...item, sort_order: firstOrder };
+          }
+
+          return item;
+        })
+        .sort((a, b) => a.sort_order - b.sort_order)
+    );
+
+    setMessage("Resource order updated.");
     setSaving(false);
   }
 
-  async function deleteCourse(course: Course) {
-    if (role !== "admin") {
-      return;
-    }
+  function updateCourseField<K extends keyof Course>(
+    field: K,
+    value: Course[K]
+  ) {
+    setCourseForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
 
-    clearMessages();
+  function updateLessonField<K extends keyof Lesson>(
+    field: K,
+    value: Lesson[K]
+  ) {
+    setLessonForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
 
-    if (
-      !window.confirm(
-        `Delete "${course.title}" permanently? This also removes its sections, lessons, enrollments and lesson progress.`
-      )
-    ) {
-      return;
-    }
-
-    setSaving(true);
-
-    const { error: deleteError } = await supabase
-      .from("courses")
-      .delete()
-      .eq("id", course.id);
-
-    if (deleteError) {
-      setError(deleteError.message);
-      setSaving(false);
-      return;
-    }
-
-    const remaining = courses.filter(
-      (item) => item.id !== course.id
-    );
-
-    setCourses(remaining);
-    setSelectedCourseId(remaining[0]?.id ?? null);
-    setSections([]);
-    setLessons([]);
-    setShowCourseForm(false);
-
-    setMessage("Course deleted.");
-    setSaving(false);
-
-    router.refresh();
+  function updateResourceField<K extends keyof LessonResource>(
+    field: K,
+    value: LessonResource[K]
+  ) {
+    setResourceForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
   }
 
   return (
@@ -841,7 +1212,10 @@ export default function AdminLmsEditor({
       {message && (
         <div
           className="panel"
-          style={{ marginBottom: 16 }}
+          style={{
+            marginBottom: 16,
+            borderLeft: "4px solid #16a34a",
+          }}
         >
           {message}
         </div>
@@ -850,345 +1224,328 @@ export default function AdminLmsEditor({
       {error && (
         <div
           className="panel"
-          style={{ marginBottom: 16 }}
+          style={{
+            marginBottom: 16,
+            borderLeft: "4px solid #dc2626",
+          }}
         >
           <strong>Error:</strong> {error}
         </div>
       )}
 
       <div
+        className="panel"
         style={{
+          marginBottom: 24,
           display: "flex",
           justifyContent: "space-between",
-          gap: 12,
           alignItems: "center",
-          marginBottom: 16,
+          gap: 16,
           flexWrap: "wrap",
         }}
       >
-        <h3 style={{ margin: 0 }}>
-          Course Editor
-        </h3>
+        <div style={{ minWidth: 260 }}>
+          <label
+            style={{
+              display: "block",
+              fontWeight: 600,
+              marginBottom: 6,
+            }}
+          >
+            Course
+          </label>
+
+          <select
+            value={selectedCourseId}
+            onChange={(event) => {
+              clearMessages();
+              setSelectedCourseId(event.target.value);
+              setEditingCourse(false);
+            }}
+            style={{ width: "100%", padding: 10 }}
+          >
+            <option value="">Select a course</option>
+
+            {courses.map((course) => (
+              <option key={course.id} value={course.id}>
+                {course.title}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <button
           type="button"
-          onClick={startNewCourse}
+          onClick={beginCreateCourse}
+          disabled={saving}
         >
           + New Course
         </button>
       </div>
 
-      {showCourseForm && (
-        <div
-          className="panel"
-          style={{ marginBottom: 24 }}
-        >
+      {editingCourse && (
+        <div className="panel" style={{ marginBottom: 24 }}>
           <h3 style={{ marginTop: 0 }}>
-            {editingCourse
-              ? "Edit Course"
-              : "Create Course"}
+            {selectedCourseId ? "Edit Course" : "Create Course"}
           </h3>
 
           <div className="grid">
-            <label>
-              Title
+            <div>
+              <label>Title</label>
               <input
-                value={courseForm.title}
+                value={String(courseForm.title ?? "")}
                 onChange={(event) =>
-                  setCourseForm({
-                    ...courseForm,
-                    title: event.target.value,
-                    slug:
-                      editingCourse
-                        ? courseForm.slug
-                        : slugify(
-                            event.target.value
-                          ),
-                  })
+                  updateCourseField("title", event.target.value)
                 }
+                onBlur={() => {
+                  if (!courseForm.slug && courseForm.title) {
+                    updateCourseField(
+                      "slug",
+                      slugify(String(courseForm.title))
+                    );
+                  }
+                }}
+                style={{ width: "100%", padding: 10 }}
               />
-            </label>
+            </div>
 
-            <label>
-              Slug
+            <div>
+              <label>Slug</label>
               <input
-                value={courseForm.slug}
+                value={String(courseForm.slug ?? "")}
                 onChange={(event) =>
-                  setCourseForm({
-                    ...courseForm,
-                    slug: slugify(
-                      event.target.value
-                    ),
-                  })
+                  updateCourseField("slug", event.target.value)
                 }
+                style={{ width: "100%", padding: 10 }}
               />
-            </label>
+            </div>
 
-            <label>
-              Category
+            <div>
+              <label>Category</label>
               <input
-                value={courseForm.category}
+                value={String(courseForm.category ?? "")}
                 onChange={(event) =>
-                  setCourseForm({
-                    ...courseForm,
-                    category:
-                      event.target.value,
-                  })
+                  updateCourseField("category", event.target.value)
                 }
+                style={{ width: "100%", padding: 10 }}
               />
-            </label>
+            </div>
 
-            <label>
-              Level
+            <div>
+              <label>Level</label>
               <select
-                value={courseForm.level}
+                value={courseForm.level ?? "beginner"}
                 onChange={(event) =>
-                  setCourseForm({
-                    ...courseForm,
-                    level:
-                      event.target.value as Course["level"],
-                  })
+                  updateCourseField(
+                    "level",
+                    event.target.value as Course["level"]
+                  )
                 }
+                style={{ width: "100%", padding: 10 }}
               >
-                <option value="beginner">
-                  Beginner
-                </option>
-                <option value="intermediate">
-                  Intermediate
-                </option>
-                <option value="advanced">
-                  Advanced
-                </option>
+                <option value="beginner">Beginner</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
               </select>
-            </label>
+            </div>
 
-            <label>
-              Price (NGN)
+            <div>
+              <label>Price (NGN)</label>
               <input
                 type="number"
                 min="0"
-                value={courseForm.price_ngn}
+                value={Number(courseForm.price_ngn ?? 0)}
                 onChange={(event) =>
-                  setCourseForm({
-                    ...courseForm,
-                    price_ngn:
-                      Number(
-                        event.target.value
-                      ),
-                  })
+                  updateCourseField(
+                    "price_ngn",
+                    Number(event.target.value)
+                  )
                 }
+                style={{ width: "100%", padding: 10 }}
               />
-            </label>
+            </div>
 
-            <label>
-              Status
+            <div>
+              <label>Status</label>
               <select
-                value={courseForm.status}
+                value={courseForm.status ?? "draft"}
                 onChange={(event) =>
-                  setCourseForm({
-                    ...courseForm,
-                    status:
-                      event.target.value as Course["status"],
-                  })
+                  updateCourseField(
+                    "status",
+                    event.target.value as Course["status"]
+                  )
                 }
+                style={{ width: "100%", padding: 10 }}
               >
-                <option value="draft">
-                  Draft
-                </option>
-                <option value="published">
-                  Published
-                </option>
-                <option value="archived">
-                  Archived
-                </option>
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="archived">Archived</option>
               </select>
-            </label>
+            </div>
 
-            <label>
-              Duration (minutes)
+            {role === "admin" && (
+              <div>
+                <label>Instructor</label>
+                <select
+                  value={courseForm.instructor_id ?? ""}
+                  onChange={(event) =>
+                    updateCourseField(
+                      "instructor_id",
+                      event.target.value || null
+                    )
+                  }
+                  style={{ width: "100%", padding: 10 }}
+                >
+                  <option value="">No instructor assigned</option>
+
+                  {instructors.map((instructor) => (
+                    <option key={instructor.id} value={instructor.id}>
+                      {instructor.full_name || instructor.email || instructor.id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div>
+              <label>Duration (minutes)</label>
               <input
                 type="number"
                 min="0"
-                value={
-                  courseForm.duration_minutes
-                }
+                value={Number(courseForm.duration_minutes ?? 0)}
                 onChange={(event) =>
-                  setCourseForm({
-                    ...courseForm,
-                    duration_minutes:
-                      Number(
-                        event.target.value
-                      ),
-                  })
+                  updateCourseField(
+                    "duration_minutes",
+                    Number(event.target.value)
+                  )
                 }
+                style={{ width: "100%", padding: 10 }}
               />
-            </label>
-
-            <label>
-              Thumbnail URL
-              <input
-                value={
-                  courseForm.thumbnail_url
-                }
-                onChange={(event) =>
-                  setCourseForm({
-                    ...courseForm,
-                    thumbnail_url:
-                      event.target.value,
-                  })
-                }
-              />
-            </label>
-
-            <label>
-              Intro Video URL
-              <input
-                value={
-                  courseForm.intro_video_url
-                }
-                onChange={(event) =>
-                  setCourseForm({
-                    ...courseForm,
-                    intro_video_url:
-                      event.target.value,
-                  })
-                }
-              />
-            </label>
-
-            <label>
-              Target Audience
-              <input
-                value={
-                  courseForm.target_audience
-                }
-                onChange={(event) =>
-                  setCourseForm({
-                    ...courseForm,
-                    target_audience:
-                      event.target.value,
-                  })
-                }
-              />
-            </label>
+            </div>
           </div>
 
-          <label
-            style={{
-              display: "block",
-              marginTop: 16,
-            }}
-          >
-            Short Description
-
+          <div style={{ marginTop: 16 }}>
+            <label>Short description</label>
             <textarea
+              value={String(courseForm.short_description ?? "")}
+              onChange={(event) =>
+                updateCourseField(
+                  "short_description",
+                  event.target.value
+                )
+              }
               rows={3}
-              value={
-                courseForm.short_description
-              }
-              onChange={(event) =>
-                setCourseForm({
-                  ...courseForm,
-                  short_description:
-                    event.target.value,
-                })
-              }
+              style={{ width: "100%", padding: 10 }}
             />
-          </label>
+          </div>
 
-          <label
-            style={{
-              display: "block",
-              marginTop: 16,
-            }}
-          >
-            Description
-
+          <div style={{ marginTop: 16 }}>
+            <label>Description</label>
             <textarea
-              rows={7}
-              value={courseForm.description}
+              value={String(courseForm.description ?? "")}
               onChange={(event) =>
-                setCourseForm({
-                  ...courseForm,
-                  description:
-                    event.target.value,
-                })
+                updateCourseField("description", event.target.value)
               }
+              rows={6}
+              style={{ width: "100%", padding: 10 }}
             />
-          </label>
+          </div>
 
-          <label
-            style={{
-              display: "block",
-              marginTop: 16,
-            }}
-          >
-            Learning Outcomes
-
-            <span className="muted">
-              One outcome per line.
-            </span>
-
-            <textarea
-              rows={5}
-              value={
-                courseForm.learning_outcomes
-              }
-              onChange={(event) =>
-                setCourseForm({
-                  ...courseForm,
-                  learning_outcomes:
-                    event.target.value,
-                })
-              }
-            />
-          </label>
-
-          <div
-            className="grid"
-            style={{ marginTop: 16 }}
-          >
-            <label>
-              SEO Title
-
+          <div className="grid" style={{ marginTop: 16 }}>
+            <div>
+              <label>Thumbnail URL</label>
               <input
-                value={
-                  courseForm.seo_title
-                }
+                value={String(courseForm.thumbnail_url ?? "")}
                 onChange={(event) =>
-                  setCourseForm({
-                    ...courseForm,
-                    seo_title:
-                      event.target.value,
-                  })
+                  updateCourseField(
+                    "thumbnail_url",
+                    event.target.value
+                  )
                 }
+                style={{ width: "100%", padding: 10 }}
               />
-            </label>
+            </div>
 
-            <label>
-              SEO Description
-
-              <textarea
-                rows={3}
-                value={
-                  courseForm.seo_description
-                }
+            <div>
+              <label>Intro video URL</label>
+              <input
+                value={String(courseForm.intro_video_url ?? "")}
                 onChange={(event) =>
-                  setCourseForm({
-                    ...courseForm,
-                    seo_description:
-                      event.target.value,
-                  })
+                  updateCourseField(
+                    "intro_video_url",
+                    event.target.value
+                  )
                 }
+                style={{ width: "100%", padding: 10 }}
               />
-            </label>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 16 }}>
+            <label>Learning outcomes — one per line</label>
+            <textarea
+              value={(courseForm.learning_outcomes ?? []).join("\n")}
+              onChange={(event) =>
+                updateCourseField(
+                  "learning_outcomes",
+                  event.target.value
+                    .split("\n")
+                    .map((item) => item.trim())
+                    .filter(Boolean)
+                )
+              }
+              rows={5}
+              style={{ width: "100%", padding: 10 }}
+            />
+          </div>
+
+          <div style={{ marginTop: 16 }}>
+            <label>Target audience</label>
+            <textarea
+              value={String(courseForm.target_audience ?? "")}
+              onChange={(event) =>
+                updateCourseField(
+                  "target_audience",
+                  event.target.value
+                )
+              }
+              rows={3}
+              style={{ width: "100%", padding: 10 }}
+            />
+          </div>
+
+          <div className="grid" style={{ marginTop: 16 }}>
+            <div>
+              <label>SEO title</label>
+              <input
+                value={String(courseForm.seo_title ?? "")}
+                onChange={(event) =>
+                  updateCourseField("seo_title", event.target.value)
+                }
+                style={{ width: "100%", padding: 10 }}
+              />
+            </div>
+
+            <div>
+              <label>SEO description</label>
+              <input
+                value={String(courseForm.seo_description ?? "")}
+                onChange={(event) =>
+                  updateCourseField(
+                    "seo_description",
+                    event.target.value
+                  )
+                }
+                style={{ width: "100%", padding: 10 }}
+              />
+            </div>
           </div>
 
           <div
             style={{
               display: "flex",
-              gap: 8,
-              marginTop: 16,
+              gap: 10,
+              marginTop: 20,
               flexWrap: "wrap",
             }}
           >
@@ -1197,16 +1554,12 @@ export default function AdminLmsEditor({
               onClick={saveCourse}
               disabled={saving}
             >
-              {saving
-                ? "Saving..."
-                : "Save Course"}
+              {saving ? "Saving..." : "Save Course"}
             </button>
 
             <button
               type="button"
-              onClick={() =>
-                setShowCourseForm(false)
-              }
+              onClick={cancelCourseEdit}
               disabled={saving}
             >
               Cancel
@@ -1215,418 +1568,296 @@ export default function AdminLmsEditor({
         </div>
       )}
 
-      <div
-        className="panel"
-        style={{ marginBottom: 24 }}
-      >
-        <h3 style={{ marginTop: 0 }}>
-          Courses
-        </h3>
+      {selectedCourse && !editingCourse && (
+        <div className="panel" style={{ marginBottom: 24 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <h3 style={{ marginTop: 0 }}>
+                {selectedCourse.title}
+              </h3>
 
-        {courses.length === 0 ? (
-          <p className="muted">
-            No courses yet.
-          </p>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table
+              <div className="muted">
+                {selectedCourse.status} ·{" "}
+                {selectedCourse.is_free
+                  ? "Free"
+                  : `₦${selectedCourse.price_ngn.toLocaleString()}`}
+              </div>
+
+              {role === "admin" && (
+                <div className="muted" style={{ marginTop: 6 }}>
+                  Instructor:{" "}
+                  {selectedCourse.instructor_id
+                    ? instructors.find(
+                        (item) =>
+                          item.id === selectedCourse.instructor_id
+                      )?.full_name ||
+                      instructors.find(
+                        (item) =>
+                          item.id === selectedCourse.instructor_id
+                      )?.email ||
+                      "Assigned"
+                    : "Not assigned"}
+                </div>
+              )}
+            </div>
+
+            <div
               style={{
-                width: "100%",
-                borderCollapse:
-                  "collapse",
-                fontSize: "0.92rem",
+                display: "flex",
+                gap: 8,
+                flexWrap: "wrap",
               }}
             >
-              <thead>
-                <tr
-                  style={{
-                    textAlign: "left",
-                    borderBottom:
-                      "1px solid var(--border)",
-                  }}
+              <button
+                type="button"
+                onClick={() => beginEditCourse(selectedCourse)}
+                disabled={saving}
+              >
+                Edit
+              </button>
+
+              <a
+                href={`/courses/${selectedCourse.slug}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <button type="button">View</button>
+              </a>
+
+              {role === "admin" && (
+                <button
+                  type="button"
+                  onClick={() => deleteCourse(selectedCourse.id)}
+                  disabled={saving}
                 >
-                  <th
-                    style={{
-                      padding: "8px 4px",
-                    }}
-                  >
-                    Title
-                  </th>
+                  Delete
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
-                  <th
-                    style={{
-                      padding: "8px 4px",
-                    }}
-                  >
-                    Status
-                  </th>
+      {selectedCourseId && (
+        <div className="panel">
+          <h3 style={{ marginTop: 0 }}>Curriculum</h3>
 
-                  <th
-                    style={{
-                      padding: "8px 4px",
-                    }}
-                  >
-                    Price
-                  </th>
+          {loadingCurriculum ? (
+            <p className="muted">Loading curriculum...</p>
+          ) : (
+            <>
+              <div className="muted" style={{ marginBottom: 20 }}>
+                {sections.length} section
+                {sections.length === 1 ? "" : "s"} ·{" "}
+                {lessons.length} lesson
+                {lessons.length === 1 ? "" : "s"}
+              </div>
 
-                  <th
-                    style={{
-                      padding: "8px 4px",
-                    }}
-                  >
-                    Actions
-                  </th>
-                </tr>
-              </thead>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  flexWrap: "wrap",
+                  marginBottom: 24,
+                }}
+              >
+                <input
+                  value={sectionTitle}
+                  placeholder={
+                    editingSectionId
+                      ? "Rename section"
+                      : "New section title"
+                  }
+                  onChange={(event) =>
+                    setSectionTitle(event.target.value)
+                  }
+                  style={{
+                    padding: 10,
+                    minWidth: 240,
+                  }}
+                />
 
-              <tbody>
-                {courses.map((course) => (
-                  <tr
-                    key={course.id}
+                <button
+                  type="button"
+                  onClick={saveSection}
+                  disabled={saving}
+                >
+                  {editingSectionId
+                    ? "Rename Section"
+                    : "Add Section"}
+                </button>
+
+                {editingSectionId && (
+                  <button
+                    type="button"
+                    onClick={cancelSectionEdit}
+                    disabled={saving}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+
+              {sections.map((section, sectionIndex) => {
+                const sectionLessons =
+                  lessonsBySection[section.id] ?? [];
+
+                return (
+                  <div
+                    key={section.id}
+                    className="panel"
                     style={{
-                      borderBottom:
-                        "1px solid var(--border)",
+                      marginBottom: 16,
+                      background: "transparent",
                     }}
                   >
-                    <td
+                    <div
                       style={{
-                        padding: "10px 4px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        alignItems: "center",
+                        flexWrap: "wrap",
                       }}
                     >
-                      <strong>
-                        {course.title}
-                      </strong>
-                    </td>
+                      <div>
+                        <strong>
+                          {sectionIndex + 1}. {section.title}
+                        </strong>
 
-                    <td
-                      style={{
-                        padding: "10px 4px",
-                      }}
-                    >
-                      <span className="badge">
-                        {course.status}
-                      </span>
-                    </td>
+                        <div className="muted">
+                          {sectionLessons.length} lesson
+                          {sectionLessons.length === 1 ? "" : "s"}
+                        </div>
+                      </div>
 
-                    <td
-                      style={{
-                        padding: "10px 4px",
-                      }}
-                    >
-                      {course.is_free
-                        ? "Free"
-                        : `₦${course.price_ngn.toLocaleString()}`}
-                    </td>
-
-                    <td
-                      style={{
-                        padding: "10px 4px",
-                      }}
-                    >
                       <div
                         style={{
                           display: "flex",
-                          gap: 8,
-                          flexWrap:
-                            "wrap",
+                          gap: 6,
+                          flexWrap: "wrap",
                         }}
                       >
                         <button
                           type="button"
                           onClick={() =>
-                            startEditCourse(
-                              course
-                            )
+                            moveSection(section, "up")
+                          }
+                          disabled={
+                            saving || sectionIndex === 0
                           }
                         >
-                          Edit
+                          ↑
                         </button>
 
                         <button
                           type="button"
-                          onClick={() => {
-                            setSelectedCourseId(
-                              course.id
-                            );
-                          }}
+                          onClick={() =>
+                            moveSection(section, "down")
+                          }
+                          disabled={
+                            saving ||
+                            sectionIndex === sections.length - 1
+                          }
                         >
-                          Curriculum
+                          ↓
                         </button>
 
-                        {course.status ===
-                          "published" && (
-                          <a
-                            href={`/courses/${course.slug}`}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            View
-                          </a>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => editSection(section)}
+                          disabled={saving}
+                        >
+                          Rename
+                        </button>
 
-                        {role === "admin" && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              deleteCourse(
-                                course
-                              )
-                            }
-                          >
-                            Delete
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => deleteSection(section)}
+                          disabled={saving}
+                        >
+                          Delete
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            beginCreateLesson(section.id)
+                          }
+                          disabled={saving}
+                        >
+                          + Lesson
+                        </button>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                    </div>
 
-      {selectedCourse && (
-        <div className="panel">
-          <div
-            style={{
-              display: "flex",
-              justifyContent:
-                "space-between",
-              gap: 12,
-              alignItems:
-                "center",
-              flexWrap:
-                "wrap",
-            }}
-          >
-            <div>
-              <h3
-                style={{
-                  margin: 0,
-                }}
-              >
-                Curriculum:{" "}
-                {selectedCourse.title}
-              </h3>
-
-              <p className="muted">
-                {selectedCourse.status} ·{" "}
-                {selectedCourse.is_free
-                  ? "Free"
-                  : `₦${selectedCourse.price_ngn.toLocaleString()}`}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() =>
-                startNewLesson()
-              }
-              disabled={
-                sections.length === 0
-              }
-            >
-              + Add Lesson
-            </button>
-          </div>
-
-          {sections.length === 0 &&
-            !loadingCurriculum && (
-              <p
-                className="muted"
-                style={{
-                  marginTop: 20,
-                }}
-              >
-                Add a section before
-                adding lessons.
-              </p>
-            )}
-
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              marginTop: 20,
-              flexWrap: "wrap",
-            }}
-          >
-            <input
-              placeholder="New section title"
-              value={
-                newSectionTitle
-              }
-              onChange={(event) =>
-                setNewSectionTitle(
-                  event.target.value
-                )
-              }
-            />
-
-            <button
-              type="button"
-              onClick={addSection}
-              disabled={saving}
-            >
-              + Add Section
-            </button>
-          </div>
-
-          {loadingCurriculum ? (
-            <p
-              className="muted"
-              style={{
-                marginTop: 20,
-              }}
-            >
-              Loading curriculum...
-            </p>
-          ) : (
-            <div
-              style={{
-                marginTop: 24,
-              }}
-            >
-              {sections
-                .slice()
-                .sort(
-                  (a, b) =>
-                    a.sort_order -
-                    b.sort_order
-                )
-                .map(
-                  (
-                    section,
-                    sectionIndex
-                  ) => {
-                    const sectionLessons =
-                      lessonsForSection(
-                        section.id
-                      );
-
-                    return (
-                      <div
-                        key={section.id}
-                        className="panel"
-                        style={{
-                          marginBottom: 16,
-                        }}
+                    {sectionLessons.length === 0 && (
+                      <p
+                        className="muted"
+                        style={{ marginBottom: 0 }}
                       >
+                        No lessons in this section.
+                      </p>
+                    )}
+
+                    {sectionLessons.map(
+                      (lesson, lessonIndex) => (
                         <div
+                          key={lesson.id}
                           style={{
-                            display:
-                              "flex",
-                            justifyContent:
-                              "space-between",
-                            gap: 12,
-                            alignItems:
-                              "center",
-                            flexWrap:
-                              "wrap",
+                            borderTop: "1px solid rgba(0,0,0,.1)",
+                            marginTop: 12,
+                            paddingTop: 12,
                           }}
                         >
-                          {editingSectionId ===
-                          section.id ? (
-                            <div
-                              style={{
-                                display:
-                                  "flex",
-                                gap: 8,
-                                flex: 1,
-                              }}
-                            >
-                              <input
-                                value={
-                                  editingSectionTitle
-                                }
-                                onChange={(
-                                  event
-                                ) =>
-                                  setEditingSectionTitle(
-                                    event
-                                      .target
-                                      .value
-                                  )
-                                }
-                              />
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  saveSection(
-                                    section.id
-                                  )
-                                }
-                                disabled={
-                                  saving
-                                }
-                              >
-                                Save
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setEditingSectionId(
-                                    null
-                                  )
-                                }
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 12,
+                              alignItems: "center",
+                              flexWrap: "wrap",
+                            }}
+                          >
                             <div>
-                              <h4
-                                style={{
-                                  margin: 0,
-                                }}
-                              >
-                                {sectionIndex +
-                                  1}
-                                .{" "}
-                                {
-                                  section.title
-                                }
-                              </h4>
+                              <strong>
+                                {lessonIndex + 1}.{" "}
+                                {lesson.title}
+                              </strong>
 
-                              <span className="muted">
-                                {
-                                  sectionLessons.length
-                                }{" "}
-                                lesson
-                                {sectionLessons.length ===
-                                1
-                                  ? ""
-                                  : "s"}
-                              </span>
+                              <div className="muted">
+                                {lesson.is_published
+                                  ? "Published"
+                                  : "Draft"}{" "}
+                                ·{" "}
+                                {lesson.is_preview
+                                  ? "Preview"
+                                  : "Members only"}
+                              </div>
                             </div>
-                          )}
 
-                          {editingSectionId !==
-                            section.id && (
                             <div
                               style={{
-                                display:
-                                  "flex",
+                                display: "flex",
                                 gap: 6,
-                                flexWrap:
-                                  "wrap",
+                                flexWrap: "wrap",
                               }}
                             >
                               <button
                                 type="button"
                                 onClick={() =>
-                                  moveSection(
-                                    section,
-                                    "up"
-                                  )
+                                  moveLesson(lesson, "up")
                                 }
                                 disabled={
-                                  sectionIndex ===
-                                    0 ||
-                                  saving
+                                  saving ||
+                                  lessonIndex === 0
                                 }
                               >
                                 ↑
@@ -1635,16 +1866,12 @@ export default function AdminLmsEditor({
                               <button
                                 type="button"
                                 onClick={() =>
-                                  moveSection(
-                                    section,
-                                    "down"
-                                  )
+                                  moveLesson(lesson, "down")
                                 }
                                 disabled={
-                                  sectionIndex ===
-                                    sections.length -
-                                      1 ||
-                                  saving
+                                  saving ||
+                                  lessonIndex ===
+                                    sectionLessons.length - 1
                                 }
                               >
                                 ↓
@@ -1652,374 +1879,496 @@ export default function AdminLmsEditor({
 
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setEditingSectionId(
-                                    section.id
-                                  );
-                                  setEditingSectionTitle(
-                                    section.title
-                                  );
-                                }}
+                                onClick={() =>
+                                  beginEditLesson(lesson)
+                                }
+                                disabled={saving}
                               >
-                                Rename
+                                Edit
                               </button>
 
                               <button
                                 type="button"
                                 onClick={() =>
-                                  startNewLesson(
-                                    section.id
-                                  )
+                                  deleteLesson(lesson)
                                 }
-                              >
-                                + Lesson
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  deleteSection(
-                                    section
-                                  )
-                                }
+                                disabled={saving}
                               >
                                 Delete
                               </button>
-                            </div>
-                          )}
-                        </div>
 
-                        {sectionLessons.length >
-                          0 && (
-                          <div
-                            style={{
-                              marginTop: 16,
-                            }}
-                          >
-                            {sectionLessons.map(
-                              (
-                                lesson,
-                                lessonIndex
-                              ) => (
-                                <div
-                                  key={
-                                    lesson.id
-                                  }
-                                  style={{
-                                    padding:
-                                      "12px",
-                                    borderTop:
-                                      "1px solid var(--border)",
-                                  }}
-                                >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  beginCreateResource(lesson.id)
+                                }
+                                disabled={saving}
+                              >
+                                Resources
+                              </button>
+                            </div>
+                          </div>
+
+                          {selectedLessonId === lesson.id && (
+                            <div
+                              className="panel"
+                              style={{
+                                marginTop: 12,
+                                background: "transparent",
+                              }}
+                            >
+                              <strong>
+                                Lesson Resources
+                              </strong>
+
+                              {loadingResources ? (
+                                <p className="muted">
+                                  Loading resources...
+                                </p>
+                              ) : (
+                                <>
+                                  {resources.length === 0 && (
+                                    <p className="muted">
+                                      No resources added.
+                                    </p>
+                                  )}
+
+                                  {resources.map(
+                                    (
+                                      resource,
+                                      resourceIndex
+                                    ) => (
+                                      <div
+                                        key={resource.id}
+                                        style={{
+                                          borderTop:
+                                            "1px solid rgba(0,0,0,.1)",
+                                          paddingTop: 10,
+                                          marginTop: 10,
+                                        }}
+                                      >
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            justifyContent:
+                                              "space-between",
+                                            gap: 12,
+                                            flexWrap: "wrap",
+                                          }}
+                                        >
+                                          <div>
+                                            <strong>
+                                              {resourceIndex +
+                                                1}
+                                              .{" "}
+                                              {resource.title}
+                                            </strong>
+
+                                            <div className="muted">
+                                              {
+                                                resource.resource_type
+                                              }{" "}
+                                              ·{" "}
+                                              <a
+                                                href={
+                                                  resource.url
+                                                }
+                                                target="_blank"
+                                                rel="noreferrer"
+                                              >
+                                                Open
+                                              </a>
+                                            </div>
+                                          </div>
+
+                                          <div
+                                            style={{
+                                              display: "flex",
+                                              gap: 6,
+                                            }}
+                                          >
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                moveResource(
+                                                  resource,
+                                                  "up"
+                                                )
+                                              }
+                                              disabled={
+                                                saving ||
+                                                resourceIndex ===
+                                                  0
+                                              }
+                                            >
+                                              ↑
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                moveResource(
+                                                  resource,
+                                                  "down"
+                                                )
+                                              }
+                                              disabled={
+                                                saving ||
+                                                resourceIndex ===
+                                                  resources.length -
+                                                    1
+                                              }
+                                            >
+                                              ↓
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                beginEditResource(
+                                                  resource
+                                                )
+                                              }
+                                              disabled={saving}
+                                            >
+                                              Edit
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                deleteResource(
+                                                  resource
+                                                )
+                                              }
+                                              disabled={saving}
+                                            >
+                                              Delete
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )
+                                  )}
+
                                   <div
                                     style={{
-                                      display:
-                                        "flex",
-                                      justifyContent:
-                                        "space-between",
-                                      gap: 12,
-                                      alignItems:
-                                        "center",
-                                      flexWrap:
-                                        "wrap",
+                                      marginTop: 16,
+                                      paddingTop: 16,
+                                      borderTop:
+                                        "1px solid rgba(0,0,0,.1)",
                                     }}
                                   >
-                                    <div>
-                                      <strong>
-                                        {lessonIndex +
-                                          1}
-                                        .{" "}
-                                        {
-                                          lesson.title
-                                        }
-                                      </strong>
+                                    <h4
+                                      style={{
+                                        marginTop: 0,
+                                      }}
+                                    >
+                                      {editingResourceId
+                                        ? "Edit Resource"
+                                        : "Add Resource"}
+                                    </h4>
 
-                                      <div className="muted">
-                                        {lesson.is_published
-                                          ? "Published"
-                                          : "Unpublished"}
-                                        {" · "}
-                                        {lesson.is_preview
-                                          ? "Preview"
-                                          : "Members only"}
+                                    <div className="grid">
+                                      <div>
+                                        <label>
+                                          Title
+                                        </label>
+
+                                        <input
+                                          value={String(
+                                            resourceForm.title ??
+                                              ""
+                                          )}
+                                          onChange={(event) =>
+                                            updateResourceField(
+                                              "title",
+                                              event.target.value
+                                            )
+                                          }
+                                          style={{
+                                            width: "100%",
+                                            padding: 10,
+                                          }}
+                                        />
+                                      </div>
+
+                                      <div>
+                                        <label>
+                                          Type
+                                        </label>
+
+                                        <select
+                                          value={
+                                            resourceForm.resource_type ??
+                                            "link"
+                                          }
+                                          onChange={(event) =>
+                                            updateResourceField(
+                                              "resource_type",
+                                              event.target
+                                                .value as LessonResource["resource_type"]
+                                            )
+                                          }
+                                          style={{
+                                            width: "100%",
+                                            padding: 10,
+                                          }}
+                                        >
+                                          <option value="file">
+                                            File
+                                          </option>
+                                          <option value="link">
+                                            Link
+                                          </option>
+                                          <option value="pdf">
+                                            PDF
+                                          </option>
+                                          <option value="audio">
+                                            Audio
+                                          </option>
+                                        </select>
                                       </div>
                                     </div>
 
                                     <div
                                       style={{
-                                        display:
-                                          "flex",
-                                        gap: 6,
-                                        flexWrap:
-                                          "wrap",
+                                        marginTop: 12,
+                                      }}
+                                    >
+                                      <label>
+                                        URL
+                                      </label>
+
+                                      <input
+                                        type="url"
+                                        value={String(
+                                          resourceForm.url ?? ""
+                                        )}
+                                        onChange={(event) =>
+                                          updateResourceField(
+                                            "url",
+                                            event.target.value
+                                          )
+                                        }
+                                        placeholder="https://..."
+                                        style={{
+                                          width: "100%",
+                                          padding: 10,
+                                        }}
+                                      />
+                                    </div>
+
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        gap: 8,
+                                        marginTop: 12,
+                                        flexWrap: "wrap",
                                       }}
                                     >
                                       <button
                                         type="button"
-                                        onClick={() =>
-                                          moveLesson(
-                                            lesson,
-                                            "up"
-                                          )
-                                        }
-                                        disabled={
-                                          lessonIndex ===
-                                            0 ||
-                                          saving
-                                        }
+                                        onClick={saveResource}
+                                        disabled={saving}
                                       >
-                                        ↑
+                                        {saving
+                                          ? "Saving..."
+                                          : editingResourceId
+                                            ? "Update Resource"
+                                            : "Add Resource"}
                                       </button>
 
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          moveLesson(
-                                            lesson,
-                                            "down"
-                                          )
-                                        }
-                                        disabled={
-                                          lessonIndex ===
-                                            sectionLessons.length -
-                                              1 ||
-                                          saving
-                                        }
-                                      >
-                                        ↓
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          startEditLesson(
-                                            lesson
-                                          )
-                                        }
-                                      >
-                                        Edit
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          deleteLesson(
-                                            lesson
-                                          )
-                                        }
-                                      >
-                                        Delete
-                                      </button>
+                                      {editingResourceId && (
+                                        <button
+                                          type="button"
+                                          onClick={
+                                            cancelResourceEdit
+                                          }
+                                          disabled={saving}
+                                        >
+                                          Cancel
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
-                                </div>
-                              )
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  }
-                )}
-            </div>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    )}
+                  </div>
+                );
+              })}
+
+              {sections.length === 0 && (
+                <p className="muted">
+                  No sections yet. Add the first section above.
+                </p>
+              )}
+            </>
           )}
         </div>
       )}
 
-      {showLessonForm && (
-        <div
-          className="panel"
-          style={{
-            marginTop: 24,
-            border:
-              "2px solid var(--border)",
-          }}
-        >
-          <h3
-            style={{
-              marginTop: 0,
-            }}
-          >
-            {editingLessonId
-              ? "Edit Lesson"
-              : "Add Lesson"}
-          </h3>
+      {editingLessonId && (
+        <div className="panel" style={{ marginTop: 24 }}>
+          <h3 style={{ marginTop: 0 }}>Edit Lesson</h3>
 
           <div className="grid">
-            <label>
-              Section
+            <div>
+              <label>Section</label>
 
               <select
-                value={
-                  lessonForm.section_id
-                }
+                value={lessonSectionId}
                 onChange={(event) =>
-                  setLessonForm({
-                    ...lessonForm,
-                    section_id:
-                      event.target
-                        .value,
-                  })
+                  setLessonSectionId(event.target.value)
                 }
+                style={{
+                  width: "100%",
+                  padding: 10,
+                }}
               >
-                <option value="">
-                  Select section
-                </option>
+                <option value="">Select section</option>
 
-                {sections
-                  .slice()
-                  .sort(
-                    (a, b) =>
-                      a.sort_order -
-                      b.sort_order
-                  )
-                  .map((section) => (
-                    <option
-                      key={section.id}
-                      value={section.id}
-                    >
-                      {section.title}
-                    </option>
-                  ))}
+                {sections.map((section) => (
+                  <option key={section.id} value={section.id}>
+                    {section.title}
+                  </option>
+                ))}
               </select>
-            </label>
+            </div>
 
-            <label>
-              Title
-
-              <input
-                value={
-                  lessonForm.title
-                }
-                onChange={(event) =>
-                  setLessonForm({
-                    ...lessonForm,
-                    title:
-                      event.target
-                        .value,
-                    slug: editingLessonId
-                      ? lessonForm.slug
-                      : slugify(
-                          event.target
-                            .value
-                        ),
-                  })
-                }
-              />
-            </label>
-
-            <label>
-              Slug
+            <div>
+              <label>Title</label>
 
               <input
-                value={
-                  lessonForm.slug
-                }
-                onChange={(event) =>
-                  setLessonForm({
-                    ...lessonForm,
-                    slug: slugify(
-                      event.target
-                        .value
-                    ),
-                  })
-                }
-              />
-            </label>
+                value={String(lessonForm.title ?? "")}
+                onChange={(event) => {
+                  const title = event.target.value;
 
-            <label>
-              Video URL
+                  updateLessonField("title", title);
+
+                  if (!lessonForm.slug) {
+                    updateLessonField("slug", slugify(title));
+                  }
+                }}
+                style={{
+                  width: "100%",
+                  padding: 10,
+                }}
+              />
+            </div>
+
+            <div>
+              <label>Slug</label>
 
               <input
-                value={
-                  lessonForm.video_url
-                }
+                value={String(lessonForm.slug ?? "")}
                 onChange={(event) =>
-                  setLessonForm({
-                    ...lessonForm,
-                    video_url:
-                      event.target
-                        .value,
-                  })
+                  updateLessonField(
+                    "slug",
+                    event.target.value
+                  )
                 }
+                style={{
+                  width: "100%",
+                  padding: 10,
+                }}
               />
-            </label>
+            </div>
 
-            <label>
-              Duration (minutes)
+            <div>
+              <label>Video URL</label>
+
+              <input
+                value={String(lessonForm.video_url ?? "")}
+                onChange={(event) =>
+                  updateLessonField(
+                    "video_url",
+                    event.target.value
+                  )
+                }
+                style={{
+                  width: "100%",
+                  padding: 10,
+                }}
+              />
+            </div>
+
+            <div>
+              <label>Duration (minutes)</label>
 
               <input
                 type="number"
                 min="0"
-                value={
-                  lessonForm.duration_minutes
-                }
+                value={Number(
+                  lessonForm.duration_minutes ?? 0
+                )}
                 onChange={(event) =>
-                  setLessonForm({
-                    ...lessonForm,
-                    duration_minutes:
-                      Number(
-                        event.target
-                          .value
-                      ),
-                  })
+                  updateLessonField(
+                    "duration_minutes",
+                    Number(event.target.value)
+                  )
                 }
+                style={{
+                  width: "100%",
+                  padding: 10,
+                }}
               />
-            </label>
+            </div>
 
-            <label>
-              Duration (seconds)
+            <div>
+              <label>Duration (seconds)</label>
 
               <input
                 type="number"
                 min="0"
-                value={
-                  lessonForm.duration_seconds
-                }
+                value={Number(
+                  lessonForm.duration_seconds ?? 0
+                )}
                 onChange={(event) =>
-                  setLessonForm({
-                    ...lessonForm,
-                    duration_seconds:
-                      Number(
-                        event.target
-                          .value
-                      ),
-                  })
+                  updateLessonField(
+                    "duration_seconds",
+                    Number(event.target.value)
+                  )
                 }
+                style={{
+                  width: "100%",
+                  padding: 10,
+                }}
               />
-            </label>
+            </div>
           </div>
 
-          <label
-            style={{
-              display: "block",
-              marginTop: 16,
-            }}
-          >
-            Lesson HTML Content
+          <div style={{ marginTop: 16 }}>
+            <label>Lesson HTML content</label>
 
             <textarea
-              rows={12}
-              value={
-                lessonForm.content_html
-              }
+              value={String(
+                lessonForm.content_html ?? ""
+              )}
               onChange={(event) =>
-                setLessonForm({
-                  ...lessonForm,
-                  content_html:
-                    event.target
-                      .value,
-                })
+                updateLessonField(
+                  "content_html",
+                  event.target.value
+                )
               }
-              placeholder="<p>Lesson content...</p>"
+              rows={12}
+              style={{
+                width: "100%",
+                padding: 10,
+                fontFamily: "monospace",
+              }}
             />
-          </label>
+          </div>
 
           <div
             style={{
               display: "flex",
-              gap: 16,
+              gap: 20,
               marginTop: 16,
               flexWrap: "wrap",
             }}
@@ -2027,16 +2376,14 @@ export default function AdminLmsEditor({
             <label>
               <input
                 type="checkbox"
-                checked={
+                checked={Boolean(
                   lessonForm.is_preview
-                }
+                )}
                 onChange={(event) =>
-                  setLessonForm({
-                    ...lessonForm,
-                    is_preview:
-                      event.target
-                        .checked,
-                  })
+                  updateLessonField(
+                    "is_preview",
+                    event.target.checked
+                  )
                 }
               />{" "}
               Preview lesson
@@ -2045,16 +2392,14 @@ export default function AdminLmsEditor({
             <label>
               <input
                 type="checkbox"
-                checked={
+                checked={Boolean(
                   lessonForm.is_published
-                }
+                )}
                 onChange={(event) =>
-                  setLessonForm({
-                    ...lessonForm,
-                    is_published:
-                      event.target
-                        .checked,
-                  })
+                  updateLessonField(
+                    "is_published",
+                    event.target.checked
+                  )
                 }
               />{" "}
               Published
@@ -2065,7 +2410,7 @@ export default function AdminLmsEditor({
             style={{
               display: "flex",
               gap: 8,
-              marginTop: 16,
+              marginTop: 20,
               flexWrap: "wrap",
             }}
           >
@@ -2074,25 +2419,54 @@ export default function AdminLmsEditor({
               onClick={saveLesson}
               disabled={saving}
             >
-              {saving
-                ? "Saving..."
-                : "Save Lesson"}
+              {saving ? "Saving..." : "Save Lesson"}
             </button>
 
             <button
               type="button"
-              onClick={() => {
-                setShowLessonForm(
-                  false
-                );
-                setEditingLessonId(
-                  null
-                );
-              }}
+              onClick={cancelLessonEdit}
               disabled={saving}
             >
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {selectedLesson && !editingLessonId && (
+        <div className="panel" style={{ marginTop: 24 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <strong>{selectedLesson.title}</strong>
+
+              <div className="muted">
+                {selectedLesson.is_published
+                  ? "Published"
+                  : "Draft"}{" "}
+                ·{" "}
+                {selectedLesson.is_preview
+                  ? "Preview"
+                  : "Members only"}
+              </div>
+            </div>
+
+            <div>
+              <button
+                type="button"
+                onClick={() =>
+                  beginEditLesson(selectedLesson)
+                }
+              >
+                Edit Lesson
+              </button>
+            </div>
           </div>
         </div>
       )}
