@@ -1,19 +1,43 @@
-```tsx
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import LearningRecommendations from "@/components/LearningRecommendations";
 
-type SkillData = {
+type Profile = {
   id: string;
-  name: string;
-  category: string | null;
+  email: string | null;
+  full_name: string | null;
+  role: string;
+};
+
+type Course = {
+  id: string;
+  title: string;
   slug: string;
-  description: string | null;
+  short_description: string | null;
+  category: string | null;
+  level: "beginner" | "intermediate" | "advanced";
+  thumbnail_url: string | null;
+  duration_minutes: number | null;
+  is_free: boolean;
+  price_ngn: number;
+  status: "draft" | "published" | "archived";
+};
+
+type Enrollment = {
+  id: string;
+  student_id: string;
+  course_id: string;
+  payment_status: string;
+  enrollment_status: string;
+  progress_percent: number;
+  enrolled_at: string;
+  completed_at: string | null;
+  last_accessed_at: string | null;
 };
 
 type SkillProfile = {
   id: string;
+  student_id: string;
   skill_id: string;
   confidence_score: number;
   skill_level: string;
@@ -21,49 +45,60 @@ type SkillProfile = {
   strengths: string | null;
   gaps: string | null;
   updated_at: string;
-  learning_skills:
-    | SkillData
-    | SkillData[]
-    | null;
 };
 
-type CourseData = {
+type Skill = {
   id: string;
-  title: string;
+  name: string;
   slug: string;
-  short_description: string | null;
-  is_free: boolean;
-  level: string;
   category: string | null;
-  duration_minutes: number | null;
+  description: string | null;
 };
 
-type Enrollment = {
+type LessonSkill = {
+  lesson_id: string;
+  skill_id: string;
+  relevance_weight: number;
+};
+
+type Lesson = {
   id: string;
-  progress_percent: number;
-  enrollment_status: string;
-  course_id: string;
-  enrolled_at: string;
-  courses: CourseData | CourseData[] | null;
-};
-
-type Activity = {
-  id: string;
-  activity_type: string;
-  created_at: string;
-  course_id: string | null;
-  lesson_id: string | null;
-};
-
-type RecommendationCourse = {
   course_id: string;
   title: string;
   slug: string;
-  level: string;
+  is_published: boolean;
+  is_preview: boolean;
+  sort_order: number;
+};
+
+type Recommendation = {
+  course_id: string;
+  title: string;
+  slug: string;
+  level: Course["level"];
   category: string | null;
   short_description: string | null;
   matched_skills: string[];
+  score: number;
 };
+
+function formatLevel(level: string) {
+  return level.charAt(0).toUpperCase() + level.slice(1);
+}
+
+function formatDate(value: string | null) {
+  if (!value) return "Not available";
+
+  return new Intl.DateTimeFormat("en-NG", {
+    dateStyle: "medium",
+  }).format(new Date(value));
+}
+
+function getProgressLabel(progress: number) {
+  if (progress >= 100) return "Completed";
+  if (progress > 0) return "In progress";
+  return "Not started";
+}
 
 export default async function StudentDashboardPage() {
   const supabase = await createClient();
@@ -76,60 +111,112 @@ export default async function StudentDashboardPage() {
     redirect("/login?next=/student/dashboard");
   }
 
-  const { data: profile } = await supabase
+  /*
+   * --------------------------------------------------------------------------
+   * PROFILE
+   * --------------------------------------------------------------------------
+   */
+
+  const { data: profileData } = await supabase
     .from("profiles")
-    .select("full_name, email, role")
+    .select("id, email, full_name, role")
     .eq("id", user.id)
     .maybeSingle();
 
-  const { data: enrollmentRows } = await supabase
+  const profile = profileData as Profile | null;
+
+  /*
+   * --------------------------------------------------------------------------
+   * ENROLLMENTS
+   * --------------------------------------------------------------------------
+   */
+
+  const { data: enrollmentData } = await supabase
     .from("enrollments")
     .select(
       `
         id,
-        progress_percent,
-        enrollment_status,
+        student_id,
         course_id,
+        payment_status,
+        enrollment_status,
+        progress_percent,
         enrolled_at,
-        courses (
+        completed_at,
+        last_accessed_at
+      `
+    )
+    .eq("student_id", user.id)
+    .order("last_accessed_at", {
+      ascending: false,
+      nullsFirst: false,
+    });
+
+  const enrollments = (enrollmentData || []) as Enrollment[];
+
+  /*
+   * --------------------------------------------------------------------------
+   * ENROLLED COURSES
+   *
+   * Deliberately queried separately instead of using nested Supabase
+   * relationships. This keeps the TypeScript build predictable.
+   * --------------------------------------------------------------------------
+   */
+
+  const enrolledCourseIds = [
+    ...new Set(enrollments.map((item) => item.course_id)),
+  ];
+
+  let enrolledCourses: Course[] = [];
+
+  if (enrolledCourseIds.length > 0) {
+    const { data: courseData } = await supabase
+      .from("courses")
+      .select(
+        `
           id,
           title,
           slug,
           short_description,
-          is_free,
-          level,
           category,
-          duration_minutes
-        )
-      `
-    )
-    .eq("student_id", user.id)
-    .order("enrolled_at", {
-      ascending: false,
-    });
+          level,
+          thumbnail_url,
+          duration_minutes,
+          is_free,
+          price_ngn,
+          status
+        `
+      )
+      .in("id", enrolledCourseIds);
 
-  const enrollments =
-    (enrollmentRows || []) as unknown as Enrollment[];
+    enrolledCourses = (courseData || []) as Course[];
+  }
 
-  const { data: skillRows } = await supabase
+  const courseMap = new Map<string, Course>();
+
+  enrolledCourses.forEach((course) => {
+    courseMap.set(course.id, course);
+  });
+
+  /*
+   * --------------------------------------------------------------------------
+   * SKILL PROFILE
+   * --------------------------------------------------------------------------
+   */
+
+  const { data: skillProfileData } = await supabase
     .from("learner_skill_profiles")
     .select(
       `
         id,
+        student_id,
         skill_id,
         confidence_score,
         skill_level,
         evidence,
         strengths,
         gaps,
-        updated_at,
-        learning_skills (
-          id,
-          name,
-          category,
-          slug,
-          description
-        )
+        updated_at
       `
     )
     .eq("student_id", user.id)
@@ -137,818 +224,801 @@ export default async function StudentDashboardPage() {
       ascending: false,
     });
 
-  const skillProfiles =
-    (skillRows || []) as unknown as SkillProfile[];
+  const skillProfiles = (skillProfileData || []) as SkillProfile[];
 
-  const { data: activityRows } = await supabase
-    .from("learning_activity")
-    .select(
-      "id, activity_type, created_at, course_id, lesson_id"
-    )
-    .eq("student_id", user.id)
-    .order("created_at", {
-      ascending: false,
-    })
-    .limit(8);
+  const skillIds = [
+    ...new Set(skillProfiles.map((profileItem) => profileItem.skill_id)),
+  ];
 
-  const activities =
-    (activityRows || []) as Activity[];
+  let skills: Skill[] = [];
 
-  const strengths = skillProfiles.filter(
-    (skill) =>
-      Number(skill.confidence_score) >= 70
-  );
+  if (skillIds.length > 0) {
+    const { data: skillData } = await supabase
+      .from("learning_skills")
+      .select("id, name, slug, category, description")
+      .in("id", skillIds);
 
-  const developmentAreas = skillProfiles
-    .filter(
-      (skill) =>
-        Number(skill.confidence_score) < 70
-    )
+    skills = (skillData || []) as Skill[];
+  }
+
+  const skillMap = new Map<string, Skill>();
+
+  skills.forEach((skill) => {
+    skillMap.set(skill.id, skill);
+  });
+
+  /*
+   * --------------------------------------------------------------------------
+   * BASIC STATS
+   * --------------------------------------------------------------------------
+   */
+
+  const totalCourses = enrollments.length;
+
+  const completedCourses = enrollments.filter(
+    (enrollment) =>
+      enrollment.progress_percent >= 100 ||
+      enrollment.enrollment_status === "completed"
+  ).length;
+
+  const strengthCount = skillProfiles.filter(
+    (skill) => Number(skill.confidence_score) >= 80
+  ).length;
+
+  const developmentCount = skillProfiles.filter(
+    (skill) => Number(skill.confidence_score) < 50
+  ).length;
+
+  /*
+   * --------------------------------------------------------------------------
+   * PERSONALIZED COURSE RECOMMENDATIONS
+   *
+   * Uses separate queries:
+   * learner_skill_profiles
+   * -> lesson_skills
+   * -> lessons
+   * -> courses
+   *
+   * No nested Supabase relation typing is used.
+   * --------------------------------------------------------------------------
+   */
+
+  const weakSkillProfiles = skillProfiles
+    .filter((skill) => Number(skill.confidence_score) < 70)
     .sort(
       (a, b) =>
-        Number(a.confidence_score) -
-        Number(b.confidence_score)
+        Number(a.confidence_score) - Number(b.confidence_score)
     );
 
-  const enrolledCourseIds = new Set(
-    enrollments.map(
-      (enrollment) => enrollment.course_id
-    )
-  );
+  const weakSkillIds = [
+    ...new Set(weakSkillProfiles.map((skill) => skill.skill_id)),
+  ];
 
-  let recommendations: RecommendationCourse[] =
-    [];
+  let recommendations: Recommendation[] = [];
 
-  if (developmentAreas.length > 0) {
-    /*
-     * IMPORTANT:
-     * Use skill_id from learner_skill_profiles.
-     * Do not use learner_skill_profiles.id.
-     */
-    const skillIds = developmentAreas
-      .map((skill) => skill.skill_id)
-      .filter(Boolean);
+  if (weakSkillIds.length > 0) {
+    const { data: lessonSkillData } = await supabase
+      .from("lesson_skills")
+      .select("lesson_id, skill_id, relevance_weight")
+      .in("skill_id", weakSkillIds);
 
-    if (skillIds.length > 0) {
-      const { data: lessonSkillRows } =
-        await supabase
-          .from("lesson_skills")
+    const lessonSkills = (lessonSkillData || []) as LessonSkill[];
+
+    const lessonIds = [
+      ...new Set(lessonSkills.map((item) => item.lesson_id)),
+    ];
+
+    if (lessonIds.length > 0) {
+      const { data: lessonData } = await supabase
+        .from("lessons")
+        .select(
+          `
+            id,
+            course_id,
+            title,
+            slug,
+            is_published,
+            is_preview,
+            sort_order
+          `
+        )
+        .in("id", lessonIds)
+        .eq("is_published", true);
+
+      const lessons = (lessonData || []) as Lesson[];
+
+      const recommendationCourseIds = [
+        ...new Set(lessons.map((lesson) => lesson.course_id)),
+      ].filter((courseId) => !enrolledCourseIds.includes(courseId));
+
+      if (recommendationCourseIds.length > 0) {
+        const { data: recommendationCourseData } = await supabase
+          .from("courses")
           .select(
             `
-              skill_id,
-              lessons (
-                course_id,
-                courses (
-                  id,
-                  title,
-                  slug,
-                  level,
-                  category,
-                  short_description,
-                  status
-                )
-              )
+              id,
+              title,
+              slug,
+              short_description,
+              category,
+              level,
+              thumbnail_url,
+              duration_minutes,
+              is_free,
+              price_ngn,
+              status
             `
           )
-          .in("skill_id", skillIds);
+          .in("id", recommendationCourseIds)
+          .eq("status", "published");
 
-      /*
-       * Supabase's generated nested relation type can
-       * vary depending on the relationship definition.
-       * Normalize it through unknown before processing.
-       */
-      const lessonSkills =
-        (lessonSkillRows || []) as unknown as Array<{
-          skill_id: string;
-          lessons:
-            | {
-                course_id: string;
-                courses:
-                  | {
-                      id: string;
-                      title: string;
-                      slug: string;
-                      level: string;
-                      category: string | null;
-                      short_description:
-                        | string
-                        | null;
-                      status: string;
-                    }
-                  | {
-                      id: string;
-                      title: string;
-                      slug: string;
-                      level: string;
-                      category: string | null;
-                      short_description:
-                        | string
-                        | null;
-                      status: string;
-                    }[]
-                  | null;
-              }
-            | {
-                course_id: string;
-                courses:
-                  | {
-                      id: string;
-                      title: string;
-                      slug: string;
-                      level: string;
-                      category: string | null;
-                      short_description:
-                        | string
-                        | null;
-                      status: string;
-                    }
-                  | {
-                      id: string;
-                      title: string;
-                      slug: string;
-                      level: string;
-                      category: string | null;
-                      short_description:
-                        | string
-                        | null;
-                      status: string;
-                    }[]
-                  | null;
-              }[]
-            | null;
-        }>;
+        const recommendationCourses =
+          (recommendationCourseData || []) as Course[];
 
-      const recommendationMap = new Map<
-        string,
-        {
-          course_id: string;
-          title: string;
-          slug: string;
-          level: string;
-          category: string | null;
-          short_description: string | null;
-          matched_skills: Set<string>;
-        }
-      >();
+        const recommendationCourseMap = new Map<string, Course>();
 
-      for (const item of lessonSkills) {
-        const lesson = Array.isArray(
-          item.lessons
-        )
-          ? item.lessons[0]
-          : item.lessons;
+        recommendationCourses.forEach((course) => {
+          recommendationCourseMap.set(course.id, course);
+        });
 
-        if (!lesson) {
-          continue;
-        }
+        const recommendationMap = new Map<
+          string,
+          Recommendation
+        >();
 
-        const course = Array.isArray(
-          lesson.courses
-        )
-          ? lesson.courses[0]
-          : lesson.courses;
+        lessons.forEach((lesson) => {
+          const course = recommendationCourseMap.get(lesson.course_id);
 
-        if (!course) {
-          continue;
-        }
+          if (!course) {
+            return;
+          }
 
-        if (course.status !== "published") {
-          continue;
-        }
-
-        if (enrolledCourseIds.has(course.id)) {
-          continue;
-        }
-
-        const skill = developmentAreas.find(
-          (candidate) =>
-            candidate.skill_id === item.skill_id
-        );
-
-        if (!skill) {
-          continue;
-        }
-
-        const skillData = Array.isArray(
-          skill.learning_skills
-        )
-          ? skill.learning_skills[0]
-          : skill.learning_skills;
-
-        const skillName =
-          skillData?.name ||
-          "Skill development";
-
-        const existing =
-          recommendationMap.get(course.id);
-
-        if (existing) {
-          existing.matched_skills.add(
-            skillName
+          const matchingLessonSkills = lessonSkills.filter(
+            (lessonSkill) =>
+              lessonSkill.lesson_id === lesson.id &&
+              weakSkillIds.includes(lessonSkill.skill_id)
           );
-        } else {
-          recommendationMap.set(course.id, {
-            course_id: course.id,
-            title: course.title,
-            slug: course.slug,
-            level: course.level,
-            category: course.category,
-            short_description:
-              course.short_description,
-            matched_skills: new Set([
-              skillName,
-            ]),
-          });
-        }
-      }
 
-      recommendations = Array.from(
-        recommendationMap.values()
-      )
-        .map((course) => ({
-          ...course,
-          matched_skills: Array.from(
-            course.matched_skills
-          ),
-        }))
-        .sort(
-          (a, b) =>
-            b.matched_skills.length -
-            a.matched_skills.length
+          matchingLessonSkills.forEach((lessonSkill) => {
+            const skill = skillMap.get(lessonSkill.skill_id);
+
+            const skillName = skill?.name || "Skill development";
+
+            const profileForSkill = weakSkillProfiles.find(
+              (item) => item.skill_id === lessonSkill.skill_id
+            );
+
+            const confidence = Number(
+              profileForSkill?.confidence_score ?? 0
+            );
+
+            const relevance = Number(
+              lessonSkill.relevance_weight ?? 1
+            );
+
+            const score = Math.max(
+              0,
+              100 - confidence
+            ) * relevance;
+
+            const existing = recommendationMap.get(course.id);
+
+            if (existing) {
+              if (!existing.matched_skills.includes(skillName)) {
+                existing.matched_skills.push(skillName);
+              }
+
+              existing.score += score;
+            } else {
+              recommendationMap.set(course.id, {
+                course_id: course.id,
+                title: course.title,
+                slug: course.slug,
+                level: course.level,
+                category: course.category,
+                short_description: course.short_description,
+                matched_skills: [skillName],
+                score,
+              });
+            }
+          });
+        });
+
+        recommendations = Array.from(
+          recommendationMap.values()
         )
-        .slice(0, 4);
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 6);
+      }
     }
   }
 
-  const hasSkillProfile =
-    skillProfiles.length > 0;
+  /*
+   * --------------------------------------------------------------------------
+   * DISPLAY DATA
+   * --------------------------------------------------------------------------
+   */
 
-  const averageConfidence =
-    hasSkillProfile
+  const displayName =
+    profile?.full_name ||
+    user.email?.split("@")[0] ||
+    "Learner";
+
+  const averageSkillScore =
+    skillProfiles.length > 0
       ? Math.round(
           skillProfiles.reduce(
             (total, skill) =>
-              total +
-              Number(
-                skill.confidence_score || 0
-              ),
+              total + Number(skill.confidence_score || 0),
             0
           ) / skillProfiles.length
         )
       : 0;
 
   return (
-    <section className="section">
-      <div className="container">
-        <div className="dashboard-header">
-          <div>
-            <span className="badge">
-              RuffNeck Learn
-            </span>
+    <main className="container rn-dashboard-shell">
+      {/* ------------------------------------------------------------------ */}
+      {/* HEADER                                                             */}
+      {/* ------------------------------------------------------------------ */}
 
-            <h1 className="dashboard-title">
-              My learning
-            </h1>
+      <section className="rn-dashboard-header">
+        <div>
+          <div className="rn-eyebrow">RUFFNECK LEARN</div>
 
-            <p className="muted">
-              Welcome
-              {profile?.full_name
-                ? `, ${profile.full_name}`
-                : ""}
-              . Your learning dashboard tracks
-              progress, skills and development
-              areas.
-            </p>
-          </div>
+          <h1>Learning Dashboard</h1>
 
-          <div className="dashboard-actions">
-            <Link
-              href="/courses"
-              className="btn btn-primary"
-            >
-              Browse courses
-            </Link>
+          <p className="rn-dashboard-intro">
+            Welcome
+            {profile?.full_name
+              ? `, ${profile.full_name}`
+              : ""}
+            . Your learning dashboard tracks progress, skills
+            and development.
+          </p>
+        </div>
+
+        <div className="rn-dashboard-header-actions">
+          <Link
+            href="/courses"
+            className="rn-button rn-button-primary"
+          >
+            Browse Courses
+          </Link>
+
+          <Link
+            href="/student/assessment"
+            className="rn-button rn-button-secondary"
+          >
+            Skill Assessment
+          </Link>
+        </div>
+      </section>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* STATS                                                              */}
+      {/* ------------------------------------------------------------------ */}
+
+      <section className="rn-dashboard-stats">
+        <article className="rn-dashboard-stat">
+          <span className="rn-dashboard-stat-label">
+            Courses
+          </span>
+
+          <strong>{totalCourses}</strong>
+
+          <small>Enrolled courses</small>
+        </article>
+
+        <article className="rn-dashboard-stat">
+          <span className="rn-dashboard-stat-label">
+            Completed
+          </span>
+
+          <strong>{completedCourses}</strong>
+
+          <small>Courses completed</small>
+        </article>
+
+        <article className="rn-dashboard-stat">
+          <span className="rn-dashboard-stat-label">
+            Strengths
+          </span>
+
+          <strong>{strengthCount}</strong>
+
+          <small>Skills at 80%+</small>
+        </article>
+
+        <article className="rn-dashboard-stat">
+          <span className="rn-dashboard-stat-label">
+            Development
+          </span>
+
+          <strong>{developmentCount}</strong>
+
+          <small>Skills below 50%</small>
+        </article>
+      </section>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* PROFILE SUMMARY                                                    */}
+      {/* ------------------------------------------------------------------ */}
+
+      <section className="rn-dashboard-grid">
+        <article className="rn-dashboard-card">
+          <div className="rn-dashboard-card-header">
+            <div>
+              <span className="rn-eyebrow">
+                LEARNER PROFILE
+              </span>
+
+              <h2>{displayName}</h2>
+            </div>
 
             <Link
               href="/student/skills"
-              className="btn btn-outline"
+              className="rn-text-link"
             >
-              My skills
+              View skills
             </Link>
           </div>
-        </div>
 
-        <div className="rn-learning-overview">
-          <div className="rn-learning-stat">
-            <strong>
-              {enrollments.length}
-            </strong>
-            <span>Courses</span>
-          </div>
+          <div className="rn-profile-summary">
+            <div className="rn-profile-score">
+              <strong>{averageSkillScore}%</strong>
 
-          <div className="rn-learning-stat">
-            <strong>
-              {
-                enrollments.filter(
-                  (item) =>
-                    item.enrollment_status ===
-                    "completed"
-                ).length
-              }
-            </strong>
-            <span>Completed</span>
-          </div>
+              <span>Average skill confidence</span>
+            </div>
 
-          <div className="rn-learning-stat">
-            <strong>
-              {strengths.length}
-            </strong>
-            <span>Strengths</span>
-          </div>
-
-          <div className="rn-learning-stat">
-            <strong>
-              {developmentAreas.length}
-            </strong>
-            <span>
-              Development areas
-            </span>
-          </div>
-        </div>
-
-        {!hasSkillProfile && (
-          <div className="rn-diagnostic-banner">
-            <div>
-              <span className="badge">
-                Personalised learning
-              </span>
-
-              <h2>
-                Discover your current skill level
-              </h2>
+            <div className="rn-profile-details">
+              <p>
+                <strong>Email:</strong>{" "}
+                {profile?.email || user.email}
+              </p>
 
               <p>
-                Complete the RuffNeck diagnostic
-                assessment so the platform can
-                identify your strengths, knowledge
-                gaps and suitable learning paths.
+                <strong>Role:</strong>{" "}
+                {profile?.role || "student"}
+              </p>
+
+              <p>
+                <strong>Skills tracked:</strong>{" "}
+                {skillProfiles.length}
               </p>
             </div>
+          </div>
+        </article>
+
+        <article className="rn-dashboard-card">
+          <div className="rn-dashboard-card-header">
+            <div>
+              <span className="rn-eyebrow">
+                NEXT STEP
+              </span>
+
+              <h2>Build your learning profile</h2>
+            </div>
+          </div>
+
+          <p className="rn-dashboard-card-text">
+            Complete the diagnostic assessment to identify
+            your current strengths and development areas.
+            Your results can be used to personalize your
+            learning path.
+          </p>
+
+          <Link
+            href="/student/assessment"
+            className="rn-button rn-button-primary"
+          >
+            Take Diagnostic Assessment
+          </Link>
+        </article>
+      </section>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* MY COURSES                                                         */}
+      {/* ------------------------------------------------------------------ */}
+
+      <section className="rn-dashboard-section">
+        <div className="rn-dashboard-section-header">
+          <div>
+            <span className="rn-eyebrow">MY LEARNING</span>
+
+            <h2>My Courses</h2>
+
+            <p>
+              Continue your courses and track your progress.
+            </p>
+          </div>
+
+          <Link
+            href="/courses"
+            className="rn-text-link"
+          >
+            Browse all courses
+          </Link>
+        </div>
+
+        {enrollments.length === 0 ? (
+          <article className="rn-empty-state">
+            <h3>No courses yet</h3>
+
+            <p>
+              You have not enrolled in a course yet. Explore
+              the RuffNeck Learn catalog to get started.
+            </p>
 
             <Link
-              href="/student/assessment"
-              className="btn btn-primary"
+              href="/courses"
+              className="rn-button rn-button-primary"
             >
-              Start assessment
+              Explore Courses
             </Link>
-          </div>
-        )}
+          </article>
+        ) : (
+          <div className="rn-course-grid">
+            {enrollments.map((enrollment) => {
+              const course = courseMap.get(
+                enrollment.course_id
+              );
 
-        {hasSkillProfile && (
-          <section className="dashboard-section">
-            <div className="section-heading-row">
-              <div>
-                <span className="badge">
-                  Learning profile
-                </span>
+              if (!course) {
+                return null;
+              }
 
-                <h2>
-                  Your current skill profile
-                </h2>
+              const progress = Math.min(
+                100,
+                Math.max(
+                  0,
+                  Number(enrollment.progress_percent || 0)
+                )
+              );
 
-                <p className="muted">
-                  Based on your latest learning
-                  evidence and diagnostic results.
-                </p>
-              </div>
-
-              <Link
-                href="/student/skills"
-                className="btn btn-outline"
-              >
-                View all skills
-              </Link>
-            </div>
-
-            <div className="rn-learning-overview">
-              <div className="rn-learning-stat">
-                <strong>
-                  {skillProfiles.length}
-                </strong>
-                <span>Assessed skills</span>
-              </div>
-
-              <div className="rn-learning-stat">
-                <strong>
-                  {averageConfidence}%
-                </strong>
-                <span>
-                  Average confidence
-                </span>
-              </div>
-
-              <div className="rn-learning-stat">
-                <strong>
-                  {strengths.length}
-                </strong>
-                <span>Strengths</span>
-              </div>
-
-              <div className="rn-learning-stat">
-                <strong>
-                  {developmentAreas.length}
-                </strong>
-                <span>
-                  Development areas
-                </span>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {recommendations.length > 0 && (
-          <section className="dashboard-section">
-            <div className="section-heading-row">
-              <div>
-                <span className="badge">
-                  Personalised
-                </span>
-
-                <h2>
-                  Recommended for you
-                </h2>
-
-                <p className="muted">
-                  Courses connected to skills you
-                  are still developing.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid">
-              {recommendations.map(
-                (course) => (
-                  <article
-                    key={course.course_id}
-                    className="card recommendation-card"
-                  >
-                    <div className="thumb">
+              return (
+                <article
+                  key={enrollment.id}
+                  className="rn-course-card"
+                >
+                  {course.thumbnail_url ? (
+                    <div className="rn-course-card-image">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={course.thumbnail_url}
+                        alt={course.title}
+                      />
+                    </div>
+                  ) : (
+                    <div className="rn-course-card-placeholder">
                       RN
                     </div>
+                  )}
 
-                    <div className="card-body">
-                      <div>
-                        <span className="badge">
-                          {course.level}
-                        </span>
+                  <div className="rn-course-card-body">
+                    <div className="rn-course-card-meta">
+                      <span>{formatLevel(course.level)}</span>
 
-                        {course.category && (
-                          <span
-                            className="badge"
-                            style={{
-                              marginLeft: 6,
-                            }}
-                          >
-                            {course.category}
-                          </span>
-                        )}
-                      </div>
-
-                      <h3>
-                        {course.title}
-                      </h3>
-
-                      <p>
-                        {course.short_description ||
-                          "Build practical skills with RuffNeck Learn."}
-                      </p>
-
-                      <div className="matched-skills">
-                        <strong>
-                          Helps develop:
-                        </strong>
-
-                        <div>
-                          {course.matched_skills
-                            .slice(0, 3)
-                            .map(
-                              (skill) => (
-                                <span
-                                  key={skill}
-                                  className="skill-chip"
-                                >
-                                  {skill}
-                                </span>
-                              )
-                            )}
-                        </div>
-                      </div>
-
-                      <Link
-                        href={`/courses/${course.slug}`}
-                        className="btn btn-navy"
-                      >
-                        View course
-                      </Link>
+                      {course.category ? (
+                        <span>{course.category}</span>
+                      ) : null}
                     </div>
-                  </article>
-                )
-              )}
-            </div>
-          </section>
-        )}
 
-        <section className="dashboard-section">
-          <div className="section-heading-row">
-            <div>
-              <h2>My courses</h2>
+                    <h3>{course.title}</h3>
 
-              <p className="muted">
-                Continue your active learning.
-              </p>
-            </div>
-          </div>
+                    <p>
+                      {course.short_description ||
+                        "Continue learning and build practical skills."}
+                    </p>
 
-          {!enrollments.length ? (
-            <div className="panel">
-              <p
-                style={{
-                  margin: "0 0 12px",
-                }}
-              >
-                You are not enrolled in any
-                course yet.
-              </p>
-
-              <Link
-                href="/courses"
-                className="btn btn-primary"
-              >
-                Browse courses
-              </Link>
-            </div>
-          ) : (
-            <div className="grid">
-              {enrollments.map(
-                (enrollment) => {
-                  const course =
-                    Array.isArray(
-                      enrollment.courses
-                    )
-                      ? enrollment.courses[0]
-                      : enrollment.courses;
-
-                  if (!course) {
-                    return null;
-                  }
-
-                  const completed =
-                    enrollment.enrollment_status ===
-                    "completed";
-
-                  return (
-                    <article
-                      key={enrollment.id}
-                      className="card"
-                    >
-                      <div className="thumb">
-                        RN
-                      </div>
-
-                      <div className="card-body">
-                        <span className="badge">
-                          {completed
-                            ? "Completed"
-                            : "In progress"}
-                        </span>
-
-                        <h3>
-                          {course.title}
-                        </h3>
-
-                        <p>
-                          {course.short_description}
-                        </p>
-
-                        <div
-                          className="progress"
-                          aria-label={`${enrollment.progress_percent}% complete`}
-                        >
-                          <span
-                            style={{
-                              width: `${enrollment.progress_percent}%`,
-                            }}
-                          />
-                        </div>
-
-                        <p className="muted">
-                          {
-                            enrollment.progress_percent
-                          }
-                          % complete
-                        </p>
-
-                        <Link
-                          href={`/courses/${course.slug}`}
-                          className="btn btn-navy"
-                        >
-                          {completed
-                            ? "Review course"
-                            : enrollment.progress_percent >
-                                0
-                              ? "Continue"
-                              : "Start"}
-                        </Link>
-                      </div>
-                    </article>
-                  );
-                }
-              )}
-            </div>
-          )}
-        </section>
-
-        <LearningRecommendations />
-
-        {skillProfiles.length > 0 && (
-          <section className="dashboard-section">
-            <div className="section-heading-row">
-              <div>
-                <h2>Skill profile</h2>
-
-                <p className="muted">
-                  Your current learning evidence
-                  and development areas.
-                </p>
-              </div>
-
-              <Link
-                href="/student/skills"
-                className="btn btn-outline"
-              >
-                View all skills
-              </Link>
-            </div>
-
-            <div className="skill-profile-grid">
-              {skillProfiles
-                .slice(0, 6)
-                .map((skill) => {
-                  const skillData =
-                    Array.isArray(
-                      skill.learning_skills
-                    )
-                      ? skill.learning_skills[0]
-                      : skill.learning_skills;
-
-                  const score = Math.max(
-                    0,
-                    Math.min(
-                      100,
-                      Math.round(
-                        Number(
-                          skill.confidence_score ||
-                            0
-                        )
-                      )
-                    )
-                  );
-
-                  return (
-                    <div
-                      key={skill.id}
-                      className="skill-profile-card"
-                    >
-                      <div className="skill-profile-top">
-                        <strong>
-                          {skillData?.name ||
-                            "Learning skill"}
-                        </strong>
-
+                    <div className="rn-progress-block">
+                      <div className="rn-progress-header">
                         <span>
-                          {score}%
+                          {getProgressLabel(progress)}
                         </span>
+
+                        <strong>{progress}%</strong>
                       </div>
 
-                      <div className="progress">
-                        <span
+                      <div className="rn-progress-track">
+                        <div
+                          className="rn-progress-fill"
                           style={{
-                            width: `${score}%`,
+                            width: `${progress}%`,
                           }}
                         />
                       </div>
-
-                      <p className="muted">
-                        Level{" "}
-                        {formatSkillLevel(
-                          skill.skill_level
-                        )}
-                      </p>
-
-                      {skill.gaps && (
-                        <p className="muted">
-                          Gap: {skill.gaps}
-                        </p>
-                      )}
                     </div>
-                  );
-                })}
-            </div>
-          </section>
-        )}
 
-        {activities.length > 0 && (
-          <section className="dashboard-section">
-            <div className="section-heading-row">
-              <div>
-                <h2>
-                  Recent learning activity
-                </h2>
+                    <div className="rn-course-card-footer">
+                      <span>
+                        {course.duration_minutes
+                          ? `${course.duration_minutes} min`
+                          : "Self-paced"}
+                      </span>
 
-                <p className="muted">
-                  Your latest activity on RuffNeck
-                  Learn.
-                </p>
-              </div>
-            </div>
-
-            <div className="activity-list">
-              {activities.map(
-                (activity) => (
-                  <div
-                    key={activity.id}
-                    className="activity-row"
-                  >
-                    <span className="activity-dot" />
-
-                    <div>
-                      <strong>
-                        {formatActivity(
-                          activity.activity_type
-                        )}
-                      </strong>
-
-                      <p className="muted">
-                        {new Date(
-                          activity.created_at
-                        ).toLocaleString()}
-                      </p>
+                      <Link
+                        href={`/courses/${course.slug}`}
+                        className="rn-button rn-button-primary"
+                      >
+                        {progress >= 100
+                          ? "Review Course"
+                          : progress > 0
+                            ? "Continue"
+                            : "Start Course"}
+                      </Link>
                     </div>
                   </div>
-                )
-              )}
-            </div>
-          </section>
+                </article>
+              );
+            })}
+          </div>
         )}
-      </div>
-    </section>
+      </section>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* SKILL PROFILE                                                       */}
+      {/* ------------------------------------------------------------------ */}
+
+      <section className="rn-dashboard-section">
+        <div className="rn-dashboard-section-header">
+          <div>
+            <span className="rn-eyebrow">
+              SKILL INTELLIGENCE
+            </span>
+
+            <h2>Your Skill Profile</h2>
+
+            <p>
+              Your current confidence levels across tracked
+              learning skills.
+            </p>
+          </div>
+
+          <Link
+            href="/student/skills"
+            className="rn-text-link"
+          >
+            View full profile
+          </Link>
+        </div>
+
+        {skillProfiles.length === 0 ? (
+          <article className="rn-empty-state">
+            <h3>No skill profile yet</h3>
+
+            <p>
+              Take the diagnostic assessment to create your
+              first learning skill profile.
+            </p>
+
+            <Link
+              href="/student/assessment"
+              className="rn-button rn-button-primary"
+            >
+              Start Assessment
+            </Link>
+          </article>
+        ) : (
+          <div className="rn-skill-dashboard-grid">
+            {skillProfiles.slice(0, 8).map((skillProfile) => {
+              const skill = skillMap.get(
+                skillProfile.skill_id
+              );
+
+              const score = Math.min(
+                100,
+                Math.max(
+                  0,
+                  Number(skillProfile.confidence_score || 0)
+                )
+              );
+
+              return (
+                <article
+                  key={skillProfile.id}
+                  className="rn-skill-dashboard-card"
+                >
+                  <div className="rn-skill-dashboard-header">
+                    <div>
+                      <h3>
+                        {skill?.name || "Learning Skill"}
+                      </h3>
+
+                      <span>
+                        {skillProfile.skill_level ||
+                          "beginner"}
+                      </span>
+                    </div>
+
+                    <strong>{score}%</strong>
+                  </div>
+
+                  <div className="rn-skill-bar">
+                    <div
+                      style={{
+                        width: `${score}%`,
+                      }}
+                    />
+                  </div>
+
+                  {skill?.category ? (
+                    <small>{skill.category}</small>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* PERSONALIZED RECOMMENDATIONS                                        */}
+      {/* ------------------------------------------------------------------ */}
+
+      <section className="rn-dashboard-section">
+        <div className="rn-dashboard-section-header">
+          <div>
+            <span className="rn-eyebrow">
+              PERSONALIZED LEARNING
+            </span>
+
+            <h2>Recommended Courses</h2>
+
+            <p>
+              Courses connected to skills that can strengthen
+              your current learning profile.
+            </p>
+          </div>
+        </div>
+
+        {recommendations.length === 0 ? (
+          <article className="rn-empty-state">
+            <h3>
+              No major skill gaps were identified from your
+              current profile.
+            </h3>
+
+            <p>
+              Complete more lessons or retake the diagnostic
+              assessment as your skills develop. New
+              recommendations will appear when relevant.
+            </p>
+
+            <div className="rn-dashboard-inline-actions">
+              <Link
+                href="/student/assessment"
+                className="rn-button rn-button-secondary"
+              >
+                Retake Assessment
+              </Link>
+
+              <Link
+                href="/courses"
+                className="rn-button rn-button-primary"
+              >
+                Explore Courses
+              </Link>
+            </div>
+          </article>
+        ) : (
+          <div className="rn-recommendation-grid">
+            {recommendations.map((recommendation) => (
+              <article
+                key={recommendation.course_id}
+                className="rn-recommendation-card"
+              >
+                <div className="rn-recommendation-top">
+                  <span className="rn-recommendation-badge">
+                    Recommended
+                  </span>
+
+                  <span>
+                    {formatLevel(recommendation.level)}
+                  </span>
+                </div>
+
+                <h3>{recommendation.title}</h3>
+
+                <p>
+                  {recommendation.short_description ||
+                    "Build practical skills through this course."}
+                </p>
+
+                {recommendation.matched_skills.length >
+                0 ? (
+                  <div className="rn-recommendation-skills">
+                    {recommendation.matched_skills
+                      .slice(0, 4)
+                      .map((skillName) => (
+                        <span key={skillName}>
+                          {skillName}
+                        </span>
+                      ))}
+                  </div>
+                ) : null}
+
+                <Link
+                  href={`/courses/${recommendation.slug}`}
+                  className="rn-button rn-button-primary"
+                >
+                  View Course
+                </Link>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* QUICK ACTIONS                                                       */}
+      {/* ------------------------------------------------------------------ */}
+
+      <section className="rn-dashboard-section">
+        <div className="rn-dashboard-section-header">
+          <div>
+            <span className="rn-eyebrow">QUICK ACTIONS</span>
+
+            <h2>Continue Learning</h2>
+          </div>
+        </div>
+
+        <div className="rn-dashboard-actions-grid">
+          <Link
+            href="/courses"
+            className="rn-dashboard-action"
+          >
+            <strong>Browse Courses</strong>
+
+            <span>
+              Explore AI, data, digital marketing and
+              productivity courses.
+            </span>
+          </Link>
+
+          <Link
+            href="/student/assessment"
+            className="rn-dashboard-action"
+          >
+            <strong>Take Assessment</strong>
+
+            <span>
+              Measure your current skills and identify
+              development areas.
+            </span>
+          </Link>
+
+          <Link
+            href="/student/skills"
+            className="rn-dashboard-action"
+          >
+            <strong>View Skills</strong>
+
+            <span>
+              Review your learning profile and skill
+              confidence levels.
+            </span>
+          </Link>
+        </div>
+      </section>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* FOOTER NOTE                                                        */}
+      {/* ------------------------------------------------------------------ */}
+
+      <section className="rn-dashboard-footer-note">
+        <p>
+          RuffNeck Learn helps you build practical digital
+          skills through structured courses, assessments and
+          personalized learning recommendations.
+        </p>
+
+        <p>
+          Last profile update:{" "}
+          {formatDate(
+            skillProfiles[0]?.updated_at || null
+          )}
+        </p>
+      </section>
+    </main>
   );
 }
-
-function formatSkillLevel(
-  level: string | null | undefined
-) {
-  if (!level) {
-    return "Beginner";
-  }
-
-  return (
-    level.charAt(0).toUpperCase() +
-    level.slice(1)
-  );
-}
-
-function formatActivity(type: string) {
-  switch (type) {
-    case "course_started":
-      return "Started a course";
-
-    case "lesson_started":
-      return "Started a lesson";
-
-    case "lesson_completed":
-      return "Completed a lesson";
-
-    case "resource_opened":
-      return "Opened a learning resource";
-
-    case "assessment_started":
-      return "Started an assessment";
-
-    case "assessment_completed":
-      return "Completed an assessment";
-
-    case "assessment_answered":
-      return "Answered an assessment question";
-
-    case "skill_assessed":
-      return "Skill profile updated";
-
-    case "recommendation_opened":
-      return "Opened a recommendation";
-
-    default:
-      return "Learning activity";
-  }
-}
-```
