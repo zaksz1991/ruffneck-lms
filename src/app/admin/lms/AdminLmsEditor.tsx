@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -90,6 +90,7 @@ export default function AdminLmsEditor({
   const router = useRouter();
 
   const [courses, setCourses] = useState<Course[]>(initialCourses);
+
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(
     initialCourses[0]?.id ?? null
   );
@@ -101,12 +102,14 @@ export default function AdminLmsEditor({
   const [lessons, setLessons] = useState<Lesson[]>([]);
 
   const [newSectionTitle, setNewSectionTitle] = useState("");
+
   const [editingSectionId, setEditingSectionId] = useState<string | null>(
     null
   );
   const [editingSectionTitle, setEditingSectionTitle] = useState("");
 
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
+
   const [lessonForm, setLessonForm] = useState({
     section_id: "",
     title: "",
@@ -121,20 +124,18 @@ export default function AdminLmsEditor({
 
   const [showCourseForm, setShowCourseForm] = useState(false);
   const [showLessonForm, setShowLessonForm] = useState(false);
+
   const [loadingCurriculum, setLoadingCurriculum] = useState(false);
   const [saving, setSaving] = useState(false);
+
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   const selectedCourse = useMemo(
-    () => courses.find((course) => course.id === selectedCourseId) ?? null,
+    () =>
+      courses.find((course) => course.id === selectedCourseId) ?? null,
     [courses, selectedCourseId]
   );
-
-  const lessonsForSection = (sectionId: string) =>
-    lessons
-      .filter((lesson) => lesson.section_id === sectionId)
-      .sort((a, b) => a.sort_order - b.sort_order);
 
   function clearMessages() {
     setMessage("");
@@ -150,18 +151,73 @@ export default function AdminLmsEditor({
       .replace(/-+/g, "-");
   }
 
+  async function loadCurriculum(courseId: string) {
+    clearMessages();
+    setLoadingCurriculum(true);
+
+    const [sectionsResult, lessonsResult] = await Promise.all([
+      supabase
+        .from("course_sections")
+        .select("*")
+        .eq("course_id", courseId)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true }),
+
+      supabase
+        .from("lessons")
+        .select("*")
+        .eq("course_id", courseId)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true }),
+    ]);
+
+    if (sectionsResult.error) {
+      setError(sectionsResult.error.message);
+      setLoadingCurriculum(false);
+      return;
+    }
+
+    if (lessonsResult.error) {
+      setError(lessonsResult.error.message);
+      setLoadingCurriculum(false);
+      return;
+    }
+
+    setSections(sectionsResult.data ?? []);
+    setLessons(lessonsResult.data ?? []);
+    setLoadingCurriculum(false);
+  }
+
+  /*
+   * Automatically load the curriculum whenever a course is selected.
+   * This fixes the initial empty curriculum state.
+   */
+  useEffect(() => {
+    if (!selectedCourseId) {
+      setSections([]);
+      setLessons([]);
+      return;
+    }
+
+    void loadCurriculum(selectedCourseId);
+  }, [selectedCourseId]);
+
   function startNewCourse() {
     clearMessages();
+
     setEditingCourse(null);
     setCourseForm(emptyCourse);
     setShowCourseForm(true);
     setSelectedCourseId(null);
+    setSections([]);
+    setLessons([]);
   }
 
   function startEditCourse(course: Course) {
     clearMessages();
 
     setEditingCourse(course);
+
     setCourseForm({
       title: course.title,
       slug: course.slug,
@@ -181,6 +237,7 @@ export default function AdminLmsEditor({
     });
 
     setShowCourseForm(true);
+    setSelectedCourseId(course.id);
   }
 
   async function saveCourse() {
@@ -216,7 +273,8 @@ export default function AdminLmsEditor({
     const payload = {
       title: courseForm.title.trim(),
       slug: courseForm.slug.trim(),
-      short_description: courseForm.short_description.trim() || null,
+      short_description:
+        courseForm.short_description.trim() || null,
       description: courseForm.description.trim() || null,
       thumbnail_url: courseForm.thumbnail_url.trim() || null,
       intro_video_url: courseForm.intro_video_url.trim() || null,
@@ -224,11 +282,14 @@ export default function AdminLmsEditor({
       level: courseForm.level,
       price_ngn: Number(courseForm.price_ngn) || 0,
       status: courseForm.status,
-      duration_minutes: Number(courseForm.duration_minutes) || 0,
+      duration_minutes:
+        Number(courseForm.duration_minutes) || 0,
       learning_outcomes: learningOutcomes,
-      target_audience: courseForm.target_audience.trim() || null,
+      target_audience:
+        courseForm.target_audience.trim() || null,
       seo_title: courseForm.seo_title.trim() || null,
-      seo_description: courseForm.seo_description.trim() || null,
+      seo_description:
+        courseForm.seo_description.trim() || null,
       published_at: publishedAt,
     };
 
@@ -286,44 +347,6 @@ export default function AdminLmsEditor({
     router.refresh();
   }
 
-  async function loadCurriculum(courseId: string) {
-    clearMessages();
-    setSelectedCourseId(courseId);
-    setLoadingCurriculum(true);
-
-    const [sectionsResult, lessonsResult] = await Promise.all([
-      supabase
-        .from("course_sections")
-        .select("*")
-        .eq("course_id", courseId)
-        .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: true }),
-
-      supabase
-        .from("lessons")
-        .select("*")
-        .eq("course_id", courseId)
-        .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: true }),
-    ]);
-
-    if (sectionsResult.error) {
-      setError(sectionsResult.error.message);
-      setLoadingCurriculum(false);
-      return;
-    }
-
-    if (lessonsResult.error) {
-      setError(lessonsResult.error.message);
-      setLoadingCurriculum(false);
-      return;
-    }
-
-    setSections(sectionsResult.data ?? []);
-    setLessons(lessonsResult.data ?? []);
-    setLoadingCurriculum(false);
-  }
-
   async function addSection() {
     clearMessages();
 
@@ -341,7 +364,9 @@ export default function AdminLmsEditor({
 
     const nextOrder =
       sections.length > 0
-        ? Math.max(...sections.map((section) => section.sort_order)) + 1
+        ? Math.max(
+            ...sections.map((section) => section.sort_order)
+          ) + 1
         : 1;
 
     const { data, error: insertError } = await supabase
@@ -392,7 +417,9 @@ export default function AdminLmsEditor({
     }
 
     setSections((current) =>
-      current.map((section) => (section.id === sectionId ? data : section))
+      current.map((section) =>
+        section.id === sectionId ? data : section
+      )
     );
 
     setEditingSectionId(null);
@@ -430,22 +457,35 @@ export default function AdminLmsEditor({
     );
 
     setLessons((current) =>
-      current.filter((lesson) => lesson.section_id !== section.id)
+      current.filter(
+        (lesson) => lesson.section_id !== section.id
+      )
     );
 
     setMessage("Section deleted.");
     setSaving(false);
   }
 
-  async function moveSection(section: Section, direction: "up" | "down") {
+  async function moveSection(
+    section: Section,
+    direction: "up" | "down"
+  ) {
     const ordered = [...sections].sort(
       (a, b) => a.sort_order - b.sort_order
     );
 
-    const index = ordered.findIndex((item) => item.id === section.id);
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    const index = ordered.findIndex(
+      (item) => item.id === section.id
+    );
 
-    if (index < 0 || targetIndex < 0 || targetIndex >= ordered.length) {
+    const targetIndex =
+      direction === "up" ? index - 1 : index + 1;
+
+    if (
+      index < 0 ||
+      targetIndex < 0 ||
+      targetIndex >= ordered.length
+    ) {
       return;
     }
 
@@ -456,7 +496,9 @@ export default function AdminLmsEditor({
 
     const first = await supabase
       .from("course_sections")
-      .update({ sort_order: target.sort_order })
+      .update({
+        sort_order: target.sort_order,
+      })
       .eq("id", section.id);
 
     if (first.error) {
@@ -467,7 +509,9 @@ export default function AdminLmsEditor({
 
     const second = await supabase
       .from("course_sections")
-      .update({ sort_order: section.sort_order })
+      .update({
+        sort_order: section.sort_order,
+      })
       .eq("id", target.id);
 
     if (second.error) {
@@ -477,16 +521,25 @@ export default function AdminLmsEditor({
     }
 
     await loadCurriculum(selectedCourseId!);
+
     setMessage("Section order updated.");
     setSaving(false);
+  }
+
+  function lessonsForSection(sectionId: string) {
+    return lessons
+      .filter((lesson) => lesson.section_id === sectionId)
+      .sort((a, b) => a.sort_order - b.sort_order);
   }
 
   function startNewLesson(sectionId?: string) {
     clearMessages();
 
-    const targetSection = sectionId ?? sections[0]?.id ?? "";
+    const targetSection =
+      sectionId ?? sections[0]?.id ?? "";
 
     setEditingLessonId(null);
+
     setLessonForm({
       section_id: targetSection,
       title: "",
@@ -506,6 +559,7 @@ export default function AdminLmsEditor({
     clearMessages();
 
     setEditingLessonId(lesson.id);
+
     setLessonForm({
       section_id: lesson.section_id,
       title: lesson.title,
@@ -549,26 +603,40 @@ export default function AdminLmsEditor({
     let sortOrder = 1;
 
     if (!editingLessonId) {
-      const existing = lessonsForSection(lessonForm.section_id);
+      const existing = lessonsForSection(
+        lessonForm.section_id
+      );
 
       sortOrder =
         existing.length > 0
-          ? Math.max(...existing.map((lesson) => lesson.sort_order)) + 1
+          ? Math.max(
+              ...existing.map((lesson) => lesson.sort_order)
+            ) + 1
           : 1;
     } else {
       const existingLesson = lessons.find(
         (lesson) => lesson.id === editingLessonId
       );
 
-      sortOrder =
-        existingLesson?.section_id === lessonForm.section_id
-          ? existingLesson.sort_order
-          : (() => {
-              const existing = lessonsForSection(lessonForm.section_id);
-              return existing.length > 0
-                ? Math.max(...existing.map((lesson) => lesson.sort_order)) + 1
-                : 1;
-            })();
+      if (
+        existingLesson?.section_id ===
+        lessonForm.section_id
+      ) {
+        sortOrder = existingLesson.sort_order;
+      } else {
+        const existing = lessonsForSection(
+          lessonForm.section_id
+        );
+
+        sortOrder =
+          existing.length > 0
+            ? Math.max(
+                ...existing.map(
+                  (lesson) => lesson.sort_order
+                )
+              ) + 1
+            : 1;
+      }
     }
 
     const payload = {
@@ -576,22 +644,27 @@ export default function AdminLmsEditor({
       course_id: selectedCourseId,
       title: lessonForm.title.trim(),
       slug: lessonForm.slug.trim(),
-      content_html: lessonForm.content_html || null,
-      video_url: lessonForm.video_url.trim() || null,
-      duration_minutes: Number(lessonForm.duration_minutes) || 0,
-      duration_seconds: Number(lessonForm.duration_seconds) || 0,
+      content_html:
+        lessonForm.content_html || null,
+      video_url:
+        lessonForm.video_url.trim() || null,
+      duration_minutes:
+        Number(lessonForm.duration_minutes) || 0,
+      duration_seconds:
+        Number(lessonForm.duration_seconds) || 0,
       sort_order: sortOrder,
       is_preview: lessonForm.is_preview,
       is_published: lessonForm.is_published,
     };
 
     if (editingLessonId) {
-      const { data, error: updateError } = await supabase
-        .from("lessons")
-        .update(payload)
-        .eq("id", editingLessonId)
-        .select("*")
-        .single();
+      const { data, error: updateError } =
+        await supabase
+          .from("lessons")
+          .update(payload)
+          .eq("id", editingLessonId)
+          .select("*")
+          .single();
 
       if (updateError) {
         setError(updateError.message);
@@ -601,17 +674,20 @@ export default function AdminLmsEditor({
 
       setLessons((current) =>
         current.map((lesson) =>
-          lesson.id === editingLessonId ? data : lesson
+          lesson.id === editingLessonId
+            ? data
+            : lesson
         )
       );
 
       setMessage("Lesson updated.");
     } else {
-      const { data, error: insertError } = await supabase
-        .from("lessons")
-        .insert(payload)
-        .select("*")
-        .single();
+      const { data, error: insertError } =
+        await supabase
+          .from("lessons")
+          .insert(payload)
+          .select("*")
+          .single();
 
       if (insertError) {
         setError(insertError.message);
@@ -656,12 +732,26 @@ export default function AdminLmsEditor({
     setSaving(false);
   }
 
-  async function moveLesson(lesson: Lesson, direction: "up" | "down") {
-    const ordered = lessonsForSection(lesson.section_id);
-    const index = ordered.findIndex((item) => item.id === lesson.id);
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
+  async function moveLesson(
+    lesson: Lesson,
+    direction: "up" | "down"
+  ) {
+    const ordered = lessonsForSection(
+      lesson.section_id
+    );
 
-    if (index < 0 || targetIndex < 0 || targetIndex >= ordered.length) {
+    const index = ordered.findIndex(
+      (item) => item.id === lesson.id
+    );
+
+    const targetIndex =
+      direction === "up" ? index - 1 : index + 1;
+
+    if (
+      index < 0 ||
+      targetIndex < 0 ||
+      targetIndex >= ordered.length
+    ) {
       return;
     }
 
@@ -672,7 +762,9 @@ export default function AdminLmsEditor({
 
     const first = await supabase
       .from("lessons")
-      .update({ sort_order: target.sort_order })
+      .update({
+        sort_order: target.sort_order,
+      })
       .eq("id", lesson.id);
 
     if (first.error) {
@@ -683,7 +775,9 @@ export default function AdminLmsEditor({
 
     const second = await supabase
       .from("lessons")
-      .update({ sort_order: lesson.sort_order })
+      .update({
+        sort_order: lesson.sort_order,
+      })
       .eq("id", target.id);
 
     if (second.error) {
@@ -693,6 +787,7 @@ export default function AdminLmsEditor({
     }
 
     await loadCurriculum(selectedCourseId!);
+
     setMessage("Lesson order updated.");
     setSaving(false);
   }
@@ -725,7 +820,9 @@ export default function AdminLmsEditor({
       return;
     }
 
-    const remaining = courses.filter((item) => item.id !== course.id);
+    const remaining = courses.filter(
+      (item) => item.id !== course.id
+    );
 
     setCourses(remaining);
     setSelectedCourseId(remaining[0]?.id ?? null);
@@ -733,25 +830,28 @@ export default function AdminLmsEditor({
     setLessons([]);
     setShowCourseForm(false);
 
-    if (remaining[0]) {
-      await loadCurriculum(remaining[0].id);
-    }
-
     setMessage("Course deleted.");
     setSaving(false);
+
     router.refresh();
   }
 
   return (
     <div>
       {message && (
-        <div className="panel" style={{ marginBottom: 16 }}>
+        <div
+          className="panel"
+          style={{ marginBottom: 16 }}
+        >
           {message}
         </div>
       )}
 
       {error && (
-        <div className="panel" style={{ marginBottom: 16 }}>
+        <div
+          className="panel"
+          style={{ marginBottom: 16 }}
+        >
           <strong>Error:</strong> {error}
         </div>
       )}
@@ -766,17 +866,27 @@ export default function AdminLmsEditor({
           flexWrap: "wrap",
         }}
       >
-        <h3 style={{ margin: 0 }}>Course Editor</h3>
+        <h3 style={{ margin: 0 }}>
+          Course Editor
+        </h3>
 
-        <button type="button" onClick={startNewCourse}>
+        <button
+          type="button"
+          onClick={startNewCourse}
+        >
           + New Course
         </button>
       </div>
 
       {showCourseForm && (
-        <div className="panel" style={{ marginBottom: 24 }}>
+        <div
+          className="panel"
+          style={{ marginBottom: 24 }}
+        >
           <h3 style={{ marginTop: 0 }}>
-            {editingCourse ? "Edit Course" : "Create Course"}
+            {editingCourse
+              ? "Edit Course"
+              : "Create Course"}
           </h3>
 
           <div className="grid">
@@ -789,8 +899,11 @@ export default function AdminLmsEditor({
                     ...courseForm,
                     title: event.target.value,
                     slug:
-                      editingCourse?.slug ||
-                      slugify(event.target.value),
+                      editingCourse
+                        ? courseForm.slug
+                        : slugify(
+                            event.target.value
+                          ),
                   })
                 }
               />
@@ -803,7 +916,9 @@ export default function AdminLmsEditor({
                 onChange={(event) =>
                   setCourseForm({
                     ...courseForm,
-                    slug: slugify(event.target.value),
+                    slug: slugify(
+                      event.target.value
+                    ),
                   })
                 }
               />
@@ -816,7 +931,8 @@ export default function AdminLmsEditor({
                 onChange={(event) =>
                   setCourseForm({
                     ...courseForm,
-                    category: event.target.value,
+                    category:
+                      event.target.value,
                   })
                 }
               />
@@ -829,13 +945,20 @@ export default function AdminLmsEditor({
                 onChange={(event) =>
                   setCourseForm({
                     ...courseForm,
-                    level: event.target.value as Course["level"],
+                    level:
+                      event.target.value as Course["level"],
                   })
                 }
               >
-                <option value="beginner">Beginner</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
+                <option value="beginner">
+                  Beginner
+                </option>
+                <option value="intermediate">
+                  Intermediate
+                </option>
+                <option value="advanced">
+                  Advanced
+                </option>
               </select>
             </label>
 
@@ -848,7 +971,10 @@ export default function AdminLmsEditor({
                 onChange={(event) =>
                   setCourseForm({
                     ...courseForm,
-                    price_ngn: Number(event.target.value),
+                    price_ngn:
+                      Number(
+                        event.target.value
+                      ),
                   })
                 }
               />
@@ -861,13 +987,20 @@ export default function AdminLmsEditor({
                 onChange={(event) =>
                   setCourseForm({
                     ...courseForm,
-                    status: event.target.value as Course["status"],
+                    status:
+                      event.target.value as Course["status"],
                   })
                 }
               >
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
-                <option value="archived">Archived</option>
+                <option value="draft">
+                  Draft
+                </option>
+                <option value="published">
+                  Published
+                </option>
+                <option value="archived">
+                  Archived
+                </option>
               </select>
             </label>
 
@@ -876,11 +1009,16 @@ export default function AdminLmsEditor({
               <input
                 type="number"
                 min="0"
-                value={courseForm.duration_minutes}
+                value={
+                  courseForm.duration_minutes
+                }
                 onChange={(event) =>
                   setCourseForm({
                     ...courseForm,
-                    duration_minutes: Number(event.target.value),
+                    duration_minutes:
+                      Number(
+                        event.target.value
+                      ),
                   })
                 }
               />
@@ -889,11 +1027,14 @@ export default function AdminLmsEditor({
             <label>
               Thumbnail URL
               <input
-                value={courseForm.thumbnail_url}
+                value={
+                  courseForm.thumbnail_url
+                }
                 onChange={(event) =>
                   setCourseForm({
                     ...courseForm,
-                    thumbnail_url: event.target.value,
+                    thumbnail_url:
+                      event.target.value,
                   })
                 }
               />
@@ -902,11 +1043,14 @@ export default function AdminLmsEditor({
             <label>
               Intro Video URL
               <input
-                value={courseForm.intro_video_url}
+                value={
+                  courseForm.intro_video_url
+                }
                 onChange={(event) =>
                   setCourseForm({
                     ...courseForm,
-                    intro_video_url: event.target.value,
+                    intro_video_url:
+                      event.target.value,
                   })
                 }
               />
@@ -915,71 +1059,107 @@ export default function AdminLmsEditor({
             <label>
               Target Audience
               <input
-                value={courseForm.target_audience}
+                value={
+                  courseForm.target_audience
+                }
                 onChange={(event) =>
                   setCourseForm({
                     ...courseForm,
-                    target_audience: event.target.value,
+                    target_audience:
+                      event.target.value,
                   })
                 }
               />
             </label>
           </div>
 
-          <label style={{ display: "block", marginTop: 16 }}>
+          <label
+            style={{
+              display: "block",
+              marginTop: 16,
+            }}
+          >
             Short Description
+
             <textarea
               rows={3}
-              value={courseForm.short_description}
+              value={
+                courseForm.short_description
+              }
               onChange={(event) =>
                 setCourseForm({
                   ...courseForm,
-                  short_description: event.target.value,
+                  short_description:
+                    event.target.value,
                 })
               }
             />
           </label>
 
-          <label style={{ display: "block", marginTop: 16 }}>
+          <label
+            style={{
+              display: "block",
+              marginTop: 16,
+            }}
+          >
             Description
+
             <textarea
               rows={7}
               value={courseForm.description}
               onChange={(event) =>
                 setCourseForm({
                   ...courseForm,
-                  description: event.target.value,
+                  description:
+                    event.target.value,
                 })
               }
             />
           </label>
 
-          <label style={{ display: "block", marginTop: 16 }}>
+          <label
+            style={{
+              display: "block",
+              marginTop: 16,
+            }}
+          >
             Learning Outcomes
+
             <span className="muted">
               One outcome per line.
             </span>
+
             <textarea
               rows={5}
-              value={courseForm.learning_outcomes}
+              value={
+                courseForm.learning_outcomes
+              }
               onChange={(event) =>
                 setCourseForm({
                   ...courseForm,
-                  learning_outcomes: event.target.value,
+                  learning_outcomes:
+                    event.target.value,
                 })
               }
             />
           </label>
 
-          <div className="grid" style={{ marginTop: 16 }}>
+          <div
+            className="grid"
+            style={{ marginTop: 16 }}
+          >
             <label>
               SEO Title
+
               <input
-                value={courseForm.seo_title}
+                value={
+                  courseForm.seo_title
+                }
                 onChange={(event) =>
                   setCourseForm({
                     ...courseForm,
-                    seo_title: event.target.value,
+                    seo_title:
+                      event.target.value,
                   })
                 }
               />
@@ -987,13 +1167,17 @@ export default function AdminLmsEditor({
 
             <label>
               SEO Description
+
               <textarea
                 rows={3}
-                value={courseForm.seo_description}
+                value={
+                  courseForm.seo_description
+                }
                 onChange={(event) =>
                   setCourseForm({
                     ...courseForm,
-                    seo_description: event.target.value,
+                    seo_description:
+                      event.target.value,
                   })
                 }
               />
@@ -1008,13 +1192,21 @@ export default function AdminLmsEditor({
               flexWrap: "wrap",
             }}
           >
-            <button type="button" onClick={saveCourse} disabled={saving}>
-              {saving ? "Saving..." : "Save Course"}
+            <button
+              type="button"
+              onClick={saveCourse}
+              disabled={saving}
+            >
+              {saving
+                ? "Saving..."
+                : "Save Course"}
             </button>
 
             <button
               type="button"
-              onClick={() => setShowCourseForm(false)}
+              onClick={() =>
+                setShowCourseForm(false)
+              }
               disabled={saving}
             >
               Cancel
@@ -1023,17 +1215,25 @@ export default function AdminLmsEditor({
         </div>
       )}
 
-      <div className="panel" style={{ marginBottom: 24 }}>
-        <h3 style={{ marginTop: 0 }}>Courses</h3>
+      <div
+        className="panel"
+        style={{ marginBottom: 24 }}
+      >
+        <h3 style={{ marginTop: 0 }}>
+          Courses
+        </h3>
 
         {courses.length === 0 ? (
-          <p className="muted">No courses yet.</p>
+          <p className="muted">
+            No courses yet.
+          </p>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table
               style={{
                 width: "100%",
-                borderCollapse: "collapse",
+                borderCollapse:
+                  "collapse",
                 fontSize: "0.92rem",
               }}
             >
@@ -1041,13 +1241,41 @@ export default function AdminLmsEditor({
                 <tr
                   style={{
                     textAlign: "left",
-                    borderBottom: "1px solid var(--border)",
+                    borderBottom:
+                      "1px solid var(--border)",
                   }}
                 >
-                  <th style={{ padding: "8px 4px" }}>Title</th>
-                  <th style={{ padding: "8px 4px" }}>Status</th>
-                  <th style={{ padding: "8px 4px" }}>Price</th>
-                  <th style={{ padding: "8px 4px" }}>Actions</th>
+                  <th
+                    style={{
+                      padding: "8px 4px",
+                    }}
+                  >
+                    Title
+                  </th>
+
+                  <th
+                    style={{
+                      padding: "8px 4px",
+                    }}
+                  >
+                    Status
+                  </th>
+
+                  <th
+                    style={{
+                      padding: "8px 4px",
+                    }}
+                  >
+                    Price
+                  </th>
+
+                  <th
+                    style={{
+                      padding: "8px 4px",
+                    }}
+                  >
+                    Actions
+                  </th>
                 </tr>
               </thead>
 
@@ -1056,49 +1284,77 @@ export default function AdminLmsEditor({
                   <tr
                     key={course.id}
                     style={{
-                      borderBottom: "1px solid var(--border)",
+                      borderBottom:
+                        "1px solid var(--border)",
                     }}
                   >
-                    <td style={{ padding: "10px 4px" }}>
-                      <strong>{course.title}</strong>
+                    <td
+                      style={{
+                        padding: "10px 4px",
+                      }}
+                    >
+                      <strong>
+                        {course.title}
+                      </strong>
                     </td>
 
-                    <td style={{ padding: "10px 4px" }}>
-                      <span className="badge">{course.status}</span>
+                    <td
+                      style={{
+                        padding: "10px 4px",
+                      }}
+                    >
+                      <span className="badge">
+                        {course.status}
+                      </span>
                     </td>
 
-                    <td style={{ padding: "10px 4px" }}>
+                    <td
+                      style={{
+                        padding: "10px 4px",
+                      }}
+                    >
                       {course.is_free
                         ? "Free"
                         : `₦${course.price_ngn.toLocaleString()}`}
                     </td>
 
-                    <td style={{ padding: "10px 4px" }}>
+                    <td
+                      style={{
+                        padding: "10px 4px",
+                      }}
+                    >
                       <div
                         style={{
                           display: "flex",
                           gap: 8,
-                          flexWrap: "wrap",
+                          flexWrap:
+                            "wrap",
                         }}
                       >
                         <button
                           type="button"
-                          onClick={() => {
-                            startEditCourse(course);
-                            loadCurriculum(course.id);
-                          }}
+                          onClick={() =>
+                            startEditCourse(
+                              course
+                            )
+                          }
                         >
                           Edit
                         </button>
 
                         <button
                           type="button"
-                          onClick={() => loadCurriculum(course.id)}
+                          onClick={() => {
+                            setSelectedCourseId(
+                              course.id
+                            );
+                          }}
                         >
                           Curriculum
                         </button>
 
-                        {course.status === "published" && (
+                        {course.status ===
+                          "published" && (
                           <a
                             href={`/courses/${course.slug}`}
                             target="_blank"
@@ -1111,7 +1367,11 @@ export default function AdminLmsEditor({
                         {role === "admin" && (
                           <button
                             type="button"
-                            onClick={() => deleteCourse(course)}
+                            onClick={() =>
+                              deleteCourse(
+                                course
+                              )
+                            }
                           >
                             Delete
                           </button>
@@ -1131,15 +1391,23 @@ export default function AdminLmsEditor({
           <div
             style={{
               display: "flex",
-              justifyContent: "space-between",
+              justifyContent:
+                "space-between",
               gap: 12,
-              alignItems: "center",
-              flexWrap: "wrap",
+              alignItems:
+                "center",
+              flexWrap:
+                "wrap",
             }}
           >
             <div>
-              <h3 style={{ margin: 0 }}>
-                Curriculum: {selectedCourse.title}
+              <h3
+                style={{
+                  margin: 0,
+                }}
+              >
+                Curriculum:{" "}
+                {selectedCourse.title}
               </h3>
 
               <p className="muted">
@@ -1152,18 +1420,29 @@ export default function AdminLmsEditor({
 
             <button
               type="button"
-              onClick={() => startNewLesson()}
-              disabled={sections.length === 0}
+              onClick={() =>
+                startNewLesson()
+              }
+              disabled={
+                sections.length === 0
+              }
             >
               + Add Lesson
             </button>
           </div>
 
-          {sections.length === 0 && !loadingCurriculum && (
-            <p className="muted" style={{ marginTop: 20 }}>
-              Add a section before adding lessons.
-            </p>
-          )}
+          {sections.length === 0 &&
+            !loadingCurriculum && (
+              <p
+                className="muted"
+                style={{
+                  marginTop: 20,
+                }}
+              >
+                Add a section before
+                adding lessons.
+              </p>
+            )}
 
           <div
             style={{
@@ -1175,9 +1454,13 @@ export default function AdminLmsEditor({
           >
             <input
               placeholder="New section title"
-              value={newSectionTitle}
+              value={
+                newSectionTitle
+              }
               onChange={(event) =>
-                setNewSectionTitle(event.target.value)
+                setNewSectionTitle(
+                  event.target.value
+                )
               }
             />
 
@@ -1191,234 +1474,354 @@ export default function AdminLmsEditor({
           </div>
 
           {loadingCurriculum ? (
-            <p className="muted" style={{ marginTop: 20 }}>
+            <p
+              className="muted"
+              style={{
+                marginTop: 20,
+              }}
+            >
               Loading curriculum...
             </p>
           ) : (
-            <div style={{ marginTop: 24 }}>
+            <div
+              style={{
+                marginTop: 24,
+              }}
+            >
               {sections
                 .slice()
-                .sort((a, b) => a.sort_order - b.sort_order)
-                .map((section, sectionIndex) => {
-                  const sectionLessons = lessonsForSection(section.id);
+                .sort(
+                  (a, b) =>
+                    a.sort_order -
+                    b.sort_order
+                )
+                .map(
+                  (
+                    section,
+                    sectionIndex
+                  ) => {
+                    const sectionLessons =
+                      lessonsForSection(
+                        section.id
+                      );
 
-                  return (
-                    <div
-                      key={section.id}
-                      className="panel"
-                      style={{ marginBottom: 16 }}
-                    >
+                    return (
                       <div
+                        key={section.id}
+                        className="panel"
                         style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: 12,
-                          alignItems: "center",
-                          flexWrap: "wrap",
+                          marginBottom: 16,
                         }}
                       >
-                        {editingSectionId === section.id ? (
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: 8,
-                              flex: 1,
-                            }}
-                          >
-                            <input
-                              value={editingSectionTitle}
-                              onChange={(event) =>
-                                setEditingSectionTitle(
-                                  event.target.value
-                                )
-                              }
-                            />
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                saveSection(section.id)
-                              }
-                              disabled={saving}
-                            >
-                              Save
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setEditingSectionId(null)
-                              }
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <div>
-                            <h4 style={{ margin: 0 }}>
-                              {sectionIndex + 1}. {section.title}
-                            </h4>
-
-                            <span className="muted">
-                              {sectionLessons.length} lesson
-                              {sectionLessons.length === 1 ? "" : "s"}
-                            </span>
-                          </div>
-                        )}
-
-                        {editingSectionId !== section.id && (
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: 6,
-                              flexWrap: "wrap",
-                            }}
-                          >
-                            <button
-                              type="button"
-                              onClick={() =>
-                                moveSection(section, "up")
-                              }
-                              disabled={sectionIndex === 0 || saving}
-                            >
-                              ↑
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                moveSection(section, "down")
-                              }
-                              disabled={
-                                sectionIndex === sections.length - 1 ||
-                                saving
-                              }
-                            >
-                              ↓
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingSectionId(section.id);
-                                setEditingSectionTitle(section.title);
+                        <div
+                          style={{
+                            display:
+                              "flex",
+                            justifyContent:
+                              "space-between",
+                            gap: 12,
+                            alignItems:
+                              "center",
+                            flexWrap:
+                              "wrap",
+                          }}
+                        >
+                          {editingSectionId ===
+                          section.id ? (
+                            <div
+                              style={{
+                                display:
+                                  "flex",
+                                gap: 8,
+                                flex: 1,
                               }}
                             >
-                              Rename
-                            </button>
+                              <input
+                                value={
+                                  editingSectionTitle
+                                }
+                                onChange={(
+                                  event
+                                ) =>
+                                  setEditingSectionTitle(
+                                    event
+                                      .target
+                                      .value
+                                  )
+                                }
+                              />
 
-                            <button
-                              type="button"
-                              onClick={() => startNewLesson(section.id)}
-                            >
-                              + Lesson
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  saveSection(
+                                    section.id
+                                  )
+                                }
+                                disabled={
+                                  saving
+                                }
+                              >
+                                Save
+                              </button>
 
-                            <button
-                              type="button"
-                              onClick={() => deleteSection(section)}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditingSectionId(
+                                    null
+                                  )
+                                }
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div>
+                              <h4
+                                style={{
+                                  margin: 0,
+                                }}
+                              >
+                                {sectionIndex +
+                                  1}
+                                .{" "}
+                                {
+                                  section.title
+                                }
+                              </h4>
+
+                              <span className="muted">
+                                {
+                                  sectionLessons.length
+                                }{" "}
+                                lesson
+                                {sectionLessons.length ===
+                                1
+                                  ? ""
+                                  : "s"}
+                              </span>
+                            </div>
+                          )}
+
+                          {editingSectionId !==
+                            section.id && (
+                            <div
+                              style={{
+                                display:
+                                  "flex",
+                                gap: 6,
+                                flexWrap:
+                                  "wrap",
+                              }}
                             >
-                              Delete
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  moveSection(
+                                    section,
+                                    "up"
+                                  )
+                                }
+                                disabled={
+                                  sectionIndex ===
+                                    0 ||
+                                  saving
+                                }
+                              >
+                                ↑
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  moveSection(
+                                    section,
+                                    "down"
+                                  )
+                                }
+                                disabled={
+                                  sectionIndex ===
+                                    sections.length -
+                                      1 ||
+                                  saving
+                                }
+                              >
+                                ↓
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingSectionId(
+                                    section.id
+                                  );
+                                  setEditingSectionTitle(
+                                    section.title
+                                  );
+                                }}
+                              >
+                                Rename
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  startNewLesson(
+                                    section.id
+                                  )
+                                }
+                              >
+                                + Lesson
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  deleteSection(
+                                    section
+                                  )
+                                }
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {sectionLessons.length >
+                          0 && (
+                          <div
+                            style={{
+                              marginTop: 16,
+                            }}
+                          >
+                            {sectionLessons.map(
+                              (
+                                lesson,
+                                lessonIndex
+                              ) => (
+                                <div
+                                  key={
+                                    lesson.id
+                                  }
+                                  style={{
+                                    padding:
+                                      "12px",
+                                    borderTop:
+                                      "1px solid var(--border)",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      display:
+                                        "flex",
+                                      justifyContent:
+                                        "space-between",
+                                      gap: 12,
+                                      alignItems:
+                                        "center",
+                                      flexWrap:
+                                        "wrap",
+                                    }}
+                                  >
+                                    <div>
+                                      <strong>
+                                        {lessonIndex +
+                                          1}
+                                        .{" "}
+                                        {
+                                          lesson.title
+                                        }
+                                      </strong>
+
+                                      <div className="muted">
+                                        {lesson.is_published
+                                          ? "Published"
+                                          : "Unpublished"}
+                                        {" · "}
+                                        {lesson.is_preview
+                                          ? "Preview"
+                                          : "Members only"}
+                                      </div>
+                                    </div>
+
+                                    <div
+                                      style={{
+                                        display:
+                                          "flex",
+                                        gap: 6,
+                                        flexWrap:
+                                          "wrap",
+                                      }}
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          moveLesson(
+                                            lesson,
+                                            "up"
+                                          )
+                                        }
+                                        disabled={
+                                          lessonIndex ===
+                                            0 ||
+                                          saving
+                                        }
+                                      >
+                                        ↑
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          moveLesson(
+                                            lesson,
+                                            "down"
+                                          )
+                                        }
+                                        disabled={
+                                          lessonIndex ===
+                                            sectionLessons.length -
+                                              1 ||
+                                          saving
+                                        }
+                                      >
+                                        ↓
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          startEditLesson(
+                                            lesson
+                                          )
+                                        }
+                                      >
+                                        Edit
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          deleteLesson(
+                                            lesson
+                                          )
+                                        }
+                                      >
+                                        Delete
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            )}
                           </div>
                         )}
                       </div>
-
-                      {sectionLessons.length > 0 && (
-                        <div style={{ marginTop: 16 }}>
-                          {sectionLessons.map((lesson, lessonIndex) => (
-                            <div
-                              key={lesson.id}
-                              style={{
-                                padding: "12px",
-                                borderTop:
-                                  "1px solid var(--border)",
-                              }}
-                            >
-                              <div
-                                style={{
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  gap: 12,
-                                  alignItems: "center",
-                                  flexWrap: "wrap",
-                                }}
-                              >
-                                <div>
-                                  <strong>
-                                    {lessonIndex + 1}. {lesson.title}
-                                  </strong>
-
-                                  <div className="muted">
-                                    {lesson.is_published
-                                      ? "Published"
-                                      : "Unpublished"}
-                                    {" · "}
-                                    {lesson.is_preview
-                                      ? "Preview"
-                                      : "Members only"}
-                                  </div>
-                                </div>
-
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    gap: 6,
-                                    flexWrap: "wrap",
-                                  }}
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      moveLesson(lesson, "up")
-                                    }
-                                    disabled={
-                                      lessonIndex === 0 || saving
-                                    }
-                                  >
-                                    ↑
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      moveLesson(lesson, "down")
-                                    }
-                                    disabled={
-                                      lessonIndex ===
-                                        sectionLessons.length - 1 ||
-                                      saving
-                                    }
-                                  >
-                                    ↓
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      startEditLesson(lesson)
-                                    }
-                                  >
-                                    Edit
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      deleteLesson(lesson)
-                                    }
-                                  >
-                                    Delete
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  }
+                )}
             </div>
           )}
         </div>
@@ -1429,32 +1832,53 @@ export default function AdminLmsEditor({
           className="panel"
           style={{
             marginTop: 24,
-            border: "2px solid var(--border)",
+            border:
+              "2px solid var(--border)",
           }}
         >
-          <h3 style={{ marginTop: 0 }}>
-            {editingLessonId ? "Edit Lesson" : "Add Lesson"}
+          <h3
+            style={{
+              marginTop: 0,
+            }}
+          >
+            {editingLessonId
+              ? "Edit Lesson"
+              : "Add Lesson"}
           </h3>
 
           <div className="grid">
             <label>
               Section
+
               <select
-                value={lessonForm.section_id}
+                value={
+                  lessonForm.section_id
+                }
                 onChange={(event) =>
                   setLessonForm({
                     ...lessonForm,
-                    section_id: event.target.value,
+                    section_id:
+                      event.target
+                        .value,
                   })
                 }
               >
-                <option value="">Select section</option>
+                <option value="">
+                  Select section
+                </option>
 
                 {sections
                   .slice()
-                  .sort((a, b) => a.sort_order - b.sort_order)
+                  .sort(
+                    (a, b) =>
+                      a.sort_order -
+                      b.sort_order
+                  )
                   .map((section) => (
-                    <option key={section.id} value={section.id}>
+                    <option
+                      key={section.id}
+                      value={section.id}
+                    >
                       {section.title}
                     </option>
                   ))}
@@ -1463,16 +1887,23 @@ export default function AdminLmsEditor({
 
             <label>
               Title
+
               <input
-                value={lessonForm.title}
+                value={
+                  lessonForm.title
+                }
                 onChange={(event) =>
                   setLessonForm({
                     ...lessonForm,
-                    title: event.target.value,
-                    slug:
-                      editingLessonId
-                        ? lessonForm.slug
-                        : slugify(event.target.value),
+                    title:
+                      event.target
+                        .value,
+                    slug: editingLessonId
+                      ? lessonForm.slug
+                      : slugify(
+                          event.target
+                            .value
+                        ),
                   })
                 }
               />
@@ -1480,12 +1911,18 @@ export default function AdminLmsEditor({
 
             <label>
               Slug
+
               <input
-                value={lessonForm.slug}
+                value={
+                  lessonForm.slug
+                }
                 onChange={(event) =>
                   setLessonForm({
                     ...lessonForm,
-                    slug: slugify(event.target.value),
+                    slug: slugify(
+                      event.target
+                        .value
+                    ),
                   })
                 }
               />
@@ -1493,12 +1930,17 @@ export default function AdminLmsEditor({
 
             <label>
               Video URL
+
               <input
-                value={lessonForm.video_url}
+                value={
+                  lessonForm.video_url
+                }
                 onChange={(event) =>
                   setLessonForm({
                     ...lessonForm,
-                    video_url: event.target.value,
+                    video_url:
+                      event.target
+                        .value,
                   })
                 }
               />
@@ -1506,14 +1948,21 @@ export default function AdminLmsEditor({
 
             <label>
               Duration (minutes)
+
               <input
                 type="number"
                 min="0"
-                value={lessonForm.duration_minutes}
+                value={
+                  lessonForm.duration_minutes
+                }
                 onChange={(event) =>
                   setLessonForm({
                     ...lessonForm,
-                    duration_minutes: Number(event.target.value),
+                    duration_minutes:
+                      Number(
+                        event.target
+                          .value
+                      ),
                   })
                 }
               />
@@ -1521,14 +1970,21 @@ export default function AdminLmsEditor({
 
             <label>
               Duration (seconds)
+
               <input
                 type="number"
                 min="0"
-                value={lessonForm.duration_seconds}
+                value={
+                  lessonForm.duration_seconds
+                }
                 onChange={(event) =>
                   setLessonForm({
                     ...lessonForm,
-                    duration_seconds: Number(event.target.value),
+                    duration_seconds:
+                      Number(
+                        event.target
+                          .value
+                      ),
                   })
                 }
               />
@@ -1542,13 +1998,18 @@ export default function AdminLmsEditor({
             }}
           >
             Lesson HTML Content
+
             <textarea
               rows={12}
-              value={lessonForm.content_html}
+              value={
+                lessonForm.content_html
+              }
               onChange={(event) =>
                 setLessonForm({
                   ...lessonForm,
-                  content_html: event.target.value,
+                  content_html:
+                    event.target
+                      .value,
                 })
               }
               placeholder="<p>Lesson content...</p>"
@@ -1566,11 +2027,15 @@ export default function AdminLmsEditor({
             <label>
               <input
                 type="checkbox"
-                checked={lessonForm.is_preview}
+                checked={
+                  lessonForm.is_preview
+                }
                 onChange={(event) =>
                   setLessonForm({
                     ...lessonForm,
-                    is_preview: event.target.checked,
+                    is_preview:
+                      event.target
+                        .checked,
                   })
                 }
               />{" "}
@@ -1580,11 +2045,15 @@ export default function AdminLmsEditor({
             <label>
               <input
                 type="checkbox"
-                checked={lessonForm.is_published}
+                checked={
+                  lessonForm.is_published
+                }
                 onChange={(event) =>
                   setLessonForm({
                     ...lessonForm,
-                    is_published: event.target.checked,
+                    is_published:
+                      event.target
+                        .checked,
                   })
                 }
               />{" "}
@@ -1605,14 +2074,20 @@ export default function AdminLmsEditor({
               onClick={saveLesson}
               disabled={saving}
             >
-              {saving ? "Saving..." : "Save Lesson"}
+              {saving
+                ? "Saving..."
+                : "Save Lesson"}
             </button>
 
             <button
               type="button"
               onClick={() => {
-                setShowLessonForm(false);
-                setEditingLessonId(null);
+                setShowLessonForm(
+                  false
+                );
+                setEditingLessonId(
+                  null
+                );
               }}
               disabled={saving}
             >
