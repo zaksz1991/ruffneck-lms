@@ -60,7 +60,7 @@ export default async function StudentDashboardPage() {
         ) : (
           <div className="grid">
             {enrollments.map((e) => {
-              const c = e.courses;
+              const c = Array.isArray(e.courses) ? e.courses[0] : e.courses;
 
               if (!c) return null;
 
