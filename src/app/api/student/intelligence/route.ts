@@ -20,9 +20,15 @@ type AssessmentAttempt = {
   created_at: string;
 };
 
-type LessonProgress = {
-  lesson_id: string;
-  completed: boolean;
+type Enrollment = {
+  course_id: string;
+  progress_percent: number;
+  enrollment_status: string;
+};
+
+type LearningActivity = {
+  activity_type: string;
+  created_at: string;
 };
 
 type Course = {
@@ -36,56 +42,66 @@ type Course = {
   duration_minutes: number | null;
 };
 
-type Enrollment = {
-  course_id: string;
-};
-
-type LearningActivity = {
-  created_at: string;
-};
-
-function clamp(value: number) {
-  return Math.max(0, Math.min(100, Math.round(value)));
+/**
+ * Convert a timestamp into a calendar date in Nigeria.
+ *
+ * Using Africa/Lagos prevents UTC date boundaries from
+ * incorrectly breaking a learner's streak.
+ */
+function getNigeriaDate(value: string | Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Lagos",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(value));
 }
 
+/**
+ * Calculate consecutive learning days using Nigeria time.
+ *
+ * Today counts if the learner has learning activity today.
+ * Yesterday counts as the previous active day.
+ *
+ * If the learner has no activity today but was active yesterday,
+ * the streak remains active at yesterday's count.
+ */
 function calculateLearningStreak(
   activities: LearningActivity[]
 ) {
-  if (activities.length === 0) {
+  if (!activities.length) {
     return 0;
   }
 
   const uniqueDates = [
     ...new Set(
       activities.map((activity) =>
-        new Date(activity.created_at)
-          .toISOString()
-          .slice(0, 10)
+        getNigeriaDate(activity.created_at)
       )
     ),
-  ].sort((a, b) => (a < b ? 1 : -1));
+  ].sort((a, b) => (a > b ? -1 : a < b ? 1 : 0));
 
-  if (uniqueDates.length === 0) {
+  if (!uniqueDates.length) {
     return 0;
   }
 
-  const today = new Date();
+  const today = getNigeriaDate(new Date());
 
-  const todayKey = today.toISOString().slice(0, 10);
+  const yesterdayDate = new Date();
 
-  const yesterday = new Date(today);
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
 
-  yesterday.setUTCDate(
-    yesterday.getUTCDate() - 1
-  );
+  const yesterday = getNigeriaDate(yesterdayDate);
 
-  const yesterdayKey = yesterday
-    .toISOString()
-    .slice(0, 10);
+  const mostRecentDate = uniqueDates[0];
 
+  /*
+   * A streak is only active if the most recent activity
+   * happened today or yesterday.
+   */
   if (
-    uniqueDates[0] !== todayKey &&
-    uniqueDates[0] !== yesterdayKey
+    mostRecentDate !== today &&
+    mostRecentDate !== yesterday
   ) {
     return 0;
   }
@@ -94,25 +110,60 @@ function calculateLearningStreak(
 
   for (let index = 1; index < uniqueDates.length; index++) {
     const current = new Date(
-      `${uniqueDates[index - 1]}T00:00:00Z`
+      `${uniqueDates[index - 1]}T12:00:00`
     );
 
     const previous = new Date(
-      `${uniqueDates[index]}T00:00:00Z`
+      `${uniqueDates[index]}T12:00:00`
     );
 
     const difference =
       (current.getTime() - previous.getTime()) /
       (1000 * 60 * 60 * 24);
 
-    if (difference === 1) {
-      streak += 1;
-    } else {
+    if (Math.round(difference) !== 1) {
       break;
     }
+
+    streak += 1;
   }
 
   return streak;
+}
+
+function calculateOverallLearningScore({
+  skillScore,
+  assessmentScore,
+  completedLessons,
+  learningActivityCount,
+}: {
+  skillScore: number;
+  assessmentScore: number;
+  completedLessons: number;
+  learningActivityCount: number;
+}) {
+  /*
+   * Skill profile:
+   * 50%
+   *
+   * Latest assessment:
+   * 30%
+   *
+   * Learning activity:
+   * 20%
+   */
+
+  const activityScore =
+    completedLessons > 0 || learningActivityCount > 0
+      ? 100
+      : 0;
+
+  const score =
+    skillScore * 0.5 +
+    assessmentScore * 0.3 +
+    activityScore * 0.2;
+
+  return Math.round(Math.min(100, Math.max(0, score)));
 }
 
 export async function GET() {
@@ -135,28 +186,25 @@ export async function GET() {
     }
 
     /*
-     * ---------------------------------------------------------------
+     * --------------------------------------------------------------
      * SKILL PROFILES
-     * ---------------------------------------------------------------
+     * --------------------------------------------------------------
      */
 
     const { data: skillProfileData, error: skillProfileError } =
       await supabase
         .from("learner_skill_profiles")
         .select(
-          "skill_id, confidence_score, skill_level"
+          `
+            skill_id,
+            confidence_score,
+            skill_level
+          `
         )
         .eq("student_id", user.id);
 
     if (skillProfileError) {
-      return NextResponse.json(
-        {
-          error: skillProfileError.message,
-        },
-        {
-          status: 500,
-        }
-      );
+      throw skillProfileError;
     }
 
     const skillProfiles =
@@ -173,10 +221,15 @@ export async function GET() {
     let skills: Skill[] = [];
 
     if (skillIds.length > 0) {
-      const { data: skillData } = await supabase
-        .from("learning_skills")
-        .select("id, name, category")
-        .in("id", skillIds);
+      const { data: skillData, error: skillError } =
+        await supabase
+          .from("learning_skills")
+          .select("id, name, category")
+          .in("id", skillIds);
+
+      if (skillError) {
+        throw skillError;
+      }
 
       skills = (skillData || []) as Skill[];
     }
@@ -188,90 +241,117 @@ export async function GET() {
     });
 
     /*
-     * ---------------------------------------------------------------
+     * --------------------------------------------------------------
      * LATEST ASSESSMENT
-     * ---------------------------------------------------------------
+     * --------------------------------------------------------------
      */
 
-    const { data: assessmentData } = await supabase
-      .from("assessment_attempts")
-      .select(
-        `
-          score,
-          total_questions,
-          completed_at,
-          created_at
-        `
-      )
-      .eq("student_id", user.id)
-      .order("created_at", {
-        ascending: false,
-      })
-      .limit(1);
+    const { data: assessmentData, error: assessmentError } =
+      await supabase
+        .from("assessment_attempts")
+        .select(
+          `
+            score,
+            total_questions,
+            completed_at,
+            created_at
+          `
+        )
+        .eq("student_id", user.id)
+        .order("created_at", {
+          ascending: false,
+        })
+        .limit(1)
+        .maybeSingle();
+
+    if (assessmentError) {
+      throw assessmentError;
+    }
 
     const latestAssessment =
-      assessmentData &&
-      assessmentData.length > 0
-        ? (assessmentData[0] as AssessmentAttempt)
-        : null;
+      assessmentData as AssessmentAttempt | null;
 
     const assessmentScore = latestAssessment
-      ? clamp(Number(latestAssessment.score || 0))
+      ? Number(latestAssessment.score || 0)
       : 0;
 
     /*
-     * ---------------------------------------------------------------
-     * COMPLETED LESSONS
-     * ---------------------------------------------------------------
-     */
-
-    const { data: progressData } = await supabase
-      .from("lesson_progress")
-      .select("lesson_id, completed")
-      .eq("student_id", user.id)
-      .eq("completed", true);
-
-    const lessonProgress =
-      (progressData || []) as LessonProgress[];
-
-    const completedLessons = lessonProgress.length;
-
-    /*
-     * ---------------------------------------------------------------
+     * --------------------------------------------------------------
      * ENROLLMENTS
-     * ---------------------------------------------------------------
+     * --------------------------------------------------------------
      */
 
-    const { data: enrollmentData } = await supabase
-      .from("enrollments")
-      .select("course_id")
-      .eq("student_id", user.id);
+    const { data: enrollmentData, error: enrollmentError } =
+      await supabase
+        .from("enrollments")
+        .select(
+          `
+            course_id,
+            progress_percent,
+            enrollment_status
+          `
+        )
+        .eq("student_id", user.id);
+
+    if (enrollmentError) {
+      throw enrollmentError;
+    }
 
     const enrollments =
       (enrollmentData || []) as Enrollment[];
 
-    const enrolledCourseIds = [
-      ...new Set(
-        enrollments.map(
-          (enrollment) => enrollment.course_id
-        )
-      ),
-    ];
-
     /*
-     * ---------------------------------------------------------------
-     * LEARNING ACTIVITY / STREAK
-     * ---------------------------------------------------------------
+     * --------------------------------------------------------------
+     * COMPLETED LESSONS
+     * --------------------------------------------------------------
+     *
+     * Count completed published lessons through lesson_progress.
+     * The table already has RLS restricting access to the current
+     * learner.
      */
 
-    const { data: activityData } = await supabase
-      .from("learning_activity")
-      .select("created_at")
-      .eq("student_id", user.id)
-      .order("created_at", {
-        ascending: false,
-      })
-      .limit(100);
+    const { data: progressData, error: progressError } =
+      await supabase
+        .from("lesson_progress")
+        .select(
+          `
+            lesson_id,
+            completed,
+            last_accessed_at
+          `
+        )
+        .eq("student_id", user.id)
+        .eq("completed", true);
+
+    if (progressError) {
+      throw progressError;
+    }
+
+    const completedLessons = progressData?.length || 0;
+
+    /*
+     * --------------------------------------------------------------
+     * LEARNING ACTIVITY
+     * --------------------------------------------------------------
+     */
+
+    const { data: activityData, error: activityError } =
+      await supabase
+        .from("learning_activity")
+        .select(
+          `
+            activity_type,
+            created_at
+          `
+        )
+        .eq("student_id", user.id)
+        .order("created_at", {
+          ascending: false,
+        });
+
+    if (activityError) {
+      throw activityError;
+    }
 
     const activities =
       (activityData || []) as LearningActivity[];
@@ -280,19 +360,25 @@ export async function GET() {
       calculateLearningStreak(activities);
 
     /*
-     * ---------------------------------------------------------------
+     * --------------------------------------------------------------
      * SKILL METRICS
-     * ---------------------------------------------------------------
+     * --------------------------------------------------------------
      */
 
-    const averageSkillScore =
-      skillProfiles.length > 0
-        ? skillProfiles.reduce(
-            (total, profile) =>
-              total +
-              Number(profile.confidence_score || 0),
-            0
-          ) / skillProfiles.length
+    const totalSkills = skillProfiles.length;
+
+    const skillScore =
+      totalSkills > 0
+        ? Math.round(
+            skillProfiles.reduce(
+              (total, profile) =>
+                total +
+                Number(
+                  profile.confidence_score || 0
+                ),
+              0
+            ) / totalSkills
+          )
         : 0;
 
     const masteredSkills = skillProfiles.filter(
@@ -302,47 +388,91 @@ export async function GET() {
 
     const developingSkills = skillProfiles.filter(
       (profile) =>
-        Number(profile.confidence_score || 0) < 70
+        Number(profile.confidence_score || 0) < 80
     ).length;
 
     /*
-     * ---------------------------------------------------------------
+     * --------------------------------------------------------------
      * OVERALL LEARNING SCORE
-     *
-     * Uses available evidence:
-     * - skill profile: 50%
-     * - assessment: 30%
-     * - activity/completion signal: 20%
-     * ---------------------------------------------------------------
+     * --------------------------------------------------------------
      */
-
-    const activityScore =
-      completedLessons > 0 || activities.length > 0
-        ? 100
-        : 0;
 
     const overallLearningScore =
-      skillProfiles.length === 0 &&
-      !latestAssessment
-        ? 0
-        : clamp(
-            averageSkillScore * 0.5 +
-              assessmentScore * 0.3 +
-              activityScore * 0.2
-          );
+      calculateOverallLearningScore({
+        skillScore,
+        assessmentScore,
+        completedLessons,
+        learningActivityCount: activities.length,
+      });
 
     /*
-     * ---------------------------------------------------------------
-     * NEXT COURSE RECOMMENDATION
-     *
-     * Prefer an advanced course for a learner whose current
-     * profile demonstrates strong foundational skills.
-     * ---------------------------------------------------------------
+     * --------------------------------------------------------------
+     * SKILL BREAKDOWN
+     * --------------------------------------------------------------
      */
 
-    let nextCourse: Course | null = null;
+    const skillBreakdown = skillProfiles
+      .map((profile) => {
+        const skill = skillMap.get(profile.skill_id);
 
-    const { data: advancedCourseData } =
+        if (!skill) {
+          return null;
+        }
+
+        return {
+          id: skill.id,
+          name: skill.name,
+          category: skill.category || "General",
+          score: Math.round(
+            Number(profile.confidence_score || 0)
+          ),
+          level: profile.skill_level || "beginner",
+        };
+      })
+      .filter(
+        (
+          item
+        ): item is {
+          id: string;
+          name: string;
+          category: string;
+          score: number;
+          level: string;
+        } => item !== null
+      )
+      .sort((a, b) => b.score - a.score);
+
+    /*
+     * --------------------------------------------------------------
+     * RECOMMENDED NEXT COURSE
+     * --------------------------------------------------------------
+     *
+     * Choose the next published course that the learner has not
+     * completed. Prefer intermediate/advanced courses when the
+     * learner already has a strong profile.
+     */
+
+    const enrolledCourseIds = [
+      ...new Set(
+        enrollments.map(
+          (enrollment) => enrollment.course_id
+        )
+      ),
+    ];
+
+    const completedCourseIds = new Set(
+      enrollments
+        .filter(
+          (enrollment) =>
+            enrollment.progress_percent >= 100 ||
+            enrollment.enrollment_status === "completed"
+        )
+        .map(
+          (enrollment) => enrollment.course_id
+        )
+    );
+
+    const { data: courseData, error: courseError } =
       await supabase
         .from("courses")
         .select(
@@ -358,88 +488,68 @@ export async function GET() {
           `
         )
         .eq("status", "published")
-        .eq("level", "advanced")
         .order("created_at", {
           ascending: false,
-        })
-        .limit(10);
+        });
 
-    const advancedCourses =
-      (advancedCourseData || []) as Course[];
-
-    const availableAdvancedCourses =
-      advancedCourses.filter(
-        (course) =>
-          !enrolledCourseIds.includes(course.id)
-      );
-
-    if (
-      availableAdvancedCourses.length > 0 &&
-      averageSkillScore >= 70
-    ) {
-      nextCourse = availableAdvancedCourses[0];
+    if (courseError) {
+      throw courseError;
     }
 
-    if (!nextCourse) {
-      const { data: intermediateCourseData } =
-        await supabase
-          .from("courses")
-          .select(
-            `
-              id,
-              title,
-              slug,
-              level,
-              category,
-              short_description,
-              thumbnail_url,
-              duration_minutes
-            `
-          )
-          .eq("status", "published")
-          .eq("level", "intermediate")
-          .order("created_at", {
-            ascending: false,
-          })
-          .limit(10);
+    const courses =
+      (courseData || []) as Course[];
 
-      const intermediateCourses =
-        (intermediateCourseData || []) as Course[];
+    const availableCourses = courses.filter(
+      (course) =>
+        !completedCourseIds.has(course.id)
+    );
 
-      const availableIntermediateCourses =
-        intermediateCourses.filter(
-          (course) =>
-            !enrolledCourseIds.includes(course.id)
+    const levelRank: Record<
+      Course["level"],
+      number
+    > = {
+      beginner: 1,
+      intermediate: 2,
+      advanced: 3,
+    };
+
+    const sortedCourses = [
+      ...availableCourses,
+    ].sort((a, b) => {
+      /*
+       * Strong learning profiles should be directed toward
+       * higher-level material.
+       */
+      if (skillScore >= 80) {
+        return (
+          levelRank[b.level] -
+          levelRank[a.level]
         );
-
-      if (availableIntermediateCourses.length > 0) {
-        nextCourse =
-          availableIntermediateCourses[0];
       }
-    }
+
+      if (skillScore >= 50) {
+        return (
+          levelRank[b.level] -
+          levelRank[a.level]
+        );
+      }
+
+      return (
+        levelRank[a.level] -
+        levelRank[b.level]
+      );
+    });
+
+    const nextCourse =
+      sortedCourses.length > 0
+        ? sortedCourses[0]
+        : null;
 
     /*
-     * ---------------------------------------------------------------
-     * SKILL BREAKDOWN
-     * ---------------------------------------------------------------
+     * --------------------------------------------------------------
+     * RESPONSE
+     * --------------------------------------------------------------
      */
-
-    const skillBreakdown = skillProfiles
-      .map((profile) => {
-        const skill = skillMap.get(profile.skill_id);
-
-        return {
-          id: profile.skill_id,
-          name: skill?.name || "Learning Skill",
-          category: skill?.category || "General",
-          score: clamp(
-            Number(profile.confidence_score || 0)
-          ),
-          level:
-            profile.skill_level || "beginner",
-        };
-      })
-      .sort((a, b) => b.score - a.score);
 
     return NextResponse.json({
       overallLearningScore,
@@ -448,7 +558,7 @@ export async function GET() {
       learningStreak,
       masteredSkills,
       developingSkills,
-      totalSkills: skillProfiles.length,
+      totalSkills,
       skillBreakdown,
       nextCourse,
       latestAssessmentDate:
@@ -464,7 +574,8 @@ export async function GET() {
 
     return NextResponse.json(
       {
-        error: "Unable to load learning intelligence.",
+        error:
+          "Unable to load learning intelligence.",
       },
       {
         status: 500,
