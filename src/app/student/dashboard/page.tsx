@@ -326,13 +326,13 @@ export default async function StudentDashboardPage() {
             <div>
               <span className="rn-eyebrow">
                 {hasLearningProfile
-                  ? "KEEP DEVELOPING"
+                  ? "CONTINUE ADVANCING"
                   : "NEXT STEP"}
               </span>
 
               <h2>
                 {hasLearningProfile
-                  ? "Keep developing your skills"
+                  ? "Continue advancing your skills"
                   : "Build your learning profile"}
               </h2>
             </div>
@@ -340,7 +340,7 @@ export default async function StudentDashboardPage() {
 
           <p className="rn-dashboard-card-text">
             {hasLearningProfile
-              ? "Your learning profile is already active. Review your current skills, continue learning, or retake the assessment as your skills develop."
+              ? "Your current learning profile shows strong foundational skills across the areas assessed. Continue with advanced courses to deepen your capabilities and expand your practical digital skills."
               : "Complete the diagnostic assessment to identify your current strengths and development areas. Your results can be used to personalize your learning path."}
           </p>
 
@@ -355,10 +355,10 @@ export default async function StudentDashboardPage() {
                 </Link>
 
                 <Link
-                  href="/student/assessment"
+                  href="/courses"
                   className="rn-button rn-button-secondary"
                 >
-                  Retake Assessment
+                  Explore Advanced Courses
                 </Link>
               </>
             ) : (
