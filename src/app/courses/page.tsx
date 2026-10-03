@@ -155,7 +155,7 @@ export default async function CoursesPage() {
     .eq("status", "published")
     .order("published_at", { ascending: false });
 
-  const courses: Course[] = (data ?? []) as Course[];
+  const courses: Course[] = (data ?? []) as unknown as Course[];
 
   return (
     <main className="rn-courses-page">
