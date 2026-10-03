@@ -3,10 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 
 type Profile = {
   id: string;
-  role:
-    | "student"
-    | "instructor"
-    | "admin";
+  role: "student" | "instructor" | "admin";
 };
 
 type Submission = {
@@ -40,8 +37,7 @@ export async function PATCH(
     }>;
   }
 ) {
-  const { submissionId } =
-    await context.params;
+  const { submissionId } = await context.params;
 
   const supabase = await createClient();
 
@@ -52,33 +48,27 @@ export async function PATCH(
   if (!user) {
     return NextResponse.json(
       {
-        error:
-          "Authentication required.",
+        error: "Authentication required.",
       },
       { status: 401 }
     );
   }
 
-  const { data: profileData } =
-    await supabase
-      .from("profiles")
-      .select("id, role")
-      .eq("id", user.id)
-      .maybeSingle();
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("id, role")
+    .eq("id", user.id)
+    .maybeSingle();
 
-  const profile =
-    profileData as unknown as Profile | null;
+  const profile = profileData as unknown as Profile | null;
 
   if (
     !profile ||
-    !["admin", "instructor"].includes(
-      profile.role
-    )
+    !["admin", "instructor"].includes(profile.role)
   ) {
     return NextResponse.json(
       {
-        error:
-          "You are not authorised to review projects.",
+        error: "You are not authorised to review projects.",
       },
       { status: 403 }
     );
@@ -91,17 +81,15 @@ export async function PATCH(
   };
 
   try {
-    body =
-      (await request.json()) as {
-        status?: string;
-        score?: number | null;
-        feedback?: string;
-      };
+    body = (await request.json()) as {
+      status?: string;
+      score?: number | null;
+      feedback?: string;
+    };
   } catch {
     return NextResponse.json(
       {
-        error:
-          "Invalid request body.",
+        error: "Invalid request body.",
       },
       { status: 400 }
     );
@@ -116,23 +104,22 @@ export async function PATCH(
 
   if (
     !body.status ||
-    !allowedStatuses.includes(
-      body.status
-    )
+    !allowedStatuses.includes(body.status)
   ) {
     return NextResponse.json(
       {
-        error:
-          "Invalid review status.",
+        error: "Invalid review status.",
       },
       { status: 400 }
     );
   }
 
+  /*
+   * Score is typed as number | null.
+   * Do not compare it with an empty string.
+   */
   const score =
-    body.score === null ||
-    body.score === undefined ||
-    body.score === ""
+    body.score === null || body.score === undefined
       ? null
       : Number(body.score);
 
@@ -144,26 +131,24 @@ export async function PATCH(
   ) {
     return NextResponse.json(
       {
-        error:
-          "Score must be between 0 and 100.",
+        error: "Score must be between 0 and 100.",
       },
       { status: 400 }
     );
   }
 
-  const { data: submissionData } =
-    await supabase
-      .from("project_submissions")
-      .select(
-        [
-          "id",
-          "project_id",
-          "student_id",
-          "status",
-        ].join(", ")
-      )
-      .eq("id", submissionId)
-      .maybeSingle();
+  const { data: submissionData } = await supabase
+    .from("project_submissions")
+    .select(
+      [
+        "id",
+        "project_id",
+        "student_id",
+        "status",
+      ].join(", ")
+    )
+    .eq("id", submissionId)
+    .maybeSingle();
 
   const submission =
     submissionData as unknown as Submission | null;
@@ -171,21 +156,17 @@ export async function PATCH(
   if (!submission) {
     return NextResponse.json(
       {
-        error:
-          "Submission not found.",
+        error: "Submission not found.",
       },
       { status: 404 }
     );
   }
 
-  const { data: projectData } =
-    await supabase
-      .from("course_projects")
-      .select(
-        "id, course_id"
-      )
-      .eq("id", submission.project_id)
-      .maybeSingle();
+  const { data: projectData } = await supabase
+    .from("course_projects")
+    .select("id, course_id")
+    .eq("id", submission.project_id)
+    .maybeSingle();
 
   const project =
     projectData as unknown as Project | null;
@@ -199,12 +180,11 @@ export async function PATCH(
     );
   }
 
-  const { data: courseData } =
-    await supabase
-      .from("courses")
-      .select("id, title, slug")
-      .eq("id", project.course_id)
-      .maybeSingle();
+  const { data: courseData } = await supabase
+    .from("courses")
+    .select("id, title, slug")
+    .eq("id", project.course_id)
+    .maybeSingle();
 
   const course =
     courseData as unknown as Course | null;
@@ -218,50 +198,44 @@ export async function PATCH(
     );
   }
 
-  if (
-    profile.role !== "admin"
-  ) {
-    const { data: ownedCourse } =
-      await supabase
-        .from("courses")
-        .select("id")
-        .eq("id", project.course_id)
-        .eq(
-          "instructor_id",
-          user.id
-        )
-        .maybeSingle();
+  /*
+   * Instructors can only review projects
+   * belonging to their own courses.
+   */
+  if (profile.role !== "admin") {
+    const { data: ownedCourse } = await supabase
+      .from("courses")
+      .select("id")
+      .eq("id", project.course_id)
+      .eq("instructor_id", user.id)
+      .maybeSingle();
 
     if (!ownedCourse) {
       return NextResponse.json(
         {
-          error:
-            "You do not manage this course.",
+          error: "You do not manage this course.",
         },
         { status: 403 }
       );
     }
   }
 
-  const timestamp =
-    new Date().toISOString();
+  const timestamp = new Date().toISOString();
 
-  const { error } =
-    await supabase
-      .from("project_submissions")
-      .update({
-        status: body.status,
-        score,
-        feedback:
-          typeof body.feedback === "string"
-            ? body.feedback.trim() ||
-              null
-            : null,
-        reviewed_at: timestamp,
-        reviewed_by: user.id,
-        updated_at: timestamp,
-      })
-      .eq("id", submission.id);
+  const { error } = await supabase
+    .from("project_submissions")
+    .update({
+      status: body.status,
+      score,
+      feedback:
+        typeof body.feedback === "string"
+          ? body.feedback.trim() || null
+          : null,
+      reviewed_at: timestamp,
+      reviewed_by: user.id,
+      updated_at: timestamp,
+    })
+    .eq("id", submission.id);
 
   if (error) {
     return NextResponse.json(
@@ -274,18 +248,14 @@ export async function PATCH(
 
   /*
    * Revision required:
-   * keep the course active because the learner
-   * needs to resubmit.
+   * Keep the course active because the learner
+   * needs to edit and resubmit the project.
    */
-  if (
-    body.status ===
-    "revision_required"
-  ) {
+  if (body.status === "revision_required") {
     await supabase
       .from("enrollments")
       .update({
-        enrollment_status:
-          "active",
+        enrollment_status: "active",
         completed_at: null,
       })
       .eq(
@@ -305,14 +275,13 @@ export async function PATCH(
 
   /*
    * Approval:
-   * course completion requires:
+   *
+   * Course completion requires:
    * 1. All published lessons completed
    * 2. At least one course assessment completed
    * 3. Approved capstone
    */
-  if (
-    body.status === "approved"
-  ) {
+  if (body.status === "approved") {
     const { count: publishedLessons } =
       await supabase
         .from("lessons")
@@ -369,10 +338,8 @@ export async function PATCH(
       await supabase
         .from("enrollments")
         .update({
-          enrollment_status:
-            "completed",
-          completed_at:
-            timestamp,
+          enrollment_status: "completed",
+          completed_at: timestamp,
           progress_percent: 100,
         })
         .eq(
@@ -409,9 +376,7 @@ export async function PATCH(
       const { data: studentProfile } =
         await supabase
           .from("profiles")
-          .select(
-            "full_name, email"
-          )
+          .select("full_name, email")
           .eq(
             "id",
             submission.student_id
@@ -425,9 +390,7 @@ export async function PATCH(
 
       const { error: certificateError } =
         await supabase
-          .from(
-            "course_certificates"
-          )
+          .from("course_certificates")
           .upsert(
             {
               student_id:
@@ -443,10 +406,8 @@ export async function PATCH(
               assessment_score:
                 latestAssessment?.score ??
                 null,
-              capstone_score:
-                score,
-              issued_at:
-                timestamp,
+              capstone_score: score,
+              issued_at: timestamp,
               is_revoked: false,
               revoked_at: null,
               revoked_reason: null,
@@ -467,6 +428,11 @@ export async function PATCH(
     }
   }
 
+  /*
+   * Log project review activity.
+   * Activity logging is non-blocking so a logging
+   * problem does not prevent the review from saving.
+   */
   const { error: activityError } =
     await supabase
       .from("learning_activity")
@@ -480,12 +446,10 @@ export async function PATCH(
             ? "project_approved"
             : "project_reviewed",
         metadata: {
-          project_id:
-            project.id,
+          project_id: project.id,
           submission_id:
             submission.id,
-          status:
-            body.status,
+          status: body.status,
           score,
         },
       });
