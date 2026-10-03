@@ -14,7 +14,13 @@ type Course = {
   thumbnail_url: string | null;
 };
 
-function getCourseVisual(course: Course) {
+type CourseVisual = {
+  className: string;
+  icon: string;
+  label: string;
+};
+
+function getCourseVisual(course: Course): CourseVisual {
   const value =
     `${course.slug} ${course.title} ${course.category ?? ""}`.toLowerCase();
 
@@ -130,7 +136,7 @@ function formatDuration(minutes: number | null) {
 export default async function CoursesPage() {
   const supabase = await createClient();
 
-  const { data: courses } = await supabase
+  const { data, error } = await supabase
     .from("courses")
     .select(
       [
@@ -149,14 +155,14 @@ export default async function CoursesPage() {
     .eq("status", "published")
     .order("published_at", { ascending: false });
 
+  const courses: Course[] = (data ?? []) as Course[];
+
   return (
     <main className="rn-courses-page">
       <section className="rn-courses-hero">
         <div className="container">
           <div className="rn-courses-hero-content">
-            <span className="rn-eyebrow">
-              RUFFNECK LEARN
-            </span>
+            <span className="rn-eyebrow">RUFFNECK LEARN</span>
 
             <h1>
               Practical skills for work,
@@ -218,6 +224,7 @@ export default async function CoursesPage() {
               <span className="rn-eyebrow">
                 COURSE CATALOGUE
               </span>
+
               <h2>Choose a skill and start learning.</h2>
             </div>
 
@@ -226,10 +233,26 @@ export default async function CoursesPage() {
             </p>
           </div>
 
-          {!courses?.length ? (
+          {error ? (
+            <div className="rn-empty-state">
+              <div className="rn-empty-icon">!</div>
+
+              <strong>
+                Courses could not be loaded.
+              </strong>
+
+              <p>
+                Please try again later.
+              </p>
+            </div>
+          ) : !courses.length ? (
             <div className="rn-empty-state">
               <div className="rn-empty-icon">◎</div>
-              <strong>No published courses yet.</strong>
+
+              <strong>
+                No published courses yet.
+              </strong>
+
               <p>
                 New practical courses will appear here when they
                 are published.
@@ -263,6 +286,7 @@ export default async function CoursesPage() {
                       ) : (
                         <div className={visual.className}>
                           <div className="course-art-grid" />
+
                           <div className="course-art-glow" />
 
                           <div className="course-art-content">
@@ -294,8 +318,7 @@ export default async function CoursesPage() {
                           </span>
                         ) : (
                           <span className="badge">
-                            ₦
-                            {course.price_ngn.toLocaleString()}
+                            ₦{course.price_ngn.toLocaleString()}
                           </span>
                         )}
                       </div>
