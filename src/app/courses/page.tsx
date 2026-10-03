@@ -122,9 +122,7 @@ function formatDuration(minutes: number | null) {
   const hours = Math.floor(minutes / 60);
   const remaining = minutes % 60;
 
-  return remaining
-    ? `${hours} hr ${remaining} min`
-    : `${hours} hr`;
+  return remaining ? `${hours} hr ${remaining} min` : `${hours} hr`;
 }
 
 export default async function CoursesPage() {
@@ -153,7 +151,7 @@ export default async function CoursesPage() {
     console.error("Failed to load courses:", error);
   }
 
-  const courses: Course[] = (data ?? []) as Course[];
+  const courses: Course[] = (data ?? []) as unknown as Course[];
 
   return (
     <main className="rn-courses-page">
@@ -220,9 +218,7 @@ export default async function CoursesPage() {
               <h2>Choose a skill and start learning.</h2>
             </div>
 
-            <p>
-              Explore the available RuffNeck Learn courses.
-            </p>
+            <p>Explore the available RuffNeck Learn courses.</p>
           </div>
 
           {!courses.length ? (
@@ -288,9 +284,7 @@ export default async function CoursesPage() {
                         </span>
 
                         {course.is_free ? (
-                          <span className="badge badge-free">
-                            Free
-                          </span>
+                          <span className="badge badge-free">Free</span>
                         ) : (
                           <span className="badge">
                             ₦{course.price_ngn.toLocaleString()}
