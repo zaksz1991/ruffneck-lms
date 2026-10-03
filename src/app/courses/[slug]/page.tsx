@@ -29,7 +29,6 @@ type Course = {
   level: "beginner" | "intermediate" | "advanced";
   price_ngn: number;
   is_free: boolean;
-  status: "draft" | "published" | "archived";
   duration_minutes: number | null;
   learning_outcomes: string[] | null;
   target_audience: string | null;
@@ -139,7 +138,9 @@ export async function generateMetadata({
 
   const { data: course } = await supabase
     .from("courses")
-    .select("title, short_description, seo_title, seo_description")
+    .select(
+      "title, short_description, seo_title, seo_description"
+    )
     .eq("slug", slug)
     .maybeSingle();
 
@@ -173,7 +174,7 @@ export default async function CourseDetailPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: course } = await supabase
+  const { data: courseData } = await supabase
     .from("courses")
     .select(
       [
@@ -187,20 +188,22 @@ export default async function CourseDetailPage({
         "level",
         "price_ngn",
         "is_free",
-        "status",
         "duration_minutes",
         "learning_outcomes",
         "target_audience",
       ].join(", ")
     )
     .eq("slug", slug)
+    .eq("status", "published")
     .maybeSingle();
 
-  if (!course || course.status !== "published") {
+  const course = courseData as Course | null;
+
+  if (!course) {
     notFound();
   }
 
-  const typedCourse = course as Course;
+  const typedCourse = course;
 
   const { data: curriculum } = await supabase
     .from("course_curriculum")
@@ -304,6 +307,7 @@ export default async function CourseDetailPage({
   ).sort((a, b) => a.sortOrder - b.sortOrder);
 
   const firstLesson = curriculumRows[0] || null;
+
   const previewCount = curriculumRows.filter(
     (lesson) => lesson.is_preview
   ).length;
@@ -389,9 +393,7 @@ export default async function CourseDetailPage({
               </div>
 
               <div>
-                <strong>
-                  {previewCount}
-                </strong>
+                <strong>{previewCount}</strong>
                 <span>Preview lessons</span>
               </div>
             </div>
@@ -412,12 +414,12 @@ export default async function CourseDetailPage({
                   courseSlug={typedCourse.slug}
                   firstLessonSlug={
                     firstLesson?.lesson_slug || null
-                }
-                courseTitle={typedCourse.title}
-                className="rn-button rn-button-primary"
-                label="Enroll Free"
-              />
-            ) : (
+                  }
+                  courseTitle={typedCourse.title}
+                  className="rn-button rn-button-primary"
+                  label="Enroll Free"
+                />
+              ) : (
                 <Link
                   href={`/login?next=/courses/${typedCourse.slug}`}
                   className="rn-button rn-button-primary"
@@ -659,7 +661,10 @@ export default async function CourseDetailPage({
                               ? "✓"
                               : String(
                                   lessonIndex + 1
-                                ).padStart(2, "0")}
+                                ).padStart(
+                                  2,
+                                  "0"
+                                )}
                           </div>
 
                           <div className="rn-lesson-main">
@@ -686,8 +691,7 @@ export default async function CourseDetailPage({
                                       )
                                     : `${Math.ceil(
                                         (lesson.duration_seconds ||
-                                          0) /
-                                          60
+                                          0) / 60
                                       )} min`}
                                 </span>
                               ) : null}
