@@ -70,6 +70,112 @@ function formatHours(minutes: number) {
   return `${Math.round(hours * 10) / 10} hours`;
 }
 
+function getCourseVisual(course: Course) {
+  const value =
+    `${course.slug} ${course.title} ${course.category ?? ""}`.toLowerCase();
+
+  /*
+   * Specific categories come first so words such as
+   * "digital" do not accidentally match "ai".
+   */
+
+  if (
+    value.includes("marketing") ||
+    value.includes("content") ||
+    value.includes("social media") ||
+    value.includes("digital marketing")
+  ) {
+    return {
+      className: "course-art course-art-marketing",
+      icon: "◈",
+      label: "Digital Marketing",
+    };
+  }
+
+  if (
+    value.includes("data") ||
+    value.includes("excel") ||
+    value.includes("power-bi") ||
+    value.includes("power bi") ||
+    value.includes("analytics")
+  ) {
+    return {
+      className: "course-art course-art-data",
+      icon: "▥",
+      label: "Data & Analytics",
+    };
+  }
+
+  if (
+    value.includes("business") ||
+    value.includes("entrepreneur") ||
+    value.includes("startup")
+  ) {
+    return {
+      className: "course-art course-art-business",
+      icon: "◆",
+      label: "Business",
+    };
+  }
+
+  if (
+    value.includes("operation") ||
+    value.includes("logistics") ||
+    value.includes("inventory") ||
+    value.includes("warehouse")
+  ) {
+    return {
+      className: "course-art course-art-operations",
+      icon: "▦",
+      label: "Operations",
+    };
+  }
+
+  if (
+    value.includes("teacher") ||
+    value.includes("teaching") ||
+    value.includes("education")
+  ) {
+    return {
+      className: "course-art course-art-education",
+      icon: "◇",
+      label: "Education",
+    };
+  }
+
+  if (
+    value.includes("productivity") ||
+    value.includes("digital skills") ||
+    value.includes("office")
+  ) {
+    return {
+      className: "course-art course-art-productivity",
+      icon: "◫",
+      label: "Productivity",
+    };
+  }
+
+  const hasAi =
+    /\bai\b/.test(value) ||
+    value.includes("artificial intelligence") ||
+    value.includes("automation") ||
+    value.includes("prompt engineering");
+
+  if (hasAi) {
+    return {
+      className: "course-art course-art-ai",
+      icon: "✦",
+      label: "AI & Technology",
+    };
+  }
+
+  return {
+    className: "course-art course-art-default",
+    icon: "R",
+    label: course.category || "Professional Skills",
+  };
+}
+
 function getCourseFocus(slug: string) {
   switch (slug) {
     case "ai-literacy":
@@ -138,9 +244,7 @@ export async function generateMetadata({
 
   const { data: course } = await supabase
     .from("courses")
-    .select(
-      "title, short_description, seo_title, seo_description"
-    )
+    .select("title, short_description, seo_title, seo_description")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -319,6 +423,8 @@ export default async function CourseDetailPage({
     typedCourse.slug
   );
 
+  const visual = getCourseVisual(typedCourse);
+
   return (
     <main className="rn-course-experience">
       <div className="container">
@@ -440,6 +546,7 @@ export default async function CourseDetailPage({
               <div className="rn-course-progress-box">
                 <div className="rn-course-progress-header">
                   <span>Your progress</span>
+
                   <strong>
                     {progressPercent}%
                   </strong>
@@ -475,12 +582,26 @@ export default async function CourseDetailPage({
                 alt={typedCourse.title}
               />
             ) : (
-              <div className="rn-course-visual-fallback">
-                <span>R</span>
-                <strong>RuffNeck Learn</strong>
-                <small>
-                  Practical professional learning
-                </small>
+              <div
+                className={`rn-course-visual-fallback ${visual.className}`}
+              >
+                <div className="course-art-grid" />
+
+                <div className="course-art-glow" />
+
+                <div className="course-art-content">
+                  <span className="course-art-icon">
+                    {visual.icon}
+                  </span>
+
+                  <span className="course-art-label">
+                    {visual.label}
+                  </span>
+                </div>
+
+                <div className="course-art-decoration course-art-decoration-one" />
+                <div className="course-art-decoration course-art-decoration-two" />
+                <div className="course-art-decoration course-art-decoration-three" />
               </div>
             )}
 
@@ -553,7 +674,9 @@ export default async function CourseDetailPage({
           <div className="rn-practical-grid">
             <article className="rn-practical-card">
               <span>01</span>
+
               <h3>Real-world scenarios</h3>
+
               <p>
                 Apply concepts to realistic workplace,
                 business, education and operational
@@ -563,7 +686,9 @@ export default async function CourseDetailPage({
 
             <article className="rn-practical-card">
               <span>02</span>
+
               <h3>Case studies</h3>
+
               <p>
                 Analyse practical problems, identify
                 risks and develop structured solutions.
@@ -572,7 +697,9 @@ export default async function CourseDetailPage({
 
             <article className="rn-practical-card">
               <span>03</span>
+
               <h3>Samples & exercises</h3>
+
               <p>
                 Work with examples, templates,
                 checklists and guided practical tasks.
@@ -581,7 +708,9 @@ export default async function CourseDetailPage({
 
             <article className="rn-practical-card">
               <span>04</span>
+
               <h3>Capstone projects</h3>
+
               <p>
                 Finish with an applied project that
                 demonstrates what you can actually do.
