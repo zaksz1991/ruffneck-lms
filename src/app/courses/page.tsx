@@ -14,13 +14,7 @@ type Course = {
   thumbnail_url: string | null;
 };
 
-type CourseVisual = {
-  className: string;
-  icon: string;
-  label: string;
-};
-
-function getCourseVisual(course: Course): CourseVisual {
+function getCourseVisual(course: Course) {
   const value =
     `${course.slug} ${course.title} ${course.category ?? ""}`.toLowerCase();
 
@@ -155,7 +149,11 @@ export default async function CoursesPage() {
     .eq("status", "published")
     .order("published_at", { ascending: false });
 
-  const courses: Course[] = (data ?? []) as unknown as Course[];
+  if (error) {
+    console.error("Failed to load courses:", error);
+  }
+
+  const courses: Course[] = (data ?? []) as Course[];
 
   return (
     <main className="rn-courses-page">
@@ -165,14 +163,13 @@ export default async function CoursesPage() {
             <span className="rn-eyebrow">RUFFNECK LEARN</span>
 
             <h1>
-              Practical skills for work,
-              business and the digital economy.
+              Practical skills for work, business and the digital economy.
             </h1>
 
             <p>
-              Learn practical AI, data, business, marketing,
-              operations and digital skills through structured
-              courses built for real-world application.
+              Learn practical AI, data, business, marketing, operations and
+              digital skills through structured courses built for real-world
+              application.
             </p>
 
             <div className="rn-courses-hero-actions">
@@ -196,9 +193,7 @@ export default async function CoursesPage() {
             <div className="rn-hero-learning-card">
               <span>LEARN</span>
               <strong>Build useful skills.</strong>
-              <small>
-                AI · Data · Business · Digital
-              </small>
+              <small>AI · Data · Business · Digital</small>
             </div>
 
             <div className="rn-hero-floating-card rn-hero-floating-one">
@@ -221,10 +216,7 @@ export default async function CoursesPage() {
         <div className="container">
           <div className="rn-course-catalogue-heading">
             <div>
-              <span className="rn-eyebrow">
-                COURSE CATALOGUE
-              </span>
-
+              <span className="rn-eyebrow">COURSE CATALOGUE</span>
               <h2>Choose a skill and start learning.</h2>
             </div>
 
@@ -233,38 +225,22 @@ export default async function CoursesPage() {
             </p>
           </div>
 
-          {error ? (
-            <div className="rn-empty-state">
-              <div className="rn-empty-icon">!</div>
-
-              <strong>
-                Courses could not be loaded.
-              </strong>
-
-              <p>
-                Please try again later.
-              </p>
-            </div>
-          ) : !courses.length ? (
+          {!courses.length ? (
             <div className="rn-empty-state">
               <div className="rn-empty-icon">◎</div>
 
-              <strong>
-                No published courses yet.
-              </strong>
+              <strong>No published courses yet.</strong>
 
               <p>
-                New practical courses will appear here when they
-                are published.
+                New practical courses will appear here when they are
+                published.
               </p>
             </div>
           ) : (
             <div className="rn-course-catalogue-grid">
               {courses.map((course) => {
                 const visual = getCourseVisual(course);
-                const duration = formatDuration(
-                  course.duration_minutes
-                );
+                const duration = formatDuration(course.duration_minutes);
 
                 return (
                   <article
@@ -286,7 +262,6 @@ export default async function CoursesPage() {
                       ) : (
                         <div className={visual.className}>
                           <div className="course-art-grid" />
-
                           <div className="course-art-glow" />
 
                           <div className="course-art-content">
