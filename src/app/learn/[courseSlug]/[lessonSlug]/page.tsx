@@ -3,6 +3,27 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { CompleteLessonButton } from "@/components/CompleteLessonButton";
 
+type Course = {
+  id: string;
+  title: string;
+  slug: string;
+  category: string | null;
+  level: string | null;
+  thumbnail_url: string | null;
+};
+
+type Lesson = {
+  id: string;
+  course_id: string;
+  title: string;
+  slug: string;
+  content_html: string | null;
+  video_url: string | null;
+  duration_minutes: number | null;
+  is_preview: boolean;
+  is_published: boolean;
+};
+
 type CurriculumRow = {
   lesson_id: string;
   course_id: string;
@@ -18,32 +39,14 @@ type CurriculumRow = {
   is_published: boolean;
 };
 
-type Course = {
-  id: string;
-  title: string;
-  slug: string;
-  level: "beginner" | "intermediate" | "advanced";
-  category: string | null;
-};
-
-type Lesson = {
-  id: string;
-  course_id: string;
-  section_id: string;
-  title: string;
-  slug: string;
-  content_html: string | null;
-  video_url: string | null;
-  duration_minutes: number | null;
-  duration_seconds: number | null;
-  sort_order: number;
-  is_preview: boolean;
-  is_published: boolean;
+type LessonProgress = {
+  completed: boolean;
+  watched_seconds: number | null;
+  last_position_seconds: number | null;
 };
 
 type Resource = {
   id: string;
-  lesson_id: string;
   title: string;
   resource_type: "file" | "link" | "pdf" | "audio";
   url: string;
@@ -55,34 +58,20 @@ function formatDuration(
   seconds: number | null
 ) {
   if (minutes && minutes > 0) {
-    if (minutes < 60) {
-      return `${minutes} min`;
-    }
-
-    const hours = Math.floor(minutes / 60);
-    const remaining = minutes % 60;
-
-    return remaining
-      ? `${hours} hr ${remaining} min`
-      : `${hours} hr`;
+    return `${minutes} min`;
   }
 
   if (seconds && seconds > 0) {
-    const totalMinutes = Math.ceil(seconds / 60);
-
-    if (totalMinutes < 60) {
-      return `${totalMinutes} min`;
-    }
-
-    const hours = Math.floor(totalMinutes / 60);
-    const remaining = totalMinutes % 60;
-
-    return remaining
-      ? `${hours} hr ${remaining} min`
-      : `${hours} hr`;
+    return `${Math.ceil(seconds / 60)} min`;
   }
 
   return null;
+}
+
+function formatLevel(level: string | null) {
+  if (!level) return null;
+
+  return level.charAt(0).toUpperCase() + level.slice(1);
 }
 
 function getResourceLabel(
@@ -90,13 +79,28 @@ function getResourceLabel(
 ) {
   switch (type) {
     case "pdf":
+      return "Open PDF";
+    case "audio":
+      return "Listen to audio";
+    case "link":
+      return "Open resource";
+    default:
+      return "Open file";
+  }
+}
+
+function getResourceIcon(
+  type: Resource["resource_type"]
+) {
+  switch (type) {
+    case "pdf":
       return "PDF";
     case "audio":
-      return "Audio";
-    case "file":
-      return "File";
+      return "AUDIO";
+    case "link":
+      return "LINK";
     default:
-      return "Link";
+      return "FILE";
   }
 }
 
@@ -122,14 +126,21 @@ export default async function LessonPage({
     );
   }
 
-  const { data: courseData } = await supabase
-    .from("courses")
-    .select(
-      "id, title, slug, level, category"
-    )
-    .eq("slug", courseSlug)
-    .eq("status", "published")
-    .maybeSingle();
+  const { data: courseData, error: courseError } =
+    await supabase
+      .from("courses")
+      .select(
+        "id, title, slug, category, level, thumbnail_url"
+      )
+      .eq("slug", courseSlug)
+      .maybeSingle();
+
+  if (courseError) {
+    console.error(
+      "Failed to load course:",
+      courseError
+    );
+  }
 
   const course =
     courseData as unknown as Course | null;
@@ -138,182 +149,174 @@ export default async function LessonPage({
     notFound();
   }
 
-  const { data: enrollment } = await supabase
-    .from("enrollments")
-    .select(
-      "id, progress_percent, enrollment_status"
-    )
-    .eq("student_id", user.id)
-    .eq("course_id", course.id)
-    .maybeSingle();
+  const { data: enrollmentData } =
+    await supabase
+      .from("enrollments")
+      .select(
+        "id, progress_percent, enrollment_status, payment_status"
+      )
+      .eq("student_id", user.id)
+      .eq("course_id", course.id)
+      .maybeSingle();
 
-  const { data: lessonData } = await supabase
-    .from("lessons")
-    .select(
-      [
-        "id",
-        "course_id",
-        "section_id",
-        "title",
-        "slug",
-        "content_html",
-        "video_url",
-        "duration_minutes",
-        "duration_seconds",
-        "sort_order",
-        "is_preview",
-        "is_published",
-      ].join(", ")
-    )
-    .eq("course_id", course.id)
-    .eq("slug", lessonSlug)
-    .maybeSingle();
+  const enrollment = enrollmentData as unknown as
+    | {
+        id: string;
+        progress_percent: number | null;
+        enrollment_status: string | null;
+        payment_status: string | null;
+      }
+    | null;
+
+  const { data: lessonData, error: lessonError } =
+    await supabase
+      .from("lessons")
+      .select(
+        "id, course_id, title, slug, content_html, video_url, duration_minutes, is_preview, is_published"
+      )
+      .eq("course_id", course.id)
+      .eq("slug", lessonSlug)
+      .eq("is_published", true)
+      .maybeSingle();
+
+  if (lessonError) {
+    console.error(
+      "Failed to load lesson:",
+      lessonError
+    );
+  }
 
   const lesson =
     lessonData as unknown as Lesson | null;
 
   if (!lesson) {
-    notFound();
-  }
+    if (!enrollment) {
+      redirect(`/courses/${courseSlug}`);
+    }
 
-  if (!lesson.is_published && !enrollment) {
-    redirect(`/courses/${courseSlug}`);
+    notFound();
   }
 
   if (!lesson.is_preview && !enrollment) {
     redirect(`/courses/${courseSlug}`);
   }
 
-  const { data: curriculum } = await supabase
-    .from("course_curriculum")
-    .select(
-      [
-        "lesson_id",
-        "course_id",
-        "section_id",
-        "section_title",
-        "section_sort",
-        "lesson_title",
-        "lesson_slug",
-        "lesson_sort",
-        "duration_minutes",
-        "duration_seconds",
-        "is_preview",
-        "is_published",
-      ].join(", ")
+  const { data: curriculumData } =
+    await supabase
+      .from("course_curriculum")
+      .select(
+        [
+          "lesson_id",
+          "course_id",
+          "section_id",
+          "section_title",
+          "section_sort",
+          "lesson_title",
+          "lesson_slug",
+          "lesson_sort",
+          "duration_minutes",
+          "duration_seconds",
+          "is_preview",
+          "is_published",
+        ].join(", ")
+      )
+      .eq("course_id", course.id)
+      .eq("is_published", true)
+      .order("section_sort")
+      .order("lesson_sort");
+
+  const curriculum =
+    (curriculumData as unknown as CurriculumRow[]) ||
+    [];
+
+  /*
+   * Calculate course progress directly from completed
+   * lessons. Do not trust the potentially stale
+   * enrollment.progress_percent value.
+   */
+  const { data: completedProgressData } =
+    enrollment
+      ? await supabase
+          .from("lesson_progress")
+          .select("lesson_id")
+          .eq("student_id", user.id)
+          .eq("course_id", course.id)
+          .eq("completed", true)
+      : { data: [] };
+
+  const completedProgress =
+    (completedProgressData as unknown as {
+      lesson_id: string;
+    }[]) || [];
+
+  const completedLessonIds = new Set(
+    completedProgress.map(
+      (row) => row.lesson_id
     )
-    .eq("course_id", course.id)
-    .eq("is_published", true)
-    .order("section_sort")
-    .order("lesson_sort");
+  );
 
-  const rows =
-    (curriculum as CurriculumRow[] | null) || [];
+  const totalLessons = curriculum.length;
+  const totalCompleted =
+    completedLessonIds.size;
 
-  const currentIndex = rows.findIndex(
-    (row) => row.lesson_id === lesson.id
+  const courseProgress =
+    totalLessons > 0
+      ? Math.min(
+          100,
+          Math.round(
+            (totalCompleted / totalLessons) * 100
+          )
+        )
+      : 0;
+
+  const currentIndex = curriculum.findIndex(
+    (row) =>
+      row.lesson_id === lesson.id ||
+      row.lesson_slug === lesson.slug
   );
 
   const previousLesson =
     currentIndex > 0
-      ? rows[currentIndex - 1]
+      ? curriculum[currentIndex - 1]
       : null;
 
   const nextLesson =
     currentIndex >= 0 &&
-    currentIndex < rows.length - 1
-      ? rows[currentIndex + 1]
+    currentIndex < curriculum.length - 1
+      ? curriculum[currentIndex + 1]
       : null;
 
-  const currentLessonNumber =
-    currentIndex >= 0 ? currentIndex + 1 : 1;
+  const currentCompleted =
+    completedLessonIds.has(lesson.id);
 
-  const totalLessons = rows.length;
-
-  const { data: progress } = await supabase
-    .from("lesson_progress")
-    .select(
-      "completed, watched_seconds, last_position_seconds, last_accessed_at"
-    )
-    .eq("student_id", user.id)
-    .eq("lesson_id", lesson.id)
-    .maybeSingle();
-
-  const completed = Boolean(progress?.completed);
-
-  const { count: completedCount } =
+  const { data: resourcesData } =
     await supabase
-      .from("lesson_progress")
-      .select("lesson_id", {
-        count: "exact",
-        head: true,
-      })
-      .eq("student_id", user.id)
-      .eq("course_id", course.id)
-      .eq("completed", true);
+      .from("lesson_resources")
+      .select(
+        "id, title, resource_type, url, sort_order"
+      )
+      .eq("lesson_id", lesson.id)
+      .order("sort_order")
+      .order("created_at");
 
-  const progressPercent =
-    enrollment?.progress_percent ??
-    (totalLessons > 0
-      ? Math.round(
-          ((completedCount || 0) /
-            totalLessons) *
-            100
-        )
-      : 0);
+  const resources =
+    (resourcesData as unknown as Resource[]) ||
+    [];
 
-  const { data: resources } = await supabase
-    .from("lesson_resources")
-    .select(
-      [
-        "id",
-        "lesson_id",
-        "title",
-        "resource_type",
-        "url",
-        "sort_order",
-      ].join(", ")
-    )
-    .eq("lesson_id", lesson.id)
-    .order("sort_order");
+  const sectionTitle =
+    currentIndex >= 0
+      ? curriculum[currentIndex]?.section_title
+      : course.category || "Course lesson";
 
-  const lessonResources =
-    (resources as Resource[] | null) || [];
+  const lessonNumber =
+    currentIndex >= 0
+      ? currentIndex + 1
+      : 1;
 
-  /*
-   * Record lesson viewing activity for enrolled
-   * learners. Activity logging is intentionally
-   * non-blocking so a database logging problem
-   * never prevents the lesson from loading.
-   */
-  if (enrollment) {
-    const { error: activityError } =
-      await supabase
-        .from("learning_activity")
-        .insert({
-          student_id: user.id,
-          course_id: course.id,
-          lesson_id: lesson.id,
-          activity_type: "lesson_viewed",
-          metadata: {
-            lesson_slug: lesson.slug,
-            section_id: lesson.section_id,
-          },
-        });
-
-    if (activityError) {
-      console.error(
-        "Lesson activity logging failed:",
-        activityError
-      );
-    }
-  }
-
-  const currentModule =
-    rows.find(
-      (row) => row.lesson_id === lesson.id
-    )?.section_title ||
-    "Course Module";
+  const totalDuration = formatDuration(
+    lesson.duration_minutes,
+    null
+  );
 
   return (
     <main className="rn-learning-shell">
@@ -328,45 +331,34 @@ export default async function LessonPage({
             </Link>
 
             <div className="rn-learning-breadcrumb">
-              <span>{currentModule}</span>
+              <span>{sectionTitle}</span>
               <span>·</span>
               <span>
-                Lesson {currentLessonNumber} of{" "}
+                Lesson {lessonNumber} of{" "}
                 {totalLessons}
               </span>
             </div>
           </div>
 
-          {enrollment ? (
-            <div className="rn-learning-progress-summary">
-              <span>Course progress</span>
+          <div className="rn-learning-progress-summary">
+            <span>Course progress</span>
+            <strong>{courseProgress}%</strong>
 
-              <strong>
-                {progressPercent}%
-              </strong>
-            </div>
-          ) : (
-            <span className="rn-preview-pill">
-              Free Preview
-            </span>
-          )}
+            {lesson.is_preview ? (
+              <span className="rn-preview-pill">
+                Preview
+              </span>
+            ) : null}
+          </div>
         </div>
 
-        {enrollment ? (
-          <div className="rn-learning-progress-track">
-            <div
-              style={{
-                width: `${Math.min(
-                  100,
-                  Math.max(
-                    0,
-                    progressPercent
-                  )
-                )}%`,
-              }}
-            />
-          </div>
-        ) : null}
+        <div className="rn-learning-progress-track">
+          <div
+            style={{
+              width: `${courseProgress}%`,
+            }}
+          />
+        </div>
 
         <div className="rn-learning-layout">
           <aside className="rn-learning-sidebar">
@@ -379,105 +371,111 @@ export default async function LessonPage({
             </div>
 
             <div className="rn-learning-sidebar-list">
-              {rows.map((row, index) => (
-                <Link
-                  key={row.lesson_id}
-                  href={`/learn/${course.slug}/${row.lesson_slug}`}
-                  className={`rn-learning-sidebar-item ${
-                    row.lesson_id === lesson.id
-                      ? "is-active"
-                      : ""
-                  }`}
-                >
-                  <span className="rn-learning-sidebar-number">
-                    {row.lesson_id === lesson.id
-                      ? "•"
-                      : String(index + 1).padStart(
-                          2,
-                          "0"
-                        )}
-                  </span>
+              {curriculum.map(
+                (row, index) => {
+                  const completed =
+                    completedLessonIds.has(
+                      row.lesson_id
+                    );
 
-                  <span className="rn-learning-sidebar-copy">
-                    <strong>
-                      {row.lesson_title}
-                    </strong>
+                  const active =
+                    row.lesson_slug ===
+                    lesson.slug;
 
-                    <small>
-                      {row.section_title}
-                    </small>
-                  </span>
-                </Link>
-              ))}
+                  return (
+                    <Link
+                      key={row.lesson_id}
+                      href={`/learn/${course.slug}/${row.lesson_slug}`}
+                      className={`rn-learning-sidebar-item ${
+                        active
+                          ? "is-active"
+                          : ""
+                      }`}
+                    >
+                      <span className="rn-learning-sidebar-number">
+                        {completed
+                          ? "✓"
+                          : String(
+                              index + 1
+                            ).padStart(
+                              2,
+                              "0"
+                            )}
+                      </span>
+
+                      <span className="rn-learning-sidebar-copy">
+                        <strong>
+                          {row.lesson_title}
+                        </strong>
+
+                        <small>
+                          {row.section_title}
+
+                          {row.is_preview
+                            ? " · Preview"
+                            : ""}
+                        </small>
+                      </span>
+                    </Link>
+                  );
+                }
+              )}
             </div>
 
             <Link
               href={`/courses/${course.slug}`}
               className="rn-learning-course-link"
             >
-              View full course
+              View full course →
             </Link>
           </aside>
 
           <article className="rn-learning-content">
             <header className="rn-learning-content-header">
               <div className="rn-course-meta-row">
-                <span>
-                  {course.category ||
-                    "Professional Learning"}
+                <span className="badge">
+                  {lesson.is_preview
+                    ? "Preview"
+                    : "Course lesson"}
                 </span>
 
-                <span>
-                  {course.level
-                    .charAt(0)
-                    .toUpperCase() +
-                    course.level.slice(1)}
-                </span>
-
-                {lesson.is_preview ? (
-                  <span>Preview</span>
+                {formatLevel(course.level) ? (
+                  <span>
+                    {formatLevel(course.level)}
+                  </span>
                 ) : null}
 
-                {formatDuration(
-                  lesson.duration_minutes,
-                  lesson.duration_seconds
-                ) ? (
-                  <span>
-                    {formatDuration(
-                      lesson.duration_minutes,
-                      lesson.duration_seconds
-                    )}
-                  </span>
+                {totalDuration ? (
+                  <span>{totalDuration}</span>
                 ) : null}
               </div>
 
               <span className="rn-eyebrow">
-                {currentModule}
+                {sectionTitle}
               </span>
 
               <h1>{lesson.title}</h1>
 
               <p className="rn-learning-intro">
-                Lesson {currentLessonNumber} of{" "}
+                Lesson {lessonNumber} of{" "}
                 {totalLessons}
-                {completed
-                  ? " · Completed"
-                  : ""}
               </p>
             </header>
 
             {lesson.video_url ? (
-              <section className="rn-learning-video">
+              <div className="rn-learning-video">
                 <div>
                   <span className="rn-eyebrow">
-                    VIDEO
+                    VIDEO LESSON
                   </span>
 
-                  <h2>Lesson video</h2>
+                  <h2>
+                    Watch the lesson video
+                  </h2>
 
                   <p>
-                    Open the lesson video in a new
-                    tab.
+                    Review the video before
+                    completing this lesson.
                   </p>
                 </div>
 
@@ -487,20 +485,19 @@ export default async function LessonPage({
                   rel="noopener noreferrer"
                   className="rn-button rn-button-primary"
                 >
-                  Open Video
+                  Watch video
                 </a>
-              </section>
+              </div>
             ) : null}
 
-            <section className="rn-learning-article">
-              <div
-                dangerouslySetInnerHTML={{
-                  __html:
-                    lesson.content_html ||
-                    "<p>Lesson content is being prepared.</p>",
-                }}
-              />
-            </section>
+            <div
+              className="rn-learning-article"
+              dangerouslySetInnerHTML={{
+                __html:
+                  lesson.content_html ||
+                  "<p>No lesson content is available yet.</p>",
+              }}
+            />
 
             <section className="rn-learning-practice-panel">
               <div>
@@ -508,22 +505,19 @@ export default async function LessonPage({
                   PRACTICAL APPLICATION
                 </span>
 
-                <h2>
-                  Apply what you learned
-                </h2>
+                <h2>Apply what you learned</h2>
 
                 <p>
-                  Review the concepts in this lesson
-                  and apply them to a realistic
-                  professional situation before moving
-                  to the next lesson.
+                  Review the lesson concepts and
+                  apply them to a realistic
+                  professional situation before
+                  moving to the next lesson.
                 </p>
               </div>
 
               <div className="rn-learning-practice-grid">
                 <div>
                   <strong>01</strong>
-
                   <span>
                     Identify the key concept
                   </span>
@@ -531,7 +525,6 @@ export default async function LessonPage({
 
                 <div>
                   <strong>02</strong>
-
                   <span>
                     Apply it to a real scenario
                   </span>
@@ -539,7 +532,6 @@ export default async function LessonPage({
 
                 <div>
                   <strong>03</strong>
-
                   <span>
                     Review your result
                   </span>
@@ -547,20 +539,20 @@ export default async function LessonPage({
               </div>
             </section>
 
-            {lessonResources.length > 0 ? (
+            {resources.length > 0 ? (
               <section className="rn-learning-resources">
                 <div className="rn-learning-section-heading">
                   <span className="rn-eyebrow">
-                    RESOURCES
+                    LEARNING RESOURCES
                   </span>
 
                   <h2>
-                    Lesson resources
+                    Resources for this lesson
                   </h2>
                 </div>
 
                 <div className="rn-resource-list">
-                  {lessonResources.map(
+                  {resources.map(
                     (resource) => (
                       <a
                         key={resource.id}
@@ -570,7 +562,9 @@ export default async function LessonPage({
                         className="rn-resource-item"
                       >
                         <span className="rn-resource-icon">
-                          ↗
+                          {getResourceIcon(
+                            resource.resource_type
+                          )}
                         </span>
 
                         <span>
@@ -596,53 +590,59 @@ export default async function LessonPage({
             ) : null}
 
             {enrollment ? (
-              <section className="rn-learning-completion">
+              <section
+                className={
+                  currentCompleted
+                    ? "rn-learning-completion"
+                    : "rn-learning-completion"
+                }
+              >
                 <div>
                   <span className="rn-eyebrow">
                     LESSON STATUS
                   </span>
 
                   <h2>
-                    {completed
+                    {currentCompleted
                       ? "Lesson completed"
                       : "Ready to complete this lesson?"}
                   </h2>
 
                   <p>
-                    {completed
-                      ? "Your progress has been saved. Continue to the next lesson or review the course curriculum."
+                    {currentCompleted
+                      ? "You have already completed this lesson. Continue to the next lesson or review the material."
                       : "Mark this lesson complete after reviewing the material and completing the practical work."}
                   </p>
                 </div>
 
-                {!completed ? (
+                {currentCompleted ? (
+                  <span className="rn-learning-completed-badge">
+                    ✓ Completed
+                  </span>
+                ) : (
                   <CompleteLessonButton
                     lessonId={lesson.id}
                     courseId={course.id}
                     studentId={user.id}
                   />
-                ) : (
-                  <div className="rn-learning-completed-badge">
-                    ✓ Completed
-                  </div>
                 )}
               </section>
-            ) : (
+            ) : lesson.is_preview ? (
               <section className="rn-learning-preview-cta">
                 <div>
                   <span className="rn-eyebrow">
-                    COURSE PREVIEW
+                    PREVIEW LESSON
                   </span>
 
                   <h2>
-                    Continue learning with the
-                    complete course
+                    Continue with the full course
                   </h2>
 
                   <p>
-                    This lesson is available as a free
-                    preview. Enroll from the course page
-                    to access the full learning path.
+                    This is a preview lesson.
+                    Enroll to unlock the remaining
+                    course content and track your
+                    learning progress.
                   </p>
                 </div>
 
@@ -650,10 +650,10 @@ export default async function LessonPage({
                   href={`/courses/${course.slug}`}
                   className="rn-button rn-button-primary"
                 >
-                  View Course
+                  View course
                 </Link>
               </section>
-            )}
+            ) : null}
 
             <nav className="rn-learning-navigation">
               {previousLesson ? (
@@ -668,7 +668,16 @@ export default async function LessonPage({
                   </strong>
                 </Link>
               ) : (
-                <div />
+                <Link
+                  href={`/courses/${course.slug}`}
+                  className="rn-learning-nav-card"
+                >
+                  <span>← Course</span>
+
+                  <strong>
+                    Back to course
+                  </strong>
+                </Link>
               )}
 
               {nextLesson ? (
@@ -687,7 +696,7 @@ export default async function LessonPage({
                   href={`/courses/${course.slug}`}
                   className="rn-learning-nav-card is-next"
                 >
-                  <span>Course complete →</span>
+                  <span>Course complete</span>
 
                   <strong>
                     Return to course
