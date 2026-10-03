@@ -16,15 +16,21 @@ function getCourseVisual(course: Course) {
   const value =
     `${course.slug} ${course.title} ${course.category ?? ""}`.toLowerCase();
 
+  /*
+   * Specific categories come first.
+   * This prevents "digital" from matching "ai".
+   */
+
   if (
-    value.includes("ai") ||
-    value.includes("artificial intelligence") ||
-    value.includes("automation")
+    value.includes("marketing") ||
+    value.includes("content") ||
+    value.includes("social media") ||
+    value.includes("digital marketing")
   ) {
     return {
-      className: "course-art course-art-ai",
-      icon: "✦",
-      label: "AI & Technology",
+      className: "course-art course-art-marketing",
+      icon: "◈",
+      label: "Digital Marketing",
     };
   }
 
@@ -39,18 +45,6 @@ function getCourseVisual(course: Course) {
       className: "course-art course-art-data",
       icon: "▥",
       label: "Data & Analytics",
-    };
-  }
-
-  if (
-    value.includes("marketing") ||
-    value.includes("content") ||
-    value.includes("social media")
-  ) {
-    return {
-      className: "course-art course-art-marketing",
-      icon: "◈",
-      label: "Digital Marketing",
     };
   }
 
@@ -103,6 +97,20 @@ function getCourseVisual(course: Course) {
     };
   }
 
+  const hasAi =
+    /\bai\b/.test(value) ||
+    value.includes("artificial intelligence") ||
+    value.includes("automation") ||
+    value.includes("prompt engineering");
+
+  if (hasAi) {
+    return {
+      className: "course-art course-art-ai",
+      icon: "✦",
+      label: "AI & Technology",
+    };
+  }
+
   return {
     className: "course-art course-art-default",
     icon: "R",
@@ -113,7 +121,7 @@ function getCourseVisual(course: Course) {
 export default async function HomePage() {
   const supabase = await createClient();
 
-  const { data: courses } = await supabase
+  const { data, error } = await supabase
     .from("courses")
     .select(
       "id, title, slug, short_description, category, is_free, level, thumbnail_url"
@@ -121,6 +129,12 @@ export default async function HomePage() {
     .eq("status", "published")
     .order("published_at", { ascending: false })
     .limit(6);
+
+  if (error) {
+    console.error("Failed to load featured courses:", error);
+  }
+
+  const courses: Course[] = (data ?? []) as unknown as Course[];
 
   return (
     <>
@@ -171,9 +185,7 @@ export default async function HomePage() {
         <div className="container">
           <div className="section-heading">
             <div>
-              <div className="rn-brand-kicker">
-                Learning library
-              </div>
+              <div className="rn-brand-kicker">Learning library</div>
 
               <h2>Featured courses</h2>
             </div>
@@ -183,7 +195,7 @@ export default async function HomePage() {
             </Link>
           </div>
 
-          {!courses?.length ? (
+          {!courses.length ? (
             <div className="rn-empty-state">
               <div className="rn-empty-icon">▦</div>
 
@@ -218,6 +230,7 @@ export default async function HomePage() {
                       ) : (
                         <div className={visual.className}>
                           <div className="course-art-grid" />
+
                           <div className="course-art-glow" />
 
                           <div className="course-art-content">
@@ -231,7 +244,9 @@ export default async function HomePage() {
                           </div>
 
                           <div className="course-art-decoration course-art-decoration-one" />
+
                           <div className="course-art-decoration course-art-decoration-two" />
+
                           <div className="course-art-decoration course-art-decoration-three" />
                         </div>
                       )}
@@ -314,15 +329,17 @@ export default async function HomePage() {
 
               <div className="rn-founder-name">
                 <strong>Hassan Zakariya</strong>
-                <span>Founder & CEO · RuffNeck Entertainment</span>
+                <span>
+                  Founder & CEO · RuffNeck Entertainment
+                </span>
               </div>
 
               <p>
-                Hassan Zakariya is an IT & Operations Administration Specialist,
-                AI Technical Content Writer, and Certified AI Fluency
-                Professional with experience across IT operations, logistics,
-                data systems, AI, digital business support, and professional
-                training.
+                Hassan Zakariya is an IT & Operations Administration
+                Specialist, AI Technical Content Writer, and Certified AI
+                Fluency Professional with experience across IT operations,
+                logistics, data systems, AI, digital business support, and
+                professional training.
               </p>
 
               <p>
