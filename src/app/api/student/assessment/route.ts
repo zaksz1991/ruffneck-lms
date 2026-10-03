@@ -1,9 +1,48 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-type SubmittedAnswers = Record<string, string>;
+type QuestionRow = {
+  id: string;
+  course_id: string;
+  skill_id: string;
+  question: string | null;
+  question_text: string | null;
+  correct_answer: string;
+  explanation: string | null;
+  difficulty: string | null;
+  sort_order: number;
+};
 
-export async function POST(request: Request) {
+type Skill = {
+  id: string;
+  name: string;
+};
+
+type AnswerMap = Record<string, string>;
+
+function normalizeAnswer(value: unknown) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.trim();
+}
+
+function getSkillLevel(score: number) {
+  if (score >= 80) {
+    return "advanced";
+  }
+
+  if (score >= 50) {
+    return "intermediate";
+  }
+
+  return "beginner";
+}
+
+export async function POST(
+  request: Request
+) {
   const supabase = await createClient();
 
   const {
@@ -12,316 +51,358 @@ export async function POST(request: Request) {
 
   if (!user) {
     return NextResponse.json(
-      { error: "You must be logged in." },
+      { error: "Authentication required." },
       { status: 401 }
     );
   }
 
+  let body: {
+    courseId?: string;
+    answers?: AnswerMap;
+  };
+
   try {
-    const body = await request.json();
-
-    const courseId =
-      typeof body?.courseId === "string"
-        ? body.courseId
-        : null;
-
-    const answers: SubmittedAnswers =
-      body?.answers &&
-      typeof body.answers === "object" &&
-      !Array.isArray(body.answers)
-        ? body.answers
-        : {};
-
-    if (!courseId) {
-      return NextResponse.json(
-        { error: "Course ID is required." },
-        { status: 400 }
-      );
-    }
-
-    if (Object.keys(answers).length === 0) {
-      return NextResponse.json(
-        { error: "No assessment answers were submitted." },
-        { status: 400 }
-      );
-    }
-
-    const { data: questions, error: questionsError } =
-      await supabase
-        .from("assessment_questions")
-        .select(
-          `
-            id,
-            skill_id,
-            question,
-            correct_answer,
-            difficulty,
-            sort_order
-          `
-        )
-        .eq("course_id", courseId)
-        .order("sort_order", { ascending: true });
-
-    if (questionsError) {
-      console.error(
-        "Assessment question lookup failed:",
-        questionsError
-      );
-
-      return NextResponse.json(
-        { error: "Unable to load assessment questions." },
-        { status: 500 }
-      );
-    }
-
-    if (!questions?.length) {
-      return NextResponse.json(
-        { error: "No assessment questions were found." },
-        { status: 404 }
-      );
-    }
-
-    const submittedQuestionIds = Object.keys(answers);
-
-    const validQuestionIds = new Set(
-      questions.map((question) => question.id)
+    body =
+      (await request.json()) as {
+        courseId?: string;
+        answers?: AnswerMap;
+      };
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid request body." },
+      { status: 400 }
     );
+  }
 
-    const hasInvalidQuestion = submittedQuestionIds.some(
-      (id) => !validQuestionIds.has(id)
+  const courseId = body.courseId;
+
+  const answers =
+    body.answers &&
+    typeof body.answers === "object"
+      ? body.answers
+      : null;
+
+  if (!courseId || !answers) {
+    return NextResponse.json(
+      {
+        error:
+          "Course and answers are required.",
+      },
+      { status: 400 }
     );
+  }
 
-    if (hasInvalidQuestion) {
-      return NextResponse.json(
-        { error: "The submitted assessment contains an invalid question." },
-        { status: 400 }
-      );
-    }
-
-    if (submittedQuestionIds.length !== questions.length) {
-      return NextResponse.json(
-        { error: "Please answer all assessment questions." },
-        { status: 400 }
-      );
-    }
-
-    const skillIds = Array.from(
-      new Set(
-        questions
-          .map((question) => question.skill_id)
-          .filter((id): id is string => Boolean(id))
+  const { data: enrollmentData } =
+    await supabase
+      .from("enrollments")
+      .select(
+        "id, enrollment_status, payment_status"
       )
-    );
+      .eq("student_id", user.id)
+      .eq("course_id", courseId)
+      .in("enrollment_status", [
+        "active",
+        "completed",
+      ])
+      .maybeSingle();
 
-    const { data: skills, error: skillsError } = await supabase
+  if (!enrollmentData) {
+    return NextResponse.json(
+      {
+        error:
+          "You must be enrolled in this course before taking its assessment.",
+      },
+      { status: 403 }
+    );
+  }
+
+  const { data: questionData } =
+    await supabase
+      .from("assessment_questions")
+      .select(
+        [
+          "id",
+          "course_id",
+          "skill_id",
+          "question",
+          "question_text",
+          "correct_answer",
+          "explanation",
+          "difficulty",
+          "sort_order",
+        ].join(", ")
+      )
+      .eq("course_id", courseId)
+      .order("sort_order");
+
+  const questions =
+    (questionData as unknown as QuestionRow[]) ||
+    [];
+
+  if (questions.length === 0) {
+    return NextResponse.json(
+      {
+        error:
+          "No assessment questions exist for this course.",
+      },
+      { status: 404 }
+    );
+  }
+
+  const answerKeys = Object.keys(
+    answers
+  );
+
+  if (
+    answerKeys.length !==
+    questions.length
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "All assessment questions must be answered.",
+      },
+      { status: 400 }
+    );
+  }
+
+  const validQuestionIds = new Set(
+    questions.map((question) => question.id)
+  );
+
+  for (const questionId of answerKeys) {
+    if (!validQuestionIds.has(questionId)) {
+      return NextResponse.json(
+        {
+          error:
+            "The submitted assessment contains an invalid question.",
+        },
+        { status: 400 }
+      );
+    }
+  }
+
+  const skillIds = Array.from(
+    new Set(
+      questions.map(
+        (question) => question.skill_id
+      )
+    )
+  );
+
+  const { data: skillData } =
+    await supabase
       .from("learning_skills")
-      .select("id, name, slug")
+      .select("id, name")
       .in("id", skillIds);
 
-    if (skillsError) {
-      console.error(
-        "Assessment skill lookup failed:",
-        skillsError
-      );
+  const skills =
+    (skillData as unknown as Skill[]) || [];
 
-      return NextResponse.json(
-        { error: "Unable to load assessment skills." },
-        { status: 500 }
-      );
+  const skillMap = new Map(
+    skills.map((skill) => [
+      skill.id,
+      skill,
+    ])
+  );
+
+  const skillStats = new Map<
+    string,
+    {
+      correct: number;
+      total: number;
     }
+  >();
 
-    const skillMap = new Map(
-      (skills || []).map((skill) => [skill.id, skill])
-    );
+  let totalCorrect = 0;
 
-    let correct = 0;
+  const answerRows = questions.map(
+    (question) => {
+      const submitted =
+        normalizeAnswer(
+          answers[question.id]
+        );
 
-    const skillStats = new Map<
-      string,
-      {
-        skillName: string;
-        correct: number;
-        total: number;
-      }
-    >();
+      const correctAnswer =
+        normalizeAnswer(
+          question.correct_answer
+        );
 
-    const answerRows = questions.map((question) => {
-      const submittedAnswer = answers[question.id] ?? "";
       const isCorrect =
-        submittedAnswer === question.correct_answer;
+        submitted === correctAnswer;
 
       if (isCorrect) {
-        correct += 1;
+        totalCorrect += 1;
       }
 
-      if (question.skill_id) {
-        const skill = skillMap.get(question.skill_id);
+      const existing =
+        skillStats.get(
+          question.skill_id
+        ) || {
+          correct: 0,
+          total: 0,
+        };
 
-        if (skill) {
-          const existing = skillStats.get(question.skill_id);
+      existing.total += 1;
 
-          if (existing) {
-            existing.total += 1;
-
-            if (isCorrect) {
-              existing.correct += 1;
-            }
-          } else {
-            skillStats.set(question.skill_id, {
-              skillName: skill.name,
-              correct: isCorrect ? 1 : 0,
-              total: 1,
-            });
-          }
-        }
+      if (isCorrect) {
+        existing.correct += 1;
       }
+
+      skillStats.set(
+        question.skill_id,
+        existing
+      );
 
       return {
         question_id: question.id,
-        answer: submittedAnswer,
+        answer: submitted,
         is_correct: isCorrect,
       };
-    });
-
-    const total = questions.length;
-    const score = Math.round((correct / total) * 100);
-
-    const { data: attempt, error: attemptError } =
-      await supabase
-        .from("assessment_attempts")
-        .insert({
-          student_id: user.id,
-          course_id: courseId,
-          score,
-          total_questions: total,
-          completed_at: new Date().toISOString(),
-        })
-        .select("id")
-        .single();
-
-    if (attemptError || !attempt) {
-      console.error(
-        "Assessment attempt insert failed:",
-        attemptError
-      );
-
-      return NextResponse.json(
-        { error: "Unable to save your assessment result." },
-        { status: 500 }
-      );
     }
+  );
 
-    const assessmentAnswers = answerRows.map((answer) => ({
-      attempt_id: attempt.id,
+  const score = Math.round(
+    (totalCorrect / questions.length) *
+      100
+  );
+
+  const { data: attemptData, error: attemptError } =
+    await supabase
+      .from("assessment_attempts")
+      .insert({
+        student_id: user.id,
+        course_id: courseId,
+        score,
+        total_questions:
+          questions.length,
+        completed_at:
+          new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+  if (attemptError || !attemptData) {
+    return NextResponse.json(
+      {
+        error:
+          attemptError?.message ||
+          "Unable to save assessment attempt.",
+      },
+      { status: 500 }
+    );
+  }
+
+  const assessmentAnswerRows =
+    answerRows.map((answer) => ({
+      attempt_id: attemptData.id,
       question_id: answer.question_id,
       answer: answer.answer,
       is_correct: answer.is_correct,
     }));
 
-    const { error: answersError } = await supabase
+  const { error: answersError } =
+    await supabase
       .from("assessment_answers")
-      .insert(assessmentAnswers);
+      .insert(assessmentAnswerRows);
 
-    if (answersError) {
-      console.error(
-        "Assessment answers insert failed:",
-        answersError
-      );
-
-      return NextResponse.json(
-        { error: "Unable to save your assessment answers." },
-        { status: 500 }
-      );
-    }
-
-    const skillResults = Array.from(skillStats.entries()).map(
-      ([skillId, stats]) => {
-        const percentage = Math.round(
-          (stats.correct / stats.total) * 100
-        );
-
-        let level = "beginner";
-
-        if (percentage >= 80) {
-          level = "advanced";
-        } else if (percentage >= 50) {
-          level = "intermediate";
-        }
-
-        return {
-          skillId,
-          skillName: stats.skillName,
-          correct: stats.correct,
-          total: stats.total,
-          percentage,
-          level,
-        };
-      }
-    );
-
-    for (const skill of skillResults) {
-      const { error: profileError } = await supabase
-        .from("learner_skill_profiles")
-        .upsert(
-          {
-            student_id: user.id,
-            skill_id: skill.skillId,
-            confidence_score: skill.percentage,
-            skill_level: skill.level,
-            evidence: `Diagnostic assessment: ${skill.correct}/${skill.total} correct.`,
-            strengths:
-              skill.percentage >= 80
-                ? `Strong performance in ${skill.skillName}.`
-                : null,
-            gaps:
-              skill.percentage < 50
-                ? `Further learning recommended in ${skill.skillName}.`
-                : null,
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: "student_id,skill_id",
-          }
-        );
-
-      if (profileError) {
-        console.error(
-          `Skill profile update failed for ${skill.skillName}:`,
-          profileError
-        );
-      }
-    }
-
-    await supabase.from("learning_activity").insert({
-      student_id: user.id,
-      course_id: courseId,
-      activity_type: "diagnostic_assessment_completed",
-      metadata: {
-        attempt_id: attempt.id,
-        score,
-        correct,
-        total,
-      },
-    });
-
-    return NextResponse.json({
-      success: true,
-      result: {
-        score,
-        correct,
-        total,
-        skillResults,
-      },
-    });
-  } catch (error) {
-    console.error("Assessment submission error:", error);
-
+  if (answersError) {
     return NextResponse.json(
       {
         error:
-          "Something went wrong while processing the assessment.",
+          answersError.message ||
+          "Unable to save assessment answers.",
       },
       { status: 500 }
     );
   }
+
+  const skillResults = [];
+
+  for (const [
+    skillId,
+    stats,
+  ] of skillStats.entries()) {
+    const skillScore = Math.round(
+      (stats.correct / stats.total) *
+        100
+    );
+
+    const level =
+      getSkillLevel(skillScore);
+
+    const skill = skillMap.get(skillId);
+
+    if (!skill) {
+      continue;
+    }
+
+    const { error: profileError } =
+      await supabase
+        .from("learner_skill_profiles")
+        .upsert(
+          {
+            student_id: user.id,
+            skill_id: skillId,
+            confidence_score: skillScore,
+            skill_level: level,
+            updated_at:
+              new Date().toISOString(),
+          },
+          {
+            onConflict:
+              "student_id,skill_id",
+          }
+        );
+
+    if (profileError) {
+      console.error(
+        "Skill profile update failed:",
+        profileError
+      );
+    }
+
+    skillResults.push({
+      id: skill.id,
+      name: skill.name,
+      score: skillScore,
+      correct: stats.correct,
+      total: stats.total,
+      level,
+    });
+  }
+
+  const { error: activityError } =
+    await supabase
+      .from("learning_activity")
+      .insert({
+        student_id: user.id,
+        course_id: courseId,
+        activity_type:
+          "assessment_completed",
+        metadata: {
+          score,
+          total_questions:
+            questions.length,
+          correct_answers: totalCorrect,
+        },
+      });
+
+  if (activityError) {
+    console.error(
+      "Assessment activity logging failed:",
+      activityError
+    );
+  }
+
+  skillResults.sort(
+    (a, b) => b.score - a.score
+  );
+
+  return NextResponse.json({
+    score,
+    correctAnswers: totalCorrect,
+    totalQuestions: questions.length,
+    skills: skillResults,
+  });
 }

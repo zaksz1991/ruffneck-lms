@@ -1,97 +1,118 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
+import Link from "next/link";
 
 type Question = {
   id: string;
   question: string;
-  questionType: string;
   options: string[];
+  explanation?: string | null;
   difficulty: string;
-  sortOrder: number;
-  skillId: string | null;
 };
 
-type Props = {
-  courseId: string;
-  courseTitle: string;
-  questions: Question[];
-};
-
-type Result = {
+type SkillResult = {
+  id: string;
+  name: string;
   score: number;
   correct: number;
   total: number;
-  skillResults: {
-    skillName: string;
-    correct: number;
-    total: number;
-    percentage: number;
-    level: string;
-  }[];
+  level: string;
+};
+
+type AssessmentResult = {
+  score: number;
+  correctAnswers: number;
+  totalQuestions: number;
+  skills: SkillResult[];
 };
 
 export default function AssessmentClient({
   courseId,
   courseTitle,
   questions,
-}: Props) {
-  const router = useRouter();
+}: {
+  courseId: string;
+  courseTitle: string;
+  questions: Question[];
+}) {
+  const [currentIndex, setCurrentIndex] =
+    useState(0);
 
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<Result | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [answers, setAnswers] =
+    useState<Record<string, string>>({});
 
-  const currentQuestion = questions[currentIndex];
+  const [submitting, setSubmitting] =
+    useState(false);
 
-  const answeredCount = useMemo(
-    () => Object.keys(answers).length,
-    [answers]
-  );
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const [result, setResult] =
+    useState<AssessmentResult | null>(null);
+
+  const question = questions[currentIndex];
+
+  const selectedAnswer =
+    answers[question.id];
+
+  const answeredCount =
+    Object.keys(answers).length;
 
   const progress = Math.round(
-    ((currentIndex + 1) / questions.length) * 100
+    ((currentIndex + 1) /
+      questions.length) *
+      100
   );
 
   function selectAnswer(answer: string) {
     setAnswers((previous) => ({
       ...previous,
-      [currentQuestion.id]: answer,
+      [question.id]: answer,
     }));
 
     setError(null);
   }
 
-  function nextQuestion() {
-    if (!answers[currentQuestion.id]) {
-      setError("Please select an answer before continuing.");
-      return;
-    }
-
-    if (currentIndex < questions.length - 1) {
-      setCurrentIndex((previous) => previous + 1);
-      setError(null);
-      return;
-    }
-
-    submitAssessment();
+  function previous() {
+    setCurrentIndex((value) =>
+      Math.max(0, value - 1)
+    );
   }
 
-  function previousQuestion() {
-    if (currentIndex > 0) {
-      setCurrentIndex((previous) => previous - 1);
-      setError(null);
+  function next() {
+    if (!selectedAnswer) {
+      setError(
+        "Select an answer before continuing."
+      );
+      return;
     }
+
+    setCurrentIndex((value) =>
+      Math.min(
+        questions.length - 1,
+        value + 1
+      )
+    );
+
+    setError(null);
   }
 
   async function submitAssessment() {
-    if (submitting) return;
+    if (!selectedAnswer) {
+      setError(
+        "Select an answer before submitting."
+      );
+      return;
+    }
 
-    if (Object.keys(answers).length !== questions.length) {
-      setError("Please answer all questions before submitting.");
+    if (
+      Object.keys(answers).length !==
+      questions.length
+    ) {
+      setError(
+        `Please answer all ${questions.length} questions before submitting.`
+      );
       return;
     }
 
@@ -99,158 +120,234 @@ export default function AssessmentClient({
     setError(null);
 
     try {
-      const response = await fetch("/api/student/assessment", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "same-origin",
-        body: JSON.stringify({
-          courseId,
-          answers,
-        }),
-      });
+      const response = await fetch(
+        "/api/student/assessment",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            courseId,
+            answers,
+          }),
+        }
+      );
 
-      const data = await response.json().catch(() => null);
+      const data =
+        (await response.json()) as
+          | AssessmentResult
+          | { error?: string };
 
       if (!response.ok) {
-        setError(
-          data?.error ||
-            "The assessment could not be submitted. Please try again."
+        throw new Error(
+          "error" in data && data.error
+            ? data.error
+            : "Unable to submit assessment."
         );
-        return;
       }
 
-      setResult(data.result);
-    } catch {
+      setResult(
+        data as AssessmentResult
+      );
+    } catch (submitError) {
       setError(
-        "Unable to connect to the assessment service. Please try again."
+        submitError instanceof Error
+          ? submitError.message
+          : "Unable to submit assessment."
       );
     } finally {
       setSubmitting(false);
     }
   }
 
+  function restart() {
+    setCurrentIndex(0);
+    setAnswers({});
+    setResult(null);
+    setError(null);
+  }
+
   if (result) {
     return (
-      <div className="rn-assessment-result">
+      <section className="rn-assessment-result">
         <div className="rn-result-hero">
-          <span className="rn-eyebrow">Assessment complete</span>
-          <h2>Your learning profile has been updated</h2>
+          <span className="rn-eyebrow">
+            ASSESSMENT COMPLETE
+          </span>
+
+          <h2>
+            {courseTitle}
+          </h2>
 
           <div className="rn-score-circle">
-            <strong>{result.score}%</strong>
+            <strong>
+              {result.score}%
+            </strong>
+
             <span>Overall score</span>
           </div>
 
           <p>
-            You answered <strong>{result.correct}</strong> of{" "}
-            <strong>{result.total}</strong> questions correctly.
+            You answered{" "}
+            <strong>
+              {result.correctAnswers}
+            </strong>{" "}
+            of{" "}
+            <strong>
+              {result.totalQuestions}
+            </strong>{" "}
+            questions correctly.
           </p>
         </div>
 
-        <section className="rn-skill-results">
-          <div className="rn-section-heading">
-            <div>
-              <span className="rn-eyebrow">Skill analysis</span>
-              <h2>Your current skill profile</h2>
-            </div>
+        <div className="rn-skill-results">
+          <div className="rn-assessment-section-heading">
+            <span className="rn-eyebrow">
+              SKILL ANALYSIS
+            </span>
+
+            <h2>
+              Your assessed skills
+            </h2>
+
+            <p>
+              Your results are mapped to the skills
+              covered by this course.
+            </p>
           </div>
 
           <div className="rn-skill-result-grid">
-            {result.skillResults.map((skill) => (
-              <article
-                className="rn-skill-result-card"
-                key={skill.skillName}
-              >
-                <div className="rn-skill-result-top">
-                  <strong>{skill.skillName}</strong>
-                  <span>{skill.level}</span>
-                </div>
+            {result.skills.map(
+              (skill) => (
+                <article
+                  key={skill.id}
+                  className="rn-skill-result-card"
+                >
+                  <div className="rn-skill-result-header">
+                    <div>
+                      <strong>
+                        {skill.name}
+                      </strong>
 
-                <div className="rn-skill-bar">
-                  <span
-                    style={{
-                      width: `${skill.percentage}%`,
-                    }}
-                  />
-                </div>
+                      <span>
+                        {skill.level
+                          .charAt(0)
+                          .toUpperCase() +
+                          skill.level.slice(
+                            1
+                          )}
+                      </span>
+                    </div>
 
-                <div className="rn-skill-result-meta">
-                  <span>
-                    {skill.correct}/{skill.total} correct
-                  </span>
-                  <span>{skill.percentage}%</span>
-                </div>
-              </article>
-            ))}
+                    <strong>
+                      {skill.score}%
+                    </strong>
+                  </div>
+
+                  <div className="rn-skill-bar">
+                    <div
+                      style={{
+                        width: `${skill.score}%`,
+                      }}
+                    />
+                  </div>
+
+                  <small>
+                    {skill.correct} of{" "}
+                    {skill.total} correct
+                  </small>
+                </article>
+              )
+            )}
           </div>
-        </section>
+        </div>
 
         <div className="rn-assessment-actions">
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => router.push("/student/dashboard")}
+          <Link
+            href="/student/skills"
+            className="rn-button rn-button-primary"
           >
-            Go to My Learning
-          </button>
+            View My Skills
+          </Link>
+
+          <Link
+            href="/student/dashboard"
+            className="rn-button rn-button-secondary"
+          >
+            My Dashboard
+          </Link>
 
           <button
             type="button"
-            className="btn btn-ghost"
-            onClick={() => router.push("/student/skills")}
+            className="rn-button rn-button-secondary"
+            onClick={restart}
           >
-            View My Skills
+            Retake Assessment
           </button>
         </div>
-      </div>
+      </section>
     );
   }
 
   return (
     <section className="rn-assessment-card">
       <div className="rn-assessment-progress-row">
-        <div>
-          <strong>
-            Question {currentIndex + 1} of {questions.length}
-          </strong>
-          <span>
-            {answeredCount} of {questions.length} answered
-          </span>
-        </div>
+        <span>
+          Question {currentIndex + 1} of{" "}
+          {questions.length}
+        </span>
 
-        <strong>{progress}%</strong>
+        <strong>
+          {answeredCount}/
+          {questions.length} answered
+        </strong>
       </div>
 
       <div className="rn-assessment-progress">
-        <span style={{ width: `${progress}%` }} />
+        <div
+          style={{
+            width: `${progress}%`,
+          }}
+        />
       </div>
 
-      <div className="rn-question">
-        <div className="rn-question-meta">
-          <span>Question {currentIndex + 1}</span>
-          <span>
-            {currentQuestion.difficulty.charAt(0).toUpperCase() +
-              currentQuestion.difficulty.slice(1)}
-          </span>
-        </div>
+      <div className="rn-question-meta">
+        <span>
+          {question.difficulty
+            .charAt(0)
+            .toUpperCase() +
+            question.difficulty.slice(1)}
+        </span>
 
-        <h2>{currentQuestion.question}</h2>
+        <span>
+          {currentIndex + 1}/
+          {questions.length}
+        </span>
+      </div>
 
-        <div className="rn-answer-list">
-          {currentQuestion.options.map((option) => {
+      <h2 className="rn-question">
+        {question.question}
+      </h2>
+
+      <div className="rn-answer-list">
+        {question.options.map(
+          (option, index) => {
             const selected =
-              answers[currentQuestion.id] === option;
+              selectedAnswer === option;
 
             return (
               <button
-                key={option}
+                key={`${question.id}-${index}`}
                 type="button"
                 className={`rn-answer-option ${
-                  selected ? "selected" : ""
+                  selected
+                    ? "is-selected"
+                    : ""
                 }`}
-                onClick={() => selectAnswer(option)}
+                onClick={() =>
+                  selectAnswer(option)
+                }
               >
                 <span className="rn-answer-radio">
                   {selected ? "✓" : ""}
@@ -259,43 +356,52 @@ export default function AssessmentClient({
                 <span>{option}</span>
               </button>
             );
-          })}
-        </div>
-
-        {error && (
-          <div className="error rn-assessment-error">
-            {error}
-          </div>
+          }
         )}
       </div>
+
+      {error ? (
+        <div className="error">
+          {error}
+        </div>
+      ) : null}
 
       <div className="rn-assessment-navigation">
         <button
           type="button"
-          className="btn btn-ghost"
-          onClick={previousQuestion}
-          disabled={currentIndex === 0 || submitting}
+          className="rn-button rn-button-secondary"
+          onClick={previous}
+          disabled={
+            currentIndex === 0 ||
+            submitting
+          }
         >
           Previous
         </button>
 
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={nextQuestion}
-          disabled={submitting}
-        >
-          {submitting
-            ? "Submitting…"
-            : currentIndex === questions.length - 1
-              ? "Submit Assessment"
-              : "Next Question"}
-        </button>
+        {currentIndex <
+        questions.length - 1 ? (
+          <button
+            type="button"
+            className="rn-button rn-button-primary"
+            onClick={next}
+            disabled={submitting}
+          >
+            Next
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="rn-button rn-button-primary"
+            onClick={submitAssessment}
+            disabled={submitting}
+          >
+            {submitting
+              ? "Submitting…"
+              : "Submit Assessment"}
+          </button>
+        )}
       </div>
-
-      <p className="rn-assessment-course">
-        Assessment: {courseTitle}
-      </p>
     </section>
   );
 }

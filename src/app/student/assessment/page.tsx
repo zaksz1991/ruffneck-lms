@@ -1,8 +1,102 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import AssessmentClient from "./AssessmentClient";
 
-export default async function AssessmentPage() {
+type Course = {
+  id: string;
+  title: string;
+  slug: string;
+  short_description: string | null;
+  category: string | null;
+  level: "beginner" | "intermediate" | "advanced";
+};
+
+type Enrollment = {
+  course_id: string;
+  progress_percent: number;
+  enrollment_status:
+    | "active"
+    | "completed"
+    | "cancelled";
+};
+
+type AssessmentQuestionRow = {
+  id: string;
+  course_id: string;
+  skill_id: string;
+  question: string | null;
+  question_text: string | null;
+  question_type: string | null;
+  options: unknown;
+  correct_answer: string;
+  explanation: string | null;
+  difficulty: string | null;
+  sort_order: number;
+};
+
+type AssessmentQuestion = {
+  id: string;
+  question: string;
+  options: string[];
+  correctAnswer?: string;
+  explanation?: string | null;
+  difficulty: string;
+};
+
+function normalizeOptions(
+  value: unknown
+): string[] {
+  if (Array.isArray(value)) {
+    return value.map(String);
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+
+      if (Array.isArray(parsed)) {
+        return parsed.map(String);
+      }
+    } catch {
+      // Fall through to delimiter handling.
+    }
+
+    return value
+      .split(/\r?\n|,/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  if (
+    value &&
+    typeof value === "object"
+  ) {
+    return Object.values(
+      value as Record<string, unknown>
+    ).map(String);
+  }
+
+  return [];
+}
+
+function formatLevel(level: string) {
+  return (
+    level.charAt(0).toUpperCase() +
+    level.slice(1)
+  );
+}
+
+export default async function AssessmentPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    course?: string;
+  }>;
+}) {
+  const { course: courseSlug } =
+    await searchParams;
+
   const supabase = await createClient();
 
   const {
@@ -10,121 +104,339 @@ export default async function AssessmentPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
+    redirect(
+      "/login?next=/student/assessment"
+    );
+  }
+
+  const { data: enrollmentData } =
+    await supabase
+      .from("enrollments")
+      .select(
+        "course_id, progress_percent, enrollment_status"
+      )
+      .eq("student_id", user.id)
+      .in("enrollment_status", [
+        "active",
+        "completed",
+      ]);
+
+  const enrollments =
+    (enrollmentData as unknown as Enrollment[]) ||
+    [];
+
+  const enrolledCourseIds = enrollments.map(
+    (item) => item.course_id
+  );
+
+  if (enrolledCourseIds.length === 0) {
     return (
-      <main className="container">
-        <div className="auth-box">
-          <h1>Diagnostic Assessment</h1>
-          <p>Please log in to continue.</p>
-          <Link href="/login" className="btn btn-primary">
-            Log in
-          </Link>
+      <main className="rn-assessment-hub">
+        <div className="container">
+          <section className="rn-assessment-info">
+            <span className="rn-eyebrow">
+              ASSESSMENTS
+            </span>
+
+            <h1>Course assessments</h1>
+
+            <p>
+              Enroll in a course to access its
+              assessment and build your learning
+              profile.
+            </p>
+
+            <Link
+              href="/courses"
+              className="rn-button rn-button-primary"
+            >
+              Explore Courses
+            </Link>
+          </section>
         </div>
       </main>
     );
   }
 
-  const { data: course } = await supabase
-    .from("courses")
-    .select("id, title, slug, short_description")
-    .eq("slug", "ai-literacy")
-    .maybeSingle();
+  /*
+   * No course selected:
+   * show the assessment catalogue.
+   */
+  if (!courseSlug) {
+    const { data: courseData } =
+      await supabase
+        .from("courses")
+        .select(
+          [
+            "id",
+            "title",
+            "slug",
+            "short_description",
+            "category",
+            "level",
+          ].join(", ")
+        )
+        .in("id", enrolledCourseIds)
+        .eq("status", "published")
+        .order("title");
 
-  if (!course) {
+    const courses =
+      (courseData as unknown as Course[]) || [];
+
     return (
-      <main className="container">
-        <div className="rn-empty-state">
-          <h1>Assessment unavailable</h1>
-          <p>The diagnostic assessment course could not be found.</p>
+      <main className="rn-assessment-hub">
+        <div className="container">
+          <section className="rn-assessment-hub-header">
+            <span className="rn-eyebrow">
+              LEARNING ASSESSMENTS
+            </span>
+
+            <h1>Choose your course assessment</h1>
+
+            <p>
+              Assess your knowledge, identify skill
+              strengths and find areas to develop.
+              Each assessment is aligned with the
+              course curriculum.
+            </p>
+          </section>
+
+          <section className="rn-assessment-course-grid">
+            {courses.map((course) => {
+              const enrollment =
+                enrollments.find(
+                  (item) =>
+                    item.course_id === course.id
+                );
+
+              return (
+                <article
+                  key={course.id}
+                  className="rn-assessment-course-card"
+                >
+                  <div className="rn-assessment-course-top">
+                    <span className="rn-eyebrow">
+                      {course.category ||
+                        "PROFESSIONAL LEARNING"}
+                    </span>
+
+                    <span className="rn-assessment-level">
+                      {formatLevel(
+                        course.level
+                      )}
+                    </span>
+                  </div>
+
+                  <h2>{course.title}</h2>
+
+                  <p>
+                    {course.short_description ||
+                      "Assess the knowledge and practical skills covered in this course."}
+                  </p>
+
+                  <div className="rn-assessment-course-meta">
+                    <span>
+                      Progress:{" "}
+                      {enrollment
+                        ?.progress_percent || 0}
+                      %
+                    </span>
+                  </div>
+
+                  <Link
+                    href={`/student/assessment?course=${course.slug}`}
+                    className="rn-button rn-button-primary"
+                  >
+                    Start Assessment
+                  </Link>
+                </article>
+              );
+            })}
+          </section>
+
+          <div className="rn-assessment-hub-actions">
+            <Link
+              href="/student/dashboard"
+              className="rn-button rn-button-secondary"
+            >
+              Back to Dashboard
+            </Link>
+
+            <Link
+              href="/student/skills"
+              className="rn-button rn-button-secondary"
+            >
+              View Skills
+            </Link>
+          </div>
         </div>
       </main>
     );
   }
 
-  const { data: questions, error } = await supabase
-    .from("assessment_questions")
-    .select(
-      `
-        id,
-        question,
-        question_text,
-        question_type,
-        options,
-        difficulty,
-        sort_order,
-        skill_id
-      `
+  /*
+   * Selected course assessment.
+   */
+  const { data: selectedCourseData } =
+    await supabase
+      .from("courses")
+      .select(
+        [
+          "id",
+          "title",
+          "slug",
+          "short_description",
+          "category",
+          "level",
+        ].join(", ")
+      )
+      .eq("slug", courseSlug)
+      .eq("status", "published")
+      .maybeSingle();
+
+  const selectedCourse =
+    selectedCourseData as unknown as Course | null;
+
+  if (!selectedCourse) {
+    redirect("/student/assessment");
+  }
+
+  if (
+    !enrolledCourseIds.includes(
+      selectedCourse.id
     )
-    .eq("course_id", course.id)
-    .order("sort_order", { ascending: true });
+  ) {
+    redirect(
+      `/courses/${selectedCourse.slug}`
+    );
+  }
 
-  if (error || !questions?.length) {
+  const { data: questionData } =
+    await supabase
+      .from("assessment_questions")
+      .select(
+        [
+          "id",
+          "course_id",
+          "skill_id",
+          "question",
+          "question_text",
+          "question_type",
+          "options",
+          "correct_answer",
+          "explanation",
+          "difficulty",
+          "sort_order",
+        ].join(", ")
+      )
+      .eq("course_id", selectedCourse.id)
+      .order("sort_order");
+
+  const rows =
+    (questionData as unknown as AssessmentQuestionRow[]) ||
+    [];
+
+  const questions: AssessmentQuestion[] =
+    rows.map((row) => ({
+      id: row.id,
+      question:
+        row.question_text ||
+        row.question ||
+        "Assessment question",
+      options: normalizeOptions(
+        row.options
+      ),
+      explanation: row.explanation,
+      difficulty:
+        row.difficulty || "intermediate",
+    }));
+
+  if (questions.length === 0) {
     return (
-      <main className="container">
-        <div className="rn-empty-state">
-          <h1>Assessment unavailable</h1>
-          <p>
-            The diagnostic questions are not currently available. Please try
-            again later.
-          </p>
+      <main className="rn-assessment-shell">
+        <div className="container">
+          <section className="rn-empty-state">
+            <span className="rn-eyebrow">
+              {selectedCourse.title}
+            </span>
+
+            <h1>
+              Assessment is being prepared
+            </h1>
+
+            <p>
+              The course curriculum is available,
+              but its assessment bank has not yet
+              been populated.
+            </p>
+
+            <Link
+              href={`/courses/${selectedCourse.slug}`}
+              className="rn-button rn-button-primary"
+            >
+              View Course
+            </Link>
+          </section>
         </div>
       </main>
     );
   }
 
-  const normalizedQuestions = questions.map((question) => ({
-    id: question.id,
-    question: question.question || question.question_text || "",
-    questionType: question.question_type || "multiple_choice",
-    options: Array.isArray(question.options)
-      ? question.options
-      : [],
-    difficulty: question.difficulty || "beginner",
-    sortOrder: question.sort_order,
-    skillId: question.skill_id,
-  }));
+  const enrollment = enrollments.find(
+    (item) =>
+      item.course_id === selectedCourse.id
+  );
 
   return (
-    <main className="container">
-      <div className="rn-assessment-shell">
-        <div className="rn-assessment-header">
-          <div>
-            <span className="rn-eyebrow">RuffNeck Learn</span>
-            <h1>Diagnostic Assessment</h1>
-            <p>
-              Assess your current knowledge so RuffNeck Learn can personalize
-              your learning path.
-            </p>
-          </div>
-
+    <main className="rn-assessment-shell">
+      <div className="container">
+        <div className="rn-assessment-course-header">
           <Link
-            href="/student/dashboard"
-            className="btn btn-ghost"
+            href="/student/assessment"
+            className="rn-learning-back"
           >
-            Back to dashboard
+            ← All assessments
           </Link>
-        </div>
 
-        <div className="rn-assessment-info">
-          <div>
-            <strong>{normalizedQuestions.length}</strong>
-            <span>Questions</span>
-          </div>
+          <div className="rn-assessment-course-heading">
+            <span className="rn-eyebrow">
+              {selectedCourse.category ||
+                "COURSE ASSESSMENT"}
+            </span>
 
-          <div>
-            <strong>Multiple choice</strong>
-            <span>Assessment format</span>
-          </div>
+            <h1>{selectedCourse.title}</h1>
 
-          <div>
-            <strong>Personalized</strong>
-            <span>Learning profile</span>
+            <p>
+              Test your understanding of the
+              course material and generate an
+              updated skills profile.
+            </p>
+
+            <div className="rn-assessment-course-summary">
+              <span>
+                {questions.length} Questions
+              </span>
+
+              <span>
+                {formatLevel(
+                  selectedCourse.level
+                )}
+              </span>
+
+              <span>
+                Progress:{" "}
+                {enrollment?.progress_percent ||
+                  0}
+                %
+              </span>
+            </div>
           </div>
         </div>
 
         <AssessmentClient
-          courseId={course.id}
-          courseTitle={course.title}
-          questions={normalizedQuestions}
+          courseId={selectedCourse.id}
+          courseTitle={selectedCourse.title}
+          questions={questions}
         />
       </div>
     </main>
