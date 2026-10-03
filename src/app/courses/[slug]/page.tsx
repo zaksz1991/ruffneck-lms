@@ -34,6 +34,13 @@ type Course = {
   target_audience: string | null;
 };
 
+type Enrollment = {
+  id: string;
+  progress_percent: number | null;
+  enrollment_status: string | null;
+  payment_status: string | null;
+};
+
 type SectionGroup = {
   id: string;
   title: string;
@@ -234,7 +241,9 @@ export async function generateMetadata({
   }
 
   return {
-    title: course.seo_title || `${course.title} | RuffNeck Learn`,
+    title:
+      course.seo_title ||
+      `${course.title} | RuffNeck Learn`,
     description:
       course.seo_description ||
       course.short_description ||
@@ -255,31 +264,35 @@ export default async function CourseDetailPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: courseData, error: courseError } = await supabase
-    .from("courses")
-    .select(
-      [
-        "id",
-        "title",
-        "slug",
-        "short_description",
-        "description",
-        "thumbnail_url",
-        "category",
-        "level",
-        "price_ngn",
-        "is_free",
-        "duration_minutes",
-        "learning_outcomes",
-        "target_audience",
-      ].join(", ")
-    )
-    .eq("slug", slug)
-    .eq("status", "published")
-    .maybeSingle();
+  const { data: courseData, error: courseError } =
+    await supabase
+      .from("courses")
+      .select(
+        [
+          "id",
+          "title",
+          "slug",
+          "short_description",
+          "description",
+          "thumbnail_url",
+          "category",
+          "level",
+          "price_ngn",
+          "is_free",
+          "duration_minutes",
+          "learning_outcomes",
+          "target_audience",
+        ].join(", ")
+      )
+      .eq("slug", slug)
+      .eq("status", "published")
+      .maybeSingle();
 
   if (courseError) {
-    console.error("Failed to load course:", courseError);
+    console.error(
+      "Failed to load course:",
+      courseError
+    );
   }
 
   const course = courseData as Course | null;
@@ -333,14 +346,8 @@ export default async function CourseDetailPage({
         .maybeSingle()
     : { data: null };
 
-  const enrollment = enrollmentData as
-    | {
-        id: string;
-        progress_percent: number | null;
-        enrollment_status: string | null;
-        payment_status: string | null;
-      }
-    | null;
+  const enrollment =
+    enrollmentData as Enrollment | null;
 
   const { data: completedProgressData } = user
     ? await supabase
@@ -365,10 +372,6 @@ export default async function CourseDetailPage({
   const totalLessons = curriculumRows.length;
   const totalCompleted = completedLessonIds.size;
 
-  /*
-   * Always calculate learner progress from completed lessons.
-   * This avoids stale enrollment.progress_percent values.
-   */
   const progressPercent =
     totalLessons > 0
       ? Math.min(
@@ -378,6 +381,29 @@ export default async function CourseDetailPage({
           )
         )
       : 0;
+
+  const courseCompleted =
+    totalLessons > 0 &&
+    totalCompleted >= totalLessons;
+
+  /*
+   * Resume from the first incomplete lesson.
+   * This is the lesson the learner should reach when
+   * pressing "Continue Course".
+   */
+  const nextIncompleteLesson =
+    curriculumRows.find(
+      (lesson) =>
+        !completedLessonIds.has(
+          lesson.lesson_id
+        )
+    ) || null;
+
+  const firstLesson =
+    curriculumRows[0] || null;
+
+  const continueLesson =
+    nextIncompleteLesson || firstLesson;
 
   const calculatedMinutes = curriculumRows.reduce(
     (total, lesson) =>
@@ -418,8 +444,6 @@ export default async function CourseDetailPage({
     (a, b) => a.sortOrder - b.sortOrder
   );
 
-  const firstLesson = curriculumRows[0] || null;
-
   const previewCount = curriculumRows.filter(
     (lesson) => lesson.is_preview
   ).length;
@@ -429,6 +453,10 @@ export default async function CourseDetailPage({
 
   const focus = getCourseFocus(course.slug);
   const visual = getCourseVisual(course);
+
+  const continueHref = continueLesson
+    ? `/learn/${course.slug}/${continueLesson.lesson_slug}`
+    : `/courses/${course.slug}`;
 
   return (
     <main className="rn-course-experience">
@@ -505,14 +533,16 @@ export default async function CourseDetailPage({
             </div>
 
             <div className="rn-course-hero-actions">
-              {enrollment && firstLesson ? (
+              {enrollment && continueLesson ? (
                 <Link
-                  href={`/learn/${course.slug}/${firstLesson.lesson_slug}`}
+                  href={continueHref}
                   className="rn-button rn-button-primary"
                 >
-                  {progressPercent > 0
-                    ? "Continue Course"
-                    : "Start Course"}
+                  {courseCompleted
+                    ? "Review Course"
+                    : progressPercent > 0
+                      ? "Continue Course"
+                      : "Start Course"}
                 </Link>
               ) : user && course.is_free ? (
                 <EnrollButton
@@ -601,7 +631,9 @@ export default async function CourseDetailPage({
             <div className="rn-course-visual-overlay">
               <span>{formatLevel(course.level)}</span>
 
-              <strong>{totalLessons} lessons</strong>
+              <strong>
+                {totalLessons} lessons
+              </strong>
             </div>
           </div>
         </section>
@@ -664,7 +696,9 @@ export default async function CourseDetailPage({
           <div className="rn-practical-grid">
             <article className="rn-practical-card">
               <span>01</span>
+
               <h3>Real-world scenarios</h3>
+
               <p>
                 Apply concepts to realistic workplace,
                 business, education and operational
@@ -674,7 +708,9 @@ export default async function CourseDetailPage({
 
             <article className="rn-practical-card">
               <span>02</span>
+
               <h3>Case studies</h3>
+
               <p>
                 Analyse practical problems, identify
                 risks and develop structured solutions.
@@ -683,7 +719,9 @@ export default async function CourseDetailPage({
 
             <article className="rn-practical-card">
               <span>03</span>
+
               <h3>Samples & exercises</h3>
+
               <p>
                 Work with examples, templates,
                 checklists and guided practical tasks.
@@ -692,7 +730,9 @@ export default async function CourseDetailPage({
 
             <article className="rn-practical-card">
               <span>04</span>
+
               <h3>Capstone projects</h3>
+
               <p>
                 Finish with an applied project that
                 demonstrates what you can actually do.
@@ -703,7 +743,9 @@ export default async function CourseDetailPage({
 
         <section className="rn-course-section-block">
           <div className="rn-course-section-heading">
-            <span className="rn-eyebrow">CURRICULUM</span>
+            <span className="rn-eyebrow">
+              CURRICULUM
+            </span>
 
             <h2>Course modules and lessons</h2>
 
@@ -865,39 +907,44 @@ export default async function CourseDetailPage({
           </article>
         </section>
 
-        {firstLesson ? (
+        {continueLesson ? (
           <section className="rn-course-final-cta">
             <div>
               <span className="rn-eyebrow">
-                START LEARNING
+                {courseCompleted
+                  ? "COURSE COMPLETE"
+                  : "CONTINUE LEARNING"}
               </span>
 
               <h2>
-                Ready to build practical skills?
+                {courseCompleted
+                  ? "Review your completed course."
+                  : "Ready to keep learning?"}
               </h2>
 
               <p>
-                Start with the first module and work
-                through the curriculum step by step.
+                {courseCompleted
+                  ? "Return to the course lessons whenever you need to review the material."
+                  : `Your next lesson is "${continueLesson.lesson_title}".`}
               </p>
             </div>
 
             <div>
               {enrollment ? (
                 <Link
-                  href={`/learn/${course.slug}/${firstLesson.lesson_slug}`}
+                  href={continueHref}
                   className="rn-button rn-button-primary"
                 >
-                  {progressPercent > 0
-                    ? "Continue Learning"
-                    : "Start Learning"}
+                  {courseCompleted
+                    ? "Review Course"
+                    : "Continue Learning"}
                 </Link>
               ) : user && course.is_free ? (
                 <EnrollButton
                   courseId={course.id}
                   courseSlug={course.slug}
                   firstLessonSlug={
-                    firstLesson.lesson_slug
+                    firstLesson?.lesson_slug || null
                   }
                   courseTitle={course.title}
                   className="rn-button rn-button-primary"
