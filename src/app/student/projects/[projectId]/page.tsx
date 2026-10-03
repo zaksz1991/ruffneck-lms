@@ -7,7 +7,10 @@ type Project = {
   id: string;
   course_id: string;
   title: string;
-  project_type: "practical" | "case_study" | "capstone";
+  project_type:
+    | "practical"
+    | "case_study"
+    | "capstone";
   brief: string;
   scenario: string | null;
   deliverables: string[];
@@ -38,7 +41,10 @@ type Course = {
   id: string;
   title: string;
   slug: string;
-  level: "beginner" | "intermediate" | "advanced";
+  level:
+    | "beginner"
+    | "intermediate"
+    | "advanced";
   category: string | null;
 };
 
@@ -48,12 +54,16 @@ function formatStatus(
   switch (status) {
     case "under_review":
       return "Under Review";
+
     case "revision_required":
       return "Revision Required";
+
     case "approved":
       return "Approved";
+
     case "submitted":
       return "Submitted";
+
     default:
       return "Draft";
   }
@@ -177,9 +187,15 @@ export default async function StudentProjectPage({
   const submission =
     submissionData as unknown as Submission | null;
 
-  const locked =
-    submission &&
-    submission.status !== "draft";
+  /*
+   * Drafts and revision-required submissions can
+   * be edited and submitted again.
+   */
+  const canEdit =
+    !submission ||
+    submission.status === "draft" ||
+    submission.status ===
+      "revision_required";
 
   return (
     <main className="rn-project-workspace">
@@ -234,9 +250,46 @@ export default async function StudentProjectPage({
                   submission.status
                 )}
               </span>
-            ) : null}
+            ) : (
+              <span>
+                Status: Not Started
+              </span>
+            )}
           </div>
         </section>
+
+        {submission?.status ===
+        "revision_required" ? (
+          <section className="rn-project-revision-banner">
+            <div>
+              <span className="rn-eyebrow">
+                REVISION REQUIRED
+              </span>
+
+              <h2>
+                Your project needs revision
+              </h2>
+
+              <p>
+                Review the assessor feedback,
+                update your work and resubmit the
+                project for another review.
+              </p>
+            </div>
+
+            {submission.feedback ? (
+              <div className="rn-project-revision-feedback">
+                <strong>
+                  Assessor feedback
+                </strong>
+
+                <p>
+                  {submission.feedback}
+                </p>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         <div className="rn-project-workspace-grid">
           <div>
@@ -355,7 +408,9 @@ export default async function StudentProjectPage({
           <aside className="rn-project-submission-column">
             {submission &&
             submission.status !==
-              "draft" ? (
+              "draft" &&
+            submission.status !==
+              "revision_required" ? (
               <section className="rn-project-status-card">
                 <span className="rn-eyebrow">
                   SUBMISSION STATUS
@@ -402,13 +457,13 @@ export default async function StudentProjectPage({
                 ) : (
                   <p>
                     Your submission is waiting
-                    for review.
+                    for the next review action.
                   </p>
                 )}
               </section>
             ) : null}
 
-            {!locked ? (
+            {canEdit ? (
               <ProjectSubmissionForm
                 projectId={project.id}
                 initialText={
@@ -424,21 +479,6 @@ export default async function StudentProjectPage({
                   "draft"
                 }
               />
-            ) : null}
-
-            {locked ? (
-              <div className="rn-project-locked">
-                <strong>
-                  Submission locked
-                </strong>
-
-                <p>
-                  This submission has been
-                  sent for review and cannot
-                  be edited while it is being
-                  evaluated.
-                </p>
-              </div>
             ) : null}
           </aside>
         </div>

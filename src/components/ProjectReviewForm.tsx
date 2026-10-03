@@ -80,9 +80,21 @@ export default function ProjectReviewForm({
       return;
     }
 
+    if (
+      status ===
+        "revision_required" &&
+      !feedback.trim()
+    ) {
+      setError(
+        "Provide reviewer feedback explaining what needs to be revised."
+      );
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch(
-        `/api/student/projects/${submissionId}`,
+        `/api/admin/projects/${submissionId}`,
         {
           method: "PATCH",
           headers: {
@@ -100,6 +112,7 @@ export default function ProjectReviewForm({
       const result =
         (await response.json()) as {
           error?: string;
+          message?: string;
         };
 
       if (!response.ok) {
@@ -110,6 +123,7 @@ export default function ProjectReviewForm({
       }
 
       setSaved(true);
+
       router.refresh();
     } catch (reviewError) {
       setError(
@@ -167,7 +181,9 @@ export default function ProjectReviewForm({
             max={maxScore}
             value={score}
             onChange={(event) =>
-              setScore(event.target.value)
+              setScore(
+                event.target.value
+              )
             }
             disabled={loading}
           />
@@ -175,15 +191,19 @@ export default function ProjectReviewForm({
       </div>
 
       <label>
-        <span>Reviewer feedback</span>
+        <span>
+          Reviewer feedback
+        </span>
 
         <textarea
-          rows={6}
+          rows={7}
           value={feedback}
           onChange={(event) =>
-            setFeedback(event.target.value)
+            setFeedback(
+              event.target.value
+            )
           }
-          placeholder="Provide clear strengths, improvements and next steps."
+          placeholder="Record strengths, required revisions, evidence, and next steps."
           disabled={loading}
         />
       </label>

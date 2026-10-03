@@ -38,6 +38,10 @@ export default function ProjectSubmissionForm({
   const [message, setMessage] =
     useState<string | null>(null);
 
+  const isRevision =
+    initialStatus ===
+    "revision_required";
+
   async function save(
     status: "draft" | "submitted"
   ) {
@@ -51,7 +55,8 @@ export default function ProjectSubmissionForm({
         {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
           },
           body: JSON.stringify({
             submissionText: text,
@@ -74,15 +79,15 @@ export default function ProjectSubmissionForm({
         );
       }
 
-      setMessage(
-        result.message ||
-          "Submission saved."
-      );
-
       if (status === "submitted") {
         router.refresh();
         return;
       }
+
+      setMessage(
+        result.message ||
+          "Draft saved."
+      );
     } catch (submissionError) {
       setError(
         submissionError instanceof Error
@@ -94,30 +99,30 @@ export default function ProjectSubmissionForm({
     }
   }
 
-  const canEdit =
-    initialStatus === "draft";
-
-  if (!canEdit) {
-    return null;
-  }
-
   return (
     <section className="rn-project-submission-card">
       <span className="rn-eyebrow">
-        YOUR SUBMISSION
+        {isRevision
+          ? "REVISE YOUR WORK"
+          : "YOUR SUBMISSION"}
       </span>
 
       <h2>
-        Prepare your project
+        {isRevision
+          ? "Update and resubmit"
+          : "Prepare your project"}
       </h2>
 
       <p>
-        Describe your completed work and provide a
-        link to supporting material where applicable.
+        {isRevision
+          ? "Make the requested improvements, update your evidence and resubmit the project for review."
+          : "Describe your completed work and provide a link to supporting material where applicable."}
       </p>
 
       <label>
-        <span>Written submission</span>
+        <span>
+          Written submission
+        </span>
 
         <textarea
           value={text}
@@ -182,7 +187,9 @@ export default function ProjectSubmissionForm({
         >
           {loading
             ? "Submitting…"
-            : "Submit for Review"}
+            : isRevision
+              ? "Resubmit for Review"
+              : "Submit for Review"}
         </button>
       </div>
     </section>

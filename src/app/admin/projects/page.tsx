@@ -3,14 +3,6 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import ProjectReviewForm from "@/components/ProjectReviewForm";
 
-type Profile = {
-  id: string;
-  role:
-    | "student"
-    | "instructor"
-    | "admin";
-};
-
 type Submission = {
   id: string;
   project_id: string;
@@ -46,18 +38,28 @@ type Student = {
   email: string | null;
 };
 
+type Filter =
+  | "all"
+  | "pending"
+  | "approved"
+  | "revision_required";
+
 function formatStatus(
   status: Submission["status"]
 ) {
   switch (status) {
     case "under_review":
       return "Under Review";
+
     case "revision_required":
       return "Revision Required";
+
     case "approved":
       return "Approved";
+
     case "submitted":
       return "Submitted";
+
     default:
       return "Draft";
   }
@@ -78,7 +80,24 @@ function formatDate(
   ).format(new Date(value));
 }
 
-export default async function AdminProjectsPage() {
+export default async function AdminProjectsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    status?: string;
+  }>;
+}) {
+  const params = await searchParams;
+
+  const filter: Filter =
+    params.status ===
+      "pending" ||
+    params.status === "approved" ||
+    params.status ===
+      "revision_required"
+      ? params.status
+      : "all";
+
   const supabase = await createClient();
 
   const {
@@ -99,7 +118,13 @@ export default async function AdminProjectsPage() {
       .maybeSingle();
 
   const profile =
-    profileData as unknown as Profile | null;
+    profileData as {
+      id: string;
+      role:
+        | "student"
+        | "instructor"
+        | "admin";
+    } | null;
 
   if (
     !profile ||
@@ -110,25 +135,87 @@ export default async function AdminProjectsPage() {
     redirect("/student/dashboard");
   }
 
-  const { data: submissionData } =
-    await supabase
+  const [
+    pendingResult,
+    approvedResult,
+    revisionResult,
+  ] = await Promise.all([
+    supabase
       .from("project_submissions")
-      .select(
-        [
-          "id",
-          "project_id",
-          "student_id",
-          "submission_text",
-          "submission_url",
-          "status",
-          "score",
-          "feedback",
-          "submitted_at",
-        ].join(", ")
-      )
-      .order("created_at", {
-        ascending: false,
-      });
+      .select("*", {
+        count: "exact",
+        head: true,
+      })
+      .in("status", [
+        "submitted",
+        "under_review",
+      ]),
+
+    supabase
+      .from("project_submissions")
+      .select("*", {
+        count: "exact",
+        head: true,
+      })
+      .eq("status", "approved"),
+
+    supabase
+      .from("project_submissions")
+      .select("*", {
+        count: "exact",
+        head: true,
+      })
+      .eq(
+        "status",
+        "revision_required"
+      ),
+  ]);
+
+  let query = supabase
+    .from("project_submissions")
+    .select(
+      [
+        "id",
+        "project_id",
+        "student_id",
+        "submission_text",
+        "submission_url",
+        "status",
+        "score",
+        "feedback",
+        "submitted_at",
+      ].join(", ")
+    )
+    .order("created_at", {
+      ascending: false,
+    });
+
+  if (filter === "pending") {
+    query = query.in("status", [
+      "submitted",
+      "under_review",
+    ]);
+  }
+
+  if (filter === "approved") {
+    query = query.eq(
+      "status",
+      "approved"
+    );
+  }
+
+  if (
+    filter ===
+    "revision_required"
+  ) {
+    query = query.eq(
+      "status",
+      "revision_required"
+    );
+  }
+
+  const { data: submissionData } =
+    await query;
 
   const submissions =
     (submissionData as unknown as Submission[]) ||
@@ -169,7 +256,8 @@ export default async function AdminProjectsPage() {
   const courseIds = Array.from(
     new Set(
       projects.map(
-        (project) => project.course_id
+        (project) =>
+          project.course_id
       )
     )
   );
@@ -201,46 +289,34 @@ export default async function AdminProjectsPage() {
     [];
 
   const projectMap = new Map(
-    projects.map((item) => [
-      item.id,
-      item,
+    projects.map((project) => [
+      project.id,
+      project,
     ])
   );
 
   const courseMap = new Map(
-    courses.map((item) => [
-      item.id,
-      item,
+    courses.map((course) => [
+      course.id,
+      course,
     ])
   );
 
   const studentMap = new Map(
-    students.map((item) => [
-      item.id,
-      item,
+    students.map((student) => [
+      student.id,
+      student,
     ])
   );
 
   const pendingCount =
-    submissions.filter((item) =>
-      [
-        "submitted",
-        "under_review",
-      ].includes(item.status)
-    ).length;
+    pendingResult.count || 0;
 
   const approvedCount =
-    submissions.filter(
-      (item) =>
-        item.status === "approved"
-    ).length;
+    approvedResult.count || 0;
 
   const revisionCount =
-    submissions.filter(
-      (item) =>
-        item.status ===
-        "revision_required"
-    ).length;
+    revisionResult.count || 0;
 
   return (
     <main className="rn-admin-projects-page">
@@ -248,10 +324,10 @@ export default async function AdminProjectsPage() {
         <div className="rn-admin-project-header">
           <div>
             <Link
-              href="/admin"
+              href="/admin/lms"
               className="rn-learning-back"
             >
-              ← Admin Dashboard
+              ← LMS Admin
             </Link>
 
             <span className="rn-eyebrow">
@@ -263,49 +339,155 @@ export default async function AdminProjectsPage() {
             </h1>
 
             <p>
-              Review student practical work,
-              provide feedback and record final
-              scores.
+              Review practical work, manage
+              revisions, approve projects and record
+              assessment results.
             </p>
           </div>
 
-          <div className="rn-admin-project-stats">
-            <div>
-              <strong>
-                {pendingCount}
-              </strong>
-              <span>Awaiting review</span>
-            </div>
-
-            <div>
-              <strong>
-                {approvedCount}
-              </strong>
-              <span>Approved</span>
-            </div>
-
-            <div>
-              <strong>
-                {revisionCount}
-              </strong>
-              <span>Revision required</span>
-            </div>
+          <div className="rn-admin-project-header-action">
+            <Link
+              href="/admin/lms"
+              className="btn btn-ghost"
+            >
+              Back to LMS
+            </Link>
           </div>
         </div>
+
+        <section className="rn-project-review-summary">
+          <Link
+            href="/admin/projects?status=pending"
+            className={`rn-project-review-summary-card ${
+              filter === "pending"
+                ? "active"
+                : ""
+            }`}
+          >
+            <strong>
+              {pendingCount}
+            </strong>
+
+            <span>
+              Awaiting Review
+            </span>
+
+            <small>
+              Submitted + under review
+            </small>
+          </Link>
+
+          <Link
+            href="/admin/projects?status=approved"
+            className={`rn-project-review-summary-card ${
+              filter === "approved"
+                ? "active"
+                : ""
+            }`}
+          >
+            <strong>
+              {approvedCount}
+            </strong>
+
+            <span>
+              Approved
+            </span>
+
+            <small>
+              Completed project reviews
+            </small>
+          </Link>
+
+          <Link
+            href="/admin/projects?status=revision_required"
+            className={`rn-project-review-summary-card ${
+              filter ===
+              "revision_required"
+                ? "active"
+                : ""
+            }`}
+          >
+            <strong>
+              {revisionCount}
+            </strong>
+
+            <span>
+              Revision Required
+            </span>
+
+            <small>
+              Waiting for learner resubmission
+            </small>
+          </Link>
+        </section>
+
+        <nav className="rn-project-review-tabs">
+          <Link
+            href="/admin/projects"
+            className={
+              filter === "all"
+                ? "active"
+                : ""
+            }
+          >
+            All submissions
+          </Link>
+
+          <Link
+            href="/admin/projects?status=pending"
+            className={
+              filter === "pending"
+                ? "active"
+                : ""
+            }
+          >
+            Awaiting Review
+          </Link>
+
+          <Link
+            href="/admin/projects?status=approved"
+            className={
+              filter === "approved"
+                ? "active"
+                : ""
+            }
+          >
+            Approved
+          </Link>
+
+          <Link
+            href="/admin/projects?status=revision_required"
+            className={
+              filter ===
+              "revision_required"
+                ? "active"
+                : ""
+            }
+          >
+            Revision Required
+          </Link>
+        </nav>
 
         {submissions.length === 0 ? (
           <section className="rn-project-empty">
             <span className="rn-eyebrow">
-              SUBMISSIONS
+              {filter === "approved"
+                ? "APPROVED"
+                : filter ===
+                    "revision_required"
+                  ? "REVISION REQUIRED"
+                  : filter === "pending"
+                    ? "AWAITING REVIEW"
+                    : "SUBMISSIONS"}
             </span>
 
             <h2>
-              No project submissions yet
+              No submissions in this section
             </h2>
 
             <p>
-              Student capstone submissions will
-              appear here when they are submitted.
+              Student project submissions matching
+              this workflow status will appear here.
             </p>
           </section>
         ) : (
@@ -317,21 +499,19 @@ export default async function AdminProjectsPage() {
                     submission.project_id
                   );
 
+                if (!project) {
+                  return null;
+                }
+
                 const course =
-                  project
-                    ? courseMap.get(
-                        project.course_id
-                      )
-                    : null;
+                  courseMap.get(
+                    project.course_id
+                  );
 
                 const student =
                   studentMap.get(
                     submission.student_id
                   );
-
-                if (!project) {
-                  return null;
-                }
 
                 return (
                   <article

@@ -120,25 +120,24 @@ export default async function StudentDashboardPage() {
   let enrolledCourses: Course[] = [];
 
   if (enrolledCourseIds.length > 0) {
-    const { data: courseData } =
-      await supabase
-        .from("courses")
-        .select(
-          `
-            id,
-            title,
-            slug,
-            short_description,
-            category,
-            level,
-            thumbnail_url,
-            duration_minutes,
-            is_free,
-            price_ngn,
-            status
-          `
-        )
-        .in("id", enrolledCourseIds);
+    const { data: courseData } = await supabase
+      .from("courses")
+      .select(
+        `
+          id,
+          title,
+          slug,
+          short_description,
+          category,
+          level,
+          thumbnail_url,
+          duration_minutes,
+          is_free,
+          price_ngn,
+          status
+        `
+      )
+      .in("id", enrolledCourseIds);
 
     enrolledCourses =
       (courseData || []) as Course[];
@@ -188,15 +187,13 @@ export default async function StudentDashboardPage() {
   const strengthCount =
     skillProfiles.filter(
       (skill) =>
-        Number(skill.confidence_score) >=
-        80
+        Number(skill.confidence_score) >= 80
     ).length;
 
   const developmentCount =
     skillProfiles.filter(
       (skill) =>
-        Number(skill.confidence_score) <
-        50
+        Number(skill.confidence_score) < 50
     ).length;
 
   const displayName =
@@ -214,8 +211,7 @@ export default async function StudentDashboardPage() {
                 skill.confidence_score || 0
               ),
             0
-          ) /
-            skillProfiles.length
+          ) / skillProfiles.length
         )
       : 0;
 
@@ -255,6 +251,13 @@ export default async function StudentDashboardPage() {
             className="rn-button rn-button-secondary"
           >
             Projects & Capstones
+          </Link>
+
+          <Link
+            href="/student/certificates"
+            className="rn-button rn-button-secondary"
+          >
+            Certificates
           </Link>
 
           <Link
@@ -645,6 +648,21 @@ export default async function StudentDashboardPage() {
               Complete practical projects,
               submit your work and track
               project reviews.
+            </span>
+          </Link>
+
+          <Link
+            href="/student/certificates"
+            className="rn-dashboard-action"
+          >
+            <strong>
+              Certificates
+            </strong>
+
+            <span>
+              View your RuffNeck Learn
+              credentials and course
+              completion records.
             </span>
           </Link>
 
