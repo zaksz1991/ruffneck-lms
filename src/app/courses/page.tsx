@@ -18,15 +18,21 @@ function getCourseVisual(course: Course) {
   const value =
     `${course.slug} ${course.title} ${course.category ?? ""}`.toLowerCase();
 
+  /*
+   * Use specific category matches before AI.
+   * This prevents "digital" from incorrectly matching "ai".
+   */
+
   if (
-    value.includes("ai") ||
-    value.includes("artificial intelligence") ||
-    value.includes("automation")
+    value.includes("marketing") ||
+    value.includes("content") ||
+    value.includes("social media") ||
+    value.includes("digital marketing")
   ) {
     return {
-      className: "course-art course-art-ai",
-      icon: "✦",
-      label: "AI & Technology",
+      className: "course-art course-art-marketing",
+      icon: "◈",
+      label: "Digital Marketing",
     };
   }
 
@@ -41,18 +47,6 @@ function getCourseVisual(course: Course) {
       className: "course-art course-art-data",
       icon: "▥",
       label: "Data & Analytics",
-    };
-  }
-
-  if (
-    value.includes("marketing") ||
-    value.includes("content") ||
-    value.includes("social media")
-  ) {
-    return {
-      className: "course-art course-art-marketing",
-      icon: "◈",
-      label: "Digital Marketing",
     };
   }
 
@@ -102,6 +96,20 @@ function getCourseVisual(course: Course) {
       className: "course-art course-art-productivity",
       icon: "◫",
       label: "Productivity",
+    };
+  }
+
+  const hasAi =
+    /\bai\b/.test(value) ||
+    value.includes("artificial intelligence") ||
+    value.includes("automation") ||
+    value.includes("prompt engineering");
+
+  if (hasAi) {
+    return {
+      className: "course-art course-art-ai",
+      icon: "✦",
+      label: "AI & Technology",
     };
   }
 
