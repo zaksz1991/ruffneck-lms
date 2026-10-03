@@ -18,6 +18,29 @@ type CurriculumRow = {
   is_published: boolean;
 };
 
+type Course = {
+  id: string;
+  title: string;
+  slug: string;
+  level: "beginner" | "intermediate" | "advanced";
+  category: string | null;
+};
+
+type Lesson = {
+  id: string;
+  course_id: string;
+  section_id: string;
+  title: string;
+  slug: string;
+  content_html: string | null;
+  video_url: string | null;
+  duration_minutes: number | null;
+  duration_seconds: number | null;
+  sort_order: number;
+  is_preview: boolean;
+  is_published: boolean;
+};
+
 type Resource = {
   id: string;
   lesson_id: string;
@@ -99,15 +122,19 @@ export default async function LessonPage({
     );
   }
 
-  const { data: course } = await supabase
+  const { data: courseData } = await supabase
     .from("courses")
     .select(
-      "id, title, slug, level, category, status"
+      "id, title, slug, level, category"
     )
     .eq("slug", courseSlug)
+    .eq("status", "published")
     .maybeSingle();
 
-  if (!course || course.status !== "published") {
+  const course =
+    courseData as unknown as Course | null;
+
+  if (!course) {
     notFound();
   }
 
@@ -120,7 +147,7 @@ export default async function LessonPage({
     .eq("course_id", course.id)
     .maybeSingle();
 
-  const { data: lesson } = await supabase
+  const { data: lessonData } = await supabase
     .from("lessons")
     .select(
       [
@@ -142,14 +169,14 @@ export default async function LessonPage({
     .eq("slug", lessonSlug)
     .maybeSingle();
 
+  const lesson =
+    lessonData as unknown as Lesson | null;
+
   if (!lesson) {
     notFound();
   }
 
-  if (
-    !lesson.is_published &&
-    !enrollment
-  ) {
+  if (!lesson.is_published && !enrollment) {
     redirect(`/courses/${courseSlug}`);
   }
 
@@ -217,13 +244,10 @@ export default async function LessonPage({
   const { count: completedCount } =
     await supabase
       .from("lesson_progress")
-      .select(
-        "lesson_id",
-        {
-          count: "exact",
-          head: true,
-        }
-      )
+      .select("lesson_id", {
+        count: "exact",
+        head: true,
+      })
       .eq("student_id", user.id)
       .eq("course_id", course.id)
       .eq("completed", true);
@@ -258,7 +282,9 @@ export default async function LessonPage({
 
   /*
    * Record lesson viewing activity for enrolled
-   * learners. This remains non-blocking.
+   * learners. Activity logging is intentionally
+   * non-blocking so a database logging problem
+   * never prevents the lesson from loading.
    */
   if (enrollment) {
     const { error: activityError } =
@@ -314,6 +340,7 @@ export default async function LessonPage({
           {enrollment ? (
             <div className="rn-learning-progress-summary">
               <span>Course progress</span>
+
               <strong>
                 {progressPercent}%
               </strong>
@@ -496,6 +523,7 @@ export default async function LessonPage({
               <div className="rn-learning-practice-grid">
                 <div>
                   <strong>01</strong>
+
                   <span>
                     Identify the key concept
                   </span>
@@ -503,6 +531,7 @@ export default async function LessonPage({
 
                 <div>
                   <strong>02</strong>
+
                   <span>
                     Apply it to a real scenario
                   </span>
@@ -510,6 +539,7 @@ export default async function LessonPage({
 
                 <div>
                   <strong>03</strong>
+
                   <span>
                     Review your result
                   </span>
