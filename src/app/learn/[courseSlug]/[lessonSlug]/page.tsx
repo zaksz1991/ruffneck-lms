@@ -9,7 +9,6 @@ type Course = {
   slug: string;
   category: string | null;
   level: string | null;
-  thumbnail_url: string | null;
 };
 
 type Lesson = {
@@ -39,18 +38,19 @@ type CurriculumRow = {
   is_published: boolean;
 };
 
-type LessonProgress = {
-  completed: boolean;
-  watched_seconds: number | null;
-  last_position_seconds: number | null;
-};
-
 type Resource = {
   id: string;
   title: string;
   resource_type: "file" | "link" | "pdf" | "audio";
   url: string;
   sort_order: number;
+};
+
+type Enrollment = {
+  id: string;
+  progress_percent: number | null;
+  enrollment_status: string | null;
+  payment_status: string | null;
 };
 
 function formatDuration(
@@ -89,18 +89,18 @@ function getResourceLabel(
   }
 }
 
-function getResourceIcon(
+function getResourceTypeLabel(
   type: Resource["resource_type"]
 ) {
   switch (type) {
     case "pdf":
       return "PDF";
     case "audio":
-      return "AUDIO";
+      return "Audio";
     case "link":
-      return "LINK";
+      return "External link";
     default:
-      return "FILE";
+      return "File";
   }
 }
 
@@ -130,7 +130,7 @@ export default async function LessonPage({
     await supabase
       .from("courses")
       .select(
-        "id, title, slug, category, level, thumbnail_url"
+        "id, title, slug, category, level"
       )
       .eq("slug", courseSlug)
       .maybeSingle();
@@ -159,20 +159,24 @@ export default async function LessonPage({
       .eq("course_id", course.id)
       .maybeSingle();
 
-  const enrollment = enrollmentData as unknown as
-    | {
-        id: string;
-        progress_percent: number | null;
-        enrollment_status: string | null;
-        payment_status: string | null;
-      }
-    | null;
+  const enrollment =
+    enrollmentData as unknown as Enrollment | null;
 
   const { data: lessonData, error: lessonError } =
     await supabase
       .from("lessons")
       .select(
-        "id, course_id, title, slug, content_html, video_url, duration_minutes, is_preview, is_published"
+        [
+          "id",
+          "course_id",
+          "title",
+          "slug",
+          "content_html",
+          "video_url",
+          "duration_minutes",
+          "is_preview",
+          "is_published",
+        ].join(", ")
       )
       .eq("course_id", course.id)
       .eq("slug", lessonSlug)
@@ -190,10 +194,6 @@ export default async function LessonPage({
     lessonData as unknown as Lesson | null;
 
   if (!lesson) {
-    if (!enrollment) {
-      redirect(`/courses/${courseSlug}`);
-    }
-
     notFound();
   }
 
@@ -230,9 +230,8 @@ export default async function LessonPage({
     [];
 
   /*
-   * Calculate course progress directly from completed
-   * lessons. Do not trust the potentially stale
-   * enrollment.progress_percent value.
+   * Course progress is calculated from completed
+   * lessons instead of trusting stale enrollment data.
    */
   const { data: completedProgressData } =
     enrollment
@@ -275,6 +274,11 @@ export default async function LessonPage({
       row.lesson_slug === lesson.slug
   );
 
+  const lessonNumber =
+    currentIndex >= 0
+      ? currentIndex + 1
+      : 1;
+
   const previousLesson =
     currentIndex > 0
       ? curriculum[currentIndex - 1]
@@ -288,6 +292,10 @@ export default async function LessonPage({
 
   const currentCompleted =
     completedLessonIds.has(lesson.id);
+
+  const courseComplete =
+    totalLessons > 0 &&
+    totalCompleted >= totalLessons;
 
   const { data: resourcesData } =
     await supabase
@@ -308,21 +316,25 @@ export default async function LessonPage({
       ? curriculum[currentIndex]?.section_title
       : course.category || "Course lesson";
 
-  const lessonNumber =
-    currentIndex >= 0
-      ? currentIndex + 1
-      : 1;
-
   const totalDuration = formatDuration(
     lesson.duration_minutes,
     null
   );
 
+  const progressLabel =
+    totalLessons > 0
+      ? `${totalCompleted} of ${totalLessons} lessons completed`
+      : "Course progress";
+
   return (
     <main className="rn-learning-shell">
       <div className="container">
+        {/* =================================================
+            TOP BAR
+            ================================================= */}
+
         <div className="rn-learning-topbar">
-          <div>
+          <div className="rn-learning-topbar-copy">
             <Link
               href={`/courses/${course.slug}`}
               className="rn-learning-back"
@@ -360,7 +372,15 @@ export default async function LessonPage({
           />
         </div>
 
+        {/* =================================================
+            MAIN LEARNING LAYOUT
+            ================================================= */}
+
         <div className="rn-learning-layout">
+          {/* =================================================
+              CURRICULUM SIDEBAR
+              ================================================= */}
+
           <aside className="rn-learning-sidebar">
             <div className="rn-learning-sidebar-header">
               <span className="rn-eyebrow">
@@ -368,6 +388,10 @@ export default async function LessonPage({
               </span>
 
               <h2>Course lessons</h2>
+
+              <p className="rn-learning-sidebar-progress">
+                {progressLabel}
+              </p>
             </div>
 
             <div className="rn-learning-sidebar-list">
@@ -430,10 +454,26 @@ export default async function LessonPage({
             </Link>
           </aside>
 
+          {/* =================================================
+              LESSON CONTENT
+              ================================================= */}
+
           <article className="rn-learning-content">
+            {/* Lesson header */}
+
             <header className="rn-learning-content-header">
+              <div className="rn-learning-label-row">
+                <span className="rn-eyebrow">
+                  {sectionTitle}
+                </span>
+
+                <span className="rn-learning-lesson-number">
+                  Lesson {lessonNumber}
+                </span>
+              </div>
+
               <div className="rn-course-meta-row">
-                <span className="badge">
+                <span>
                   {lesson.is_preview
                     ? "Preview"
                     : "Course lesson"}
@@ -445,25 +485,84 @@ export default async function LessonPage({
                   </span>
                 ) : null}
 
+                {course.category ? (
+                  <span>{course.category}</span>
+                ) : null}
+
                 {totalDuration ? (
                   <span>{totalDuration}</span>
                 ) : null}
               </div>
 
-              <span className="rn-eyebrow">
-                {sectionTitle}
-              </span>
-
               <h1>{lesson.title}</h1>
 
               <p className="rn-learning-intro">
                 Lesson {lessonNumber} of{" "}
-                {totalLessons}
+                {totalLessons}. Work through the
+                material, complete the practical task,
+                then mark the lesson complete.
               </p>
             </header>
 
+            {/* Lesson overview */}
+
+            <section className="rn-learning-overview-panel">
+              <div>
+                <span className="rn-eyebrow">
+                  LESSON OVERVIEW
+                </span>
+
+                <h2>What you will work on</h2>
+              </div>
+
+              <div className="rn-learning-overview-grid">
+                <div>
+                  <strong>
+                    {lessonNumber}
+                  </strong>
+
+                  <span>
+                    Current lesson
+                  </span>
+                </div>
+
+                <div>
+                  <strong>
+                    {totalLessons}
+                  </strong>
+
+                  <span>
+                    Lessons in course
+                  </span>
+                </div>
+
+                <div>
+                  <strong>
+                    {courseProgress}%
+                  </strong>
+
+                  <span>
+                    Course completed
+                  </span>
+                </div>
+
+                <div>
+                  <strong>
+                    {totalDuration ||
+                      "Self-paced"}
+                  </strong>
+
+                  <span>
+                    Lesson duration
+                  </span>
+                </div>
+              </div>
+            </section>
+
+            {/* Optional video */}
+
             {lesson.video_url ? (
-              <div className="rn-learning-video">
+              <section className="rn-learning-video">
                 <div>
                   <span className="rn-eyebrow">
                     VIDEO LESSON
@@ -474,8 +573,8 @@ export default async function LessonPage({
                   </h2>
 
                   <p>
-                    Review the video before
-                    completing this lesson.
+                    Use the video together with the
+                    written lesson material.
                   </p>
                 </div>
 
@@ -487,17 +586,33 @@ export default async function LessonPage({
                 >
                   Watch video
                 </a>
-              </div>
+              </section>
             ) : null}
 
-            <div
-              className="rn-learning-article"
-              dangerouslySetInnerHTML={{
-                __html:
-                  lesson.content_html ||
-                  "<p>No lesson content is available yet.</p>",
-              }}
-            />
+            {/* Main lesson material */}
+
+            <section className="rn-learning-material">
+              <div className="rn-learning-section-heading">
+                <span className="rn-eyebrow">
+                  LESSON MATERIAL
+                </span>
+
+                <h2>
+                  {lesson.title}
+                </h2>
+              </div>
+
+              <div
+                className="rn-learning-article"
+                dangerouslySetInnerHTML={{
+                  __html:
+                    lesson.content_html ||
+                    "<p>No lesson content is available yet.</p>",
+                }}
+              />
+            </section>
+
+            {/* Practical application */}
 
             <section className="rn-learning-practice-panel">
               <div>
@@ -505,19 +620,22 @@ export default async function LessonPage({
                   PRACTICAL APPLICATION
                 </span>
 
-                <h2>Apply what you learned</h2>
+                <h2>
+                  Put the lesson into practice
+                </h2>
 
                 <p>
-                  Review the lesson concepts and
-                  apply them to a realistic
-                  professional situation before
-                  moving to the next lesson.
+                  Before moving on, connect the lesson
+                  to an actual professional situation.
+                  The objective is to turn the concept
+                  into something you can use.
                 </p>
               </div>
 
               <div className="rn-learning-practice-grid">
                 <div>
                   <strong>01</strong>
+
                   <span>
                     Identify the key concept
                   </span>
@@ -525,19 +643,23 @@ export default async function LessonPage({
 
                 <div>
                   <strong>02</strong>
+
                   <span>
-                    Apply it to a real scenario
+                    Apply it to a real situation
                   </span>
                 </div>
 
                 <div>
                   <strong>03</strong>
+
                   <span>
                     Review your result
                   </span>
                 </div>
               </div>
             </section>
+
+            {/* Resources */}
 
             {resources.length > 0 ? (
               <section className="rn-learning-resources">
@@ -549,6 +671,11 @@ export default async function LessonPage({
                   <h2>
                     Resources for this lesson
                   </h2>
+
+                  <p>
+                    Supporting material you can open
+                    while studying this lesson.
+                  </p>
                 </div>
 
                 <div className="rn-resource-list">
@@ -562,7 +689,7 @@ export default async function LessonPage({
                         className="rn-resource-item"
                       >
                         <span className="rn-resource-icon">
-                          {getResourceIcon(
+                          {getResourceTypeLabel(
                             resource.resource_type
                           )}
                         </span>
@@ -589,14 +716,10 @@ export default async function LessonPage({
               </section>
             ) : null}
 
+            {/* Completion */}
+
             {enrollment ? (
-              <section
-                className={
-                  currentCompleted
-                    ? "rn-learning-completion"
-                    : "rn-learning-completion"
-                }
-              >
+              <section className="rn-learning-completion">
                 <div>
                   <span className="rn-eyebrow">
                     LESSON STATUS
@@ -605,13 +728,13 @@ export default async function LessonPage({
                   <h2>
                     {currentCompleted
                       ? "Lesson completed"
-                      : "Ready to complete this lesson?"}
+                      : "Complete this lesson"}
                   </h2>
 
                   <p>
                     {currentCompleted
-                      ? "You have already completed this lesson. Continue to the next lesson or review the material."
-                      : "Mark this lesson complete after reviewing the material and completing the practical work."}
+                      ? "This lesson is already recorded as completed. You can review it or continue through the curriculum."
+                      : "Review the lesson material and complete the practical work before marking this lesson complete."}
                   </p>
                 </div>
 
@@ -639,10 +762,9 @@ export default async function LessonPage({
                   </h2>
 
                   <p>
-                    This is a preview lesson.
-                    Enroll to unlock the remaining
-                    course content and track your
-                    learning progress.
+                    This is a preview lesson. View
+                    the full course to see the complete
+                    curriculum and enrollment options.
                   </p>
                 </div>
 
@@ -655,13 +777,15 @@ export default async function LessonPage({
               </section>
             ) : null}
 
+            {/* Navigation */}
+
             <nav className="rn-learning-navigation">
               {previousLesson ? (
                 <Link
                   href={`/learn/${course.slug}/${previousLesson.lesson_slug}`}
                   className="rn-learning-nav-card"
                 >
-                  <span>← Previous</span>
+                  <span>← Previous lesson</span>
 
                   <strong>
                     {previousLesson.lesson_title}
@@ -696,7 +820,11 @@ export default async function LessonPage({
                   href={`/courses/${course.slug}`}
                   className="rn-learning-nav-card is-next"
                 >
-                  <span>Course complete</span>
+                  <span>
+                    {courseComplete
+                      ? "Course complete"
+                      : "End of curriculum"}
+                  </span>
 
                   <strong>
                     Return to course
