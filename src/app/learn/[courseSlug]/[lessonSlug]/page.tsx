@@ -104,6 +104,41 @@ function getResourceTypeLabel(
   }
 }
 
+/*
+ * Removes a leading h1/h2/h3/etc. from lesson HTML
+ * when that heading exactly matches the lesson title.
+ *
+ * This prevents:
+ *
+ * # Lesson Title
+ * LESSON MATERIAL
+ * # Lesson Title
+ *
+ * from appearing twice.
+ */
+function removeDuplicateLeadingHeading(
+  html: string | null,
+  title: string
+) {
+  if (!html) {
+    return "<p>No lesson content is available yet.</p>";
+  }
+
+  const escapedTitle = title
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    .trim();
+
+  const duplicateHeadingPattern = new RegExp(
+    `^\\s*<h[1-6][^>]*>\\s*${escapedTitle}\\s*</h[1-6]>\\s*`,
+    "i"
+  );
+
+  return html.replace(
+    duplicateHeadingPattern,
+    ""
+  );
+}
+
 export default async function LessonPage({
   params,
 }: {
@@ -201,7 +236,7 @@ export default async function LessonPage({
     redirect(`/courses/${courseSlug}`);
   }
 
-  const { data: curriculumData } =
+  const { data: curriculumData, error: curriculumError } =
     await supabase
       .from("course_curriculum")
       .select(
@@ -225,14 +260,17 @@ export default async function LessonPage({
       .order("section_sort")
       .order("lesson_sort");
 
+  if (curriculumError) {
+    console.error(
+      "Failed to load curriculum:",
+      curriculumError
+    );
+  }
+
   const curriculum =
     (curriculumData as unknown as CurriculumRow[]) ||
     [];
 
-  /*
-   * Course progress is calculated from completed
-   * lessons instead of trusting stale enrollment data.
-   */
   const { data: completedProgressData } =
     enrollment
       ? await supabase
@@ -321,6 +359,12 @@ export default async function LessonPage({
     null
   );
 
+  const lessonContent =
+    removeDuplicateLeadingHeading(
+      lesson.content_html,
+      lesson.title
+    );
+
   const progressLabel =
     totalLessons > 0
       ? `${totalCompleted} of ${totalLessons} lessons completed`
@@ -373,12 +417,12 @@ export default async function LessonPage({
         </div>
 
         {/* =================================================
-            MAIN LEARNING LAYOUT
+            LEARNING LAYOUT
             ================================================= */}
 
         <div className="rn-learning-layout">
           {/* =================================================
-              CURRICULUM SIDEBAR
+              SIDEBAR
               ================================================= */}
 
           <aside className="rn-learning-sidebar">
@@ -455,12 +499,10 @@ export default async function LessonPage({
           </aside>
 
           {/* =================================================
-              LESSON CONTENT
+              CONTENT
               ================================================= */}
 
           <article className="rn-learning-content">
-            {/* Lesson header */}
-
             <header className="rn-learning-content-header">
               <div className="rn-learning-label-row">
                 <span className="rn-eyebrow">
@@ -468,7 +510,8 @@ export default async function LessonPage({
                 </span>
 
                 <span className="rn-learning-lesson-number">
-                  Lesson {lessonNumber}
+                  Lesson {lessonNumber} of{" "}
+                  {totalLessons}
                 </span>
               </div>
 
@@ -504,7 +547,9 @@ export default async function LessonPage({
               </p>
             </header>
 
-            {/* Lesson overview */}
+            {/* =================================================
+                LESSON OVERVIEW
+                ================================================= */}
 
             <section className="rn-learning-overview-panel">
               <div>
@@ -512,7 +557,9 @@ export default async function LessonPage({
                   LESSON OVERVIEW
                 </span>
 
-                <h2>What you will work on</h2>
+                <h2>
+                  What you will work on
+                </h2>
               </div>
 
               <div className="rn-learning-overview-grid">
@@ -559,7 +606,9 @@ export default async function LessonPage({
               </div>
             </section>
 
-            {/* Optional video */}
+            {/* =================================================
+                OPTIONAL VIDEO
+                ================================================= */}
 
             {lesson.video_url ? (
               <section className="rn-learning-video">
@@ -589,7 +638,9 @@ export default async function LessonPage({
               </section>
             ) : null}
 
-            {/* Main lesson material */}
+            {/* =================================================
+                LESSON MATERIAL
+                ================================================= */}
 
             <section className="rn-learning-material">
               <div className="rn-learning-section-heading">
@@ -597,22 +648,24 @@ export default async function LessonPage({
                   LESSON MATERIAL
                 </span>
 
-                <h2>
-                  {lesson.title}
-                </h2>
+                <p>
+                  Read through the material carefully
+                  before completing the practical
+                  application.
+                </p>
               </div>
 
               <div
                 className="rn-learning-article"
                 dangerouslySetInnerHTML={{
-                  __html:
-                    lesson.content_html ||
-                    "<p>No lesson content is available yet.</p>",
+                  __html: lessonContent,
                 }}
               />
             </section>
 
-            {/* Practical application */}
+            {/* =================================================
+                PRACTICAL APPLICATION
+                ================================================= */}
 
             <section className="rn-learning-practice-panel">
               <div>
@@ -659,7 +712,9 @@ export default async function LessonPage({
               </div>
             </section>
 
-            {/* Resources */}
+            {/* =================================================
+                RESOURCES
+                ================================================= */}
 
             {resources.length > 0 ? (
               <section className="rn-learning-resources">
@@ -716,7 +771,9 @@ export default async function LessonPage({
               </section>
             ) : null}
 
-            {/* Completion */}
+            {/* =================================================
+                COMPLETION
+                ================================================= */}
 
             {enrollment ? (
               <section className="rn-learning-completion">
@@ -777,7 +834,9 @@ export default async function LessonPage({
               </section>
             ) : null}
 
-            {/* Navigation */}
+            {/* =================================================
+                NAVIGATION
+                ================================================= */}
 
             <nav className="rn-learning-navigation">
               {previousLesson ? (
@@ -785,7 +844,9 @@ export default async function LessonPage({
                   href={`/learn/${course.slug}/${previousLesson.lesson_slug}`}
                   className="rn-learning-nav-card"
                 >
-                  <span>← Previous lesson</span>
+                  <span>
+                    ← Previous lesson
+                  </span>
 
                   <strong>
                     {previousLesson.lesson_title}
@@ -809,7 +870,9 @@ export default async function LessonPage({
                   href={`/learn/${course.slug}/${nextLesson.lesson_slug}`}
                   className="rn-learning-nav-card is-next"
                 >
-                  <span>Next lesson →</span>
+                  <span>
+                    Next lesson →
+                  </span>
 
                   <strong>
                     {nextLesson.lesson_title}
