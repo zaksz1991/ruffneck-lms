@@ -106,35 +106,42 @@ export default async function StudentDashboardPage() {
       nullsFirst: false,
     });
 
-  const enrollments = (enrollmentData || []) as Enrollment[];
+  const enrollments =
+    (enrollmentData || []) as Enrollment[];
 
   const enrolledCourseIds = [
-    ...new Set(enrollments.map((item) => item.course_id)),
+    ...new Set(
+      enrollments.map(
+        (item) => item.course_id
+      )
+    ),
   ];
 
   let enrolledCourses: Course[] = [];
 
   if (enrolledCourseIds.length > 0) {
-    const { data: courseData } = await supabase
-      .from("courses")
-      .select(
-        `
-          id,
-          title,
-          slug,
-          short_description,
-          category,
-          level,
-          thumbnail_url,
-          duration_minutes,
-          is_free,
-          price_ngn,
-          status
-        `
-      )
-      .in("id", enrolledCourseIds);
+    const { data: courseData } =
+      await supabase
+        .from("courses")
+        .select(
+          `
+            id,
+            title,
+            slug,
+            short_description,
+            category,
+            level,
+            thumbnail_url,
+            duration_minutes,
+            is_free,
+            price_ngn,
+            status
+          `
+        )
+        .in("id", enrolledCourseIds);
 
-    enrolledCourses = (courseData || []) as Course[];
+    enrolledCourses =
+      (courseData || []) as Course[];
   }
 
   const courseMap = new Map<string, Course>();
@@ -143,43 +150,54 @@ export default async function StudentDashboardPage() {
     courseMap.set(course.id, course);
   });
 
-  const { data: skillProfileData } = await supabase
-    .from("learner_skill_profiles")
-    .select(
-      `
-        id,
-        student_id,
-        skill_id,
-        confidence_score,
-        skill_level,
-        evidence,
-        strengths,
-        gaps,
-        updated_at
-      `
-    )
-    .eq("student_id", user.id)
-    .order("confidence_score", {
-      ascending: false,
-    });
+  const { data: skillProfileData } =
+    await supabase
+      .from("learner_skill_profiles")
+      .select(
+        `
+          id,
+          student_id,
+          skill_id,
+          confidence_score,
+          skill_level,
+          evidence,
+          strengths,
+          gaps,
+          updated_at
+        `
+      )
+      .eq("student_id", user.id)
+      .order("confidence_score", {
+        ascending: false,
+      });
 
-  const skillProfiles = (skillProfileData || []) as SkillProfile[];
+  const skillProfiles =
+    (skillProfileData || []) as SkillProfile[];
 
-  const totalCourses = enrollments.length;
+  const totalCourses =
+    enrollments.length;
 
-  const completedCourses = enrollments.filter(
-    (enrollment) =>
-      enrollment.progress_percent >= 100 ||
-      enrollment.enrollment_status === "completed"
-  ).length;
+  const completedCourses =
+    enrollments.filter(
+      (enrollment) =>
+        enrollment.progress_percent >= 100 ||
+        enrollment.enrollment_status ===
+          "completed"
+    ).length;
 
-  const strengthCount = skillProfiles.filter(
-    (skill) => Number(skill.confidence_score) >= 80
-  ).length;
+  const strengthCount =
+    skillProfiles.filter(
+      (skill) =>
+        Number(skill.confidence_score) >=
+        80
+    ).length;
 
-  const developmentCount = skillProfiles.filter(
-    (skill) => Number(skill.confidence_score) < 50
-  ).length;
+  const developmentCount =
+    skillProfiles.filter(
+      (skill) =>
+        Number(skill.confidence_score) <
+        50
+    ).length;
 
   const displayName =
     profile?.full_name ||
@@ -191,19 +209,26 @@ export default async function StudentDashboardPage() {
       ? Math.round(
           skillProfiles.reduce(
             (total, skill) =>
-              total + Number(skill.confidence_score || 0),
+              total +
+              Number(
+                skill.confidence_score || 0
+              ),
             0
-          ) / skillProfiles.length
+          ) /
+            skillProfiles.length
         )
       : 0;
 
-  const hasLearningProfile = skillProfiles.length > 0;
+  const hasLearningProfile =
+    skillProfiles.length > 0;
 
   return (
     <main className="container rn-dashboard-shell">
       <section className="rn-dashboard-header">
         <div>
-          <div className="rn-eyebrow">RUFFNECK LEARN</div>
+          <div className="rn-eyebrow">
+            RUFFNECK LEARN
+          </div>
 
           <h1>Learning Dashboard</h1>
 
@@ -212,8 +237,8 @@ export default async function StudentDashboardPage() {
             {profile?.full_name
               ? `, ${profile.full_name}`
               : ""}
-            . Your learning dashboard tracks progress, skills
-            and development.
+            . Your learning dashboard tracks
+            progress, skills and development.
           </p>
         </div>
 
@@ -223,6 +248,13 @@ export default async function StudentDashboardPage() {
             className="rn-button rn-button-primary"
           >
             Browse Courses
+          </Link>
+
+          <Link
+            href="/student/projects"
+            className="rn-button rn-button-secondary"
+          >
+            Projects & Capstones
           </Link>
 
           <Link
@@ -242,7 +274,9 @@ export default async function StudentDashboardPage() {
 
           <strong>{totalCourses}</strong>
 
-          <small>Enrolled courses</small>
+          <small>
+            Enrolled courses
+          </small>
         </article>
 
         <article className="rn-dashboard-stat">
@@ -250,9 +284,13 @@ export default async function StudentDashboardPage() {
             Completed
           </span>
 
-          <strong>{completedCourses}</strong>
+          <strong>
+            {completedCourses}
+          </strong>
 
-          <small>Courses completed</small>
+          <small>
+            Courses completed
+          </small>
         </article>
 
         <article className="rn-dashboard-stat">
@@ -260,9 +298,13 @@ export default async function StudentDashboardPage() {
             Strengths
           </span>
 
-          <strong>{strengthCount}</strong>
+          <strong>
+            {strengthCount}
+          </strong>
 
-          <small>Skills at 80%+</small>
+          <small>
+            Skills at 80%+
+          </small>
         </article>
 
         <article className="rn-dashboard-stat">
@@ -270,9 +312,13 @@ export default async function StudentDashboardPage() {
             Development
           </span>
 
-          <strong>{developmentCount}</strong>
+          <strong>
+            {developmentCount}
+          </strong>
 
-          <small>Skills below 50%</small>
+          <small>
+            Skills below 50%
+          </small>
         </article>
       </section>
 
@@ -297,24 +343,32 @@ export default async function StudentDashboardPage() {
 
           <div className="rn-profile-summary">
             <div className="rn-profile-score">
-              <strong>{averageSkillScore}%</strong>
+              <strong>
+                {averageSkillScore}%
+              </strong>
 
-              <span>Average skill confidence</span>
+              <span>
+                Average skill confidence
+              </span>
             </div>
 
             <div className="rn-profile-details">
               <p>
                 <strong>Email:</strong>{" "}
-                {profile?.email || user.email}
+                {profile?.email ||
+                  user.email}
               </p>
 
               <p>
                 <strong>Role:</strong>{" "}
-                {profile?.role || "student"}
+                {profile?.role ||
+                  "student"}
               </p>
 
               <p>
-                <strong>Skills tracked:</strong>{" "}
+                <strong>
+                  Skills tracked:
+                </strong>{" "}
                 {skillProfiles.length}
               </p>
             </div>
@@ -376,12 +430,15 @@ export default async function StudentDashboardPage() {
       <section className="rn-dashboard-section">
         <div className="rn-dashboard-section-header">
           <div>
-            <span className="rn-eyebrow">MY LEARNING</span>
+            <span className="rn-eyebrow">
+              MY LEARNING
+            </span>
 
             <h2>My Courses</h2>
 
             <p>
-              Continue your courses and track your progress.
+              Continue your courses and
+              track your progress.
             </p>
           </div>
 
@@ -398,8 +455,10 @@ export default async function StudentDashboardPage() {
             <h3>No courses yet</h3>
 
             <p>
-              You have not enrolled in a course yet. Explore
-              the RuffNeck Learn catalog to get started.
+              You have not enrolled in a
+              course yet. Explore the
+              RuffNeck Learn catalog to get
+              started.
             </p>
 
             <Link
@@ -411,101 +470,121 @@ export default async function StudentDashboardPage() {
           </article>
         ) : (
           <div className="rn-course-grid">
-            {enrollments.map((enrollment) => {
-              const course = courseMap.get(
-                enrollment.course_id
-              );
+            {enrollments.map(
+              (enrollment) => {
+                const course =
+                  courseMap.get(
+                    enrollment.course_id
+                  );
 
-              if (!course) {
-                return null;
-              }
+                if (!course) {
+                  return null;
+                }
 
-              const progress = Math.min(
-                100,
-                Math.max(
-                  0,
-                  Number(enrollment.progress_percent || 0)
-                )
-              );
+                const progress =
+                  Math.min(
+                    100,
+                    Math.max(
+                      0,
+                      Number(
+                        enrollment.progress_percent ||
+                          0
+                      )
+                    )
+                  );
 
-              return (
-                <article
-                  key={enrollment.id}
-                  className="rn-course-card"
-                >
-                  {course.thumbnail_url ? (
-                    <div className="rn-course-card-image">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={course.thumbnail_url}
-                        alt={course.title}
-                      />
-                    </div>
-                  ) : (
-                    <div className="rn-course-card-placeholder">
-                      RN
-                    </div>
-                  )}
-
-                  <div className="rn-course-card-body">
-                    <div className="rn-course-card-meta">
-                      <span>
-                        {formatLevel(course.level)}
-                      </span>
-
-                      {course.category ? (
-                        <span>{course.category}</span>
-                      ) : null}
-                    </div>
-
-                    <h3>{course.title}</h3>
-
-                    <p>
-                      {course.short_description ||
-                        "Continue learning and build practical skills."}
-                    </p>
-
-                    <div className="rn-progress-block">
-                      <div className="rn-progress-header">
-                        <span>
-                          {getProgressLabel(progress)}
-                        </span>
-
-                        <strong>{progress}%</strong>
-                      </div>
-
-                      <div className="rn-progress-track">
-                        <div
-                          className="rn-progress-fill"
-                          style={{
-                            width: `${progress}%`,
-                          }}
+                return (
+                  <article
+                    key={enrollment.id}
+                    className="rn-course-card"
+                  >
+                    {course.thumbnail_url ? (
+                      <div className="rn-course-card-image">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={
+                            course.thumbnail_url
+                          }
+                          alt={course.title}
                         />
                       </div>
-                    </div>
+                    ) : (
+                      <div className="rn-course-card-placeholder">
+                        RN
+                      </div>
+                    )}
 
-                    <div className="rn-course-card-footer">
-                      <span>
-                        {course.duration_minutes
-                          ? `${course.duration_minutes} min`
-                          : "Self-paced"}
-                      </span>
+                    <div className="rn-course-card-body">
+                      <div className="rn-course-card-meta">
+                        <span>
+                          {formatLevel(
+                            course.level
+                          )}
+                        </span>
 
-                      <Link
-                        href={`/courses/${course.slug}`}
-                        className="rn-button rn-button-primary"
-                      >
-                        {progress >= 100
-                          ? "Review Course"
-                          : progress > 0
-                            ? "Continue"
-                            : "Start Course"}
-                      </Link>
+                        {course.category ? (
+                          <span>
+                            {course.category}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <h3>
+                        {course.title}
+                      </h3>
+
+                      <p>
+                        {course.short_description ||
+                          "Continue learning and build practical skills."}
+                      </p>
+
+                      <div className="rn-progress-block">
+                        <div className="rn-progress-header">
+                          <span>
+                            {getProgressLabel(
+                              progress
+                            )}
+                          </span>
+
+                          <strong>
+                            {progress}%
+                          </strong>
+                        </div>
+
+                        <div className="rn-progress-track">
+                          <div
+                            className="rn-progress-fill"
+                            style={{
+                              width: `${progress}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="rn-course-card-footer">
+                        <span>
+                          {course.duration_minutes
+                            ? `${course.duration_minutes} min`
+                            : "Self-paced"}
+                        </span>
+
+                        <Link
+                          href={`/courses/${course.slug}`}
+                          className="rn-button rn-button-primary"
+                        >
+                          {progress >=
+                          100
+                            ? "Review Course"
+                            : progress > 0
+                              ? "Continue"
+                              : "Start Course"}
+                        </Link>
+                      </div>
                     </div>
-                  </div>
-                </article>
-              );
-            })}
+                  </article>
+                );
+              }
+            )}
           </div>
         )}
       </section>
@@ -515,7 +594,9 @@ export default async function StudentDashboardPage() {
       <section className="rn-dashboard-section">
         <div className="rn-dashboard-section-header">
           <div>
-            <span className="rn-eyebrow">QUICK ACTIONS</span>
+            <span className="rn-eyebrow">
+              QUICK ACTIONS
+            </span>
 
             <h2>Continue Learning</h2>
           </div>
@@ -526,10 +607,13 @@ export default async function StudentDashboardPage() {
             href="/courses"
             className="rn-dashboard-action"
           >
-            <strong>Browse Courses</strong>
+            <strong>
+              Browse Courses
+            </strong>
 
             <span>
-              Explore AI, data, digital marketing and
+              Explore AI, data, digital
+              marketing, teaching and
               productivity courses.
             </span>
           </Link>
@@ -538,11 +622,29 @@ export default async function StudentDashboardPage() {
             href="/student/assessment"
             className="rn-dashboard-action"
           >
-            <strong>Take Assessment</strong>
+            <strong>
+              Course Assessments
+            </strong>
 
             <span>
-              Measure your current skills and identify
-              development areas.
+              Test your knowledge and
+              update your course-specific
+              skills profile.
+            </span>
+          </Link>
+
+          <Link
+            href="/student/projects"
+            className="rn-dashboard-action"
+          >
+            <strong>
+              Projects & Capstones
+            </strong>
+
+            <span>
+              Complete practical projects,
+              submit your work and track
+              project reviews.
             </span>
           </Link>
 
@@ -550,11 +652,13 @@ export default async function StudentDashboardPage() {
             href="/student/skills"
             className="rn-dashboard-action"
           >
-            <strong>View Skills</strong>
+            <strong>
+              View Skills
+            </strong>
 
             <span>
-              Review your learning profile and skill
-              confidence levels.
+              Review your learning profile
+              and skill confidence levels.
             </span>
           </Link>
         </div>
@@ -562,15 +666,18 @@ export default async function StudentDashboardPage() {
 
       <section className="rn-dashboard-footer-note">
         <p>
-          RuffNeck Learn helps you build practical digital
-          skills through structured courses, assessments and
-          personalized learning recommendations.
+          RuffNeck Learn helps you build
+          practical digital skills through
+          structured courses, assessments,
+          practical projects and personalized
+          learning recommendations.
         </p>
 
         <p>
           Last profile update:{" "}
           {formatDate(
-            skillProfiles[0]?.updated_at || null
+            skillProfiles[0]?.updated_at ||
+              null
           )}
         </p>
       </section>
