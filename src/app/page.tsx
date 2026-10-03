@@ -1,13 +1,122 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
+type Course = {
+  id: string;
+  title: string;
+  slug: string;
+  short_description: string | null;
+  category: string | null;
+  is_free: boolean;
+  level: string | null;
+  thumbnail_url: string | null;
+};
+
+function getCourseVisual(course: Course) {
+  const value =
+    `${course.slug} ${course.title} ${course.category ?? ""}`.toLowerCase();
+
+  if (
+    value.includes("ai") ||
+    value.includes("artificial intelligence") ||
+    value.includes("automation")
+  ) {
+    return {
+      className: "course-art course-art-ai",
+      icon: "✦",
+      label: "AI & Technology",
+    };
+  }
+
+  if (
+    value.includes("data") ||
+    value.includes("excel") ||
+    value.includes("power-bi") ||
+    value.includes("power bi") ||
+    value.includes("analytics")
+  ) {
+    return {
+      className: "course-art course-art-data",
+      icon: "▥",
+      label: "Data & Analytics",
+    };
+  }
+
+  if (
+    value.includes("marketing") ||
+    value.includes("content") ||
+    value.includes("social media")
+  ) {
+    return {
+      className: "course-art course-art-marketing",
+      icon: "◈",
+      label: "Digital Marketing",
+    };
+  }
+
+  if (
+    value.includes("business") ||
+    value.includes("entrepreneur") ||
+    value.includes("startup")
+  ) {
+    return {
+      className: "course-art course-art-business",
+      icon: "◆",
+      label: "Business",
+    };
+  }
+
+  if (
+    value.includes("operation") ||
+    value.includes("logistics") ||
+    value.includes("inventory") ||
+    value.includes("warehouse")
+  ) {
+    return {
+      className: "course-art course-art-operations",
+      icon: "▦",
+      label: "Operations",
+    };
+  }
+
+  if (
+    value.includes("teacher") ||
+    value.includes("teaching") ||
+    value.includes("education")
+  ) {
+    return {
+      className: "course-art course-art-education",
+      icon: "◇",
+      label: "Education",
+    };
+  }
+
+  if (
+    value.includes("productivity") ||
+    value.includes("digital skills") ||
+    value.includes("office")
+  ) {
+    return {
+      className: "course-art course-art-productivity",
+      icon: "◫",
+      label: "Productivity",
+    };
+  }
+
+  return {
+    className: "course-art course-art-default",
+    icon: "R",
+    label: course.category || "Professional Skills",
+  };
+}
+
 export default async function HomePage() {
   const supabase = await createClient();
 
   const { data: courses } = await supabase
     .from("courses")
     .select(
-      "id, title, slug, short_description, category, is_free, level"
+      "id, title, slug, short_description, category, is_free, level, thumbnail_url"
     )
     .eq("status", "published")
     .order("published_at", { ascending: false })
@@ -58,11 +167,14 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section rn-featured-courses-section">
         <div className="container">
           <div className="section-heading">
             <div>
-              <div className="rn-brand-kicker">Learning library</div>
+              <div className="rn-brand-kicker">
+                Learning library
+              </div>
+
               <h2>Featured courses</h2>
             </div>
 
@@ -74,48 +186,95 @@ export default async function HomePage() {
           {!courses?.length ? (
             <div className="rn-empty-state">
               <div className="rn-empty-icon">▦</div>
+
               <strong>No published courses yet</strong>
-              <p>New courses will appear here when they are published.</p>
+
+              <p>
+                New courses will appear here when they are published.
+              </p>
             </div>
           ) : (
-            <div className="grid">
-              {courses.map((course) => (
-                <article key={course.id} className="card rn-course-card">
-                  <div className="thumb rn-course-thumb">
-                    <span className="rn-thumb-mark">RN</span>
+            <div className="rn-featured-course-grid">
+              {courses.map((course) => {
+                const visual = getCourseVisual(course);
 
-                    <span>
-                      {course.category || "Digital Skills"}
-                    </span>
-                  </div>
-
-                  <div className="card-body">
-                    <div className="rn-course-meta">
-                      {course.is_free ? (
-                        <span className="badge badge-free">Free</span>
-                      ) : (
-                        <span className="badge">{course.level}</span>
-                      )}
-
-                      <span>{course.level}</span>
-                    </div>
-
-                    <h3>{course.title}</h3>
-
-                    <p>
-                      {course.short_description ||
-                        "Practical learning designed for real-world use."}
-                    </p>
-
+                return (
+                  <article
+                    key={course.id}
+                    className="card rn-featured-course-card"
+                  >
                     <Link
                       href={`/courses/${course.slug}`}
-                      className="btn btn-navy"
+                      className="rn-featured-course-art"
+                      aria-label={`View ${course.title}`}
                     >
-                      View course →
+                      {course.thumbnail_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={course.thumbnail_url}
+                          alt=""
+                          className="rn-featured-course-image"
+                        />
+                      ) : (
+                        <div className={visual.className}>
+                          <div className="course-art-grid" />
+                          <div className="course-art-glow" />
+
+                          <div className="course-art-content">
+                            <span className="course-art-icon">
+                              {visual.icon}
+                            </span>
+
+                            <span className="course-art-label">
+                              {visual.label}
+                            </span>
+                          </div>
+
+                          <div className="course-art-decoration course-art-decoration-one" />
+                          <div className="course-art-decoration course-art-decoration-two" />
+                          <div className="course-art-decoration course-art-decoration-three" />
+                        </div>
+                      )}
                     </Link>
-                  </div>
-                </article>
-              ))}
+
+                    <div className="card-body rn-featured-course-body">
+                      <div className="rn-course-meta">
+                        {course.is_free ? (
+                          <span className="badge badge-free">
+                            Free
+                          </span>
+                        ) : (
+                          <span className="badge">
+                            Premium
+                          </span>
+                        )}
+
+                        {course.level ? (
+                          <span>{course.level}</span>
+                        ) : null}
+                      </div>
+
+                      <h3>
+                        <Link href={`/courses/${course.slug}`}>
+                          {course.title}
+                        </Link>
+                      </h3>
+
+                      <p>
+                        {course.short_description ||
+                          "Practical learning designed for real-world use."}
+                      </p>
+
+                      <Link
+                        href={`/courses/${course.slug}`}
+                        className="btn btn-navy"
+                      >
+                        View course →
+                      </Link>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
         </div>
