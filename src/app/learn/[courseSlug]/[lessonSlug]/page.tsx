@@ -69,7 +69,9 @@ function formatDuration(
 }
 
 function formatLevel(level: string | null) {
-  if (!level) return null;
+  if (!level) {
+    return null;
+  }
 
   return level.charAt(0).toUpperCase() + level.slice(1);
 }
@@ -80,10 +82,13 @@ function getResourceLabel(
   switch (type) {
     case "pdf":
       return "Open PDF";
+
     case "audio":
       return "Listen to audio";
+
     case "link":
       return "Open resource";
+
     default:
       return "Open file";
   }
@@ -95,27 +100,18 @@ function getResourceTypeLabel(
   switch (type) {
     case "pdf":
       return "PDF";
+
     case "audio":
       return "Audio";
+
     case "link":
       return "External link";
+
     default:
       return "File";
   }
 }
 
-/*
- * Removes a leading h1/h2/h3/etc. from lesson HTML
- * when that heading exactly matches the lesson title.
- *
- * This prevents:
- *
- * # Lesson Title
- * LESSON MATERIAL
- * # Lesson Title
- *
- * from appearing twice.
- */
 function removeDuplicateLeadingHeading(
   html: string | null,
   title: string
@@ -161,14 +157,21 @@ export default async function LessonPage({
     );
   }
 
-  const { data: courseData, error: courseError } =
-    await supabase
-      .from("courses")
-      .select(
-        "id, title, slug, category, level"
-      )
-      .eq("slug", courseSlug)
-      .maybeSingle();
+  /*
+   * Only published courses are allowed to expose
+   * the learning experience.
+   */
+  const {
+    data: courseData,
+    error: courseError,
+  } = await supabase
+    .from("courses")
+    .select(
+      "id, title, slug, category, level"
+    )
+    .eq("slug", courseSlug)
+    .eq("status", "published")
+    .maybeSingle();
 
   if (courseError) {
     console.error(
@@ -184,6 +187,10 @@ export default async function LessonPage({
     notFound();
   }
 
+  /*
+   * Enrollment is intentionally checked independently
+   * from lesson progress.
+   */
   const { data: enrollmentData } =
     await supabase
       .from("enrollments")
@@ -197,26 +204,32 @@ export default async function LessonPage({
   const enrollment =
     enrollmentData as unknown as Enrollment | null;
 
-  const { data: lessonData, error: lessonError } =
-    await supabase
-      .from("lessons")
-      .select(
-        [
-          "id",
-          "course_id",
-          "title",
-          "slug",
-          "content_html",
-          "video_url",
-          "duration_minutes",
-          "is_preview",
-          "is_published",
-        ].join(", ")
-      )
-      .eq("course_id", course.id)
-      .eq("slug", lessonSlug)
-      .eq("is_published", true)
-      .maybeSingle();
+  /*
+   * Load only published lessons belonging to the
+   * requested published course.
+   */
+  const {
+    data: lessonData,
+    error: lessonError,
+  } = await supabase
+    .from("lessons")
+    .select(
+      [
+        "id",
+        "course_id",
+        "title",
+        "slug",
+        "content_html",
+        "video_url",
+        "duration_minutes",
+        "is_preview",
+        "is_published",
+      ].join(", ")
+    )
+    .eq("course_id", course.id)
+    .eq("slug", lessonSlug)
+    .eq("is_published", true)
+    .maybeSingle();
 
   if (lessonError) {
     console.error(
@@ -232,33 +245,41 @@ export default async function LessonPage({
     notFound();
   }
 
+  /*
+   * Preview lessons are publicly accessible to
+   * authenticated users.
+   *
+   * Full lessons require a course enrollment.
+   */
   if (!lesson.is_preview && !enrollment) {
     redirect(`/courses/${courseSlug}`);
   }
 
-  const { data: curriculumData, error: curriculumError } =
-    await supabase
-      .from("course_curriculum")
-      .select(
-        [
-          "lesson_id",
-          "course_id",
-          "section_id",
-          "section_title",
-          "section_sort",
-          "lesson_title",
-          "lesson_slug",
-          "lesson_sort",
-          "duration_minutes",
-          "duration_seconds",
-          "is_preview",
-          "is_published",
-        ].join(", ")
-      )
-      .eq("course_id", course.id)
-      .eq("is_published", true)
-      .order("section_sort")
-      .order("lesson_sort");
+  const {
+    data: curriculumData,
+    error: curriculumError,
+  } = await supabase
+    .from("course_curriculum")
+    .select(
+      [
+        "lesson_id",
+        "course_id",
+        "section_id",
+        "section_title",
+        "section_sort",
+        "lesson_title",
+        "lesson_slug",
+        "lesson_sort",
+        "duration_minutes",
+        "duration_seconds",
+        "is_preview",
+        "is_published",
+      ].join(", ")
+    )
+    .eq("course_id", course.id)
+    .eq("is_published", true)
+    .order("section_sort")
+    .order("lesson_sort");
 
   if (curriculumError) {
     console.error(
@@ -271,6 +292,13 @@ export default async function LessonPage({
     (curriculumData as unknown as CurriculumRow[]) ||
     [];
 
+  /*
+   * lesson_progress is the source of truth for
+   * lesson completion.
+   *
+   * The enrollment.progress_percent value is not
+   * used to calculate displayed progress.
+   */
   const { data: completedProgressData } =
     enrollment
       ? await supabase
@@ -293,6 +321,7 @@ export default async function LessonPage({
   );
 
   const totalLessons = curriculum.length;
+
   const totalCompleted =
     completedLessonIds.size;
 
@@ -398,6 +427,7 @@ export default async function LessonPage({
 
           <div className="rn-learning-progress-summary">
             <span>Course progress</span>
+
             <strong>{courseProgress}%</strong>
 
             {lesson.is_preview ? (

@@ -24,7 +24,6 @@ type Course = {
   slug: string;
   short_description: string | null;
   description: string | null;
-  thumbnail_url: string | null;
   category: string | null;
   level: "beginner" | "intermediate" | "advanced";
   price_ngn: number;
@@ -71,107 +70,6 @@ function formatHours(minutes: number) {
   }
 
   return `${Math.round((minutes / 60) * 10) / 10} hours`;
-}
-
-function getCourseVisual(course: Course) {
-  const value =
-    `${course.slug} ${course.title} ${course.category ?? ""}`.toLowerCase();
-
-  if (
-    value.includes("marketing") ||
-    value.includes("content") ||
-    value.includes("social media") ||
-    value.includes("digital marketing")
-  ) {
-    return {
-      className: "course-art course-art-marketing",
-      icon: "◈",
-      label: "Digital Marketing",
-    };
-  }
-
-  if (
-    value.includes("data") ||
-    value.includes("excel") ||
-    value.includes("power-bi") ||
-    value.includes("power bi") ||
-    value.includes("analytics")
-  ) {
-    return {
-      className: "course-art course-art-data",
-      icon: "▥",
-      label: "Data & Analytics",
-    };
-  }
-
-  if (
-    value.includes("business") ||
-    value.includes("entrepreneur") ||
-    value.includes("startup")
-  ) {
-    return {
-      className: "course-art course-art-business",
-      icon: "◆",
-      label: "Business",
-    };
-  }
-
-  if (
-    value.includes("operation") ||
-    value.includes("logistics") ||
-    value.includes("inventory") ||
-    value.includes("warehouse")
-  ) {
-    return {
-      className: "course-art course-art-operations",
-      icon: "▦",
-      label: "Operations",
-    };
-  }
-
-  if (
-    value.includes("teacher") ||
-    value.includes("teaching") ||
-    value.includes("education")
-  ) {
-    return {
-      className: "course-art course-art-education",
-      icon: "◇",
-      label: "Education",
-    };
-  }
-
-  if (
-    value.includes("productivity") ||
-    value.includes("digital skills") ||
-    value.includes("office")
-  ) {
-    return {
-      className: "course-art course-art-productivity",
-      icon: "◫",
-      label: "Productivity",
-    };
-  }
-
-  const hasAi =
-    /\bai\b/.test(value) ||
-    value.includes("artificial intelligence") ||
-    value.includes("automation") ||
-    value.includes("prompt engineering");
-
-  if (hasAi) {
-    return {
-      className: "course-art course-art-ai",
-      icon: "✦",
-      label: "AI & Technology",
-    };
-  }
-
-  return {
-    className: "course-art course-art-default",
-    icon: "R",
-    label: course.category || "Professional Skills",
-  };
 }
 
 function getCourseFocus(slug: string) {
@@ -230,7 +128,9 @@ export async function generateMetadata({
 
   const { data: course } = await supabase
     .from("courses")
-    .select("title, short_description, seo_title, seo_description")
+    .select(
+      "title, short_description, seo_title, seo_description"
+    )
     .eq("slug", slug)
     .maybeSingle();
 
@@ -264,29 +164,30 @@ export default async function CourseDetailPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: courseData, error: courseError } =
-    await supabase
-      .from("courses")
-      .select(
-        [
-          "id",
-          "title",
-          "slug",
-          "short_description",
-          "description",
-          "thumbnail_url",
-          "category",
-          "level",
-          "price_ngn",
-          "is_free",
-          "duration_minutes",
-          "learning_outcomes",
-          "target_audience",
-        ].join(", ")
-      )
-      .eq("slug", slug)
-      .eq("status", "published")
-      .maybeSingle();
+  const {
+    data: courseData,
+    error: courseError,
+  } = await supabase
+    .from("courses")
+    .select(
+      [
+        "id",
+        "title",
+        "slug",
+        "short_description",
+        "description",
+        "category",
+        "level",
+        "price_ngn",
+        "is_free",
+        "duration_minutes",
+        "learning_outcomes",
+        "target_audience",
+      ].join(", ")
+    )
+    .eq("slug", slug)
+    .eq("status", "published")
+    .maybeSingle();
 
   if (courseError) {
     console.error(
@@ -301,29 +202,31 @@ export default async function CourseDetailPage({
     notFound();
   }
 
-  const { data: curriculumData, error: curriculumError } =
-    await supabase
-      .from("course_curriculum")
-      .select(
-        [
-          "lesson_id",
-          "course_id",
-          "section_id",
-          "section_title",
-          "section_sort",
-          "lesson_title",
-          "lesson_slug",
-          "lesson_sort",
-          "duration_minutes",
-          "duration_seconds",
-          "is_preview",
-          "is_published",
-        ].join(", ")
-      )
-      .eq("course_id", course.id)
-      .eq("is_published", true)
-      .order("section_sort")
-      .order("lesson_sort");
+  const {
+    data: curriculumData,
+    error: curriculumError,
+  } = await supabase
+    .from("course_curriculum")
+    .select(
+      [
+        "lesson_id",
+        "course_id",
+        "section_id",
+        "section_title",
+        "section_sort",
+        "lesson_title",
+        "lesson_slug",
+        "lesson_sort",
+        "duration_minutes",
+        "duration_seconds",
+        "is_preview",
+        "is_published",
+      ].join(", ")
+    )
+    .eq("course_id", course.id)
+    .eq("is_published", true)
+    .order("section_sort")
+    .order("lesson_sort");
 
   if (curriculumError) {
     console.error(
@@ -370,7 +273,9 @@ export default async function CourseDetailPage({
   );
 
   const totalLessons = curriculumRows.length;
-  const totalCompleted = completedLessonIds.size;
+
+  const totalCompleted =
+    completedLessonIds.size;
 
   const progressPercent =
     totalLessons > 0
@@ -386,11 +291,6 @@ export default async function CourseDetailPage({
     totalLessons > 0 &&
     totalCompleted >= totalLessons;
 
-  /*
-   * Resume from the first incomplete lesson.
-   * This is the lesson the learner should reach when
-   * pressing "Continue Course".
-   */
   const nextIncompleteLesson =
     curriculumRows.find(
       (lesson) =>
@@ -405,11 +305,12 @@ export default async function CourseDetailPage({
   const continueLesson =
     nextIncompleteLesson || firstLesson;
 
-  const calculatedMinutes = curriculumRows.reduce(
-    (total, lesson) =>
-      total + (lesson.duration_minutes || 0),
-    0
-  );
+  const calculatedMinutes =
+    curriculumRows.reduce(
+      (total, lesson) =>
+        total + (lesson.duration_minutes || 0),
+      0
+    );
 
   const totalMinutes =
     calculatedMinutes > 0
@@ -452,7 +353,6 @@ export default async function CourseDetailPage({
     course.learning_outcomes?.filter(Boolean) || [];
 
   const focus = getCourseFocus(course.slug);
-  const visual = getCourseVisual(course);
 
   const continueHref = continueLesson
     ? `/learn/${course.slug}/${continueLesson.lesson_slug}`
@@ -596,45 +496,6 @@ export default async function CourseDetailPage({
                 </small>
               </div>
             ) : null}
-          </div>
-
-          <div className="rn-course-hero-visual">
-            {course.thumbnail_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={course.thumbnail_url}
-                alt={course.title}
-              />
-            ) : (
-              <div
-                className={`rn-course-visual-fallback ${visual.className}`}
-              >
-                <div className="course-art-grid" />
-                <div className="course-art-glow" />
-
-                <div className="course-art-content">
-                  <span className="course-art-icon">
-                    {visual.icon}
-                  </span>
-
-                  <span className="course-art-label">
-                    {visual.label}
-                  </span>
-                </div>
-
-                <div className="course-art-decoration course-art-decoration-one" />
-                <div className="course-art-decoration course-art-decoration-two" />
-                <div className="course-art-decoration course-art-decoration-three" />
-              </div>
-            )}
-
-            <div className="rn-course-visual-overlay">
-              <span>{formatLevel(course.level)}</span>
-
-              <strong>
-                {totalLessons} lessons
-              </strong>
-            </div>
           </div>
         </section>
 
