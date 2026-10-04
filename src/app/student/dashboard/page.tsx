@@ -17,7 +17,6 @@ type Course = {
   short_description: string | null;
   category: string | null;
   level: "beginner" | "intermediate" | "advanced";
-  thumbnail_url: string | null;
   duration_minutes: number | null;
   is_free: boolean;
   price_ngn: number;
@@ -48,12 +47,25 @@ type SkillProfile = {
   updated_at: string;
 };
 
+type CurriculumRow = {
+  lesson_id: string;
+  course_id: string;
+};
+
+type LessonProgressRow = {
+  lesson_id: string;
+  course_id: string;
+  completed: boolean;
+};
+
 function formatLevel(level: string) {
   return level.charAt(0).toUpperCase() + level.slice(1);
 }
 
 function formatDate(value: string | null) {
-  if (!value) return "Not available";
+  if (!value) {
+    return "Not available";
+  }
 
   return new Intl.DateTimeFormat("en-NG", {
     dateStyle: "medium",
@@ -61,9 +73,63 @@ function formatDate(value: string | null) {
 }
 
 function getProgressLabel(progress: number) {
-  if (progress >= 100) return "Completed";
-  if (progress > 0) return "In progress";
+  if (progress >= 100) {
+    return "Completed";
+  }
+
+  if (progress > 0) {
+    return "In progress";
+  }
+
   return "Not started";
+}
+
+function getEnrollmentProgress(
+  enrollment: Enrollment,
+  curriculumLessons: CurriculumRow[],
+  completedLessons: LessonProgressRow[]
+) {
+  const courseLessonIds = new Set(
+    curriculumLessons
+      .filter(
+        (lesson) =>
+          lesson.course_id === enrollment.course_id
+      )
+      .map((lesson) => lesson.lesson_id)
+  );
+
+  const totalLessons = courseLessonIds.size;
+
+  if (totalLessons === 0) {
+    return Math.min(
+      100,
+      Math.max(
+        0,
+        Number(enrollment.progress_percent || 0)
+      )
+    );
+  }
+
+  const completedCount = new Set(
+    completedLessons
+      .filter(
+        (progress) =>
+          progress.course_id === enrollment.course_id &&
+          progress.completed &&
+          courseLessonIds.has(progress.lesson_id)
+      )
+      .map((progress) => progress.lesson_id)
+  ).size;
+
+  return Math.min(
+    100,
+    Math.max(
+      0,
+      Math.round(
+        (completedCount / totalLessons) * 100
+      )
+    )
+  );
 }
 
 export default async function StudentDashboardPage() {
@@ -101,6 +167,10 @@ export default async function StudentDashboardPage() {
       `
     )
     .eq("student_id", user.id)
+    .in("enrollment_status", [
+      "active",
+      "completed",
+    ])
     .order("last_accessed_at", {
       ascending: false,
       nullsFirst: false,
@@ -120,24 +190,25 @@ export default async function StudentDashboardPage() {
   let enrolledCourses: Course[] = [];
 
   if (enrolledCourseIds.length > 0) {
-    const { data: courseData } = await supabase
-      .from("courses")
-      .select(
-        `
-          id,
-          title,
-          slug,
-          short_description,
-          category,
-          level,
-          thumbnail_url,
-          duration_minutes,
-          is_free,
-          price_ngn,
-          status
-        `
-      )
-      .in("id", enrolledCourseIds);
+    const { data: courseData } =
+      await supabase
+        .from("courses")
+        .select(
+          `
+            id,
+            title,
+            slug,
+            short_description,
+            category,
+            level,
+            duration_minutes,
+            is_free,
+            price_ngn,
+            status
+          `
+        )
+        .in("id", enrolledCourseIds)
+        .eq("status", "published");
 
     enrolledCourses =
       (courseData || []) as Course[];
@@ -148,6 +219,100 @@ export default async function StudentDashboardPage() {
   enrolledCourses.forEach((course) => {
     courseMap.set(course.id, course);
   });
+
+  /*
+   * Keep only enrollments whose courses are currently
+   * published and therefore accessible through the
+   * learner-facing catalogue.
+   */
+  const visibleEnrollments =
+    enrollments.filter((enrollment) =>
+      courseMap.has(enrollment.course_id)
+    );
+
+  const visibleCourseIds = [
+    ...new Set(
+      visibleEnrollments.map(
+        (enrollment) =>
+          enrollment.course_id
+      )
+    ),
+  ];
+
+  /*
+   * Load the canonical published curriculum for the
+   * learner's visible courses.
+   *
+   * This allows the dashboard to calculate progress
+   * from actual lesson completion rather than relying
+   * only on a potentially stale enrollment percentage.
+   */
+  let curriculumLessons: CurriculumRow[] = [];
+
+  if (visibleCourseIds.length > 0) {
+    const {
+      data: curriculumData,
+      error: curriculumError,
+    } = await supabase
+      .from("course_curriculum")
+      .select(
+        "lesson_id, course_id"
+      )
+      .in("course_id", visibleCourseIds)
+      .eq("is_published", true);
+
+    if (curriculumError) {
+      console.error(
+        "Failed to load dashboard curriculum:",
+        curriculumError
+      );
+    }
+
+    curriculumLessons =
+      (curriculumData || []) as CurriculumRow[];
+  }
+
+  let completedLessons: LessonProgressRow[] = [];
+
+  if (visibleCourseIds.length > 0) {
+    const {
+      data: progressData,
+      error: progressError,
+    } = await supabase
+      .from("lesson_progress")
+      .select(
+        "lesson_id, course_id, completed"
+      )
+      .eq("student_id", user.id)
+      .in("course_id", visibleCourseIds)
+      .eq("completed", true);
+
+    if (progressError) {
+      console.error(
+        "Failed to load dashboard lesson progress:",
+        progressError
+      );
+    }
+
+    completedLessons =
+      (progressData || []) as LessonProgressRow[];
+  }
+
+  const enrollmentProgressMap =
+    new Map<string, number>();
+
+  visibleEnrollments.forEach(
+    (enrollment) => {
+      enrollmentProgressMap.set(
+        enrollment.id,
+        getEnrollmentProgress(
+          enrollment,
+          curriculumLessons,
+          completedLessons
+        )
+      );
+    }
+  );
 
   const { data: skillProfileData } =
     await supabase
@@ -174,12 +339,14 @@ export default async function StudentDashboardPage() {
     (skillProfileData || []) as SkillProfile[];
 
   const totalCourses =
-    enrollments.length;
+    visibleEnrollments.length;
 
   const completedCourses =
-    enrollments.filter(
+    visibleEnrollments.filter(
       (enrollment) =>
-        enrollment.progress_percent >= 100 ||
+        enrollmentProgressMap.get(
+          enrollment.id
+        ) === 100 ||
         enrollment.enrollment_status ===
           "completed"
     ).length;
@@ -258,13 +425,6 @@ export default async function StudentDashboardPage() {
             className="rn-button rn-button-secondary"
           >
             Certificates
-          </Link>
-
-          <Link
-            href="/student/assessment"
-            className="rn-button rn-button-secondary"
-          >
-            Skill Assessment
           </Link>
         </div>
       </section>
@@ -358,14 +518,12 @@ export default async function StudentDashboardPage() {
             <div className="rn-profile-details">
               <p>
                 <strong>Email:</strong>{" "}
-                {profile?.email ||
-                  user.email}
+                {profile?.email || user.email}
               </p>
 
               <p>
                 <strong>Role:</strong>{" "}
-                {profile?.role ||
-                  "student"}
+                {profile?.role || "student"}
               </p>
 
               <p>
@@ -397,8 +555,8 @@ export default async function StudentDashboardPage() {
 
           <p className="rn-dashboard-card-text">
             {hasLearningProfile
-              ? "Your current learning profile shows strong foundational skills across the areas assessed. Continue with advanced courses to deepen your capabilities and expand your practical digital skills."
-              : "Complete the diagnostic assessment to identify your current strengths and development areas. Your results can be used to personalize your learning path."}
+              ? "Your current learning profile shows the skills measured through your completed assessments. Continue with relevant courses and practical projects to deepen your capabilities."
+              : "Complete a course assessment to establish your current skill profile. Assessment results can be used to identify strengths and development areas."}
           </p>
 
           <div className="rn-dashboard-inline-actions">
@@ -415,15 +573,15 @@ export default async function StudentDashboardPage() {
                   href="/courses"
                   className="rn-button rn-button-secondary"
                 >
-                  Explore Advanced Courses
+                  Explore Courses
                 </Link>
               </>
             ) : (
               <Link
-                href="/student/assessment"
+                href="/courses"
                 className="rn-button rn-button-primary"
               >
-                Take Diagnostic Assessment
+                Choose a Course
               </Link>
             )}
           </div>
@@ -453,15 +611,15 @@ export default async function StudentDashboardPage() {
           </Link>
         </div>
 
-        {enrollments.length === 0 ? (
+        {visibleEnrollments.length === 0 ? (
           <article className="rn-empty-state">
             <h3>No courses yet</h3>
 
             <p>
               You have not enrolled in a
-              course yet. Explore the
-              RuffNeck Learn catalog to get
-              started.
+              published course yet. Explore
+              the RuffNeck Learn catalogue to
+              get started.
             </p>
 
             <Link
@@ -473,7 +631,7 @@ export default async function StudentDashboardPage() {
           </article>
         ) : (
           <div className="rn-course-grid">
-            {enrollments.map(
+            {visibleEnrollments.map(
               (enrollment) => {
                 const course =
                   courseMap.get(
@@ -485,38 +643,15 @@ export default async function StudentDashboardPage() {
                 }
 
                 const progress =
-                  Math.min(
-                    100,
-                    Math.max(
-                      0,
-                      Number(
-                        enrollment.progress_percent ||
-                          0
-                      )
-                    )
-                  );
+                  enrollmentProgressMap.get(
+                    enrollment.id
+                  ) ?? 0;
 
                 return (
                   <article
                     key={enrollment.id}
                     className="rn-course-card"
                   >
-                    {course.thumbnail_url ? (
-                      <div className="rn-course-card-image">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={
-                            course.thumbnail_url
-                          }
-                          alt={course.title}
-                        />
-                      </div>
-                    ) : (
-                      <div className="rn-course-card-placeholder">
-                        RN
-                      </div>
-                    )}
-
                     <div className="rn-course-card-body">
                       <div className="rn-course-card-meta">
                         <span>
@@ -530,6 +665,16 @@ export default async function StudentDashboardPage() {
                             {course.category}
                           </span>
                         ) : null}
+
+                        {course.is_free ? (
+                          <span>
+                            Free
+                          </span>
+                        ) : (
+                          <span>
+                            Premium
+                          </span>
+                        )}
                       </div>
 
                       <h3>
@@ -575,8 +720,7 @@ export default async function StudentDashboardPage() {
                           href={`/courses/${course.slug}`}
                           className="rn-button rn-button-primary"
                         >
-                          {progress >=
-                          100
+                          {progress >= 100
                             ? "Review Course"
                             : progress > 0
                               ? "Continue"
@@ -616,13 +760,13 @@ export default async function StudentDashboardPage() {
 
             <span>
               Explore AI, data, digital
-              marketing, teaching and
-              productivity courses.
+              marketing, productivity and
+              other practical courses.
             </span>
           </Link>
 
           <Link
-            href="/student/assessment"
+            href="/courses"
             className="rn-dashboard-action"
           >
             <strong>
@@ -630,9 +774,9 @@ export default async function StudentDashboardPage() {
             </strong>
 
             <span>
-              Test your knowledge and
-              update your course-specific
-              skills profile.
+              Open an enrolled course to
+              access its assessment and
+              update your skill profile.
             </span>
           </Link>
 
