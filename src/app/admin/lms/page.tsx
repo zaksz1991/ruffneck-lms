@@ -15,6 +15,15 @@ type Profile = {
   email: string | null;
 };
 
+type Course = {
+  id: string;
+  title: string;
+  status: string;
+  instructor_id: string | null;
+  created_at: string;
+  [key: string]: unknown;
+};
+
 type Student = {
   id: string;
   full_name: string | null;
@@ -57,11 +66,23 @@ export default async function AdminLmsPage({
     redirect("/login?next=/admin/lms");
   }
 
-  const { data: profileData } = await supabase
-    .from("profiles")
-    .select("role, full_name, email")
-    .eq("id", user.id)
-    .maybeSingle();
+  const { data: profileData, error: profileError } =
+    await supabase
+      .from("profiles")
+      .select("role, full_name, email")
+      .eq("id", user.id)
+      .maybeSingle();
+
+  if (profileError) {
+    console.error(
+      "Admin LMS profile lookup failed:",
+      profileError
+    );
+
+    throw new Error(
+      "Unable to verify admin access."
+    );
+  }
 
   const profile =
     profileData as unknown as Profile | null;
@@ -75,16 +96,67 @@ export default async function AdminLmsPage({
   }
 
   const params = await searchParams;
-  const view = params.view || "courses";
 
-  const { data: courses } = await supabase
+  const requestedView =
+    params.view || "courses";
+
+  const view =
+    requestedView === "students" ||
+    requestedView === "enrollments" ||
+    requestedView === "courses"
+      ? requestedView
+      : "courses";
+
+  /*
+   * Admins can manage all courses.
+   * Instructors can manage only courses assigned to them.
+   *
+   * The same ownership boundary used by the hardened
+   * project-review API is applied here.
+   */
+  let coursesQuery = supabase
     .from("courses")
     .select("*")
     .order("created_at", {
       ascending: false,
     });
 
-  const { count: studentCount } =
+  if (profile.role === "instructor") {
+    coursesQuery = coursesQuery.eq(
+      "instructor_id",
+      user.id
+    );
+  }
+
+  const {
+    data: courseData,
+    error: courseError,
+  } = await coursesQuery;
+
+  if (courseError) {
+    console.error(
+      "Admin LMS course lookup failed:",
+      courseError
+    );
+
+    throw new Error(
+      "Unable to load courses."
+    );
+  }
+
+  const courses =
+    (courseData as unknown as Course[]) || [];
+
+  const courseIds = courses.map(
+    (course) => course.id
+  );
+
+  /*
+   * Student and enrollment counts remain global
+   * only for admins. Instructors receive counts
+   * scoped to their assigned courses.
+   */
+  const studentCountResult =
     await supabase
       .from("profiles")
       .select("*", {
@@ -93,50 +165,113 @@ export default async function AdminLmsPage({
       })
       .eq("role", "student");
 
-  const { count: enrollCount } =
-    await supabase
-      .from("enrollments")
-      .select("*", {
-        count: "exact",
-        head: true,
-      });
+  const studentCount =
+    studentCountResult.count ?? 0;
+
+  let enrollCount = 0;
+
+  if (profile.role === "admin") {
+    const result =
+      await supabase
+        .from("enrollments")
+        .select("*", {
+          count: "exact",
+          head: true,
+        });
+
+    enrollCount = result.count ?? 0;
+  } else if (courseIds.length > 0) {
+    const result =
+      await supabase
+        .from("enrollments")
+        .select("*", {
+          count: "exact",
+          head: true,
+        })
+        .in("course_id", courseIds);
+
+    enrollCount = result.count ?? 0;
+  }
 
   /*
-   * Project / capstone statistics.
-   *
-   * course_projects is readable to published projects,
-   * instructors managing their own courses, and admins.
+   * Only published projects belonging to courses
+   * the current user can manage are counted.
    */
-  const { count: projectCount } =
-    await supabase
+  let projectCount = 0;
+  let pendingProjectCount = 0;
+
+  if (courseIds.length > 0) {
+    const {
+      data: projectData,
+      error: projectError,
+    } = await supabase
       .from("course_projects")
-      .select("*", {
-        count: "exact",
-        head: true,
-      })
+      .select("id, course_id")
+      .in("course_id", courseIds)
       .eq("is_published", true);
 
-  const { count: pendingProjectCount } =
-    await supabase
-      .from("project_submissions")
-      .select("*", {
-        count: "exact",
-        head: true,
-      })
-      .in("status", [
-        "submitted",
-        "under_review",
-      ]);
+    if (projectError) {
+      console.error(
+        "Admin LMS project lookup failed:",
+        projectError
+      );
+
+      throw new Error(
+        "Unable to load project statistics."
+      );
+    }
+
+    const projects =
+      (projectData as unknown as {
+        id: string;
+        course_id: string;
+      }[]) || [];
+
+    projectCount = projects.length;
+
+    const projectIds = projects.map(
+      (project) => project.id
+    );
+
+    if (projectIds.length > 0) {
+      const {
+        count,
+        error: pendingError,
+      } = await supabase
+        .from("project_submissions")
+        .select("*", {
+          count: "exact",
+          head: true,
+        })
+        .in("project_id", projectIds)
+        .in("status", [
+          "submitted",
+          "under_review",
+        ]);
+
+      if (pendingError) {
+        console.error(
+          "Pending project count failed:",
+          pendingError
+        );
+      }
+
+      pendingProjectCount =
+        count ?? 0;
+    }
+  }
 
   let students: Student[] = [];
-
   let enrollments: Enrollment[] = [];
 
   if (
     profile.role === "admin" &&
     view === "students"
   ) {
-    const { data } = await supabase
+    const {
+      data,
+      error,
+    } = await supabase
       .from("profiles")
       .select(
         "id, full_name, email, phone, created_at"
@@ -146,6 +281,17 @@ export default async function AdminLmsPage({
         ascending: false,
       });
 
+    if (error) {
+      console.error(
+        "Admin student lookup failed:",
+        error
+      );
+
+      throw new Error(
+        "Unable to load students."
+      );
+    }
+
     students =
       (data as unknown as Student[]) || [];
   }
@@ -154,7 +300,10 @@ export default async function AdminLmsPage({
     profile.role === "admin" &&
     view === "enrollments"
   ) {
-    const { data } = await supabase
+    const {
+      data,
+      error,
+    } = await supabase
       .from("enrollments")
       .select(
         "id, student_id, course_id, payment_status, enrollment_status, progress_percent, enrolled_at"
@@ -162,6 +311,17 @@ export default async function AdminLmsPage({
       .order("enrolled_at", {
         ascending: false,
       });
+
+    if (error) {
+      console.error(
+        "Admin enrollment lookup failed:",
+        error
+      );
+
+      throw new Error(
+        "Unable to load enrollments."
+      );
+    }
 
     enrollments =
       (data as unknown as Enrollment[]) ||
@@ -176,7 +336,7 @@ export default async function AdminLmsPage({
     ),
   ];
 
-  const courseIds = [
+  const enrollmentCourseIds = [
     ...new Set(
       enrollments.map(
         (item) => item.course_id
@@ -186,6 +346,7 @@ export default async function AdminLmsPage({
 
   const {
     data: enrollmentStudents,
+    error: enrollmentStudentsError,
   } =
     profile.role === "admin" &&
     view === "enrollments" &&
@@ -196,19 +357,51 @@ export default async function AdminLmsPage({
             "id, full_name, email"
           )
           .in("id", studentIds)
-      : { data: [] };
+      : {
+          data: [],
+          error: null,
+        };
+
+  if (enrollmentStudentsError) {
+    console.error(
+      "Enrollment student lookup failed:",
+      enrollmentStudentsError
+    );
+
+    throw new Error(
+      "Unable to load enrollment students."
+    );
+  }
 
   const {
     data: enrollmentCourses,
+    error: enrollmentCoursesError,
   } =
     profile.role === "admin" &&
     view === "enrollments" &&
-    courseIds.length > 0
+    enrollmentCourseIds.length > 0
       ? await supabase
           .from("courses")
           .select("id, title")
-          .in("id", courseIds)
-      : { data: [] };
+          .in(
+            "id",
+            enrollmentCourseIds
+          )
+      : {
+          data: [],
+          error: null,
+        };
+
+  if (enrollmentCoursesError) {
+    console.error(
+      "Enrollment course lookup failed:",
+      enrollmentCoursesError
+    );
+
+    throw new Error(
+      "Unable to load enrollment courses."
+    );
+  }
 
   const studentMap = new Map(
     (
@@ -261,8 +454,7 @@ export default async function AdminLmsPage({
               className="btn btn-primary"
             >
               Projects & Capstones
-              {pendingProjectCount &&
-              pendingProjectCount > 0
+              {pendingProjectCount > 0
                 ? ` (${pendingProjectCount})`
                 : ""}
             </Link>
@@ -288,7 +480,7 @@ export default async function AdminLmsPage({
               </span>
 
               <strong>
-                {courses?.length ?? 0}
+                {courses.length}
               </strong>
             </span>
           </Link>
@@ -312,7 +504,7 @@ export default async function AdminLmsPage({
                 </span>
 
                 <strong>
-                  {studentCount ?? 0}
+                  {studentCount}
                 </strong>
               </span>
             </Link>
@@ -328,7 +520,7 @@ export default async function AdminLmsPage({
                 </span>
 
                 <strong>
-                  {studentCount ?? 0}
+                  {studentCount}
                 </strong>
               </span>
             </div>
@@ -353,7 +545,7 @@ export default async function AdminLmsPage({
                 </span>
 
                 <strong>
-                  {enrollCount ?? 0}
+                  {enrollCount}
                 </strong>
               </span>
             </Link>
@@ -369,7 +561,7 @@ export default async function AdminLmsPage({
                 </span>
 
                 <strong>
-                  {enrollCount ?? 0}
+                  {enrollCount}
                 </strong>
               </span>
             </div>
@@ -389,7 +581,7 @@ export default async function AdminLmsPage({
               </span>
 
               <strong>
-                {projectCount ?? 0}
+                {projectCount}
               </strong>
 
               <small
@@ -399,7 +591,7 @@ export default async function AdminLmsPage({
                   fontSize: "0.72rem",
                 }}
               >
-                {pendingProjectCount ?? 0}{" "}
+                {pendingProjectCount}{" "}
                 awaiting review
               </small>
             </span>
@@ -530,8 +722,7 @@ export default async function AdminLmsPage({
               </Link>
             </div>
 
-            {enrollments.length ===
-            0 ? (
+            {enrollments.length === 0 ? (
               <div className="rn-empty-state">
                 <div className="rn-empty-icon">
                   ✓
@@ -665,9 +856,7 @@ export default async function AdminLmsPage({
 
         {view === "courses" ? (
           <AdminLmsEditor
-            initialCourses={
-              courses ?? []
-            }
+            initialCourses={courses}
             userId={user.id}
             role={profile.role}
           />

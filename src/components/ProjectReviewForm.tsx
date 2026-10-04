@@ -9,6 +9,13 @@ type ReviewStatus =
   | "approved"
   | "revision_required";
 
+type ReviewResponse = {
+  error?: string;
+  message?: string;
+};
+
+const MAX_FEEDBACK_LENGTH = 10000;
+
 export default function ProjectReviewForm({
   submissionId,
   initialStatus,
@@ -28,6 +35,12 @@ export default function ProjectReviewForm({
   maxScore: number;
 }) {
   const router = useRouter();
+
+  const normalizedMaxScore =
+    Number.isFinite(maxScore) &&
+    maxScore > 0
+      ? Math.floor(maxScore)
+      : 100;
 
   const [status, setStatus] =
     useState<ReviewStatus>(
@@ -55,26 +68,77 @@ export default function ProjectReviewForm({
   const [saved, setSaved] =
     useState(false);
 
+  const isLocked =
+    initialStatus === "approved";
+
   async function saveReview() {
+    if (loading || isLocked) {
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setSaved(false);
 
-    const numericScore =
-      score === ""
-        ? null
-        : Number(score);
+    const trimmedFeedback =
+      feedback.trim();
 
     if (
-      numericScore !== null &&
-      (!Number.isInteger(
-        numericScore
-      ) ||
-        numericScore < 0 ||
-        numericScore > maxScore)
+      trimmedFeedback.length >
+      MAX_FEEDBACK_LENGTH
     ) {
       setError(
-        `Score must be between 0 and ${maxScore}.`
+        `Reviewer feedback cannot exceed ${MAX_FEEDBACK_LENGTH.toLocaleString()} characters.`
+      );
+      setLoading(false);
+      return;
+    }
+
+    let numericScore:
+      | number
+      | null = null;
+
+    if (score.trim() !== "") {
+      const parsedScore =
+        Number(score);
+
+      if (
+        !Number.isFinite(
+          parsedScore
+        ) ||
+        !Number.isInteger(
+          parsedScore
+        )
+      ) {
+        setError(
+          "Score must be a whole number."
+        );
+        setLoading(false);
+        return;
+      }
+
+      if (
+        parsedScore < 0 ||
+        parsedScore >
+          normalizedMaxScore
+      ) {
+        setError(
+          `Score must be between 0 and ${normalizedMaxScore}.`
+        );
+        setLoading(false);
+        return;
+      }
+
+      numericScore =
+        parsedScore;
+    }
+
+    if (
+      status === "approved" &&
+      numericScore === null
+    ) {
+      setError(
+        "A project score is required before approving the submission."
       );
       setLoading(false);
       return;
@@ -83,7 +147,7 @@ export default function ProjectReviewForm({
     if (
       status ===
         "revision_required" &&
-      !feedback.trim()
+      !trimmedFeedback
     ) {
       setError(
         "Provide reviewer feedback explaining what needs to be revised."
@@ -94,7 +158,9 @@ export default function ProjectReviewForm({
 
     try {
       const response = await fetch(
-        `/api/admin/projects/${submissionId}`,
+        `/api/admin/projects/${encodeURIComponent(
+          submissionId
+        )}`,
         {
           method: "PATCH",
           headers: {
@@ -104,16 +170,24 @@ export default function ProjectReviewForm({
           body: JSON.stringify({
             status,
             score: numericScore,
-            feedback,
+            feedback:
+              trimmedFeedback ||
+              null,
           }),
         }
       );
 
-      const result =
-        (await response.json()) as {
-          error?: string;
-          message?: string;
-        };
+      let result: ReviewResponse =
+        {};
+
+      try {
+        result =
+          (await response.json()) as ReviewResponse;
+      } catch {
+        throw new Error(
+          "The review service returned an invalid response."
+        );
+      }
 
       if (!response.ok) {
         throw new Error(
@@ -136,6 +210,42 @@ export default function ProjectReviewForm({
     }
   }
 
+  if (isLocked) {
+    return (
+      <div className="rn-project-review-form">
+        <div
+          className="success"
+          role="status"
+        >
+          This project has already been
+          approved. Its review is locked.
+        </div>
+
+        {initialScore !== null ? (
+          <p>
+            Final score:{" "}
+            <strong>
+              {initialScore} /{" "}
+              {normalizedMaxScore}
+            </strong>
+          </p>
+        ) : null}
+
+        {initialFeedback ? (
+          <div>
+            <span className="rn-eyebrow">
+              REVIEWER FEEDBACK
+            </span>
+
+            <p>
+              {initialFeedback}
+            </p>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="rn-project-review-form">
       <div className="rn-project-review-fields">
@@ -144,13 +254,16 @@ export default function ProjectReviewForm({
 
           <select
             value={status}
-            onChange={(event) =>
+            onChange={(event) => {
               setStatus(
                 event.target
                   .value as ReviewStatus
-              )
-            }
+              );
+              setSaved(false);
+              setError(null);
+            }}
             disabled={loading}
+            aria-label="Project review status"
           >
             <option value="submitted">
               Submitted
@@ -172,20 +285,25 @@ export default function ProjectReviewForm({
 
         <label>
           <span>
-            Score / {maxScore}
+            Score / {normalizedMaxScore}
           </span>
 
           <input
             type="number"
             min="0"
-            max={maxScore}
+            max={normalizedMaxScore}
+            step="1"
+            inputMode="numeric"
             value={score}
-            onChange={(event) =>
+            onChange={(event) => {
               setScore(
                 event.target.value
-              )
-            }
+              );
+              setSaved(false);
+              setError(null);
+            }}
             disabled={loading}
+            aria-label={`Project score out of ${normalizedMaxScore}`}
           />
         </label>
       </div>
@@ -197,25 +315,61 @@ export default function ProjectReviewForm({
 
         <textarea
           rows={7}
+          maxLength={
+            MAX_FEEDBACK_LENGTH
+          }
           value={feedback}
-          onChange={(event) =>
+          onChange={(event) => {
             setFeedback(
               event.target.value
-            )
-          }
+            );
+            setSaved(false);
+            setError(null);
+          }}
           placeholder="Record strengths, required revisions, evidence, and next steps."
           disabled={loading}
+          aria-label="Reviewer feedback"
         />
+
+        <small>
+          {feedback.length.toLocaleString()} /{" "}
+          {MAX_FEEDBACK_LENGTH.toLocaleString()}
+        </small>
       </label>
 
+      {status === "approved" ? (
+        <p>
+          Approval requires a project score and
+          successful completion of the published
+          course lessons and a passing assessment
+          score. The server will verify these
+          requirements.
+        </p>
+      ) : null}
+
+      {status ===
+      "revision_required" ? (
+        <p>
+          Feedback is required when requesting
+          revisions so the learner knows what to
+          improve.
+        </p>
+      ) : null}
+
       {error ? (
-        <div className="error">
+        <div
+          className="error"
+          role="alert"
+        >
           {error}
         </div>
       ) : null}
 
       {saved ? (
-        <div className="success">
+        <div
+          className="success"
+          role="status"
+        >
           Review saved.
         </div>
       ) : null}
@@ -225,6 +379,7 @@ export default function ProjectReviewForm({
         className="rn-button rn-button-primary"
         onClick={saveReview}
         disabled={loading}
+        aria-busy={loading}
       >
         {loading
           ? "Saving…"

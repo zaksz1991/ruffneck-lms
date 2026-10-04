@@ -30,6 +30,8 @@ type Project = {
 type Course = {
   id: string;
   title: string;
+  status: string;
+  instructor_id: string | null;
 };
 
 type Student = {
@@ -72,12 +74,18 @@ function formatDate(
     return "—";
   }
 
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
   return new Intl.DateTimeFormat(
     "en-NG",
     {
       dateStyle: "medium",
     }
-  ).format(new Date(value));
+  ).format(date);
 }
 
 export default async function AdminProjectsPage({
@@ -90,11 +98,9 @@ export default async function AdminProjectsPage({
   const params = await searchParams;
 
   const filter: Filter =
-    params.status ===
-      "pending" ||
+    params.status === "pending" ||
     params.status === "approved" ||
-    params.status ===
-      "revision_required"
+    params.status === "revision_required"
       ? params.status
       : "all";
 
@@ -110,21 +116,31 @@ export default async function AdminProjectsPage({
     );
   }
 
-  const { data: profileData } =
+  const { data: profileData, error: profileError } =
     await supabase
       .from("profiles")
       .select("id, role")
       .eq("id", user.id)
       .maybeSingle();
 
-  const profile =
-    profileData as {
-      id: string;
-      role:
-        | "student"
-        | "instructor"
-        | "admin";
-    } | null;
+  if (profileError) {
+    console.error(
+      "Admin project profile lookup failed:",
+      profileError
+    );
+
+    throw new Error(
+      "Unable to verify admin access."
+    );
+  }
+
+  const profile = profileData as {
+    id: string;
+    role:
+      | "student"
+      | "instructor"
+      | "admin";
+  } | null;
 
   if (
     !profile ||
@@ -135,99 +151,286 @@ export default async function AdminProjectsPage({
     redirect("/student/dashboard");
   }
 
-  const [
-    pendingResult,
-    approvedResult,
-    revisionResult,
-  ] = await Promise.all([
-    supabase
-      .from("project_submissions")
-      .select("*", {
-        count: "exact",
-        head: true,
-      })
-      .in("status", [
-        "submitted",
-        "under_review",
-      ]),
+  /*
+   * Load projects first so instructors can be restricted
+   * to projects belonging to their own courses.
+   */
+  const { data: allProjectData, error: projectError } =
+    await supabase
+      .from("course_projects")
+      .select(
+        "id, course_id, title, max_score"
+      );
 
-    supabase
-      .from("project_submissions")
-      .select("*", {
-        count: "exact",
-        head: true,
-      })
-      .eq("status", "approved"),
+  if (projectError) {
+    console.error(
+      "Admin project lookup failed:",
+      projectError
+    );
 
-    supabase
-      .from("project_submissions")
-      .select("*", {
-        count: "exact",
-        head: true,
-      })
-      .eq(
-        "status",
-        "revision_required"
-      ),
-  ]);
-
-  let query = supabase
-    .from("project_submissions")
-    .select(
-      [
-        "id",
-        "project_id",
-        "student_id",
-        "submission_text",
-        "submission_url",
-        "status",
-        "score",
-        "feedback",
-        "submitted_at",
-      ].join(", ")
-    )
-    .order("created_at", {
-      ascending: false,
-    });
-
-  if (filter === "pending") {
-    query = query.in("status", [
-      "submitted",
-      "under_review",
-    ]);
-  }
-
-  if (filter === "approved") {
-    query = query.eq(
-      "status",
-      "approved"
+    throw new Error(
+      "Unable to load projects."
     );
   }
 
-  if (
-    filter ===
-    "revision_required"
-  ) {
-    query = query.eq(
-      "status",
-      "revision_required"
-    );
-  }
+  const allProjects =
+    (allProjectData as unknown as Project[]) || [];
 
-  const { data: submissionData } =
-    await query;
-
-  const submissions =
-    (submissionData as unknown as Submission[]) ||
-    [];
-
-  const projectIds = Array.from(
+  const allCourseIds = Array.from(
     new Set(
-      submissions.map(
-        (submission) =>
-          submission.project_id
+      allProjects.map(
+        (project) => project.course_id
       )
     )
+  );
+
+  const { data: allCourseData, error: courseError } =
+    allCourseIds.length > 0
+      ? await supabase
+          .from("courses")
+          .select(
+            "id, title, status, instructor_id"
+          )
+          .in("id", allCourseIds)
+      : { data: [], error: null };
+
+  if (courseError) {
+    console.error(
+      "Admin course lookup failed:",
+      courseError
+    );
+
+    throw new Error(
+      "Unable to load project courses."
+    );
+  }
+
+  const allCourses =
+    (allCourseData as unknown as Course[]) || [];
+
+  /*
+   * Admins can review all courses.
+   * Instructors can review only their own courses.
+   *
+   * Published courses are required because the review API
+   * also requires the project to belong to a published course.
+   */
+  const reviewableCourseIds = new Set(
+    allCourses
+      .filter((course) => {
+        if (course.status !== "published") {
+          return false;
+        }
+
+        if (profile.role === "admin") {
+          return true;
+        }
+
+        return course.instructor_id === user.id;
+      })
+      .map((course) => course.id)
+  );
+
+  const reviewableProjectIds = new Set(
+    allProjects
+      .filter((project) =>
+        reviewableCourseIds.has(
+          project.course_id
+        )
+      )
+      .map((project) => project.id)
+  );
+
+  const reviewableProjects =
+    allProjects.filter((project) =>
+      reviewableProjectIds.has(project.id)
+    );
+
+  const reviewableProjectIdArray = Array.from(
+    reviewableProjectIds
+  );
+
+  /*
+   * There is no need to query submissions when this
+   * admin/instructor has no reviewable projects.
+   */
+  let submissions: Submission[] = [];
+
+  if (reviewableProjectIdArray.length > 0) {
+    let query = supabase
+      .from("project_submissions")
+      .select(
+        [
+          "id",
+          "project_id",
+          "student_id",
+          "submission_text",
+          "submission_url",
+          "status",
+          "score",
+          "feedback",
+          "submitted_at",
+        ].join(", ")
+      )
+      .in(
+        "project_id",
+        reviewableProjectIdArray
+      )
+      .order("created_at", {
+        ascending: false,
+      });
+
+    if (filter === "pending") {
+      query = query.in("status", [
+        "submitted",
+        "under_review",
+      ]);
+    }
+
+    if (filter === "approved") {
+      query = query.eq(
+        "status",
+        "approved"
+      );
+    }
+
+    if (
+      filter === "revision_required"
+    ) {
+      query = query.eq(
+        "status",
+        "revision_required"
+      );
+    }
+
+    const {
+      data: submissionData,
+      error: submissionError,
+    } = await query;
+
+    if (submissionError) {
+      console.error(
+        "Admin project submissions lookup failed:",
+        submissionError
+      );
+
+      throw new Error(
+        "Unable to load project submissions."
+      );
+    }
+
+    submissions =
+      (submissionData as unknown as Submission[]) ||
+      [];
+  }
+
+  /*
+   * Summary counts are calculated from the same
+   * reviewable project scope as the main list.
+   * This prevents instructors from seeing global counts
+   * for projects they are not allowed to review.
+   */
+  let pendingCount = 0;
+  let approvedCount = 0;
+  let revisionCount = 0;
+
+  if (reviewableProjectIdArray.length > 0) {
+    const [
+      pendingResult,
+      approvedResult,
+      revisionResult,
+    ] = await Promise.all([
+      supabase
+        .from("project_submissions")
+        .select("*", {
+          count: "exact",
+          head: true,
+        })
+        .in(
+          "project_id",
+          reviewableProjectIdArray
+        )
+        .in("status", [
+          "submitted",
+          "under_review",
+        ]),
+
+      supabase
+        .from("project_submissions")
+        .select("*", {
+          count: "exact",
+          head: true,
+        })
+        .in(
+          "project_id",
+          reviewableProjectIdArray
+        )
+        .eq("status", "approved"),
+
+      supabase
+        .from("project_submissions")
+        .select("*", {
+          count: "exact",
+          head: true,
+        })
+        .in(
+          "project_id",
+          reviewableProjectIdArray
+        )
+        .eq(
+          "status",
+          "revision_required"
+        ),
+    ]);
+
+    if (pendingResult.error) {
+      console.error(
+        "Pending project count failed:",
+        pendingResult.error
+      );
+    }
+
+    if (approvedResult.error) {
+      console.error(
+        "Approved project count failed:",
+        approvedResult.error
+      );
+    }
+
+    if (revisionResult.error) {
+      console.error(
+        "Revision project count failed:",
+        revisionResult.error
+      );
+    }
+
+    pendingCount =
+      pendingResult.count ?? 0;
+
+    approvedCount =
+      approvedResult.count ?? 0;
+
+    revisionCount =
+      revisionResult.count ?? 0;
+  }
+
+  const projectMap = new Map(
+    reviewableProjects.map((project) => [
+      project.id,
+      project,
+    ])
+  );
+
+  const reviewableCourses = allCourses.filter(
+    (course) =>
+      reviewableCourseIds.has(course.id)
+  );
+
+  const courseMap = new Map(
+    reviewableCourses.map((course) => [
+      course.id,
+      course,
+    ])
   );
 
   const studentIds = Array.from(
@@ -239,42 +442,7 @@ export default async function AdminProjectsPage({
     )
   );
 
-  const { data: projectData } =
-    projectIds.length > 0
-      ? await supabase
-          .from("course_projects")
-          .select(
-            "id, course_id, title, max_score"
-          )
-          .in("id", projectIds)
-      : { data: [] };
-
-  const projects =
-    (projectData as unknown as Project[]) ||
-    [];
-
-  const courseIds = Array.from(
-    new Set(
-      projects.map(
-        (project) =>
-          project.course_id
-      )
-    )
-  );
-
-  const { data: courseData } =
-    courseIds.length > 0
-      ? await supabase
-          .from("courses")
-          .select("id, title")
-          .in("id", courseIds)
-      : { data: [] };
-
-  const courses =
-    (courseData as unknown as Course[]) ||
-    [];
-
-  const { data: studentData } =
+  const { data: studentData, error: studentError } =
     studentIds.length > 0
       ? await supabase
           .from("profiles")
@@ -282,25 +450,21 @@ export default async function AdminProjectsPage({
             "id, full_name, email"
           )
           .in("id", studentIds)
-      : { data: [] };
+      : { data: [], error: null };
+
+  if (studentError) {
+    console.error(
+      "Admin project student lookup failed:",
+      studentError
+    );
+
+    throw new Error(
+      "Unable to load student information."
+    );
+  }
 
   const students =
-    (studentData as unknown as Student[]) ||
-    [];
-
-  const projectMap = new Map(
-    projects.map((project) => [
-      project.id,
-      project,
-    ])
-  );
-
-  const courseMap = new Map(
-    courses.map((course) => [
-      course.id,
-      course,
-    ])
-  );
+    (studentData as unknown as Student[]) || [];
 
   const studentMap = new Map(
     students.map((student) => [
@@ -308,15 +472,6 @@ export default async function AdminProjectsPage({
       student,
     ])
   );
-
-  const pendingCount =
-    pendingResult.count || 0;
-
-  const approvedCount =
-    approvedResult.count || 0;
-
-  const revisionCount =
-    revisionResult.count || 0;
 
   return (
     <main className="rn-admin-projects-page">
