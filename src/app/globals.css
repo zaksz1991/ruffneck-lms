@@ -7745,3 +7745,85 @@ table {
     padding: 12px;
   }
 }
+
+/* =========================================================
+   HOMEPAGE — MOBILE CENTERING
+   ========================================================= */
+
+@media (max-width: 720px) {
+  .rn-home-hero,
+  .rn-hero,
+  .home-hero {
+    text-align: center;
+  }
+
+  .rn-home-hero > *,
+  .rn-hero > *,
+  .home-hero > * {
+    margin-inline: auto;
+  }
+
+  .rn-hero-content,
+  .rn-home-hero-content,
+  .home-hero-content {
+    width: 100%;
+    max-width: 720px;
+    margin-inline: auto;
+    text-align: center;
+  }
+
+  .rn-hero-actions,
+  .rn-home-hero-actions,
+  .home-hero-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    max-width: 420px;
+    margin-inline: auto;
+  }
+
+  .rn-hero-actions .rn-button,
+  .rn-home-hero-actions .rn-button,
+  .home-hero-actions .rn-button {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .rn-hero-brand-copy {
+    text-align: center;
+  }
+
+  .rn-hero-brand-copy strong,
+  .rn-hero-brand-copy p,
+  .rn-hero-brand-copy span {
+    text-align: center;
+  }
+
+  .rn-learn-banner {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin-inline: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .rn-home-hero h1,
+  .rn-hero h1,
+  .home-hero h1 {
+    max-width: 100%;
+    margin-inline: auto;
+    text-align: center;
+  }
+
+  .rn-home-hero p,
+  .rn-hero p,
+  .home-hero p {
+    max-width: 100%;
+    margin-inline: auto;
+    text-align: center;
+  }
+}
