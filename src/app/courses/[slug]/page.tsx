@@ -358,6 +358,9 @@ export default async function CourseDetailPage({
     ? `/learn/${course.slug}/${continueLesson.lesson_slug}`
     : `/courses/${course.slug}`;
 
+  const assessmentHref =
+    `/courses/${course.slug}/assessment`;
+
   return (
     <main className="rn-course-experience">
       <div className="container">
@@ -433,16 +436,21 @@ export default async function CourseDetailPage({
             </div>
 
             <div className="rn-course-hero-actions">
-              {enrollment && continueLesson ? (
+              {enrollment && courseCompleted ? (
+                <Link
+                  href={assessmentHref}
+                  className="rn-button rn-button-primary"
+                >
+                  Take Final Assessment
+                </Link>
+              ) : enrollment && continueLesson ? (
                 <Link
                   href={continueHref}
                   className="rn-button rn-button-primary"
                 >
-                  {courseCompleted
-                    ? "Review Course"
-                    : progressPercent > 0
-                      ? "Continue Course"
-                      : "Start Course"}
+                  {progressPercent > 0
+                    ? "Continue Course"
+                    : "Start Course"}
                 </Link>
               ) : user && course.is_free ? (
                 <EnrollButton
@@ -494,6 +502,13 @@ export default async function CourseDetailPage({
                   {totalCompleted} of{" "}
                   {totalLessons} lessons completed
                 </small>
+
+                {courseCompleted ? (
+                  <p className="rn-course-completion-note">
+                    All published lessons are complete.
+                    Your final assessment is ready.
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -773,32 +788,37 @@ export default async function CourseDetailPage({
             <div>
               <span className="rn-eyebrow">
                 {courseCompleted
-                  ? "COURSE COMPLETE"
+                  ? "ASSESSMENT READY"
                   : "CONTINUE LEARNING"}
               </span>
 
               <h2>
                 {courseCompleted
-                  ? "Review your completed course."
+                  ? "Your course is complete."
                   : "Ready to keep learning?"}
               </h2>
 
               <p>
                 {courseCompleted
-                  ? "Return to the course lessons whenever you need to review the material."
+                  ? "You have completed all published lessons. Take the final assessment to record your performance."
                   : `Your next lesson is "${continueLesson.lesson_title}".`}
               </p>
             </div>
 
             <div>
-              {enrollment ? (
+              {enrollment && courseCompleted ? (
+                <Link
+                  href={assessmentHref}
+                  className="rn-button rn-button-primary"
+                >
+                  Take Final Assessment
+                </Link>
+              ) : enrollment ? (
                 <Link
                   href={continueHref}
                   className="rn-button rn-button-primary"
                 >
-                  {courseCompleted
-                    ? "Review Course"
-                    : "Continue Learning"}
+                  Continue Learning
                 </Link>
               ) : user && course.is_free ? (
                 <EnrollButton
