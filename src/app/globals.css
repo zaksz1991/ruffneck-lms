@@ -6755,3 +6755,10 @@ a.rn-admin-stat:hover {
     min-height: 90vh;
   }
 }
+
+.brand-logo {
+  display: block;
+  width: 120px;
+  height: auto;
+  object-fit: contain;
+}

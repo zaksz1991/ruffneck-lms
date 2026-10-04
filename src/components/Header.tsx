@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
@@ -50,8 +51,19 @@ export async function Header() {
 
       <header className="site-header">
         <div className="inner">
-          <Link href="/" className="brand">
-            <span className="brand-mark">RN</span>
+          <Link
+            href="/"
+            className="brand"
+            aria-label="RuffNeck Learn home"
+          >
+            <Image
+              src="/brand/ruffneck-logo.png"
+              alt="RuffNeck Entertainment"
+              width={180}
+              height={60}
+              priority
+              className="brand-logo"
+            />
 
             <span className="brand-copy">
               <strong>RuffNeck</strong>
@@ -59,8 +71,13 @@ export async function Header() {
             </span>
           </Link>
 
-          <nav className="nav">
-            <Link href="/courses">Courses</Link>
+          <nav
+            className="nav"
+            aria-label="Main navigation"
+          >
+            <Link href="/courses">
+              Courses
+            </Link>
 
             {user ? (
               <>
@@ -68,7 +85,8 @@ export async function Header() {
                   My learning
                 </Link>
 
-                {(role === "admin" || role === "instructor") && (
+                {(role === "admin" ||
+                  role === "instructor") && (
                   <Link href="/admin/lms">
                     Admin
                   </Link>
@@ -82,7 +100,9 @@ export async function Header() {
                   <button
                     type="submit"
                     className="btn btn-ghost"
-                    style={{ padding: "7px 12px" }}
+                    style={{
+                      padding: "7px 12px",
+                    }}
                   >
                     Sign out
                   </button>
@@ -97,7 +117,9 @@ export async function Header() {
                 <Link
                   href="/signup"
                   className="btn btn-primary"
-                  style={{ padding: "7px 12px" }}
+                  style={{
+                    padding: "7px 12px",
+                  }}
                 >
                   Sign up
                 </Link>
