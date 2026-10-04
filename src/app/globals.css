@@ -7963,3 +7963,170 @@ table {
     font-size: clamp(1.6rem, 8.5vw, 2rem);
   }
 }
+
+/* =========================================================
+   FINAL MOBILE OVERRIDES
+   Additive only — do not remove earlier CSS
+   ========================================================= */
+
+@media (max-width: 720px) {
+  /* Parent brand */
+  .rn-parent-brand-inner {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    gap: 8px !important;
+  }
+
+  .rn-parent-copy {
+    width: 100% !important;
+    min-width: 0 !important;
+    text-align: center !important;
+  }
+
+  .rn-parent-kicker,
+  .rn-parent-description,
+  .rn-parent-link {
+    text-align: center !important;
+  }
+
+  /* Main homepage hero */
+  .hero {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+  }
+
+  .hero .container {
+    width: calc(100% - 24px) !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin-inline: auto !important;
+  }
+
+  .hero-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    gap: 24px !important;
+  }
+
+  .hero-grid > * {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .hero-grid > *:first-child {
+    text-align: center !important;
+  }
+
+  .hero h1 {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-inline: auto !important;
+    text-align: center !important;
+    overflow-wrap: anywhere !important;
+    word-break: normal !important;
+  }
+
+  .hero p {
+    width: 100% !important;
+    max-width: 680px !important;
+    margin-inline: auto !important;
+    text-align: center !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  .hero-actions {
+    width: 100% !important;
+    max-width: 420px !important;
+    margin-inline: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .hero-actions .btn {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    text-align: center !important;
+  }
+
+  /* Banner / hero card */
+  .hero-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  .rn-learn-banner {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    margin-inline: auto !important;
+  }
+
+  .rn-hero-brand-copy {
+    width: 100% !important;
+    text-align: center !important;
+  }
+
+  .rn-hero-brand-copy strong,
+  .rn-hero-brand-copy p,
+  .rn-hero-brand-copy span {
+    text-align: center !important;
+  }
+
+  /* Featured courses */
+  .rn-featured-course-grid,
+  .rn-featured-courses,
+  .rn-course-grid,
+  .rn-catalogue-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Founder */
+  .rn-founder-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .rn-founder-image {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .hero .container {
+    width: calc(100% - 16px) !important;
+  }
+
+  .hero-grid {
+    gap: 20px !important;
+  }
+
+  .hero h1 {
+    font-size: clamp(1.65rem, 8vw, 2.1rem) !important;
+    line-height: 1.15 !important;
+  }
+
+  .hero p {
+    font-size: 0.95rem !important;
+    line-height: 1.6 !important;
+  }
+}
