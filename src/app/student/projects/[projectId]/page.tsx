@@ -13,9 +13,9 @@ type Project = {
     | "capstone";
   brief: string;
   scenario: string | null;
-  deliverables: string[];
+  deliverables: string[] | null;
   submission_instructions: string | null;
-  evaluation_criteria: string[];
+  evaluation_criteria: string[] | null;
   max_score: number;
 };
 
@@ -46,6 +46,16 @@ type Course = {
     | "intermediate"
     | "advanced";
   category: string | null;
+  status: "draft" | "published" | "archived";
+};
+
+type Enrollment = {
+  id: string;
+  enrollment_status:
+    | "active"
+    | "completed"
+    | "cancelled";
+  progress_percent: number;
 };
 
 function formatStatus(
@@ -69,10 +79,31 @@ function formatStatus(
   }
 }
 
+function formatProjectType(
+  projectType: Project["project_type"]
+) {
+  switch (projectType) {
+    case "case_study":
+      return "Case Study";
+
+    case "capstone":
+      return "Capstone";
+
+    default:
+      return "Practical Project";
+  }
+}
+
 function formatDate(
   value: string | null
 ) {
   if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
     return null;
   }
 
@@ -81,7 +112,7 @@ function formatDate(
     {
       dateStyle: "medium",
     }
-  ).format(new Date(value));
+  ).format(date);
 }
 
 export default async function StudentProjectPage({
@@ -105,26 +136,39 @@ export default async function StudentProjectPage({
     );
   }
 
-  const { data: projectData } =
-    await supabase
-      .from("course_projects")
-      .select(
-        [
-          "id",
-          "course_id",
-          "title",
-          "project_type",
-          "brief",
-          "scenario",
-          "deliverables",
-          "submission_instructions",
-          "evaluation_criteria",
-          "max_score",
-        ].join(", ")
-      )
-      .eq("id", projectId)
-      .eq("is_published", true)
-      .maybeSingle();
+  const {
+    data: projectData,
+    error: projectError,
+  } = await supabase
+    .from("course_projects")
+    .select(
+      [
+        "id",
+        "course_id",
+        "title",
+        "project_type",
+        "brief",
+        "scenario",
+        "deliverables",
+        "submission_instructions",
+        "evaluation_criteria",
+        "max_score",
+      ].join(", ")
+    )
+    .eq("id", projectId)
+    .eq("is_published", true)
+    .maybeSingle();
+
+  if (projectError) {
+    console.error(
+      "Failed to load student project:",
+      projectError
+    );
+
+    throw new Error(
+      "Unable to load the project."
+    );
+  }
 
   const project =
     projectData as unknown as Project | null;
@@ -133,69 +177,142 @@ export default async function StudentProjectPage({
     notFound();
   }
 
-  const { data: enrollment } =
-    await supabase
-      .from("enrollments")
-      .select(
-        "id, enrollment_status, progress_percent"
-      )
-      .eq("student_id", user.id)
-      .eq("course_id", project.course_id)
-      .in("enrollment_status", [
-        "active",
-        "completed",
-      ])
-      .maybeSingle();
+  const {
+    data: courseData,
+    error: courseError,
+  } = await supabase
+    .from("courses")
+    .select(
+      "id, title, slug, level, category, status"
+    )
+    .eq("id", project.course_id)
+    .eq("status", "published")
+    .maybeSingle();
+
+  if (courseError) {
+    console.error(
+      "Failed to load project course:",
+      courseError
+    );
+
+    throw new Error(
+      "Unable to load the course."
+    );
+  }
+
+  const course =
+    courseData as unknown as Course | null;
+
+  if (!course) {
+    notFound();
+  }
+
+  const {
+    data: enrollmentData,
+    error: enrollmentError,
+  } = await supabase
+    .from("enrollments")
+    .select(
+      "id, enrollment_status, progress_percent"
+    )
+    .eq("student_id", user.id)
+    .eq("course_id", project.course_id)
+    .in("enrollment_status", [
+      "active",
+      "completed",
+    ])
+    .maybeSingle();
+
+  if (enrollmentError) {
+    console.error(
+      "Failed to load project enrollment:",
+      enrollmentError
+    );
+
+    throw new Error(
+      "Unable to verify course enrollment."
+    );
+  }
+
+  const enrollment =
+    enrollmentData as Enrollment | null;
 
   if (!enrollment) {
     redirect("/student/projects");
   }
 
-  const { data: courseData } =
-    await supabase
-      .from("courses")
-      .select(
-        "id, title, slug, level, category"
-      )
-      .eq("id", project.course_id)
-      .maybeSingle();
+  const {
+    data: submissionData,
+    error: submissionError,
+  } = await supabase
+    .from("project_submissions")
+    .select(
+      [
+        "id",
+        "project_id",
+        "student_id",
+        "submission_text",
+        "submission_url",
+        "status",
+        "score",
+        "feedback",
+        "submitted_at",
+        "reviewed_at",
+      ].join(", ")
+    )
+    .eq("project_id", project.id)
+    .eq("student_id", user.id)
+    .maybeSingle();
 
-  const course =
-    courseData as unknown as Course | null;
+  if (submissionError) {
+    console.error(
+      "Failed to load project submission:",
+      submissionError
+    );
 
-  const { data: submissionData } =
-    await supabase
-      .from("project_submissions")
-      .select(
-        [
-          "id",
-          "project_id",
-          "student_id",
-          "submission_text",
-          "submission_url",
-          "status",
-          "score",
-          "feedback",
-          "submitted_at",
-          "reviewed_at",
-        ].join(", ")
-      )
-      .eq("project_id", project.id)
-      .eq("student_id", user.id)
-      .maybeSingle();
+    throw new Error(
+      "Unable to load your project submission."
+    );
+  }
 
   const submission =
     submissionData as unknown as Submission | null;
 
+  const deliverables =
+    Array.isArray(project.deliverables)
+      ? project.deliverables
+      : [];
+
+  const evaluationCriteria =
+    Array.isArray(
+      project.evaluation_criteria
+    )
+      ? project.evaluation_criteria
+      : [];
+
   /*
-   * Drafts and revision-required submissions can
-   * be edited and submitted again.
+   * Only draft and revision-required
+   * submissions can be changed by the
+   * student.
+   *
+   * Submitted, under-review and approved
+   * submissions remain locked.
    */
   const canEdit =
     !submission ||
     submission.status === "draft" ||
     submission.status ===
       "revision_required";
+
+  const submittedDate =
+    formatDate(
+      submission?.submitted_at || null
+    );
+
+  const reviewedDate =
+    formatDate(
+      submission?.reviewed_at || null
+    );
 
   return (
     <main className="rn-project-workspace">
@@ -208,33 +325,30 @@ export default async function StudentProjectPage({
             ← Projects & Capstones
           </Link>
 
-          {course ? (
-            <Link
-              href={`/courses/${course.slug}`}
-              className="rn-text-link"
-            >
-              View course
-            </Link>
-          ) : null}
+          <Link
+            href={`/courses/${course.slug}`}
+            className="rn-text-link"
+          >
+            View course
+          </Link>
         </div>
 
         <section className="rn-project-hero">
           <span className="rn-eyebrow">
-            {course?.category ||
-              "PRACTICAL CAPSTONE"}
+            {formatProjectType(
+              project.project_type
+            )}
           </span>
 
           <h1>{project.title}</h1>
 
-          {course ? (
-            <p className="rn-project-hero-course">
-              {course.title}
-            </p>
-          ) : null}
+          <p className="rn-project-hero-course">
+            {course.title}
+          </p>
 
           <div className="rn-project-hero-meta">
             <span>
-              {project.deliverables.length}{" "}
+              {deliverables.length}{" "}
               deliverables
             </span>
 
@@ -243,18 +357,14 @@ export default async function StudentProjectPage({
               {project.max_score}
             </span>
 
-            {submission ? (
-              <span>
-                Status:{" "}
-                {formatStatus(
-                  submission.status
-                )}
-              </span>
-            ) : (
-              <span>
-                Status: Not Started
-              </span>
-            )}
+            <span>
+              Status:{" "}
+              {submission
+                ? formatStatus(
+                    submission.status
+                  )
+                : "Not Started"}
+            </span>
           </div>
         </section>
 
@@ -272,8 +382,8 @@ export default async function StudentProjectPage({
 
               <p>
                 Review the assessor feedback,
-                update your work and resubmit the
-                project for another review.
+                update your work and resubmit
+                the project for another review.
               </p>
             </div>
 
@@ -332,32 +442,40 @@ export default async function StudentProjectPage({
                 What you must submit
               </h2>
 
-              <div className="rn-project-deliverables">
-                {project.deliverables.map(
-                  (
-                    deliverable,
-                    index
-                  ) => (
-                    <div
-                      key={deliverable}
-                      className="rn-project-deliverable"
-                    >
-                      <span>
-                        {String(
-                          index + 1
-                        ).padStart(
-                          2,
-                          "0"
-                        )}
-                      </span>
+              {deliverables.length > 0 ? (
+                <div className="rn-project-deliverables">
+                  {deliverables.map(
+                    (
+                      deliverable,
+                      index
+                    ) => (
+                      <div
+                        key={`${project.id}-deliverable-${index}`}
+                        className="rn-project-deliverable"
+                      >
+                        <span>
+                          {String(
+                            index + 1
+                          ).padStart(
+                            2,
+                            "0"
+                          )}
+                        </span>
 
-                      <p>
-                        {deliverable}
-                      </p>
-                    </div>
-                  )
-                )}
-              </div>
+                        <p>
+                          {deliverable}
+                        </p>
+                      </div>
+                    )
+                  )}
+                </div>
+              ) : (
+                <p>
+                  Follow the project brief and
+                  submission guidance when
+                  preparing your work.
+                </p>
+              )}
             </section>
 
             <section className="rn-project-section">
@@ -369,21 +487,36 @@ export default async function StudentProjectPage({
                 How your work will be evaluated
               </h2>
 
-              <div className="rn-project-criteria">
-                {project.evaluation_criteria.map(
-                  (criterion) => (
-                    <div
-                      key={criterion}
-                    >
-                      <span>✓</span>
+              {evaluationCriteria.length >
+              0 ? (
+                <div className="rn-project-criteria">
+                  {evaluationCriteria.map(
+                    (
+                      criterion,
+                      index
+                    ) => (
+                      <div
+                        key={`${project.id}-criterion-${index}`}
+                      >
+                        <span>
+                          {index + 1}
+                        </span>
 
-                      <p>
-                        {criterion}
-                      </p>
-                    </div>
-                  )
-                )}
-              </div>
+                        <p>
+                          {criterion}
+                        </p>
+                      </div>
+                    )
+                  )}
+                </div>
+              ) : (
+                <p>
+                  Your submission will be
+                  evaluated against the project
+                  requirements and course
+                  objectives.
+                </p>
+              )}
             </section>
 
             {project.submission_instructions ? (
@@ -435,12 +568,17 @@ export default async function StudentProjectPage({
                   </div>
                 ) : null}
 
-                {submission.submitted_at ? (
+                {submittedDate ? (
                   <small>
                     Submitted{" "}
-                    {formatDate(
-                      submission.submitted_at
-                    )}
+                    {submittedDate}
+                  </small>
+                ) : null}
+
+                {reviewedDate ? (
+                  <small>
+                    Reviewed{" "}
+                    {reviewedDate}
                   </small>
                 ) : null}
 
@@ -479,7 +617,41 @@ export default async function StudentProjectPage({
                   "draft"
                 }
               />
-            ) : null}
+            ) : (
+              <section className="rn-project-status-card">
+                <span className="rn-eyebrow">
+                  SUBMISSION LOCKED
+                </span>
+
+                <h2>
+                  No further changes required
+                </h2>
+
+                <p>
+                  Your submission is currently{" "}
+                  <strong>
+                    {submission
+                      ? formatStatus(
+                          submission.status
+                        )
+                      : "unavailable"}
+                  </strong>
+                  . Student editing is disabled
+                  while the submission is being
+                  reviewed or after approval.
+                </p>
+
+                {submission?.status ===
+                  "approved" ? (
+                  <Link
+                    href="/student/certificates"
+                    className="rn-button rn-button-primary"
+                  >
+                    View Certificates
+                  </Link>
+                ) : null}
+              </section>
+            )}
           </aside>
         </div>
       </div>

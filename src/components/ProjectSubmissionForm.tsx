@@ -42,12 +42,62 @@ export default function ProjectSubmissionForm({
     initialStatus ===
     "revision_required";
 
+  function validateSubmission(
+    status: "draft" | "submitted"
+  ) {
+    const trimmedText = text.trim();
+    const trimmedUrl = url.trim();
+
+    if (
+      status === "submitted" &&
+      trimmedText.length === 0 &&
+      trimmedUrl.length === 0
+    ) {
+      return (
+        "Add a written submission or a supporting project link before submitting."
+      );
+    }
+
+    if (trimmedUrl) {
+      try {
+        const parsedUrl =
+          new URL(trimmedUrl);
+
+        if (
+          parsedUrl.protocol !==
+            "http:" &&
+          parsedUrl.protocol !==
+            "https:"
+        ) {
+          return (
+            "The supporting link must use http:// or https://."
+          );
+        }
+      } catch {
+        return (
+          "Enter a valid supporting project URL."
+        );
+      }
+    }
+
+    return null;
+  }
+
   async function save(
     status: "draft" | "submitted"
   ) {
-    setLoading(true);
     setError(null);
     setMessage(null);
+
+    const validationError =
+      validateSubmission(status);
+
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const response = await fetch(
@@ -57,20 +107,32 @@ export default function ProjectSubmissionForm({
           headers: {
             "Content-Type":
               "application/json",
+            Accept: "application/json",
           },
           body: JSON.stringify({
-            submissionText: text,
-            submissionUrl: url,
+            submissionText:
+              text.trim(),
+            submissionUrl:
+              url.trim(),
             status,
           }),
         }
       );
 
-      const result =
-        (await response.json()) as {
-          error?: string;
-          message?: string;
-        };
+      let result: {
+        error?: string;
+        message?: string;
+      } = {};
+
+      try {
+        result =
+          (await response.json()) as {
+            error?: string;
+            message?: string;
+          };
+      } catch {
+        result = {};
+      }
 
       if (!response.ok) {
         throw new Error(
@@ -86,7 +148,7 @@ export default function ProjectSubmissionForm({
 
       setMessage(
         result.message ||
-          "Draft saved."
+          "Draft saved successfully."
       );
     } catch (submissionError) {
       setError(
@@ -132,6 +194,7 @@ export default function ProjectSubmissionForm({
           placeholder="Explain your approach, work completed, findings, decisions and final result."
           rows={12}
           disabled={loading}
+          aria-label="Written project submission"
         />
       </label>
 
@@ -148,17 +211,31 @@ export default function ProjectSubmissionForm({
           }
           placeholder="https://..."
           disabled={loading}
+          aria-label="Supporting project URL"
         />
       </label>
 
+      <p className="rn-project-form-help">
+        You can save incomplete work as a
+        draft. A submission must contain
+        written work, a supporting link, or
+        both.
+      </p>
+
       {error ? (
-        <div className="error">
+        <div
+          className="error"
+          role="alert"
+        >
           {error}
         </div>
       ) : null}
 
       {message ? (
-        <div className="success">
+        <div
+          className="success"
+          role="status"
+        >
           {message}
         </div>
       ) : null}
@@ -171,6 +248,7 @@ export default function ProjectSubmissionForm({
             save("draft")
           }
           disabled={loading}
+          aria-busy={loading}
         >
           {loading
             ? "Saving…"
@@ -184,6 +262,7 @@ export default function ProjectSubmissionForm({
             save("submitted")
           }
           disabled={loading}
+          aria-busy={loading}
         >
           {loading
             ? "Submitting…"
