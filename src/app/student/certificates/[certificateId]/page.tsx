@@ -16,12 +16,18 @@ type Certificate = {
 };
 
 function formatDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
   return new Intl.DateTimeFormat(
     "en-NG",
     {
       dateStyle: "long",
     }
-  ).format(new Date(value));
+  ).format(date);
 }
 
 export default async function CertificatePage({
@@ -34,19 +40,42 @@ export default async function CertificatePage({
   const { certificateId } =
     await params;
 
-  const supabase = await createClient();
+  const normalizedCertificateId =
+    certificateId.trim();
+
+  if (!normalizedCertificateId) {
+    notFound();
+  }
+
+  const supabase =
+    await createClient();
 
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } =
+    await supabase.auth.getUser();
 
   if (!user) {
     redirect(
-      `/login?next=/student/certificates/${certificateId}`
+      `/login?next=/student/certificates/${encodeURIComponent(
+        normalizedCertificateId
+      )}`
     );
   }
 
-  const { data: certificateData } =
+  /*
+   * --------------------------------------------------------------
+   * CERTIFICATE
+   * --------------------------------------------------------------
+   *
+   * The student ID is part of the query so a learner cannot view
+   * another learner's private certificate through this route.
+   */
+
+  const {
+    data: certificateData,
+    error: certificateError,
+  } =
     await supabase
       .from("course_certificates")
       .select(
@@ -62,12 +91,31 @@ export default async function CertificatePage({
           "revoked_reason",
         ].join(", ")
       )
-      .eq("id", certificateId)
-      .eq("student_id", user.id)
+      .eq(
+        "id",
+        normalizedCertificateId
+      )
+      .eq(
+        "student_id",
+        user.id
+      )
       .maybeSingle();
 
+  if (certificateError) {
+    console.error(
+      "Certificate lookup failed:",
+      certificateError
+    );
+
+    throw new Error(
+      "Unable to load certificate."
+    );
+  }
+
   const certificate =
-    certificateData as unknown as Certificate | null;
+    certificateData as unknown as
+      | Certificate
+      | null;
 
   if (!certificate) {
     notFound();
@@ -98,7 +146,9 @@ export default async function CertificatePage({
         >
           <div className="rn-certificate-border">
             <div className="rn-certificate-brand">
-              <span>RN</span>
+              <span aria-hidden="true">
+                RN
+              </span>
 
               <strong>
                 RuffNeck Learn
@@ -106,7 +156,10 @@ export default async function CertificatePage({
             </div>
 
             {certificate.is_revoked ? (
-              <div className="rn-certificate-revoked">
+              <div
+                className="rn-certificate-revoked"
+                role="alert"
+              >
                 REVOKED
               </div>
             ) : (

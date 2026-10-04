@@ -7,12 +7,16 @@ type Course = {
   slug: string;
 };
 
-type Assessment = {
+type AssessmentAttempt = {
+  id: string;
   score: number | null;
+  total_points: number | null;
+  earned_points: number | null;
 };
 
 type Project = {
   id: string;
+  project_type: string | null;
 };
 
 type ApprovedSubmission = {
@@ -23,15 +27,53 @@ type CurriculumLesson = {
   lesson_id: string;
 };
 
+type ExistingCertificate = {
+  id: string;
+  certificate_number: string;
+};
+
+type RequestBody = {
+  courseId?: unknown;
+};
+
+const PASS_PERCENTAGE = 70;
+
+function calculateAssessmentPercentage(
+  attempt: AssessmentAttempt
+) {
+  if (
+    attempt.total_points !== null &&
+    attempt.total_points > 0 &&
+    attempt.earned_points !== null
+  ) {
+    return (
+      (attempt.earned_points /
+        attempt.total_points) *
+      100
+    );
+  }
+
+  if (
+    attempt.score !== null &&
+    Number.isFinite(attempt.score)
+  ) {
+    return attempt.score;
+  }
+
+  return null;
+}
+
 export async function POST(
   request: Request
 ) {
   try {
-    const supabase = await createClient();
+    const supabase =
+      await createClient();
 
     const {
       data: { user },
-    } = await supabase.auth.getUser();
+    } =
+      await supabase.auth.getUser();
 
     if (!user) {
       return NextResponse.json(
@@ -39,34 +81,30 @@ export async function POST(
           error:
             "Authentication required.",
         },
-        {
-          status: 401,
-        }
+        { status: 401 }
       );
     }
 
-    let body: {
-      courseId?: string;
-    };
+    let body: RequestBody;
 
     try {
       body =
-        (await request.json()) as {
-          courseId?: string;
-        };
+        (await request.json()) as RequestBody;
     } catch {
       return NextResponse.json(
         {
           error:
             "Invalid request body.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
-    const courseId = body.courseId;
+    const courseId =
+      typeof body.courseId ===
+      "string"
+        ? body.courseId.trim()
+        : "";
 
     if (!courseId) {
       return NextResponse.json(
@@ -74,9 +112,7 @@ export async function POST(
           error:
             "Course ID is required.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
@@ -89,14 +125,21 @@ export async function POST(
     const {
       data: courseData,
       error: courseError,
-    } = await supabase
-      .from("courses")
-      .select(
-        "id, title, slug"
-      )
-      .eq("id", courseId)
-      .eq("status", "published")
-      .maybeSingle();
+    } =
+      await supabase
+        .from("courses")
+        .select(
+          "id, title, slug"
+        )
+        .eq(
+          "id",
+          courseId
+        )
+        .eq(
+          "status",
+          "published"
+        )
+        .maybeSingle();
 
     if (courseError) {
       console.error(
@@ -109,14 +152,14 @@ export async function POST(
           error:
             "Unable to verify the course.",
         },
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
 
     const course =
-      courseData as unknown as Course | null;
+      courseData as unknown as
+        | Course
+        | null;
 
     if (!course) {
       return NextResponse.json(
@@ -124,9 +167,7 @@ export async function POST(
           error:
             "Course not found.",
         },
-        {
-          status: 404,
-        }
+        { status: 404 }
       );
     }
 
@@ -135,24 +176,37 @@ export async function POST(
      * ENROLLMENT
      * --------------------------------------------------------------
      *
-     * Enrollment is required, but enrollment_status is NOT used
-     * as the source of truth for course completion.
-     *
-     * Actual completion is verified below from the published
-     * curriculum and lesson_progress.
+     * Enrollment is required, but the enrollment status itself
+     * is not treated as the source of truth for eligibility.
+     * Completion is verified from the published curriculum,
+     * assessment and approved capstone below.
      */
 
     const {
       data: enrollment,
       error: enrollmentError,
-    } = await supabase
-      .from("enrollments")
-      .select(
-        "id, enrollment_status"
-      )
-      .eq("student_id", user.id)
-      .eq("course_id", courseId)
-      .maybeSingle();
+    } =
+      await supabase
+        .from("enrollments")
+        .select(
+          "id, enrollment_status"
+        )
+        .eq(
+          "student_id",
+          user.id
+        )
+        .eq(
+          "course_id",
+          courseId
+        )
+        .in(
+          "enrollment_status",
+          [
+            "active",
+            "completed",
+          ]
+        )
+        .maybeSingle();
 
     if (enrollmentError) {
       console.error(
@@ -165,9 +219,7 @@ export async function POST(
           error:
             "Unable to verify your enrollment.",
         },
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
 
@@ -177,9 +229,7 @@ export async function POST(
           error:
             "You must be enrolled in this course before requesting a certificate.",
         },
-        {
-          status: 403,
-        }
+        { status: 403 }
       );
     }
 
@@ -187,21 +237,25 @@ export async function POST(
      * --------------------------------------------------------------
      * PUBLISHED CURRICULUM
      * --------------------------------------------------------------
-     *
-     * course_curriculum is the canonical curriculum used by the
-     * learning experience.
      */
 
     const {
       data: curriculumData,
       error: curriculumError,
-    } = await supabase
-      .from("course_curriculum")
-      .select(
-        "lesson_id"
-      )
-      .eq("course_id", courseId)
-      .eq("is_published", true);
+    } =
+      await supabase
+        .from("course_curriculum")
+        .select(
+          "lesson_id"
+        )
+        .eq(
+          "course_id",
+          courseId
+        )
+        .eq(
+          "is_published",
+          true
+        );
 
     if (curriculumError) {
       console.error(
@@ -214,14 +268,14 @@ export async function POST(
           error:
             "Unable to verify course curriculum.",
         },
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
 
     const curriculum =
-      (curriculumData || []) as CurriculumLesson[];
+      (curriculumData ??
+        []) as unknown as
+        CurriculumLesson[];
 
     const publishedLessonIds =
       new Set(
@@ -234,15 +288,16 @@ export async function POST(
     const totalPublishedLessons =
       publishedLessonIds.size;
 
-    if (totalPublishedLessons === 0) {
+    if (
+      totalPublishedLessons ===
+      0
+    ) {
       return NextResponse.json(
         {
           error:
             "This course does not have any published curriculum lessons.",
         },
-        {
-          status: 403,
-        }
+        { status: 403 }
       );
     }
 
@@ -250,22 +305,30 @@ export async function POST(
      * --------------------------------------------------------------
      * COMPLETED LESSONS
      * --------------------------------------------------------------
-     *
-     * Only completed lessons that actually belong to the published
-     * curriculum count toward certificate eligibility.
      */
 
     const {
       data: completedProgressData,
-      error: completedProgressError,
-    } = await supabase
-      .from("lesson_progress")
-      .select(
-        "lesson_id"
-      )
-      .eq("student_id", user.id)
-      .eq("course_id", courseId)
-      .eq("completed", true);
+      error:
+        completedProgressError,
+    } =
+      await supabase
+        .from("lesson_progress")
+        .select(
+          "lesson_id"
+        )
+        .eq(
+          "student_id",
+          user.id
+        )
+        .eq(
+          "course_id",
+          courseId
+        )
+        .eq(
+          "completed",
+          true
+        );
 
     if (completedProgressError) {
       console.error(
@@ -278,34 +341,31 @@ export async function POST(
           error:
             "Unable to verify lesson completion.",
         },
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
 
     const completedCurriculumLessonIds =
       new Set(
         (
-          completedProgressData || []
+          completedProgressData ??
+          []
         )
           .map(
             (row) =>
               row.lesson_id as string
           )
-          .filter((lessonId) =>
-            publishedLessonIds.has(
-              lessonId
-            )
+          .filter(
+            (lessonId) =>
+              publishedLessonIds.has(
+                lessonId
+              )
           )
       );
 
     const completedLessons =
       completedCurriculumLessonIds.size;
 
-    /*
-     * Every published curriculum lesson must be completed.
-     */
     if (
       completedLessons <
       totalPublishedLessons
@@ -317,15 +377,14 @@ export async function POST(
           completedLessons,
           totalLessons:
             totalPublishedLessons,
-          progressPercent: Math.round(
-            (completedLessons /
-              totalPublishedLessons) *
-              100
-          ),
+          progressPercent:
+            Math.round(
+              (completedLessons /
+                totalPublishedLessons) *
+                100
+            ),
         },
-        {
-          status: 403,
-        }
+        { status: 403 }
       );
     }
 
@@ -333,30 +392,38 @@ export async function POST(
      * --------------------------------------------------------------
      * ASSESSMENT
      * --------------------------------------------------------------
+     *
+     * Retakes are allowed. The latest assessment attempt must
+     * meet the same 70% passing threshold used by the admin
+     * project approval workflow.
      */
 
     const {
       data: assessmentData,
       error: assessmentError,
-    } = await supabase
-      .from("assessment_attempts")
-      .select("score")
-      .eq(
-        "student_id",
-        user.id
-      )
-      .eq(
-        "course_id",
-        courseId
-      )
-      .order(
-        "completed_at",
-        {
-          ascending: false,
-        }
-      )
-      .limit(1)
-      .maybeSingle();
+    } =
+      await supabase
+        .from(
+          "assessment_attempts"
+        )
+        .select(
+          "id, score, total_points, earned_points"
+        )
+        .eq(
+          "student_id",
+          user.id
+        )
+        .eq(
+          "course_id",
+          courseId
+        )
+        .order(
+          "created_at",
+          {
+            ascending: false,
+          }
+        )
+        .limit(1);
 
     if (assessmentError) {
       console.error(
@@ -369,24 +436,52 @@ export async function POST(
           error:
             "Unable to verify your course assessment.",
         },
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
 
-    const assessment =
-      assessmentData as unknown as Assessment | null;
+    const assessmentAttempts =
+      (assessmentData ??
+        []) as unknown as
+        AssessmentAttempt[];
 
-    if (!assessment) {
+    if (
+      assessmentAttempts.length ===
+      0
+    ) {
       return NextResponse.json(
         {
           error:
             "Complete the course assessment before requesting a certificate.",
         },
+        { status: 403 }
+      );
+    }
+
+    const latestAssessment =
+      assessmentAttempts[0];
+
+    const assessmentPercentage =
+      calculateAssessmentPercentage(
+        latestAssessment
+      );
+
+    if (
+      assessmentPercentage ===
+        null ||
+      assessmentPercentage <
+        PASS_PERCENTAGE
+    ) {
+      return NextResponse.json(
         {
-          status: 403,
-        }
+          error:
+            `Your latest assessment result must be at least ${PASS_PERCENTAGE}% before a certificate can be issued.`,
+          score:
+            assessmentPercentage,
+          passingScore:
+            PASS_PERCENTAGE,
+        },
+        { status: 403 }
       );
     }
 
@@ -399,17 +494,22 @@ export async function POST(
     const {
       data: projectsData,
       error: projectsError,
-    } = await supabase
-      .from("course_projects")
-      .select("id")
-      .eq(
-        "course_id",
-        courseId
-      )
-      .eq(
-        "is_published",
-        true
-      );
+    } =
+      await supabase
+        .from(
+          "course_projects"
+        )
+        .select(
+          "id, project_type"
+        )
+        .eq(
+          "course_id",
+          courseId
+        )
+        .eq(
+          "is_published",
+          true
+        );
 
     if (projectsError) {
       console.error(
@@ -422,29 +522,38 @@ export async function POST(
           error:
             "Unable to verify the course capstone.",
         },
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
 
     const projects =
-      (projectsData || []) as Project[];
+      (projectsData ??
+        []) as unknown as
+        Project[];
 
-    const projectIds =
-      projects.map(
-        (project) => project.id
+    const capstoneProjects =
+      projects.filter(
+        (project) =>
+          project.project_type ===
+          "capstone"
       );
 
-    if (projectIds.length === 0) {
+    const capstoneIds =
+      capstoneProjects.map(
+        (project) =>
+          project.id
+      );
+
+    if (
+      capstoneIds.length ===
+      0
+    ) {
       return NextResponse.json(
         {
           error:
             "This course does not have a published capstone.",
         },
-        {
-          status: 403,
-        }
+        { status: 403 }
       );
     }
 
@@ -452,34 +561,41 @@ export async function POST(
      * --------------------------------------------------------------
      * APPROVED CAPSTONE
      * --------------------------------------------------------------
+     *
+     * Only an approved submission for a published capstone
+     * qualifies for certificate issuance.
      */
 
     const {
       data: approvedData,
       error: approvedError,
-    } = await supabase
-      .from("project_submissions")
-      .select("score")
-      .in(
-        "project_id",
-        projectIds
-      )
-      .eq(
-        "student_id",
-        user.id
-      )
-      .eq(
-        "status",
-        "approved"
-      )
-      .order(
-        "reviewed_at",
-        {
-          ascending: false,
-        }
-      )
-      .limit(1)
-      .maybeSingle();
+    } =
+      await supabase
+        .from(
+          "project_submissions"
+        )
+        .select(
+          "score"
+        )
+        .in(
+          "project_id",
+          capstoneIds
+        )
+        .eq(
+          "student_id",
+          user.id
+        )
+        .eq(
+          "status",
+          "approved"
+        )
+        .order(
+          "reviewed_at",
+          {
+            ascending: false,
+          }
+        )
+        .limit(1);
 
     if (approvedError) {
       console.error(
@@ -492,26 +608,30 @@ export async function POST(
           error:
             "Unable to verify your capstone.",
         },
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
 
-    const approved =
-      approvedData as unknown as ApprovedSubmission | null;
+    const approvedSubmissions =
+      (approvedData ??
+        []) as unknown as
+        ApprovedSubmission[];
 
-    if (!approved) {
+    if (
+      approvedSubmissions.length ===
+      0
+    ) {
       return NextResponse.json(
         {
           error:
             "Your capstone must be approved before a certificate can be issued.",
         },
-        {
-          status: 403,
-        }
+        { status: 403 }
       );
     }
+
+    const approved =
+      approvedSubmissions[0];
 
     /*
      * --------------------------------------------------------------
@@ -522,16 +642,17 @@ export async function POST(
     const {
       data: profile,
       error: profileError,
-    } = await supabase
-      .from("profiles")
-      .select(
-        "full_name, email"
-      )
-      .eq(
-        "id",
-        user.id
-      )
-      .maybeSingle();
+    } =
+      await supabase
+        .from("profiles")
+        .select(
+          "full_name, email"
+        )
+        .eq(
+          "id",
+          user.id
+        )
+        .maybeSingle();
 
     if (profileError) {
       console.error(
@@ -544,9 +665,7 @@ export async function POST(
           error:
             "Unable to load your learner profile.",
         },
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
 
@@ -560,27 +679,29 @@ export async function POST(
      * EXISTING CERTIFICATE
      * --------------------------------------------------------------
      *
-     * Issuing is idempotent. A learner requesting the same certificate
-     * again receives the existing certificate instead of a duplicate.
+     * Issuance is idempotent.
      */
 
     const {
-      data: existing,
+      data: existingData,
       error: existingError,
-    } = await supabase
-      .from("course_certificates")
-      .select(
-        "id, certificate_number"
-      )
-      .eq(
-        "student_id",
-        user.id
-      )
-      .eq(
-        "course_id",
-        courseId
-      )
-      .maybeSingle();
+    } =
+      await supabase
+        .from(
+          "course_certificates"
+        )
+        .select(
+          "id, certificate_number"
+        )
+        .eq(
+          "student_id",
+          user.id
+        )
+        .eq(
+          "course_id",
+          courseId
+        )
+        .maybeSingle();
 
     if (existingError) {
       console.error(
@@ -593,11 +714,14 @@ export async function POST(
           error:
             "Unable to check existing certificate.",
         },
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
+
+    const existing =
+      existingData as unknown as
+        | ExistingCertificate
+        | null;
 
     if (existing) {
       return NextResponse.json({
@@ -617,24 +741,32 @@ export async function POST(
     const {
       data: certificate,
       error: certificateError,
-    } = await supabase
-      .from("course_certificates")
-      .insert({
-        student_id: user.id,
-        course_id: courseId,
-        holder_name: holderName,
-        course_title: course.title,
-        course_slug: course.slug,
-        assessment_score:
-          assessment.score,
-        capstone_score:
-          approved.score,
-        is_revoked: false,
-      })
-      .select(
-        "id, certificate_number"
-      )
-      .single();
+    } =
+      await supabase
+        .from(
+          "course_certificates"
+        )
+        .insert({
+          student_id: user.id,
+          course_id: courseId,
+          holder_name:
+            holderName,
+          course_title:
+            course.title,
+          course_slug:
+            course.slug,
+          assessment_score:
+            Math.round(
+              assessmentPercentage
+            ),
+          capstone_score:
+            approved.score,
+          is_revoked: false,
+        })
+        .select(
+          "id, certificate_number"
+        )
+        .single();
 
     if (
       certificateError ||
@@ -651,9 +783,7 @@ export async function POST(
             certificateError?.message ||
             "Unable to issue certificate.",
         },
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
 
@@ -674,9 +804,7 @@ export async function POST(
         error:
           "Unable to issue certificate.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }

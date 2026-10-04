@@ -40,47 +40,104 @@ export default async function StudentCertificatesPage() {
     );
   }
 
-  const { data: certificateData } =
-    await supabase
-      .from("course_certificates")
-      .select(
-        [
-          "id",
-          "certificate_number",
-          "course_id",
-          "course_title",
-          "issued_at",
-          "is_revoked",
-          "assessment_score",
-          "capstone_score",
-        ].join(", ")
-      )
-      .eq("student_id", user.id)
-      .order("issued_at", {
+  /*
+   * --------------------------------------------------------------
+   * ISSUED CERTIFICATES
+   * --------------------------------------------------------------
+   */
+
+  const {
+    data: certificateData,
+    error: certificateError,
+  } = await supabase
+    .from("course_certificates")
+    .select(
+      [
+        "id",
+        "certificate_number",
+        "course_id",
+        "course_title",
+        "issued_at",
+        "is_revoked",
+        "assessment_score",
+        "capstone_score",
+      ].join(", ")
+    )
+    .eq(
+      "student_id",
+      user.id
+    )
+    .order(
+      "issued_at",
+      {
         ascending: false,
-      });
+      }
+    );
+
+  if (certificateError) {
+    console.error(
+      "Student certificates lookup failed:",
+      certificateError
+    );
+  }
 
   const certificates =
-    (certificateData as unknown as Certificate[]) ||
-    [];
+    (certificateData ??
+      []) as unknown as Certificate[];
 
-  const { data: enrollmentData } =
-    await supabase
-      .from("enrollments")
-      .select(
-        "course_id, enrollment_status"
-      )
-      .eq("student_id", user.id)
-      .eq("enrollment_status", "completed");
+  /*
+   * --------------------------------------------------------------
+   * COMPLETED ENROLLMENTS
+   * --------------------------------------------------------------
+   *
+   * A completed enrollment is only a certificate candidate.
+   * The certificate issuance API independently verifies:
+   *
+   * 1. Published course
+   * 2. All published lessons completed
+   * 3. Assessment passed at 70%
+   * 4. Published capstone exists
+   * 5. Capstone approved
+   */
+
+  const {
+    data: enrollmentData,
+    error: enrollmentError,
+  } = await supabase
+    .from("enrollments")
+    .select(
+      "course_id, enrollment_status"
+    )
+    .eq(
+      "student_id",
+      user.id
+    )
+    .eq(
+      "enrollment_status",
+      "completed"
+    );
+
+  if (enrollmentError) {
+    console.error(
+      "Completed enrollment lookup failed:",
+      enrollmentError
+    );
+  }
 
   const completedEnrollments =
-    (enrollmentData as unknown as Enrollment[]) ||
-    [];
+    (enrollmentData ??
+      []) as unknown as Enrollment[];
 
   const completedCourseIds =
     completedEnrollments.map(
       (item) => item.course_id
     );
+
+  /*
+   * --------------------------------------------------------------
+   * CLAIMABLE CERTIFICATE CANDIDATES
+   * --------------------------------------------------------------
+   */
 
   const certificateCourseIds =
     new Set(
@@ -97,20 +154,45 @@ export default async function StudentCertificatesPage() {
         )
     );
 
-  const { data: claimableCourseData } =
+  /*
+   * --------------------------------------------------------------
+   * COURSE DETAILS
+   * --------------------------------------------------------------
+   */
+
+  const {
+    data: claimableCourseData,
+    error: claimableCourseError,
+  } =
     claimableCourseIds.length > 0
       ? await supabase
           .from("courses")
-          .select("id, title")
+          .select(
+            "id, title"
+          )
+          .eq(
+            "status",
+            "published"
+          )
           .in(
             "id",
             claimableCourseIds
           )
-      : { data: [] };
+      : {
+          data: [],
+          error: null,
+        };
+
+  if (claimableCourseError) {
+    console.error(
+      "Certificate candidate course lookup failed:",
+      claimableCourseError
+    );
+  }
 
   const claimableCourses =
-    (claimableCourseData as unknown as Course[]) ||
-    [];
+    (claimableCourseData ??
+      []) as unknown as Course[];
 
   return (
     <main className="rn-certificates-page">
@@ -128,7 +210,9 @@ export default async function StudentCertificatesPage() {
               CREDENTIALS
             </span>
 
-            <h1>My Certificates</h1>
+            <h1>
+              My Certificates
+            </h1>
 
             <p>
               View and access your RuffNeck Learn
@@ -145,14 +229,14 @@ export default async function StudentCertificatesPage() {
               </span>
 
               <h2>
-                Certificates available
+                Certificate candidates
               </h2>
 
               <p>
                 These courses are recorded as
-                completed. Complete the certificate
-                requirements to generate the
-                corresponding credential.
+                completed. Certificate eligibility
+                is verified when you request the
+                credential.
               </p>
             </div>
 
@@ -170,6 +254,13 @@ export default async function StudentCertificatesPage() {
                     <h3>
                       {course.title}
                     </h3>
+
+                    <p>
+                      Requires completed lessons,
+                      a passing assessment of at
+                      least 70%, and an approved
+                      capstone.
+                    </p>
 
                     <CertificateIssueButton
                       courseId={course.id}
@@ -200,8 +291,10 @@ export default async function StudentCertificatesPage() {
 
               <p>
                 Complete a RuffNeck Learn course,
-                its assessment and approved capstone
-                to become eligible for a certificate.
+                pass its assessment with at least
+                70%, and receive approval for its
+                published capstone to become eligible
+                for a certificate.
               </p>
 
               <Link
