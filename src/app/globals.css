@@ -8264,3 +8264,2057 @@ table {
     font-size: 0.68rem;
   }
 }
+
+/* =========================================================
+   ASSESSMENT — MOBILE RESPONSIVENESS
+   ========================================================= */
+
+.rn-assessment,
+.rn-assessment-shell,
+.rn-assessment-header,
+.rn-assessment-content,
+.rn-assessment-question,
+.rn-assessment-options,
+.rn-assessment-actions,
+.rn-assessment-result {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rn-assessment-question {
+  overflow: hidden;
+}
+
+.rn-assessment-question h2,
+.rn-assessment-question h3,
+.rn-assessment-question p,
+.rn-assessment-question label {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.rn-assessment-options {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.rn-assessment-option {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+
+.rn-assessment-option input {
+  flex: 0 0 auto;
+}
+
+.rn-assessment-option span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rn-assessment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.rn-assessment-actions .rn-button {
+  box-sizing: border-box;
+}
+
+.rn-assessment-progress {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.rn-assessment-progress-track {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.rn-assessment-progress-track > div {
+  max-width: 100%;
+}
+
+.rn-assessment-result {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .rn-assessment {
+    overflow-x: hidden;
+  }
+
+  .rn-assessment-header {
+    text-align: center;
+  }
+
+  .rn-assessment-header h1 {
+    font-size: clamp(1.7rem, 8vw, 2.3rem);
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  .rn-assessment-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rn-assessment-actions .rn-button {
+    width: 100%;
+  }
+
+  .rn-assessment-question {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 420px) {
+  .rn-assessment-question {
+    padding: 14px;
+  }
+
+  .rn-assessment-option {
+    padding: 12px;
+  }
+
+  .rn-assessment-header h1 {
+    font-size: 1.7rem;
+  }
+}
+
+/* =========================================================
+   PROJECTS & CAPSTONES — MOBILE RESPONSIVENESS
+   ========================================================= */
+
+.rn-projects,
+.rn-projects-shell,
+.rn-project-detail,
+.rn-project-card,
+.rn-project-review,
+.rn-project-submission,
+.rn-project-deliverables,
+.rn-project-criteria,
+.rn-project-review-form {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rn-project-card,
+.rn-project-detail,
+.rn-project-review,
+.rn-project-submission,
+.rn-project-review-form {
+  overflow-wrap: anywhere;
+}
+
+.rn-project-card h2,
+.rn-project-card h3,
+.rn-project-detail h1,
+.rn-project-detail h2,
+.rn-project-detail h3,
+.rn-project-detail p,
+.rn-project-review h1,
+.rn-project-review h2,
+.rn-project-review p {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.rn-project-card a,
+.rn-project-detail a,
+.rn-project-review a {
+  overflow-wrap: anywhere;
+}
+
+.rn-project-grid {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.rn-project-card > *,
+.rn-project-detail > *,
+.rn-project-review > *,
+.rn-project-review-form > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-project-submission textarea,
+.rn-project-submission input,
+.rn-project-submission select,
+.rn-project-review-form textarea,
+.rn-project-review-form input,
+.rn-project-review-form select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rn-project-submission textarea,
+.rn-project-review-form textarea {
+  resize: vertical;
+}
+
+.rn-project-actions,
+.rn-project-card-actions,
+.rn-project-detail-actions,
+.rn-project-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rn-project-actions .rn-button,
+.rn-project-card-actions .rn-button,
+.rn-project-detail-actions .rn-button,
+.rn-project-review-actions .rn-button {
+  box-sizing: border-box;
+}
+
+.rn-project-status,
+.rn-project-badge,
+.rn-project-score,
+.rn-project-meta {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.rn-project-deliverables ul,
+.rn-project-criteria ul {
+  min-width: 0;
+  max-width: 100%;
+  padding-left: 20px;
+}
+
+.rn-project-deliverables li,
+.rn-project-criteria li {
+  overflow-wrap: anywhere;
+}
+
+.rn-project-review-fields {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .rn-project-grid {
+    grid-template-columns: repeat(
+      2,
+      minmax(0, 1fr)
+    );
+  }
+
+  .rn-project-review-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .rn-project-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rn-project-actions,
+  .rn-project-card-actions,
+  .rn-project-detail-actions,
+  .rn-project-review-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rn-project-actions .rn-button,
+  .rn-project-card-actions .rn-button,
+  .rn-project-detail-actions .rn-button,
+  .rn-project-review-actions .rn-button {
+    width: 100%;
+  }
+
+  .rn-project-card,
+  .rn-project-detail,
+  .rn-project-review,
+  .rn-project-submission,
+  .rn-project-review-form {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .rn-project-card,
+  .rn-project-detail,
+  .rn-project-review,
+  .rn-project-submission,
+  .rn-project-review-form {
+    padding: 14px;
+  }
+
+  .rn-project-deliverables ul,
+  .rn-project-criteria ul {
+    padding-left: 18px;
+  }
+}
+
+/* =========================================================
+   CERTIFICATES — MOBILE RESPONSIVENESS
+   ========================================================= */
+
+.rn-certificates,
+.rn-certificates-shell,
+.rn-certificate,
+.rn-certificate-shell,
+.rn-certificate-content,
+.rn-certificate-card,
+.rn-certificate-actions {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rn-certificates,
+.rn-certificate-shell {
+  overflow-x: hidden;
+}
+
+.rn-certificate-card,
+.rn-certificate-content {
+  overflow-wrap: anywhere;
+}
+
+.rn-certificate h1,
+.rn-certificate h2,
+.rn-certificate h3,
+.rn-certificate p,
+.rn-certificate strong,
+.rn-certificate span {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.rn-certificate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.rn-certificate-actions .rn-button {
+  box-sizing: border-box;
+}
+
+.rn-certificate-number,
+.rn-certificate-course,
+.rn-certificate-student,
+.rn-certificate-date {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Certificate issue cards */
+.rn-certificate-card {
+  overflow: hidden;
+}
+
+.rn-certificate-card a {
+  overflow-wrap: anywhere;
+}
+
+/* Score / credential information */
+.rn-certificate-meta,
+.rn-certificate-details,
+.rn-certificate-stats {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-certificate-meta > *,
+.rn-certificate-details > *,
+.rn-certificate-stats > * {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .rn-certificate-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rn-certificate-actions .rn-button {
+    width: 100%;
+  }
+
+  .rn-certificate-card,
+  .rn-certificate-content {
+    padding: 16px;
+  }
+
+  .rn-certificate-meta,
+  .rn-certificate-details,
+  .rn-certificate-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .rn-certificate-card,
+  .rn-certificate-content {
+    padding: 14px;
+  }
+
+  .rn-certificate h1 {
+    font-size: clamp(1.6rem, 8vw, 2rem);
+    line-height: 1.15;
+  }
+
+  .rn-certificate h2 {
+    font-size: 1.3rem;
+  }
+}
+
+/* =========================================================
+   ADMIN LMS — MOBILE RESPONSIVENESS
+   ========================================================= */
+
+/* Main admin/LMS containers */
+.rn-admin,
+.rn-admin-shell,
+.rn-admin-content,
+.rn-admin-panel,
+.rn-admin-card,
+.rn-admin-grid,
+.rn-lms,
+.rn-lms-shell,
+.rn-lms-editor,
+.rn-lms-content {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rn-admin,
+.rn-admin-shell,
+.rn-lms,
+.rn-lms-shell {
+  overflow-x: hidden;
+}
+
+/* Headings and dynamic text */
+.rn-admin h1,
+.rn-admin h2,
+.rn-admin h3,
+.rn-admin h4,
+.rn-lms h1,
+.rn-lms h2,
+.rn-lms h3,
+.rn-lms h4,
+.rn-lms-editor h1,
+.rn-lms-editor h2,
+.rn-lms-editor h3,
+.rn-lms-editor h4,
+.rn-lms-editor p {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Generic admin controls */
+.rn-admin input,
+.rn-admin select,
+.rn-admin textarea,
+.rn-lms input,
+.rn-lms select,
+.rn-lms textarea,
+.rn-lms-editor input,
+.rn-lms-editor select,
+.rn-lms-editor textarea {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rn-admin textarea,
+.rn-lms textarea,
+.rn-lms-editor textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+/* Buttons and action groups */
+.rn-admin-actions,
+.rn-lms-actions,
+.rn-course-actions,
+.rn-section-actions,
+.rn-lesson-actions,
+.rn-resource-actions,
+.rn-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rn-admin-actions .rn-button,
+.rn-lms-actions .rn-button,
+.rn-course-actions .rn-button,
+.rn-section-actions .rn-button,
+.rn-lesson-actions .rn-button,
+.rn-resource-actions .rn-button,
+.rn-editor-actions .rn-button {
+  box-sizing: border-box;
+}
+
+/* Course / section / lesson lists */
+.rn-course-list,
+.rn-section-list,
+.rn-lesson-list,
+.rn-resource-list,
+.rn-lms-list {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.rn-course-item,
+.rn-section-item,
+.rn-lesson-item,
+.rn-resource-item {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.rn-course-item *,
+.rn-section-item *,
+.rn-lesson-item *,
+.rn-resource-item * {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Drag/order/move controls */
+.rn-lesson-controls,
+.rn-section-controls,
+.rn-resource-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Editor form rows */
+.rn-editor-grid,
+.rn-lms-form-grid,
+.rn-course-form-grid,
+.rn-lesson-form-grid,
+.rn-resource-form-grid {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-editor-grid > *,
+.rn-lms-form-grid > *,
+.rn-course-form-grid > *,
+.rn-lesson-form-grid > *,
+.rn-resource-form-grid > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Textareas containing HTML/content */
+.rn-lms-editor textarea,
+.rn-editor textarea {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Preview area */
+.rn-lesson-preview,
+.rn-course-preview,
+.rn-lms-preview {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+}
+
+.rn-lesson-preview img,
+.rn-course-preview img,
+.rn-lms-preview img,
+.rn-lesson-preview video,
+.rn-course-preview video,
+.rn-lms-preview video,
+.rn-lesson-preview iframe,
+.rn-course-preview iframe,
+.rn-lms-preview iframe {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Content HTML inside preview */
+.rn-lesson-preview pre,
+.rn-course-preview pre,
+.rn-lms-preview pre {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.rn-lesson-preview table,
+.rn-course-preview table,
+.rn-lms-preview table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Admin tables */
+.rn-admin-table-wrapper,
+.rn-admin-table-scroll,
+.rn-lms-table-wrapper,
+.rn-table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.rn-admin-table-wrapper table,
+.rn-admin-table-scroll table,
+.rn-lms-table-wrapper table,
+.rn-table-wrapper table {
+  min-width: 680px;
+}
+
+/* Badges/status text */
+.rn-status,
+.rn-badge,
+.rn-admin-badge,
+.rn-course-status,
+.rn-lesson-status {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .rn-admin-grid,
+  .rn-lms-form-grid,
+  .rn-course-form-grid,
+  .rn-lesson-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .rn-admin,
+  .rn-admin-shell,
+  .rn-lms,
+  .rn-lms-shell,
+  .rn-lms-editor {
+    padding-inline: 0;
+  }
+
+  .rn-admin-actions,
+  .rn-lms-actions,
+  .rn-course-actions,
+  .rn-section-actions,
+  .rn-lesson-actions,
+  .rn-resource-actions,
+  .rn-editor-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rn-admin-actions .rn-button,
+  .rn-lms-actions .rn-button,
+  .rn-course-actions .rn-button,
+  .rn-section-actions .rn-button,
+  .rn-lesson-actions .rn-button,
+  .rn-resource-actions .rn-button,
+  .rn-editor-actions .rn-button {
+    width: 100%;
+  }
+
+  .rn-course-item,
+  .rn-section-item,
+  .rn-lesson-item,
+  .rn-resource-item {
+    padding: 14px;
+  }
+
+  .rn-lesson-controls,
+  .rn-section-controls,
+  .rn-resource-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rn-lesson-controls button,
+  .rn-section-controls button,
+  .rn-resource-controls button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .rn-course-item,
+  .rn-section-item,
+  .rn-lesson-item,
+  .rn-resource-item {
+    padding: 12px;
+  }
+
+  .rn-admin-table-wrapper table,
+  .rn-admin-table-scroll table,
+  .rn-lms-table-wrapper table,
+  .rn-table-wrapper table {
+    min-width: 600px;
+  }
+}
+
+/* =========================================================
+   ADMIN PROJECT REVIEW — MOBILE RESPONSIVENESS
+   ========================================================= */
+
+.rn-admin-projects,
+.rn-admin-projects-shell,
+.rn-admin-project-review,
+.rn-project-review-page,
+.rn-project-review-card,
+.rn-project-review-form {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rn-admin-projects,
+.rn-admin-projects-shell,
+.rn-admin-project-review {
+  overflow-x: hidden;
+}
+
+.rn-admin-projects h1,
+.rn-admin-projects h2,
+.rn-admin-projects h3,
+.rn-admin-projects h4,
+.rn-project-review-page h1,
+.rn-project-review-page h2,
+.rn-project-review-page h3,
+.rn-project-review-page h4,
+.rn-project-review-card h2,
+.rn-project-review-card h3,
+.rn-project-review-card p,
+.rn-project-review-form p {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Filter/navigation area */
+.rn-admin-project-filters,
+.rn-project-review-filters,
+.rn-admin-tabs,
+.rn-project-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-admin-project-filters > *,
+.rn-project-review-filters > *,
+.rn-admin-tabs > *,
+.rn-project-tabs > * {
+  min-width: 0;
+}
+
+/* Project review cards */
+.rn-project-review-card {
+  overflow: hidden;
+}
+
+.rn-project-review-card > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-project-review-card a,
+.rn-project-review-card strong,
+.rn-project-review-card span {
+  overflow-wrap: anywhere;
+}
+
+/* Review form */
+.rn-project-review-form {
+  overflow-wrap: anywhere;
+}
+
+.rn-project-review-form label {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-project-review-form input,
+.rn-project-review-form select,
+.rn-project-review-form textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rn-project-review-form textarea {
+  resize: vertical;
+}
+
+/* Review fields */
+.rn-project-review-fields {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-project-review-fields > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Review action buttons */
+.rn-project-review-actions,
+.rn-admin-project-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rn-project-review-actions .rn-button,
+.rn-admin-project-actions .rn-button {
+  box-sizing: border-box;
+}
+
+/* Reviewer feedback and project submission text */
+.rn-project-review-feedback,
+.rn-project-review-submission,
+.rn-project-submission-content {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.rn-project-review-feedback pre,
+.rn-project-review-submission pre,
+.rn-project-submission-content pre {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Project review tables */
+.rn-admin-projects .rn-admin-table-wrapper,
+.rn-admin-projects .rn-admin-table-scroll,
+.rn-admin-projects .rn-table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.rn-admin-projects .rn-admin-table-wrapper table,
+.rn-admin-projects .rn-admin-table-scroll table,
+.rn-admin-projects .rn-table-wrapper table {
+  min-width: 680px;
+}
+
+/* Status / score / metadata */
+.rn-project-review-status,
+.rn-project-review-score,
+.rn-project-review-meta,
+.rn-project-review-student {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .rn-admin-project-filters,
+  .rn-project-review-filters,
+  .rn-admin-tabs,
+  .rn-project-tabs {
+    width: 100%;
+  }
+
+  .rn-project-review-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .rn-admin-project-filters,
+  .rn-project-review-filters,
+  .rn-admin-tabs,
+  .rn-project-tabs {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .rn-admin-project-filters > *,
+  .rn-project-review-filters > *,
+  .rn-admin-tabs > *,
+  .rn-project-tabs > * {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .rn-project-review-actions,
+  .rn-admin-project-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rn-project-review-actions .rn-button,
+  .rn-admin-project-actions .rn-button {
+    width: 100%;
+  }
+
+  .rn-project-review-card,
+  .rn-project-review-form {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .rn-project-review-card,
+  .rn-project-review-form {
+    padding: 14px;
+  }
+
+  .rn-admin-projects .rn-admin-table-wrapper table,
+  .rn-admin-projects .rn-admin-table-scroll table,
+  .rn-admin-projects .rn-table-wrapper table {
+    min-width: 600px;
+  }
+
+  .rn-project-review-form textarea {
+    min-height: 160px;
+  }
+}
+
+/* =========================================================
+   STUDENT SKILLS — MOBILE RESPONSIVENESS
+   ========================================================= */
+
+.rn-skills,
+.rn-skills-shell,
+.rn-skills-page,
+.rn-skills-header,
+.rn-skills-content,
+.rn-skill-grid,
+.rn-skill-card,
+.rn-skill-profile,
+.rn-skill-summary,
+.rn-skills-empty {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rn-skills,
+.rn-skills-shell,
+.rn-skills-page {
+  overflow-x: hidden;
+}
+
+/* Headings and skill text */
+.rn-skills h1,
+.rn-skills h2,
+.rn-skills h3,
+.rn-skills h4,
+.rn-skill-card h2,
+.rn-skill-card h3,
+.rn-skill-card h4,
+.rn-skill-card p,
+.rn-skill-profile p,
+.rn-skill-summary p {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Skill cards */
+.rn-skill-card {
+  overflow: hidden;
+}
+
+.rn-skill-card > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-skill-card strong,
+.rn-skill-card span,
+.rn-skill-card small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Skill score / progress */
+.rn-skill-score,
+.rn-skill-confidence,
+.rn-skill-level,
+.rn-skill-progress {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-skill-progress {
+  width: 100%;
+  overflow: hidden;
+}
+
+.rn-skill-progress > div {
+  max-width: 100%;
+}
+
+/* Skills summary */
+.rn-skills-summary,
+.rn-skills-stat-grid,
+.rn-skill-summary-grid {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.rn-skills-summary > *,
+.rn-skills-stat-grid > *,
+.rn-skill-summary-grid > * {
+  min-width: 0;
+}
+
+/* Skill evidence / strengths / gaps */
+.rn-skill-evidence,
+.rn-skill-strengths,
+.rn-skill-gaps,
+.rn-skill-development {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.rn-skill-evidence ul,
+.rn-skill-strengths ul,
+.rn-skill-gaps ul,
+.rn-skill-development ul {
+  max-width: 100%;
+  padding-left: 20px;
+}
+
+.rn-skill-evidence li,
+.rn-skill-strengths li,
+.rn-skill-gaps li,
+.rn-skill-development li {
+  overflow-wrap: anywhere;
+}
+
+/* CTA */
+.rn-skills-actions,
+.rn-skill-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rn-skills-actions .rn-button,
+.rn-skill-actions .rn-button {
+  box-sizing: border-box;
+}
+
+@media (max-width: 900px) {
+  .rn-skill-grid {
+    grid-template-columns: repeat(
+      2,
+      minmax(0, 1fr)
+    );
+  }
+
+  .rn-skills-summary,
+  .rn-skills-stat-grid,
+  .rn-skill-summary-grid {
+    grid-template-columns: repeat(
+      2,
+      minmax(0, 1fr)
+    );
+  }
+}
+
+@media (max-width: 720px) {
+  .rn-skill-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rn-skills-summary,
+  .rn-skills-stat-grid,
+  .rn-skill-summary-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rn-skills-actions,
+  .rn-skill-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rn-skills-actions .rn-button,
+  .rn-skill-actions .rn-button {
+    width: 100%;
+  }
+
+  .rn-skill-card,
+  .rn-skill-profile,
+  .rn-skill-summary {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .rn-skill-card,
+  .rn-skill-profile,
+  .rn-skill-summary {
+    padding: 14px;
+  }
+
+  .rn-skill-evidence ul,
+  .rn-skill-strengths ul,
+  .rn-skill-gaps ul,
+  .rn-skill-development ul {
+    padding-left: 18px;
+  }
+}
+
+/* =========================================================
+   AUTH PAGES — MOBILE RESPONSIVENESS
+   ========================================================= */
+
+/* Auth containers regardless of the exact component class */
+[class*="auth"],
+[class*="login"],
+[class*="signup"] {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Main auth content */
+main form {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+main form label {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+main form input,
+main form select,
+main form textarea {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Prevent long email/error/help text from widening the page */
+main form p,
+main form small,
+main form label,
+main form span,
+main form a {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Auth buttons */
+main form button,
+main form .btn,
+main form .rn-button {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 720px) {
+  /* Keep auth content centered */
+  main form {
+    width: 100%;
+    margin-inline: auto;
+  }
+
+  main form button,
+  main form .btn,
+  main form .rn-button {
+    width: 100%;
+  }
+
+  /* Common auth cards */
+  [class*="auth-card"],
+  [class*="login-card"],
+  [class*="signup-card"] {
+    width: 100%;
+    max-width: 100%;
+    padding: 18px;
+    box-sizing: border-box;
+  }
+
+  /* Common auth headings */
+  [class*="auth"] h1,
+  [class*="auth"] h2,
+  [class*="login"] h1,
+  [class*="login"] h2,
+  [class*="signup"] h1,
+  [class*="signup"] h2 {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 480px) {
+  [class*="auth-card"],
+  [class*="login-card"],
+  [class*="signup-card"] {
+    padding: 14px;
+  }
+
+  main form input,
+  main form select,
+  main form textarea {
+    min-height: 44px;
+  }
+
+  main form button,
+  main form .btn,
+  main form .rn-button {
+    min-height: 44px;
+  }
+}
+
+/* =========================================================
+   FOOTER — MOBILE RESPONSIVENESS
+   ========================================================= */
+
+.footer {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.footer .container {
+  width: min(1100px, calc(100% - 32px));
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin-inline: auto;
+}
+
+.footer a {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+@media (max-width: 720px) {
+  .footer {
+    padding: 24px 0;
+    text-align: center;
+  }
+
+  .footer .container {
+    width: calc(100% - 24px);
+  }
+}
+
+@media (max-width: 420px) {
+  .footer .container {
+    width: calc(100% - 16px);
+  }
+
+  .footer {
+    font-size: 0.82rem;
+    line-height: 1.6;
+  }
+}
+
+/* =========================================================
+   FINAL GLOBAL MOBILE SPACING
+   ========================================================= */
+
+@media (max-width: 720px) {
+  main {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  main > * {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  section,
+  article,
+  aside,
+  header,
+  nav {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .container {
+    width: calc(100% - 24px);
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    margin-inline: auto;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  p,
+  a,
+  span,
+  strong,
+  small {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  /* Prevent accidental fixed-width children */
+  .container > *,
+  section > *,
+  article > *,
+  aside > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* Keep buttons and controls inside the viewport */
+  .btn,
+  .rn-button,
+  button,
+  input,
+  select,
+  textarea {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Images and embedded content */
+  img,
+  picture,
+  video,
+  iframe,
+  embed,
+  object {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Long URLs and generated content */
+  pre,
+  code {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  pre {
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 420px) {
+  .container {
+    width: calc(100% - 16px);
+  }
+
+  section {
+    margin-block: 20px;
+  }
+}
+
+/* =========================================================
+   STUDENT DASHBOARD — ACTUAL MOBILE LAYOUT
+   ========================================================= */
+
+.rn-dashboard-shell {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.rn-dashboard-header,
+.rn-dashboard-stats,
+.rn-dashboard-grid,
+.rn-dashboard-section,
+.rn-dashboard-section-header,
+.rn-dashboard-header-actions,
+.rn-dashboard-actions-grid,
+.rn-profile-summary,
+.rn-profile-details {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.rn-dashboard-header > *,
+.rn-dashboard-section-header > *,
+.rn-dashboard-card > *,
+.rn-dashboard-action > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-dashboard-header h1,
+.rn-dashboard-header p,
+.rn-dashboard-card h2,
+.rn-dashboard-card h3,
+.rn-dashboard-card p,
+.rn-dashboard-action strong,
+.rn-dashboard-action span {
+  overflow-wrap: anywhere;
+}
+
+/* Header action group */
+.rn-dashboard-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Statistics */
+.rn-dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(
+    4,
+    minmax(0, 1fr)
+  );
+  gap: 12px;
+}
+
+.rn-dashboard-stat {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Dashboard two-column cards */
+.rn-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(
+    2,
+    minmax(0, 1fr)
+  );
+  gap: 16px;
+}
+
+.rn-dashboard-card {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.rn-dashboard-card-header {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-dashboard-card-header > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-profile-summary {
+  min-width: 0;
+}
+
+.rn-profile-details {
+  min-width: 0;
+}
+
+.rn-profile-details p {
+  overflow-wrap: anywhere;
+}
+
+/* Dashboard section headings */
+.rn-dashboard-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.rn-dashboard-section-header > div {
+  min-width: 0;
+}
+
+/* Quick actions */
+.rn-dashboard-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(
+    3,
+    minmax(0, 1fr)
+  );
+  gap: 12px;
+}
+
+.rn-dashboard-action {
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+
+.rn-dashboard-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rn-dashboard-inline-actions .rn-button {
+  box-sizing: border-box;
+}
+
+/* Enrolled course cards */
+.rn-course-card {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.rn-course-card-body {
+  min-width: 0;
+}
+
+.rn-course-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rn-course-card-meta > span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.rn-course-card h3,
+.rn-course-card p {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.rn-course-card-footer {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rn-progress-header {
+  min-width: 0;
+}
+
+.rn-progress-header span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .rn-dashboard-stats {
+    grid-template-columns: repeat(
+      2,
+      minmax(0, 1fr)
+    );
+  }
+
+  .rn-dashboard-actions-grid {
+    grid-template-columns: repeat(
+      2,
+      minmax(0, 1fr)
+    );
+  }
+}
+
+@media (max-width: 720px) {
+  .rn-dashboard-header {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    text-align: left;
+  }
+
+  .rn-dashboard-header-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rn-dashboard-header-actions .rn-button {
+    width: 100%;
+  }
+
+  .rn-dashboard-stats {
+    grid-template-columns: repeat(
+      2,
+      minmax(0, 1fr)
+    );
+    gap: 10px;
+  }
+
+  .rn-dashboard-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rn-dashboard-section-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .rn-dashboard-section-header .rn-text-link {
+    align-self: flex-start;
+  }
+
+  .rn-dashboard-actions-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rn-dashboard-inline-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rn-dashboard-inline-actions .rn-button {
+    width: 100%;
+  }
+
+  .rn-course-card-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rn-course-card-footer .rn-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .rn-dashboard-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rn-dashboard-stat {
+    padding: 14px;
+  }
+
+  .rn-dashboard-card {
+    padding: 14px;
+  }
+
+  .rn-dashboard-action {
+    padding: 14px;
+  }
+}
+
+/* =========================================================
+   STUDENT SKILLS — ACTUAL RESPONSIVE LAYOUT
+   ========================================================= */
+
+.rn-profile-shell,
+.rn-profile-header,
+.rn-profile-stats,
+.rn-profile-grid,
+.rn-profile-panel,
+.rn-profile-skill-list,
+.rn-profile-skill,
+.rn-profile-sidebar,
+.rn-profile-empty {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rn-profile-shell {
+  overflow-x: hidden;
+}
+
+.rn-profile-header > *,
+.rn-profile-panel > *,
+.rn-profile-skill > *,
+.rn-profile-sidebar > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-profile-header h1,
+.rn-profile-header p,
+.rn-profile-panel h2,
+.rn-profile-panel p,
+.rn-profile-skill strong,
+.rn-profile-skill span,
+.rn-profile-evidence,
+.rn-profile-insight {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Header */
+.rn-profile-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.rn-profile-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rn-profile-header-actions > * {
+  min-width: 0;
+}
+
+/* Statistics */
+.rn-profile-stats {
+  display: grid;
+  grid-template-columns: repeat(
+    4,
+    minmax(0, 1fr)
+  );
+  gap: 12px;
+}
+
+.rn-profile-stat {
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.rn-profile-stat span,
+.rn-profile-stat strong {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Main skills + sidebar */
+.rn-profile-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(
+    280px,
+    1fr
+  );
+  gap: 16px;
+  align-items: start;
+}
+
+.rn-profile-panel {
+  overflow: hidden;
+}
+
+.rn-profile-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+
+.rn-profile-panel-heading > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Individual skills */
+.rn-profile-skill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rn-profile-skill {
+  overflow: hidden;
+}
+
+.rn-profile-skill-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px;
+  min-width: 0;
+}
+
+.rn-profile-skill-heading > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-profile-skill-score {
+  min-width: 70px;
+  text-align: right;
+}
+
+.rn-profile-skill-score strong,
+.rn-profile-skill-score span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.rn-skill-bar {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.rn-skill-bar span {
+  display: block;
+  max-width: 100%;
+}
+
+/* Strength / development insight */
+.rn-profile-insight {
+  display: grid;
+  grid-template-columns: repeat(
+    2,
+    minmax(0, 1fr)
+  );
+  gap: 12px;
+}
+
+.rn-profile-insight > div {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-profile-insight strong,
+.rn-profile-insight span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+/* Sidebar */
+.rn-profile-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rn-profile-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rn-profile-mini-list > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.rn-profile-mini-list strong,
+.rn-profile-mini-list span {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rn-profile-next {
+  min-width: 0;
+}
+
+.rn-profile-next .btn {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.rn-profile-updated {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Empty state */
+.rn-profile-empty {
+  overflow: hidden;
+}
+
+.rn-profile-empty-icon {
+  flex: 0 0 auto;
+}
+
+/* =========================================================
+   TABLET
+   ========================================================= */
+
+@media (max-width: 900px) {
+  .rn-profile-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rn-profile-sidebar {
+    display: grid;
+    grid-template-columns: repeat(
+      2,
+      minmax(0, 1fr)
+    );
+    gap: 12px;
+  }
+
+  .rn-profile-sidebar .rn-profile-next {
+    grid-column: 1 / -1;
+  }
+
+  .rn-profile-stats {
+    grid-template-columns: repeat(
+      2,
+      minmax(0, 1fr)
+    );
+  }
+}
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 720px) {
+  .rn-profile-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .rn-profile-header-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rn-profile-header-actions .btn {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .rn-profile-stats {
+    grid-template-columns: repeat(
+      2,
+      minmax(0, 1fr)
+    );
+    gap: 10px;
+  }
+
+  .rn-profile-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rn-profile-panel-heading {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .rn-profile-panel-heading .rn-text-link {
+    align-self: flex-start;
+  }
+
+  .rn-profile-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .rn-profile-skill-heading {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .rn-profile-skill-score {
+    min-width: 0;
+    text-align: left;
+  }
+
+  .rn-profile-insight {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* =========================================================
+   SMALL PHONES
+   ========================================================= */
+
+@media (max-width: 420px) {
+  .rn-profile-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rn-profile-stat,
+  .rn-profile-panel,
+  .rn-profile-empty,
+  .rn-profile-skill {
+    padding: 14px;
+  }
+
+  .rn-profile-header h1 {
+    font-size: clamp(1.65rem, 8vw, 2.05rem);
+    line-height: 1.15;
+  }
+
+  .rn-profile-mini-list {
+    gap: 12px;
+  }
+}
