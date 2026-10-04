@@ -6805,3 +6805,640 @@ a.rn-admin-stat:hover {
   object-fit: cover;
   border-radius: 16px;
 }
+
+/* =========================================================
+   MOBILE RESPONSIVENESS — FINAL NORMALIZATION
+   ========================================================= */
+
+html {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+main {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+img,
+video,
+iframe,
+svg {
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
+.container {
+  width: min(1100px, calc(100% - 32px));
+  max-width: 1100px;
+  min-width: 0;
+  margin-inline: auto;
+}
+
+/* Prevent long text, URLs and database content from expanding layouts. */
+p,
+span,
+strong,
+small,
+a,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+td,
+th,
+label {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+/* Flexible children must be allowed to shrink. */
+.rn-learning-topbar > *,
+.rn-learning-layout > *,
+.rn-learning-content > *,
+.rn-learning-completion > *,
+.rn-learning-preview-cta > *,
+.rn-course-final-cta > *,
+.rn-course-bottom-grid > *,
+.rn-founder-grid > *,
+.rn-dashboard-intelligence > *,
+.rn-dashboard-grid > *,
+.rn-project-review-fields > * {
+  min-width: 0;
+}
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+.site-header .inner,
+.rn-parent-brand-inner {
+  min-width: 0;
+}
+
+.brand,
+.nav {
+  min-width: 0;
+}
+
+.brand-copy {
+  min-width: 0;
+}
+
+.nav {
+  flex-wrap: wrap;
+}
+
+/* =========================================================
+   TABLES
+   ========================================================= */
+
+.rn-admin-table,
+.admin-table,
+table {
+  max-width: 100%;
+}
+
+.rn-admin-table-wrapper,
+.admin-table-wrapper,
+.table-wrapper,
+.rn-table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* =========================================================
+   FORMS
+   ========================================================= */
+
+.rn-form-row,
+.form-row,
+.rn-project-review-fields,
+.rn-assessment-actions,
+.rn-course-actions,
+.rn-dashboard-actions {
+  min-width: 0;
+}
+
+.rn-form-row > *,
+.form-row > * {
+  min-width: 0;
+}
+
+/* =========================================================
+   LEARNING EXPERIENCE
+   ========================================================= */
+
+.rn-learning-shell {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.rn-learning-topbar {
+  min-width: 0;
+}
+
+.rn-learning-topbar-copy,
+.rn-learning-progress-summary {
+  min-width: 0;
+}
+
+.rn-learning-layout {
+  min-width: 0;
+}
+
+.rn-learning-sidebar,
+.rn-learning-content {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-learning-content-header,
+.rn-learning-label-row,
+.rn-course-meta-row {
+  min-width: 0;
+}
+
+.rn-learning-content article,
+.rn-learning-content section {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-learning-content pre {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.rn-learning-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.rn-resource-list,
+.rn-learning-navigation {
+  min-width: 0;
+}
+
+.rn-resource-item,
+.rn-learning-nav-card {
+  min-width: 0;
+}
+
+/* =========================================================
+   COURSE DETAIL / CATALOGUE
+   ========================================================= */
+
+.rn-course-detail,
+.rn-course-detail-main,
+.rn-course-overview,
+.rn-course-curriculum,
+.rn-course-bottom-grid,
+.rn-course-final-cta,
+.rn-course-info-panel {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-curriculum-module,
+.rn-curriculum-lessons,
+.rn-curriculum-lesson,
+.rn-lesson-main {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-curriculum-lesson {
+  overflow: hidden;
+}
+
+.rn-lesson-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rn-course-grid,
+.rn-catalogue-grid,
+.rn-course-cards,
+.rn-featured-courses {
+  min-width: 0;
+}
+
+/* =========================================================
+   DASHBOARD
+   ========================================================= */
+
+.rn-dashboard,
+.rn-dashboard-shell,
+.rn-dashboard-grid,
+.rn-dashboard-intelligence,
+.rn-dashboard-card,
+.rn-intelligence-grid,
+.rn-skill-grid,
+.rn-quick-actions {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-dashboard-card,
+.rn-intelligence-card,
+.rn-skill-card {
+  overflow-wrap: anywhere;
+}
+
+/* =========================================================
+   PROJECTS
+   ========================================================= */
+
+.rn-project-card,
+.rn-project-detail,
+.rn-project-review,
+.rn-project-review-form,
+.rn-project-submission,
+.rn-project-deliverables,
+.rn-project-criteria {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-project-card *,
+.rn-project-detail *,
+.rn-project-review-form * {
+  max-width: 100%;
+}
+
+.rn-project-submission textarea,
+.rn-project-submission input,
+.rn-project-review-form textarea,
+.rn-project-review-form input,
+.rn-project-review-form select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* =========================================================
+   ADMIN
+   ========================================================= */
+
+.rn-admin,
+.rn-admin-shell,
+.rn-admin-grid,
+.rn-admin-stats,
+.rn-admin-card,
+.rn-admin-panel,
+.rn-admin-content {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-admin-table {
+  width: 100%;
+  min-width: 0;
+}
+
+/* =========================================================
+   CERTIFICATES
+   ========================================================= */
+
+.rn-certificate,
+.rn-certificate-shell,
+.rn-certificate-content {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-certificate * {
+  overflow-wrap: anywhere;
+}
+
+/* =========================================================
+   900px
+   ========================================================= */
+
+@media (max-width: 900px) {
+  .container {
+    width: min(100% - 28px, 1100px);
+  }
+
+  .rn-learning-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .rn-learning-sidebar {
+    position: static;
+    width: 100%;
+  }
+
+  .rn-course-bottom-grid,
+  .rn-founder-grid,
+  .rn-profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rn-course-grid,
+  .rn-catalogue-grid,
+  .rn-featured-courses {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* =========================================================
+   720px
+   ========================================================= */
+
+@media (max-width: 720px) {
+  .container {
+    width: calc(100% - 24px);
+  }
+
+  .rn-parent-brand-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .site-header .inner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .brand {
+    width: 100%;
+  }
+
+  .nav {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .nav a,
+  .nav button {
+    min-height: 40px;
+  }
+
+  .rn-learning-topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .rn-learning-progress-summary {
+    width: 100%;
+  }
+
+  .rn-learning-navigation {
+    grid-template-columns: 1fr;
+  }
+
+  .rn-course-grid,
+  .rn-catalogue-grid,
+  .rn-featured-courses,
+  .rn-benefits-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rn-dashboard-intelligence,
+  .rn-intelligence-grid,
+  .rn-skill-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rn-dashboard-actions,
+  .rn-quick-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .rn-project-review-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================================================
+   560px
+   ========================================================= */
+
+@media (max-width: 560px) {
+  .container {
+    width: calc(100% - 20px);
+  }
+
+  .rn-parent-description {
+    display: none;
+  }
+
+  .brand {
+    gap: 8px;
+  }
+
+  .brand-logo {
+    width: 96px;
+    height: auto;
+  }
+
+  .brand-copy strong {
+    font-size: 1rem;
+  }
+
+  .brand-copy span {
+    font-size: 0.8rem;
+  }
+
+  .nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .nav > * {
+    width: 100%;
+  }
+
+  .nav a,
+  .nav button {
+    width: 100%;
+    box-sizing: border-box;
+    text-align: center;
+  }
+
+  .rn-button,
+  .rn-button-primary,
+  .rn-button-secondary {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .rn-learning-sidebar {
+    padding: 16px;
+  }
+
+  .rn-learning-content {
+    padding: 18px;
+  }
+
+  .rn-learning-completion,
+  .rn-learning-preview-cta,
+  .rn-course-final-cta {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rn-learning-completion .rn-button,
+  .rn-learning-preview-cta .rn-button,
+  .rn-course-final-cta .rn-button {
+    width: 100%;
+  }
+
+  .rn-course-info-panel,
+  .rn-dashboard-card,
+  .rn-project-card,
+  .rn-admin-card {
+    padding: 16px;
+  }
+
+  .rn-assessment-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================================================
+   420px
+   ========================================================= */
+
+@media (max-width: 420px) {
+  .container {
+    width: calc(100% - 16px);
+  }
+
+  body {
+    font-size: 14px;
+  }
+
+  h1 {
+    font-size: clamp(1.7rem, 8vw, 2.2rem);
+  }
+
+  h2 {
+    font-size: clamp(1.3rem, 6vw, 1.7rem);
+  }
+
+  h3 {
+    font-size: 1.1rem;
+  }
+
+  .nav {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-logo {
+    width: 88px;
+  }
+
+  .rn-learning-content {
+    padding: 14px;
+  }
+
+  .rn-learning-sidebar {
+    padding: 14px;
+  }
+
+  .rn-resource-item {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .rn-resource-arrow {
+    font-size: 0.9rem;
+  }
+
+  .rn-curriculum-lesson {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .rn-lesson-open {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+/* =========================================================
+   MOBILE SAFETY
+   ========================================================= */
+
+@media (max-width: 720px) {
+  pre,
+  code {
+    max-width: 100%;
+  }
+
+  pre {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .rn-table-scroll,
+  .table-responsive {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .rn-table-scroll table,
+  .table-responsive table {
+    min-width: 620px;
+  }
+
+  [style*="width:"] {
+    max-width: 100%;
+  }
+}
+
+/* =========================================================
+   TOUCH TARGETS
+   ========================================================= */
+
+@media (max-width: 720px) {
+  a,
+  button,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+
+  button,
+  .rn-button,
+  .btn {
+    min-height: 42px;
+  }
+
+  input,
+  select,
+  textarea {
+    min-height: 42px;
+  }
+}
