@@ -7827,3 +7827,139 @@ table {
     text-align: center;
   }
 }
+
+/* =========================================================
+   HOMEPAGE — ACTUAL MOBILE HERO FIX
+   ========================================================= */
+
+@media (max-width: 720px) {
+  .hero {
+    width: 100%;
+    overflow-x: hidden;
+    padding: 32px 0;
+  }
+
+  .hero > .container {
+    width: calc(100% - 24px);
+    max-width: 100%;
+  }
+
+  .hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .hero-grid > div {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .hero-grid > div:first-child {
+    text-align: center;
+  }
+
+  .hero h1 {
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto 14px;
+    font-size: clamp(1.75rem, 8vw, 2.3rem);
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  .hero p {
+    width: 100%;
+    max-width: 600px;
+    margin: 0 auto 20px;
+    line-height: 1.6;
+  }
+
+  .hero-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+    gap: 10px;
+  }
+
+  .hero-actions .btn {
+    width: 100%;
+    box-sizing: border-box;
+    text-align: center;
+  }
+
+  .hero-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 18px;
+  }
+
+  .rn-learn-banner {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+  }
+
+  .rn-hero-brand-copy {
+    text-align: center;
+  }
+
+  .rn-hero-brand-copy strong,
+  .rn-hero-brand-copy p,
+  .rn-hero-brand-copy span {
+    display: block;
+    text-align: center;
+  }
+
+  .rn-featured-courses-section .section-heading {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .rn-featured-course-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rn-featured-course-card {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .rn-founder-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rn-founder-content {
+    min-width: 0;
+    text-align: left;
+  }
+}
+
+@media (max-width: 420px) {
+  .hero > .container {
+    width: calc(100% - 16px);
+  }
+
+  .hero {
+    padding: 26px 0;
+  }
+
+  .hero-card {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .hero h1 {
+    font-size: clamp(1.6rem, 8.5vw, 2rem);
+  }
+}
