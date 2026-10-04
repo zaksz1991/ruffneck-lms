@@ -1,5 +1,14 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+
+type Skill = {
+  id: string;
+  name: string;
+  slug: string;
+  category: string | null;
+  description: string | null;
+};
 
 type SkillProfile = {
   id: string;
@@ -11,22 +20,44 @@ type SkillProfile = {
   gaps: string | null;
   updated_at: string | null;
   learning_skills:
-    | {
-        id: string;
-        name: string;
-        slug: string;
-        category: string | null;
-        description: string | null;
-      }
-    | {
-        id: string;
-        name: string;
-        slug: string;
-        category: string | null;
-        description: string | null;
-      }[]
+    | Skill
+    | Skill[]
     | null;
 };
+
+function clampScore(value: number | null) {
+  return Math.min(
+    100,
+    Math.max(0, Number(value ?? 0))
+  );
+}
+
+function formatLevel(level: string | null) {
+  if (!level) {
+    return "Beginner";
+  }
+
+  return (
+    level.charAt(0).toUpperCase() +
+    level.slice(1)
+  );
+}
+
+function formatDate(value: string | null) {
+  if (!value) {
+    return "Not available";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Not available";
+  }
+
+  return new Intl.DateTimeFormat("en-NG", {
+    dateStyle: "medium",
+  }).format(date);
+}
 
 export default async function StudentSkillsPage() {
   const supabase = await createClient();
@@ -36,20 +67,13 @@ export default async function StudentSkillsPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return (
-      <main className="container">
-        <div className="auth-box">
-          <h1>My Learning Profile</h1>
-          <p>Please log in to view your learning profile.</p>
-          <Link href="/login" className="btn btn-primary">
-            Log in
-          </Link>
-        </div>
-      </main>
-    );
+    redirect("/login?next=/student/skills");
   }
 
-  const { data: profiles } = await supabase
+  const {
+    data: profiles,
+    error: profilesError,
+  } = await supabase
     .from("learner_skill_profiles")
     .select(
       `
@@ -71,67 +95,98 @@ export default async function StudentSkillsPage() {
       `
     )
     .eq("student_id", user.id)
-    .order("confidence_score", { ascending: false });
+    .order("confidence_score", {
+      ascending: false,
+    });
 
-  const skillProfiles = (profiles || []) as SkillProfile[];
-
-  const normalized = skillProfiles.map((profile) => {
-    const skill = Array.isArray(profile.learning_skills)
-      ? profile.learning_skills[0]
-      : profile.learning_skills;
-
-    const score = Math.max(
-      0,
-      Math.min(100, Number(profile.confidence_score || 0))
+  if (profilesError) {
+    console.error(
+      "Failed to load student skill profile:",
+      profilesError
     );
+  }
 
-    return {
-      ...profile,
-      skill,
-      score,
-    };
-  });
+  const skillProfiles =
+    (profiles || []) as unknown as SkillProfile[];
+
+  const normalized = skillProfiles.map(
+    (profile) => {
+      const skill = Array.isArray(
+        profile.learning_skills
+      )
+        ? profile.learning_skills[0] ?? null
+        : profile.learning_skills;
+
+      return {
+        ...profile,
+        skill,
+        score: clampScore(
+          profile.confidence_score
+        ),
+      };
+    }
+  );
 
   const averageScore =
     normalized.length > 0
       ? Math.round(
-          normalized.reduce((sum, item) => sum + item.score, 0) /
-            normalized.length
+          normalized.reduce(
+            (sum, item) =>
+              sum + item.score,
+            0
+          ) / normalized.length
         )
       : 0;
 
-  const strengths = normalized.filter((item) => item.score >= 80);
-  const developmentAreas = normalized.filter(
-    (item) => item.score < 50
+  const strengths = normalized.filter(
+    (item) => item.score >= 80
   );
 
-  const latestUpdate = normalized
-    .map((item) => item.updated_at)
-    .filter(Boolean)
-    .sort()
-    .reverse()[0];
+  const developmentAreas =
+    normalized.filter(
+      (item) => item.score < 50
+    );
+
+  const latestUpdate =
+    normalized
+      .map((item) => item.updated_at)
+      .filter(
+        (value): value is string =>
+          Boolean(value)
+      )
+      .sort(
+        (a, b) =>
+          new Date(b).getTime() -
+          new Date(a).getTime()
+      )[0] ?? null;
 
   return (
     <main className="container">
       <div className="rn-profile-shell">
         <div className="rn-profile-header">
           <div>
-            <span className="rn-eyebrow">RuffNeck Learn</span>
+            <span className="rn-eyebrow">
+              RUFFNECK LEARN
+            </span>
+
             <h1>My Learning Profile</h1>
+
             <p>
-              Your learning profile tracks your demonstrated skills and
-              identifies areas where additional learning may be useful.
+              Your learning profile tracks
+              demonstrated skills, current
+              confidence levels and areas for
+              further development.
             </p>
           </div>
 
           <div className="rn-profile-header-actions">
             <Link
-              href="/student/assessment"
+              href="/courses"
               className="btn btn-primary"
             >
               {normalized.length
-                ? "Retake Assessment"
-                : "Take Diagnostic Assessment"}
+                ? "Take a Course Assessment"
+                : "Start Learning"}
             </Link>
 
             <Link
@@ -145,42 +200,69 @@ export default async function StudentSkillsPage() {
 
         {normalized.length === 0 ? (
           <section className="rn-profile-empty">
-            <div className="rn-profile-empty-icon">RN</div>
-            <h2>Build your learning profile</h2>
+            <div className="rn-profile-empty-icon">
+              RN
+            </div>
+
+            <h2>
+              Build your learning profile
+            </h2>
+
             <p>
-              Take the diagnostic assessment to establish your initial
-              skill profile. Your results will be used to personalize
-              recommendations.
+              Your skill profile is built from
+              assessments completed through
+              RuffNeck Learn courses. Enroll in
+              a course and complete its
+              assessment to establish and
+              develop your learning profile.
             </p>
 
             <Link
-              href="/student/assessment"
+              href="/courses"
               className="btn btn-primary"
             >
-              Start Diagnostic Assessment
+              Browse Courses
             </Link>
           </section>
         ) : (
           <>
             <div className="rn-profile-stats">
               <article className="rn-profile-stat">
-                <span>Average skill score</span>
-                <strong>{averageScore}%</strong>
+                <span>
+                  Average skill score
+                </span>
+
+                <strong>
+                  {averageScore}%
+                </strong>
               </article>
 
               <article className="rn-profile-stat">
-                <span>Skills assessed</span>
-                <strong>{normalized.length}</strong>
+                <span>
+                  Skills assessed
+                </span>
+
+                <strong>
+                  {normalized.length}
+                </strong>
               </article>
 
               <article className="rn-profile-stat">
                 <span>Strengths</span>
-                <strong>{strengths.length}</strong>
+
+                <strong>
+                  {strengths.length}
+                </strong>
               </article>
 
               <article className="rn-profile-stat">
-                <span>Development areas</span>
-                <strong>{developmentAreas.length}</strong>
+                <span>
+                  Development areas
+                </span>
+
+                <strong>
+                  {developmentAreas.length}
+                </strong>
               </article>
             </div>
 
@@ -188,125 +270,209 @@ export default async function StudentSkillsPage() {
               <section className="rn-profile-panel">
                 <div className="rn-profile-panel-heading">
                   <div>
-                    <span className="rn-eyebrow">Skill map</span>
+                    <span className="rn-eyebrow">
+                      SKILL MAP
+                    </span>
+
                     <h2>Your skills</h2>
                   </div>
+
+                  <Link
+                    href="/courses"
+                    className="rn-text-link"
+                  >
+                    Continue learning
+                  </Link>
                 </div>
 
                 <div className="rn-profile-skill-list">
-                  {normalized.map((item) => (
-                    <article
-                      className="rn-profile-skill"
-                      key={item.id}
-                    >
-                      <div className="rn-profile-skill-heading">
-                        <div>
-                          <strong>
-                            {item.skill?.name || "Learning skill"}
-                          </strong>
+                  {normalized.map(
+                    (item) => (
+                      <article
+                        className="rn-profile-skill"
+                        key={item.id}
+                      >
+                        <div className="rn-profile-skill-heading">
+                          <div>
+                            <strong>
+                              {item.skill
+                                ?.name ||
+                                "Learning skill"}
+                            </strong>
 
-                          {item.skill?.category && (
-                            <span>{item.skill.category}</span>
-                          )}
+                            {item.skill
+                              ?.category && (
+                              <span>
+                                {
+                                  item
+                                    .skill
+                                    .category
+                                }
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="rn-profile-skill-score">
+                            <strong>
+                              {item.score}%
+                            </strong>
+
+                            <span>
+                              {formatLevel(
+                                item.skill_level
+                              )}
+                            </span>
+                          </div>
                         </div>
 
-                        <div className="rn-profile-skill-score">
-                          <strong>{item.score}%</strong>
-                          <span>
-                            {item.skill_level || "beginner"}
-                          </span>
+                        <div className="rn-skill-bar">
+                          <span
+                            style={{
+                              width: `${item.score}%`,
+                            }}
+                          />
                         </div>
-                      </div>
 
-                      <div className="rn-skill-bar">
-                        <span
-                          style={{
-                            width: `${item.score}%`,
-                          }}
-                        />
-                      </div>
+                        {item.evidence && (
+                          <p className="rn-profile-evidence">
+                            {item.evidence}
+                          </p>
+                        )}
 
-                      {item.evidence && (
-                        <p className="rn-profile-evidence">
-                          {item.evidence}
-                        </p>
-                      )}
+                        {(
+                          item.strengths ||
+                          item.gaps
+                        ) && (
+                          <div className="rn-profile-insight">
+                            {item.strengths && (
+                              <div>
+                                <strong>
+                                  Strength
+                                </strong>
 
-                      {(item.strengths || item.gaps) && (
-                        <div className="rn-profile-insight">
-                          {item.strengths && (
-                            <div>
-                              <strong>Strength</strong>
-                              <span>{item.strengths}</span>
-                            </div>
-                          )}
+                                <span>
+                                  {
+                                    item.strengths
+                                  }
+                                </span>
+                              </div>
+                            )}
 
-                          {item.gaps && (
-                            <div>
-                              <strong>Development</strong>
-                              <span>{item.gaps}</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </article>
-                  ))}
+                            {item.gaps && (
+                              <div>
+                                <strong>
+                                  Development
+                                </strong>
+
+                                <span>
+                                  {item.gaps}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </article>
+                    )
+                  )}
                 </div>
               </section>
 
               <aside className="rn-profile-sidebar">
                 <section className="rn-profile-panel">
-                  <span className="rn-eyebrow">Strengths</span>
-                  <h2>What you already know</h2>
+                  <span className="rn-eyebrow">
+                    STRENGTHS
+                  </span>
+
+                  <h2>
+                    What you already know
+                  </h2>
 
                   {strengths.length ? (
                     <div className="rn-profile-mini-list">
-                      {strengths.slice(0, 6).map((item) => (
-                        <div key={item.id}>
-                          <strong>
-                            {item.skill?.name || "Skill"}
-                          </strong>
-                          <span>{item.score}% demonstrated</span>
-                        </div>
-                      ))}
+                      {strengths
+                        .slice(0, 6)
+                        .map((item) => (
+                          <div
+                            key={item.id}
+                          >
+                            <strong>
+                              {item.skill
+                                ?.name ||
+                                "Skill"}
+                            </strong>
+
+                            <span>
+                              {item.score}%
+                              demonstrated
+                            </span>
+                          </div>
+                        ))}
                     </div>
                   ) : (
                     <p className="rn-profile-muted">
-                      Complete more assessments to identify your strongest
+                      Complete more course
+                      assessments to
+                      identify your strongest
                       areas.
                     </p>
                   )}
                 </section>
 
                 <section className="rn-profile-panel">
-                  <span className="rn-eyebrow">Development</span>
-                  <h2>Areas to strengthen</h2>
+                  <span className="rn-eyebrow">
+                    DEVELOPMENT
+                  </span>
+
+                  <h2>
+                    Areas to strengthen
+                  </h2>
 
                   {developmentAreas.length ? (
                     <div className="rn-profile-mini-list">
-                      {developmentAreas.slice(0, 6).map((item) => (
-                        <div key={item.id}>
-                          <strong>
-                            {item.skill?.name || "Skill"}
-                          </strong>
-                          <span>{item.score}% demonstrated</span>
-                        </div>
-                      ))}
+                      {developmentAreas
+                        .slice(0, 6)
+                        .map((item) => (
+                          <div
+                            key={item.id}
+                          >
+                            <strong>
+                              {item.skill
+                                ?.name ||
+                                "Skill"}
+                            </strong>
+
+                            <span>
+                              {item.score}%
+                              demonstrated
+                            </span>
+                          </div>
+                        ))}
                     </div>
                   ) : (
                     <p className="rn-profile-muted">
-                      No major development areas identified from the
-                      available assessment data.
+                      No major development
+                      areas identified from
+                      the available
+                      assessment data.
                     </p>
                   )}
                 </section>
 
                 <section className="rn-profile-panel rn-profile-next">
-                  <span className="rn-eyebrow">Next step</span>
-                  <h2>Continue learning</h2>
+                  <span className="rn-eyebrow">
+                    NEXT STEP
+                  </span>
+
+                  <h2>
+                    Continue learning
+                  </h2>
+
                   <p>
-                    Use your skill profile to choose courses and lessons
-                    aligned with your current level.
+                    Use your skill profile to
+                    choose courses that
+                    strengthen your current
+                    capabilities and address
+                    development areas.
                   </p>
 
                   <Link
@@ -322,7 +488,9 @@ export default async function StudentSkillsPage() {
             {latestUpdate && (
               <p className="rn-profile-updated">
                 Profile last updated{" "}
-                {new Date(latestUpdate).toLocaleDateString()}
+                {formatDate(
+                  latestUpdate
+                )}
               </p>
             )}
           </>
