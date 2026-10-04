@@ -8209,3 +8209,58 @@ table {
     font-size: 0.78rem !important;
   }
 }
+
+/* =========================================================
+   COURSE META — BADGES / TAGS
+   ========================================================= */
+
+.rn-course-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  min-width: 0;
+}
+
+.rn-course-meta > span {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 26px;
+  box-sizing: border-box;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--navy);
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
+}
+
+.rn-course-meta > .badge {
+  min-height: 26px;
+  padding: 5px 9px;
+}
+
+.rn-course-meta > .badge-free {
+  border-color: #a7f3d0;
+  background: #d1fae5;
+  color: #047857;
+}
+
+@media (max-width: 480px) {
+  .rn-course-meta {
+    gap: 6px;
+  }
+
+  .rn-course-meta > span {
+    min-height: 25px;
+    padding: 5px 8px;
+    font-size: 0.68rem;
+  }
+}
