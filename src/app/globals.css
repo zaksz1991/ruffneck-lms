@@ -7618,3 +7618,130 @@ table {
     padding: 16px;
   }
 }
+
+/* =========================================================
+   COURSE DETAIL — MOBILE LAYOUT
+   ========================================================= */
+
+.rn-course-detail {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.rn-course-detail-main,
+.rn-course-overview,
+.rn-course-curriculum,
+.rn-course-info-panel,
+.rn-course-bottom-grid,
+.rn-course-final-cta {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-course-detail h1,
+.rn-course-detail h2,
+.rn-course-detail h3,
+.rn-course-detail h4,
+.rn-course-detail p,
+.rn-course-detail li {
+  overflow-wrap: anywhere;
+}
+
+.rn-course-meta,
+.rn-course-meta-row,
+.rn-course-actions,
+.rn-course-final-actions {
+  min-width: 0;
+}
+
+.rn-course-actions,
+.rn-course-final-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.rn-course-curriculum {
+  overflow: hidden;
+}
+
+.rn-curriculum-module {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.rn-curriculum-lessons {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-curriculum-lesson {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.rn-lesson-main {
+  min-width: 0;
+}
+
+.rn-lesson-title,
+.rn-curriculum-lesson a {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .rn-course-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .rn-course-detail {
+    padding-inline: 0;
+  }
+
+  .rn-course-actions,
+  .rn-course-final-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rn-course-actions .rn-button,
+  .rn-course-final-actions .rn-button {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .rn-course-meta-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .rn-curriculum-lesson {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .rn-curriculum-lesson .rn-lesson-open {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 480px) {
+  .rn-course-bottom-grid,
+  .rn-course-info-panel,
+  .rn-course-overview,
+  .rn-course-curriculum {
+    padding: 16px;
+  }
+
+  .rn-curriculum-lesson {
+    padding: 12px;
+  }
+}
