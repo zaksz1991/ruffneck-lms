@@ -7442,3 +7442,100 @@ table {
     min-height: 42px;
   }
 }
+
+/* =========================================================
+   DASHBOARD MOBILE TEXT SPACING
+   ========================================================= */
+
+.rn-dashboard-stat,
+.rn-dashboard-stat-card,
+.rn-stat,
+.rn-stat-card,
+.rn-dashboard-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rn-dashboard-stat strong,
+.rn-dashboard-stat-card strong,
+.rn-stat strong,
+.rn-stat-card strong,
+.rn-dashboard-summary-card strong {
+  display: block;
+  line-height: 1.1;
+}
+
+.rn-dashboard-stat span,
+.rn-dashboard-stat-card span,
+.rn-stat span,
+.rn-stat-card span,
+.rn-dashboard-summary-card span {
+  display: block;
+}
+
+.rn-dashboard-stat p,
+.rn-dashboard-stat-card p,
+.rn-stat p,
+.rn-stat-card p,
+.rn-dashboard-summary-card p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Dashboard quick-action cards */
+.rn-quick-action,
+.rn-quick-action-card,
+.rn-dashboard-action,
+.rn-dashboard-action-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rn-quick-action p,
+.rn-quick-action-card p,
+.rn-dashboard-action p,
+.rn-dashboard-action-card p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Prevent adjacent inline elements from visually merging */
+.rn-dashboard-grid h1,
+.rn-dashboard-grid h2,
+.rn-dashboard-grid h3,
+.rn-dashboard-grid h4,
+.rn-dashboard-intelligence h1,
+.rn-dashboard-intelligence h2,
+.rn-dashboard-intelligence h3,
+.rn-dashboard-intelligence h4 {
+  margin-bottom: 8px;
+}
+
+.rn-dashboard-grid strong,
+.rn-dashboard-intelligence strong {
+  display: block;
+}
+
+.rn-dashboard-grid p,
+.rn-dashboard-intelligence p {
+  margin-top: 0;
+}
+
+/* Mobile */
+@media (max-width: 720px) {
+  .rn-dashboard-stat,
+  .rn-dashboard-stat-card,
+  .rn-stat,
+  .rn-stat-card,
+  .rn-dashboard-summary-card,
+  .rn-quick-action,
+  .rn-quick-action-card,
+  .rn-dashboard-action,
+  .rn-dashboard-action-card {
+    gap: 10px;
+  }
+}
