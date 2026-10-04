@@ -6762,3 +6762,30 @@ a.rn-admin-stat:hover {
   height: auto;
   object-fit: contain;
 }
+
+.rn-learn-banner {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  object-fit: cover;
+}
+
+.rn-hero-brand-copy {
+  padding-top: 18px;
+}
+
+.rn-hero-brand-copy strong {
+  display: block;
+  font-size: 1.25rem;
+}
+
+.rn-hero-brand-copy p {
+  margin: 8px 0 6px;
+}
+
+.rn-hero-brand-copy span {
+  display: block;
+  font-size: 0.875rem;
+  opacity: 0.75;
+}
