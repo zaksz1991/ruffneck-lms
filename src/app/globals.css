@@ -7539,3 +7539,82 @@ table {
     gap: 10px;
   }
 }
+
+/* =========================================================
+   COURSE CATALOGUE — MOBILE LAYOUT
+   ========================================================= */
+
+.rn-course-catalogue,
+.rn-course-catalogue-header,
+.rn-course-filters,
+.rn-course-filter-form,
+.rn-course-filter-row,
+.rn-course-grid,
+.rn-catalogue-grid {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-course-filters,
+.rn-course-filter-form,
+.rn-course-filter-row {
+  width: 100%;
+}
+
+.rn-course-filter-form input,
+.rn-course-filter-form select,
+.rn-course-filter-form button {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.rn-course-card {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.rn-course-card h2,
+.rn-course-card h3,
+.rn-course-card h4 {
+  overflow-wrap: anywhere;
+}
+
+.rn-course-card p {
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+
+.rn-course-card a {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .rn-course-filter-form,
+  .rn-course-filter-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .rn-course-filter-form input,
+  .rn-course-filter-form select,
+  .rn-course-filter-form button {
+    width: 100%;
+  }
+
+  .rn-course-grid,
+  .rn-catalogue-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rn-course-card {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .rn-course-card {
+    padding: 16px;
+  }
+}
