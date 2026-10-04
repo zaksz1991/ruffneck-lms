@@ -22,13 +22,20 @@ type AssessmentAttempt = {
 
 type Enrollment = {
   course_id: string;
-  progress_percent: number;
-  enrollment_status: string;
+  progress_percent: number | null;
+  enrollment_status: string | null;
 };
 
 type LearningActivity = {
   activity_type: string;
   created_at: string;
+};
+
+type LessonProgress = {
+  lesson_id: string;
+  course_id: string;
+  completed: boolean;
+  last_accessed_at: string | null;
 };
 
 type Course = {
@@ -42,12 +49,13 @@ type Course = {
   duration_minutes: number | null;
 };
 
-/**
- * Convert a timestamp into a calendar date in Nigeria.
- *
- * Using Africa/Lagos prevents UTC date boundaries from
- * incorrectly breaking a learner's streak.
- */
+type CourseCompletion = {
+  courseId: string;
+  completedLessons: number;
+  totalLessons: number;
+  progressPercent: number;
+};
+
 function getNigeriaDate(value: string | Date) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Africa/Lagos",
@@ -57,15 +65,6 @@ function getNigeriaDate(value: string | Date) {
   }).format(new Date(value));
 }
 
-/**
- * Calculate consecutive learning days using Nigeria time.
- *
- * Today counts if the learner has learning activity today.
- * Yesterday counts as the previous active day.
- *
- * If the learner has no activity today but was active yesterday,
- * the streak remains active at yesterday's count.
- */
 function calculateLearningStreak(
   activities: LearningActivity[]
 ) {
@@ -79,7 +78,9 @@ function calculateLearningStreak(
         getNigeriaDate(activity.created_at)
       )
     ),
-  ].sort((a, b) => (a > b ? -1 : a < b ? 1 : 0));
+  ].sort((a, b) =>
+    a > b ? -1 : a < b ? 1 : 0
+  );
 
   if (!uniqueDates.length) {
     return 0;
@@ -88,17 +89,15 @@ function calculateLearningStreak(
   const today = getNigeriaDate(new Date());
 
   const yesterdayDate = new Date();
+  yesterdayDate.setDate(
+    yesterdayDate.getDate() - 1
+  );
 
-  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-
-  const yesterday = getNigeriaDate(yesterdayDate);
+  const yesterday =
+    getNigeriaDate(yesterdayDate);
 
   const mostRecentDate = uniqueDates[0];
 
-  /*
-   * A streak is only active if the most recent activity
-   * happened today or yesterday.
-   */
   if (
     mostRecentDate !== today &&
     mostRecentDate !== yesterday
@@ -108,7 +107,11 @@ function calculateLearningStreak(
 
   let streak = 1;
 
-  for (let index = 1; index < uniqueDates.length; index++) {
+  for (
+    let index = 1;
+    index < uniqueDates.length;
+    index++
+  ) {
     const current = new Date(
       `${uniqueDates[index - 1]}T12:00:00`
     );
@@ -118,7 +121,8 @@ function calculateLearningStreak(
     );
 
     const difference =
-      (current.getTime() - previous.getTime()) /
+      (current.getTime() -
+        previous.getTime()) /
       (1000 * 60 * 60 * 24);
 
     if (Math.round(difference) !== 1) {
@@ -142,19 +146,9 @@ function calculateOverallLearningScore({
   completedLessons: number;
   learningActivityCount: number;
 }) {
-  /*
-   * Skill profile:
-   * 50%
-   *
-   * Latest assessment:
-   * 30%
-   *
-   * Learning activity:
-   * 20%
-   */
-
   const activityScore =
-    completedLessons > 0 || learningActivityCount > 0
+    completedLessons > 0 ||
+    learningActivityCount > 0
       ? 100
       : 0;
 
@@ -163,7 +157,9 @@ function calculateOverallLearningScore({
     assessmentScore * 0.3 +
     activityScore * 0.2;
 
-  return Math.round(Math.min(100, Math.max(0, score)));
+  return Math.round(
+    Math.min(100, Math.max(0, score))
+  );
 }
 
 export async function GET() {
@@ -191,17 +187,19 @@ export async function GET() {
      * --------------------------------------------------------------
      */
 
-    const { data: skillProfileData, error: skillProfileError } =
-      await supabase
-        .from("learner_skill_profiles")
-        .select(
-          `
-            skill_id,
-            confidence_score,
-            skill_level
-          `
-        )
-        .eq("student_id", user.id);
+    const {
+      data: skillProfileData,
+      error: skillProfileError,
+    } = await supabase
+      .from("learner_skill_profiles")
+      .select(
+        `
+          skill_id,
+          confidence_score,
+          skill_level
+        `
+      )
+      .eq("student_id", user.id);
 
     if (skillProfileError) {
       throw skillProfileError;
@@ -221,17 +219,20 @@ export async function GET() {
     let skills: Skill[] = [];
 
     if (skillIds.length > 0) {
-      const { data: skillData, error: skillError } =
-        await supabase
-          .from("learning_skills")
-          .select("id, name, category")
-          .in("id", skillIds);
+      const {
+        data: skillData,
+        error: skillError,
+      } = await supabase
+        .from("learning_skills")
+        .select("id, name, category")
+        .in("id", skillIds);
 
       if (skillError) {
         throw skillError;
       }
 
-      skills = (skillData || []) as Skill[];
+      skills =
+        (skillData || []) as Skill[];
     }
 
     const skillMap = new Map<string, Skill>();
@@ -246,23 +247,25 @@ export async function GET() {
      * --------------------------------------------------------------
      */
 
-    const { data: assessmentData, error: assessmentError } =
-      await supabase
-        .from("assessment_attempts")
-        .select(
-          `
-            score,
-            total_questions,
-            completed_at,
-            created_at
-          `
-        )
-        .eq("student_id", user.id)
-        .order("created_at", {
-          ascending: false,
-        })
-        .limit(1)
-        .maybeSingle();
+    const {
+      data: assessmentData,
+      error: assessmentError,
+    } = await supabase
+      .from("assessment_attempts")
+      .select(
+        `
+          score,
+          total_questions,
+          completed_at,
+          created_at
+        `
+      )
+      .eq("student_id", user.id)
+      .order("created_at", {
+        ascending: false,
+      })
+      .limit(1)
+      .maybeSingle();
 
     if (assessmentError) {
       throw assessmentError;
@@ -272,26 +275,34 @@ export async function GET() {
       assessmentData as AssessmentAttempt | null;
 
     const assessmentScore = latestAssessment
-      ? Number(latestAssessment.score || 0)
+      ? Number(
+          latestAssessment.score || 0
+        )
       : 0;
 
     /*
      * --------------------------------------------------------------
      * ENROLLMENTS
      * --------------------------------------------------------------
+     *
+     * Enrollment status is retained for enrollment state,
+     * but progress_percent is NOT used as the source of truth
+     * for course completion.
      */
 
-    const { data: enrollmentData, error: enrollmentError } =
-      await supabase
-        .from("enrollments")
-        .select(
-          `
-            course_id,
-            progress_percent,
-            enrollment_status
-          `
-        )
-        .eq("student_id", user.id);
+    const {
+      data: enrollmentData,
+      error: enrollmentError,
+    } = await supabase
+      .from("enrollments")
+      .select(
+        `
+          course_id,
+          progress_percent,
+          enrollment_status
+        `
+      )
+      .eq("student_id", user.id);
 
     if (enrollmentError) {
       throw enrollmentError;
@@ -302,32 +313,37 @@ export async function GET() {
 
     /*
      * --------------------------------------------------------------
-     * COMPLETED LESSONS
+     * LESSON PROGRESS
      * --------------------------------------------------------------
      *
-     * Count completed published lessons through lesson_progress.
-     * The table already has RLS restricting access to the current
-     * learner.
+     * This is the canonical source of lesson completion.
      */
 
-    const { data: progressData, error: progressError } =
-      await supabase
-        .from("lesson_progress")
-        .select(
-          `
-            lesson_id,
-            completed,
-            last_accessed_at
-          `
-        )
-        .eq("student_id", user.id)
-        .eq("completed", true);
+    const {
+      data: progressData,
+      error: progressError,
+    } = await supabase
+      .from("lesson_progress")
+      .select(
+        `
+          lesson_id,
+          course_id,
+          completed,
+          last_accessed_at
+        `
+      )
+      .eq("student_id", user.id)
+      .eq("completed", true);
 
     if (progressError) {
       throw progressError;
     }
 
-    const completedLessons = progressData?.length || 0;
+    const completedProgress =
+      (progressData || []) as LessonProgress[];
+
+    const completedLessons =
+      completedProgress.length;
 
     /*
      * --------------------------------------------------------------
@@ -335,19 +351,21 @@ export async function GET() {
      * --------------------------------------------------------------
      */
 
-    const { data: activityData, error: activityError } =
-      await supabase
-        .from("learning_activity")
-        .select(
-          `
-            activity_type,
-            created_at
-          `
-        )
-        .eq("student_id", user.id)
-        .order("created_at", {
-          ascending: false,
-        });
+    const {
+      data: activityData,
+      error: activityError,
+    } = await supabase
+      .from("learning_activity")
+      .select(
+        `
+          activity_type,
+          created_at
+        `
+      )
+      .eq("student_id", user.id)
+      .order("created_at", {
+        ascending: false,
+      });
 
     if (activityError) {
       throw activityError;
@@ -357,7 +375,183 @@ export async function GET() {
       (activityData || []) as LearningActivity[];
 
     const learningStreak =
-      calculateLearningStreak(activities);
+      calculateLearningStreak(
+        activities
+      );
+
+    /*
+     * --------------------------------------------------------------
+     * COURSE DATA
+     * --------------------------------------------------------------
+     */
+
+    const {
+      data: courseData,
+      error: courseError,
+    } = await supabase
+      .from("courses")
+      .select(
+        `
+          id,
+          title,
+          slug,
+          level,
+          category,
+          short_description,
+          thumbnail_url,
+          duration_minutes
+        `
+      )
+      .eq("status", "published")
+      .order("created_at", {
+        ascending: false,
+      });
+
+    if (courseError) {
+      throw courseError;
+    }
+
+    const courses =
+      (courseData || []) as Course[];
+
+    /*
+     * --------------------------------------------------------------
+     * PUBLISHED CURRICULUM
+     * --------------------------------------------------------------
+     *
+     * We need the actual published lesson count per course
+     * so that 16 completed lessons against 16 published lessons
+     * becomes 100%.
+     */
+
+    const courseIds = courses.map(
+      (course) => course.id
+    );
+
+    const courseCompletionMap =
+      new Map<string, CourseCompletion>();
+
+    if (courseIds.length > 0) {
+      const {
+        data: curriculumData,
+        error: curriculumError,
+      } = await supabase
+        .from("course_curriculum")
+        .select(
+          `
+            course_id,
+            lesson_id,
+            is_published
+          `
+        )
+        .in("course_id", courseIds)
+        .eq("is_published", true);
+
+      if (curriculumError) {
+        throw curriculumError;
+      }
+
+      const publishedLessonCounts =
+        new Map<string, number>();
+
+      (
+        curriculumData || []
+      ).forEach((row) => {
+        const courseId =
+          row.course_id as string;
+
+        publishedLessonCounts.set(
+          courseId,
+          (publishedLessonCounts.get(
+            courseId
+          ) || 0) + 1
+        );
+      });
+
+      const completedByCourse =
+        new Map<string, Set<string>>();
+
+      completedProgress.forEach(
+        (progress) => {
+          if (!completedByCourse.has(
+            progress.course_id
+          )) {
+            completedByCourse.set(
+              progress.course_id,
+              new Set<string>()
+            );
+          }
+
+          completedByCourse
+            .get(progress.course_id)!
+            .add(progress.lesson_id);
+        }
+      );
+
+      courses.forEach((course) => {
+        const totalLessons =
+          publishedLessonCounts.get(
+            course.id
+          ) || 0;
+
+        const completedSet =
+          completedByCourse.get(course.id);
+
+        const completedCount =
+          completedSet?.size || 0;
+
+        const progressPercent =
+          totalLessons > 0
+            ? Math.min(
+                100,
+                Math.round(
+                  (completedCount /
+                    totalLessons) *
+                    100
+                )
+              )
+            : 0;
+
+        courseCompletionMap.set(
+          course.id,
+          {
+            courseId: course.id,
+            completedLessons:
+              completedCount,
+            totalLessons,
+            progressPercent,
+          }
+        );
+      });
+    }
+
+    /*
+     * --------------------------------------------------------------
+     * COURSE COMPLETION
+     * --------------------------------------------------------------
+     *
+     * A course is considered completed only when every published
+     * curriculum lesson has been completed.
+     *
+     * enrollment.progress_percent is deliberately not used here.
+     */
+
+    const completedCourseIds =
+      new Set<string>();
+
+    courseCompletionMap.forEach(
+      (completion) => {
+        if (
+          completion.totalLessons > 0 &&
+          completion.completedLessons >=
+            completion.totalLessons
+        ) {
+          completedCourseIds.add(
+            completion.courseId
+          );
+        }
+      }
+    );
 
     /*
      * --------------------------------------------------------------
@@ -365,7 +559,8 @@ export async function GET() {
      * --------------------------------------------------------------
      */
 
-    const totalSkills = skillProfiles.length;
+    const totalSkills =
+      skillProfiles.length;
 
     const skillScore =
       totalSkills > 0
@@ -374,22 +569,29 @@ export async function GET() {
               (total, profile) =>
                 total +
                 Number(
-                  profile.confidence_score || 0
+                  profile.confidence_score ||
+                    0
                 ),
               0
             ) / totalSkills
           )
         : 0;
 
-    const masteredSkills = skillProfiles.filter(
-      (profile) =>
-        Number(profile.confidence_score || 0) >= 80
-    ).length;
+    const masteredSkills =
+      skillProfiles.filter(
+        (profile) =>
+          Number(
+            profile.confidence_score || 0
+          ) >= 80
+      ).length;
 
-    const developingSkills = skillProfiles.filter(
-      (profile) =>
-        Number(profile.confidence_score || 0) < 80
-    ).length;
+    const developingSkills =
+      skillProfiles.filter(
+        (profile) =>
+          Number(
+            profile.confidence_score || 0
+          ) < 80
+      ).length;
 
     /*
      * --------------------------------------------------------------
@@ -402,7 +604,8 @@ export async function GET() {
         skillScore,
         assessmentScore,
         completedLessons,
-        learningActivityCount: activities.length,
+        learningActivityCount:
+          activities.length,
       });
 
     /*
@@ -411,98 +614,64 @@ export async function GET() {
      * --------------------------------------------------------------
      */
 
-    const skillBreakdown = skillProfiles
-      .map((profile) => {
-        const skill = skillMap.get(profile.skill_id);
+    const skillBreakdown =
+      skillProfiles
+        .map((profile) => {
+          const skill =
+            skillMap.get(
+              profile.skill_id
+            );
 
-        if (!skill) {
-          return null;
-        }
+          if (!skill) {
+            return null;
+          }
 
-        return {
-          id: skill.id,
-          name: skill.name,
-          category: skill.category || "General",
-          score: Math.round(
-            Number(profile.confidence_score || 0)
-          ),
-          level: profile.skill_level || "beginner",
-        };
-      })
-      .filter(
-        (
-          item
-        ): item is {
-          id: string;
-          name: string;
-          category: string;
-          score: number;
-          level: string;
-        } => item !== null
-      )
-      .sort((a, b) => b.score - a.score);
+          return {
+            id: skill.id,
+            name: skill.name,
+            category:
+              skill.category ||
+              "General",
+            score: Math.round(
+              Number(
+                profile.confidence_score ||
+                  0
+              )
+            ),
+            level:
+              profile.skill_level ||
+              "beginner",
+          };
+        })
+        .filter(
+          (
+            item
+          ): item is {
+            id: string;
+            name: string;
+            category: string;
+            score: number;
+            level: string;
+          } => item !== null
+        )
+        .sort(
+          (a, b) =>
+            b.score - a.score
+        );
 
     /*
      * --------------------------------------------------------------
      * RECOMMENDED NEXT COURSE
      * --------------------------------------------------------------
-     *
-     * Choose the next published course that the learner has not
-     * completed. Prefer intermediate/advanced courses when the
-     * learner already has a strong profile.
      */
 
-    const enrolledCourseIds = [
-      ...new Set(
-        enrollments.map(
-          (enrollment) => enrollment.course_id
-        )
-      ),
-    ];
-
-    const completedCourseIds = new Set(
-      enrollments
-        .filter(
-          (enrollment) =>
-            enrollment.progress_percent >= 100 ||
-            enrollment.enrollment_status === "completed"
-        )
-        .map(
-          (enrollment) => enrollment.course_id
-        )
-    );
-
-    const { data: courseData, error: courseError } =
-      await supabase
-        .from("courses")
-        .select(
-          `
-            id,
-            title,
-            slug,
-            level,
-            category,
-            short_description,
-            thumbnail_url,
-            duration_minutes
-          `
-        )
-        .eq("status", "published")
-        .order("created_at", {
-          ascending: false,
-        });
-
-    if (courseError) {
-      throw courseError;
-    }
-
-    const courses =
-      (courseData || []) as Course[];
-
-    const availableCourses = courses.filter(
-      (course) =>
-        !completedCourseIds.has(course.id)
-    );
+    const availableCourses =
+      courses.filter(
+        (course) =>
+          !completedCourseIds.has(
+            course.id
+          )
+      );
 
     const levelRank: Record<
       Course["level"],
@@ -516,17 +685,6 @@ export async function GET() {
     const sortedCourses = [
       ...availableCourses,
     ].sort((a, b) => {
-      /*
-       * Strong learning profiles should be directed toward
-       * higher-level material.
-       */
-      if (skillScore >= 80) {
-        return (
-          levelRank[b.level] -
-          levelRank[a.level]
-        );
-      }
-
       if (skillScore >= 50) {
         return (
           levelRank[b.level] -
