@@ -116,13 +116,9 @@ export default async function HomePage() {
                   <div className="card-body rn-featured-course-body">
                     <div className="rn-course-meta">
                       {course.is_free ? (
-                        <span className="badge badge-free">
-                          Free
-                        </span>
+                        <span className="badge badge-free">Free</span>
                       ) : (
-                        <span className="badge">
-                          Premium
-                        </span>
+                        <span className="badge">Premium</span>
                       )}
 
                       {course.level ? (
@@ -162,6 +158,16 @@ export default async function HomePage() {
       <section className="rn-founder-section">
         <div className="container">
           <div className="rn-founder-card">
+            <div className="rn-founder-image">
+              <Image
+                src="/brand/founder.png"
+                alt="Hassan Zakariya, Founder and CEO of RuffNeck Entertainment"
+                width={600}
+                height={600}
+                className="rn-founder-photo"
+              />
+            </div>
+
             <div className="rn-founder-content">
               <div className="rn-brand-kicker">
                 About RuffNeck Entertainment
@@ -180,6 +186,7 @@ export default async function HomePage() {
 
               <div className="rn-founder-name">
                 <strong>Hassan Zakariya</strong>
+
                 <span>
                   Founder & CEO · RuffNeck Entertainment
                 </span>

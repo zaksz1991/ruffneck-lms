@@ -6789,3 +6789,19 @@ a.rn-admin-stat:hover {
   font-size: 0.875rem;
   opacity: 0.75;
 }
+
+.rn-founder-image {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.rn-founder-photo {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 16px;
+}
