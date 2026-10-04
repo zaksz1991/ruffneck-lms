@@ -71,13 +71,8 @@ export async function Header() {
             </span>
           </Link>
 
-          <nav
-            className="nav"
-            aria-label="Main navigation"
-          >
-            <Link href="/courses">
-              Courses
-            </Link>
+          <nav className="nav" aria-label="Primary navigation">
+            <Link href="/courses">Courses</Link>
 
             {user ? (
               <>
@@ -85,8 +80,7 @@ export async function Header() {
                   My learning
                 </Link>
 
-                {(role === "admin" ||
-                  role === "instructor") && (
+                {(role === "admin" || role === "instructor") && (
                   <Link href="/admin/lms">
                     Admin
                   </Link>
@@ -100,9 +94,7 @@ export async function Header() {
                   <button
                     type="submit"
                     className="btn btn-ghost"
-                    style={{
-                      padding: "7px 12px",
-                    }}
+                    style={{ padding: "7px 12px" }}
                   >
                     Sign out
                   </button>
@@ -117,9 +109,7 @@ export async function Header() {
                 <Link
                   href="/signup"
                   className="btn btn-primary"
-                  style={{
-                    padding: "7px 12px",
-                  }}
+                  style={{ padding: "7px 12px" }}
                 >
                   Sign up
                 </Link>
