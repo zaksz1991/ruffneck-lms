@@ -10318,3 +10318,217 @@ main form .rn-button {
     gap: 12px;
   }
 }
+
+/* =========================================================
+   ADMIN LMS EDITOR — FINAL MOBILE OVERRIDE
+   ========================================================= */
+
+@media (max-width: 720px) {
+  /* Keep all LMS content inside the viewport */
+  [class*="lms"],
+  [class*="Lms"],
+  [class*="admin"] {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Generic editor grids */
+  [class*="lms"] .grid,
+  [class*="Lms"] .grid,
+  [class*="admin"] .grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Panels/cards */
+  [class*="lms"] .panel,
+  [class*="Lms"] .panel,
+  [class*="admin"] .panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  /* Any editor row */
+  [class*="lms"] [class*="row"],
+  [class*="Lms"] [class*="row"],
+  [class*="admin"] [class*="row"] {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* Forms */
+  [class*="lms"] form,
+  [class*="Lms"] form,
+  [class*="admin"] form {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  [class*="lms"] input,
+  [class*="lms"] select,
+  [class*="lms"] textarea,
+  [class*="Lms"] input,
+  [class*="Lms"] select,
+  [class*="Lms"] textarea,
+  [class*="admin"] input,
+  [class*="admin"] select,
+  [class*="admin"] textarea {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  [class*="lms"] textarea,
+  [class*="Lms"] textarea,
+  [class*="admin"] textarea {
+    resize: vertical;
+  }
+
+  /* Action groups */
+  [class*="lms"] button,
+  [class*="Lms"] button,
+  [class*="admin"] button {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  [class*="lms"] .btn,
+  [class*="lms"] .rn-button,
+  [class*="Lms"] .btn,
+  [class*="Lms"] .rn-button,
+  [class*="admin"] .btn,
+  [class*="admin"] .rn-button {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Course / section / lesson controls */
+  [class*="course"],
+  [class*="section"],
+  [class*="lesson"],
+  [class*="resource"] {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  [class*="course"] h1,
+  [class*="course"] h2,
+  [class*="course"] h3,
+  [class*="section"] h2,
+  [class*="section"] h3,
+  [class*="lesson"] h2,
+  [class*="lesson"] h3,
+  [class*="resource"] h2,
+  [class*="resource"] h3 {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  /* Flex action groups wrap instead of overflowing */
+  [class*="course"] > div,
+  [class*="section"] > div,
+  [class*="lesson"] > div,
+  [class*="resource"] > div {
+    min-width: 0;
+  }
+
+  /* Tables */
+  [class*="lms"] table,
+  [class*="Lms"] table,
+  [class*="admin"] table {
+    width: 100%;
+    min-width: 620px;
+  }
+
+  [class*="lms"] .table-wrapper,
+  [class*="lms"] [class*="table"],
+  [class*="Lms"] .table-wrapper,
+  [class*="Lms"] [class*="table"],
+  [class*="admin"] .table-wrapper,
+  [class*="admin"] [class*="table"] {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Preview / HTML content */
+  [class*="preview"] {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+    overflow-wrap: anywhere;
+  }
+
+  [class*="preview"] img,
+  [class*="preview"] video,
+  [class*="preview"] iframe {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+  }
+
+  [class*="preview"] pre {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  [class*="preview"] table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Long URLs, titles and content */
+  [class*="lms"] a,
+  [class*="lms"] p,
+  [class*="lms"] span,
+  [class*="lms"] strong,
+  [class*="lms"] label,
+  [class*="Lms"] a,
+  [class*="Lms"] p,
+  [class*="Lms"] span,
+  [class*="Lms"] strong,
+  [class*="Lms"] label {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 480px) {
+  [class*="lms"] .panel,
+  [class*="Lms"] .panel,
+  [class*="admin"] .panel {
+    padding: 14px !important;
+  }
+
+  [class*="lms"] button,
+  [class*="lms"] .btn,
+  [class*="lms"] .rn-button,
+  [class*="Lms"] button,
+  [class*="Lms"] .btn,
+  [class*="Lms"] .rn-button,
+  [class*="admin"] button,
+  [class*="admin"] .btn,
+  [class*="admin"] .rn-button {
+    width: 100%;
+  }
+
+  [class*="lms"] table,
+  [class*="Lms"] table,
+  [class*="admin"] table {
+    min-width: 560px;
+  }
+}
