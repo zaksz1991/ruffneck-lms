@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import AdminLmsEditor from "./AdminLmsEditor";
+import AdminLmsEditor, {
+  type Course,
+} from "./AdminLmsEditor";
 
 type AdminLmsPageProps = {
   searchParams: Promise<{
@@ -13,15 +15,6 @@ type Profile = {
   role: "admin" | "instructor" | "student";
   full_name: string | null;
   email: string | null;
-};
-
-type Course = {
-  id: string;
-  title: string;
-  status: string;
-  instructor_id: string | null;
-  created_at: string;
-  [key: string]: unknown;
 };
 
 type Student = {
@@ -144,8 +137,14 @@ export default async function AdminLmsPage({
     );
   }
 
+  /*
+   * AdminLmsEditor owns the canonical Course type.
+   * The explicit unknown bridge protects this server
+   * component from Supabase's inferred response type
+   * while preserving the editor's full Course shape.
+   */
   const courses =
-    (courseData as unknown as Course[]) || [];
+    (courseData ?? []) as unknown as Course[];
 
   const courseIds = courses.map(
     (course) => course.id

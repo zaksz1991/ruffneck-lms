@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 
 type Role = "admin" | "instructor";
 
-type Course = {
+export type Course = {
   id: string;
   title: string;
   slug: string;
