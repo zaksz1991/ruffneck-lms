@@ -266,10 +266,22 @@ export default async function CourseDetailPage({
       lesson_id: string;
     }[] | null) || [];
 
-  const completedLessonIds = new Set(
-    completedLessonRows.map(
+  /*
+   * Only lessons that belong to the current published
+   * curriculum are allowed to count toward course progress.
+   */
+  const publishedLessonIds = new Set(
+    curriculumRows.map(
       (row) => row.lesson_id
     )
+  );
+
+  const completedLessonIds = new Set(
+    completedLessonRows
+      .map((row) => row.lesson_id)
+      .filter((lessonId) =>
+        publishedLessonIds.has(lessonId)
+      )
   );
 
   const totalLessons = curriculumRows.length;
