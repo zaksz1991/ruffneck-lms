@@ -81,7 +81,8 @@ function asPositiveInteger(
 function normalizeDifficulty(
   value: unknown
 ): string {
-  const difficulty = asString(value).toLowerCase();
+  const difficulty =
+    asString(value).toLowerCase();
 
   if (
     difficulty === "intermediate" ||
@@ -355,51 +356,51 @@ export async function GET(
     }
 
     const questions =
-      ((questionData ??
-        []) as unknown as AssessmentQuestion[])
-        .map((row, index) => ({
-          id: row.id,
-          course_id:
-            row.course_id,
-          skill_id:
-            row.skill_id,
-          question:
-            displayQuestion(row),
-          options:
-            normalizeOptions(
-              row.options
-            ),
-          correct_answer:
-            asString(
-              row.correct_answer
-            ),
-          explanation:
-            asString(
-              row.explanation
-            ),
-          difficulty:
-            normalizeDifficulty(
-              row.difficulty
-            ),
-          points:
-            asPositiveInteger(
-              row.points,
-              1
-            ),
-          question_type:
-            normalizeQuestionType(
-              row.question_type
-            ),
-          sort_order:
-            Number.isInteger(
-              row.sort_order
-            )
-              ? row.sort_order
-              : index + 1,
-        }));
+      (
+        (questionData ??
+          []) as unknown as AssessmentQuestion[]
+      ).map((row, index) => ({
+        id: row.id,
+        course_id: row.course_id,
+        skill_id: row.skill_id,
+        question:
+          displayQuestion(row),
+        options:
+          normalizeOptions(
+            row.options
+          ),
+        correct_answer:
+          asString(
+            row.correct_answer
+          ),
+        explanation:
+          asString(
+            row.explanation
+          ),
+        difficulty:
+          normalizeDifficulty(
+            row.difficulty
+          ),
+        points:
+          asPositiveInteger(
+            row.points,
+            1
+          ),
+        question_type:
+          normalizeQuestionType(
+            row.question_type
+          ),
+        sort_order:
+          Number.isInteger(
+            row.sort_order
+          )
+            ? row.sort_order
+            : index + 1,
+      }));
 
     return NextResponse.json({
-      course: courseAccess.course,
+      course:
+        courseAccess.course,
       questions,
     });
   } catch (error) {
@@ -595,13 +596,18 @@ export async function POST(
       );
     }
 
+    /*
+     * Read sort_order into a separate variable so TypeScript
+     * can safely narrow the nullable query result.
+     */
+    const lastSortOrder =
+      lastQuestion?.sort_order;
+
     const nextSortOrder =
       Number.isInteger(
-        lastQuestion?.sort_order
+        lastSortOrder
       )
-        ? Number(
-            lastQuestion.sort_order
-          ) + 1
+        ? Number(lastSortOrder) + 1
         : 1;
 
     const {
