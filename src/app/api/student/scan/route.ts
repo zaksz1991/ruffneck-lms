@@ -67,8 +67,7 @@ type GeminiResponse = {
 };
 
 /*
- * Gemini's REST responseSchema uses enum-style type names such as
- * OBJECT, ARRAY and STRING. Keep these values uppercase.
+ * Gemini's structured-output schema.
  */
 const LEARNING_PACK_SCHEMA = {
   type: "OBJECT",
@@ -107,7 +106,6 @@ const LEARNING_PACK_SCHEMA = {
           term: {
             type: "STRING",
           },
-
           explanation: {
             type: "STRING",
           },
@@ -127,11 +125,9 @@ const LEARNING_PACK_SCHEMA = {
           heading: {
             type: "STRING",
           },
-
           content: {
             type: "STRING",
           },
-
           examples: {
             type: "ARRAY",
             items: {
@@ -153,11 +149,9 @@ const LEARNING_PACK_SCHEMA = {
         title: {
           type: "STRING",
         },
-
         instructions: {
           type: "STRING",
         },
-
         expected_output: {
           type: "STRING",
         },
@@ -177,18 +171,15 @@ const LEARNING_PACK_SCHEMA = {
           question: {
             type: "STRING",
           },
-
           options: {
             type: "ARRAY",
             items: {
               type: "STRING",
             },
           },
-
           correct_answer: {
             type: "STRING",
           },
-
           explanation: {
             type: "STRING",
           },
@@ -210,7 +201,6 @@ const LEARNING_PACK_SCHEMA = {
           step: {
             type: "INTEGER",
           },
-
           action: {
             type: "STRING",
           },
@@ -230,7 +220,6 @@ const LEARNING_PACK_SCHEMA = {
           front: {
             type: "STRING",
           },
-
           back: {
             type: "STRING",
           },
@@ -460,91 +449,174 @@ function normalizeFieldName(value: string) {
 }
 
 /**
- * Redacts common personal, banking and transaction identifiers
- * from generated free text.
+ * Removes sensitive values from free text while preserving
+ * useful educational terminology.
+ *
+ * Example:
+ *   "Account Number: 4005245577"
+ * becomes:
+ *   "Account Number"
+ *
+ * The previous implementation returned:
+ *   "Account Number: [REDACTED]"
+ *
+ * That was technically safe but produced awkward learning content.
  */
 function redactSensitiveText(value: string) {
   let result = value;
 
-  // Email addresses.
+  // Remove email addresses.
   result = result.replace(
     /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
     REDACTED
   );
 
-  // Nigerian phone numbers.
+  // Nigerian mobile numbers.
   result = result.replace(
     /\b(?:\+234|234|0)(?:70|71|80|81|90|91)\d{8}\b/g,
     REDACTED
   );
 
-  // International phone-like numbers following an explicit phone label.
+  // Phone numbers following an explicit label.
   result = result.replace(
-    /\b(phone|mobile|telephone|tel)\s*[:#-]?\s*(?:\+?\d[\d\s().-]{7,18})\b/gi,
+    /\b((?:phone|mobile|telephone|tel)(?:\s+number)?)\s*[:#-]\s*(?:\+?\d[\d\s().-]{7,18})\b/gi,
     (_match, label: string) =>
-      `${label}: ${REDACTED}`
+      label.trim()
   );
 
-  // BVN / NIN with labels.
+  // BVN / NIN following an explicit label.
   result = result.replace(
-    /\b(bvn|nin)\s*[:#-]?\s*\d{11}\b/gi,
+    /\b((?:bvn|nin))\s*[:#-]\s*\d{11}\b/gi,
     (_match, label: string) =>
-      `${label}: ${REDACTED}`
+      label.trim().toUpperCase()
   );
 
-  // Account numbers with explicit labels.
+  // Account number following an explicit label.
   result = result.replace(
-    /\b((?:account|acct)(?:\s+(?:number|no\.?|name))?)\s*[:#-]\s*[A-Z0-9]{6,20}\b/gi,
+    /\b((?:account|acct)(?:\s+(?:number|no\.?))?)\s*[:#-]\s*[A-Z0-9]{6,20}\b/gi,
     (_match, label: string) =>
-      `${label}: ${REDACTED}`
+      label.trim()
   );
 
-  // Account / A/C values without punctuation.
+  // Account number expressed with "is".
   result = result.replace(
-    /\b(account|acct|a\/c)(?:\s+(?:number|no\.?))?\s+(?:is\s+)?[A-Z0-9]{6,20}\b/gi,
+    /\b((?:account|acct)(?:\s+(?:number|no\.?))?)\s+(?:is|was)\s+[A-Z0-9]{6,20}\b/gi,
     (_match, label: string) =>
-      `${label}: ${REDACTED}`
+      label.trim()
   );
 
-  // Card numbers, with or without spaces.
+  // Card number following an explicit label.
   result = result.replace(
-    /\b(?:card(?:\s+(?:number|no\.?))?\s*[:#-]?\s*)(?:\d[ -]?){13,19}\b/gi,
-    (_match) => `Card: ${REDACTED}`
+    /\b((?:card)(?:\s+(?:number|no\.?))?)\s*[:#-]\s*(?:\d[ -]?){13,19}\b/gi,
+    (_match, label: string) =>
+      label.trim()
   );
 
-  // Transaction/payment/reference identifiers with explicit labels.
+  // Transaction/payment/transfer/reference identifiers following a label.
   result = result.replace(
     /\b((?:(?:transaction|payment|transfer)\s+(?:id|reference|ref|number|no\.?)|reference(?:\s+(?:number|no\.?))?|rrn|stan))\s*[:#-]\s*[A-Z0-9-]{8,}\b/gi,
     (_match, label: string) =>
-      `${label}: ${REDACTED}`
+      label.trim()
   );
 
-  // Same identifiers where the source uses "is".
+  // Same identifiers expressed with "is" or "was".
   result = result.replace(
-    /\b((?:(?:transaction|payment|transfer)\s+(?:id|reference|ref|number|no\.?)|reference(?:\s+(?:number|no\.?))?|rrn|stan))\s+(?:is\s+)?[A-Z0-9-]{8,}\b/gi,
+    /\b((?:(?:transaction|payment|transfer)\s+(?:id|reference|ref|number|no\.?)|reference(?:\s+(?:number|no\.?))?|rrn|stan))\s+(?:is|was)\s+[A-Z0-9-]{8,}\b/gi,
     (_match, label: string) =>
-      `${label}: ${REDACTED}`
+      label.trim()
   );
 
-  // Beneficiary / sender / recipient names.
+  // Beneficiary/sender/recipient/customer account values.
   result = result.replace(
-    /\b(beneficiary|sender|recipient|customer)\s+name\s*[:#-]\s*[A-Z][A-Za-z.' -]{1,80}/g,
+    /\b((?:beneficiary|sender|recipient|customer)\s+account(?:\s+(?:number|no\.?))?)\s*[:#-]\s*[A-Z0-9]{6,20}\b/gi,
     (_match, label: string) =>
-      `${label} name: ${REDACTED}`
+      label.trim()
   );
 
-  // Explicit beneficiary/sender/recipient account values.
-  result = result.replace(
-    /\b(beneficiary|sender|recipient|customer)\s+account(?:\s+(?:number|no\.?))?\s*[:#-]\s*[A-Z0-9]{6,20}\b/gi,
-    (_match, label: string) =>
-      `${label} account: ${REDACTED}`
-  );
-
-  // IBAN-style values.
+  // IBAN.
   result = result.replace(
     /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/gi,
     REDACTED
   );
+
+  /*
+   * Gemini may itself produce wording such as:
+   *
+   * "account: [REDACTED]"
+   * "phone: [REDACTED]"
+   *
+   * Normalize those artifacts back into natural educational wording.
+   */
+  result = result
+    .replace(
+      /\baccount\s*:\s*\[REDACTED\]/gi,
+      "account number"
+    )
+    .replace(
+      /\bacct\s*:\s*\[REDACTED\]/gi,
+      "account number"
+    )
+    .replace(
+      /\bphone\s*:\s*\[REDACTED\]/gi,
+      "phone number"
+    )
+    .replace(
+      /\bmobile\s*:\s*\[REDACTED\]/gi,
+      "mobile number"
+    )
+    .replace(
+      /\bemail\s*:\s*\[REDACTED\]/gi,
+      "email address"
+    )
+    .replace(
+      /\btransaction\s+reference\s*:\s*\[REDACTED\]/gi,
+      "transaction reference"
+    )
+    .replace(
+      /\btransaction\s+id\s*:\s*\[REDACTED\]/gi,
+      "transaction ID"
+    )
+    .replace(
+      /\bpayment\s+reference\s*:\s*\[REDACTED\]/gi,
+      "payment reference"
+    )
+    .replace(
+      /\breference\s+number\s*:\s*\[REDACTED\]/gi,
+      "reference number"
+    )
+    .replace(
+      /\bbeneficiary\s+account\s*:\s*\[REDACTED\]/gi,
+      "beneficiary account"
+    )
+    .replace(
+      /\bsender\s+account\s*:\s*\[REDACTED\]/gi,
+      "sender account"
+    )
+    .replace(
+      /\brecipient\s+account\s*:\s*\[REDACTED\]/gi,
+      "recipient account"
+    )
+    .replace(
+      /\baccount\s+name\s*:\s*\[REDACTED\]/gi,
+      "account name"
+    )
+    .replace(
+      /\bbeneficiary\s+name\s*:\s*\[REDACTED\]/gi,
+      "beneficiary name"
+    )
+    .replace(
+      /\bsender\s+name\s*:\s*\[REDACTED\]/gi,
+      "sender name"
+    )
+    .replace(
+      /\brecipient\s+name\s*:\s*\[REDACTED\]/gi,
+      "recipient name"
+    );
+
+  // Avoid accidental doubled whitespace after redaction.
+  result = result
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
 
   return result;
 }
@@ -552,8 +624,9 @@ function redactSensitiveText(value: string) {
 /**
  * Recursively sanitizes Gemini output.
  *
- * This runs before the pack is returned to the browser and before
- * it can be saved as a student draft by the client.
+ * Raw OCR/source fields are withheld.
+ * Explicit sensitive object fields are replaced.
+ * Free-text values are cleaned with redactSensitiveText().
  */
 function sanitizeValue(
   value: unknown,
@@ -568,7 +641,7 @@ function sanitizeValue(
         normalizedFieldName
       )
     ) {
-      return "[Source text withheld for privacy.]";
+      return "";
     }
 
     if (
@@ -584,7 +657,10 @@ function sanitizeValue(
 
   if (Array.isArray(value)) {
     return value.map((item) =>
-      sanitizeValue(item, fieldName)
+      sanitizeValue(
+        item,
+        fieldName
+      )
     );
   }
 
@@ -613,7 +689,9 @@ function sanitizeValue(
   return value;
 }
 
-function sanitizeLearningPack(value: unknown) {
+function sanitizeLearningPack(
+  value: unknown
+) {
   if (
     !value ||
     typeof value !== "object" ||
@@ -670,7 +748,8 @@ function normalizeLearningPack(
           unknown
         > =>
           !!item &&
-          typeof item === "object" &&
+          typeof item ===
+            "object" &&
           !Array.isArray(item)
       )
       .map((item) => ({
@@ -713,7 +792,8 @@ function normalizeLearningPack(
           unknown
         > =>
           !!item &&
-          typeof item === "object" &&
+          typeof item ===
+            "object" &&
           !Array.isArray(item)
       )
       .map((item) => ({
@@ -966,10 +1046,10 @@ function normalizeLearningPack(
         : "",
 
     /*
-     * Do not retain raw OCR/source text in a reusable learning pack.
+     * Raw source/OCR text is intentionally
+     * never returned as reusable LMS content.
      */
-    extracted_text:
-      "[Source text withheld after generation for privacy and safe LMS reuse.]",
+    extracted_text: "",
 
     learning_objectives:
       normalizeStringArray(
@@ -1361,9 +1441,11 @@ export async function POST(
       "PRIVACY REQUIREMENT:",
       "Never reproduce personal or financial identifiers from the source material.",
       "Do not reproduce bank account numbers, card numbers, BVN, NIN, phone numbers, email addresses, transaction references, payment references, beneficiary account details, customer identifiers, PINs, CVVs or similar private identifiers.",
-      "When a sensitive identifier is encountered, replace it with [REDACTED].",
+      "When a sensitive identifier is encountered, do not reproduce the original value.",
+      "Use the general concept instead, for example 'account number', 'transaction reference number', 'phone number' or 'email address'.",
+      "Do not copy names, account details or other private identifying information into the learning pack unless they are clearly necessary as a generic public entity or concept.",
       "Do not put raw OCR text or a verbatim copy of a private source document into extracted_text.",
-      "The learning pack must be suitable for reuse as educational material.",
+      "Leave extracted_text empty because raw source text is not retained for reusable LMS content.",
 
       `Create a ${outputName(
         mode
@@ -1550,11 +1632,8 @@ export async function POST(
     }
 
     /*
-     * Privacy barrier:
-     *
-     * 1. Recursively sanitize Gemini's response.
-     * 2. Normalize the expected learning-pack shape.
-     * 3. Return only the sanitized pack.
+     * Final privacy barrier:
+     * sanitize Gemini output before returning it to the browser.
      */
     const sanitizedOutput =
       sanitizeLearningPack(
