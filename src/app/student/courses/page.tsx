@@ -49,6 +49,7 @@ type AssessmentAttempt = {
 
 type CourseAssessment = {
   status: "not_started" | "completed";
+  attempt_id: string | null;
   score: number | null;
   total_questions: number | null;
   completed_at: string | null;
@@ -267,6 +268,7 @@ export default async function StudentCoursesPage() {
       attempt.course_id,
       {
         status: "completed",
+        attempt_id: attempt.id,
         score:
           typeof attempt.score === "number"
             ? attempt.score
@@ -336,6 +338,7 @@ export default async function StudentCoursesPage() {
           course.id
         ) ?? {
           status: "not_started" as const,
+          attempt_id: null,
           score: null,
           total_questions: null,
           completed_at: null,
@@ -466,6 +469,13 @@ export default async function StudentCoursesPage() {
               course.slug
             )}`;
 
+          const resultHref =
+            assessment.attempt_id
+              ? `/student/assessment/results/${encodeURIComponent(
+                  assessment.attempt_id
+                )}`
+              : null;
+
           return (
             <article
               key={enrollment.id}
@@ -555,12 +565,29 @@ export default async function StudentCoursesPage() {
                   </p>
                 </div>
 
-                <Link
-                  href={assessmentHref}
-                  className="button secondary"
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    flexWrap: "wrap",
+                  }}
                 >
-                  {assessmentLabel}
-                </Link>
+                  {resultHref ? (
+                    <Link
+                      href={resultHref}
+                      className="button secondary"
+                    >
+                      View Latest Result
+                    </Link>
+                  ) : null}
+
+                  <Link
+                    href={assessmentHref}
+                    className="button secondary"
+                  >
+                    {assessmentLabel}
+                  </Link>
+                </div>
               </div>
 
               <div className="course-card-actions">
