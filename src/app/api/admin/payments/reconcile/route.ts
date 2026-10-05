@@ -86,7 +86,7 @@ async function getAuthorizedUser() {
 async function verifyPayment(payment: PaymentRecord) {
   if (payment.flutterwave_transaction_id) {
     return verifyFlutterwaveTransaction(
-      payment.flutterwave_transaction_id,
+      String(payment.flutterwave_transaction_id),
     );
   }
 
