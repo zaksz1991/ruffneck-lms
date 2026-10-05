@@ -14081,3 +14081,22 @@ main form .rn-button {
     font-size: 0.86rem !important;
   }
 }
+
+.rn-scan-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 720px) {
+  .rn-scan-result-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .rn-scan-result-actions .rn-button {
+    width: 100%;
+  }
+}

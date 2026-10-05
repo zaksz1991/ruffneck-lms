@@ -85,13 +85,32 @@ type ApiResponse = {
   pack?: LearningPack;
 };
 
+type SaveDraftResponse = {
+  success?: boolean;
+  error?: string;
+  draft?: {
+    id: string;
+    title: string;
+    output_type: string;
+    language_code: string;
+    audience: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+  };
+};
+
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
 
     reader.onload = () => {
       if (typeof reader.result !== "string") {
-        reject(new Error("Unable to read the image."));
+        reject(
+          new Error(
+            "Unable to read the image."
+          )
+        );
         return;
       }
 
@@ -99,7 +118,11 @@ function readFileAsDataUrl(file: File) {
     };
 
     reader.onerror = () => {
-      reject(new Error("Unable to read the selected image."));
+      reject(
+        new Error(
+          "Unable to read the selected image."
+        )
+      );
     };
 
     reader.readAsDataURL(file);
@@ -107,60 +130,118 @@ function readFileAsDataUrl(file: File) {
 }
 
 function loadImage(dataUrl: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
+  return new Promise<HTMLImageElement>(
+    (resolve, reject) => {
+      const image = new Image();
 
-    image.onload = () => resolve(image);
-    image.onerror = () =>
-      reject(new Error("The selected image could not be processed."));
-    image.src = dataUrl;
-  });
+      image.onload = () => resolve(image);
+
+      image.onerror = () =>
+        reject(
+          new Error(
+            "The selected image could not be processed."
+          )
+        );
+
+      image.src = dataUrl;
+    }
+  );
 }
 
 async function compressImage(file: File) {
-  const sourceDataUrl = await readFileAsDataUrl(file);
-  const image = await loadImage(sourceDataUrl);
+  const sourceDataUrl =
+    await readFileAsDataUrl(file);
 
-  const sourceWidth = image.naturalWidth || image.width;
-  const sourceHeight = image.naturalHeight || image.height;
+  const image =
+    await loadImage(sourceDataUrl);
+
+  const sourceWidth =
+    image.naturalWidth || image.width;
+
+  const sourceHeight =
+    image.naturalHeight || image.height;
 
   if (!sourceWidth || !sourceHeight) {
-    throw new Error("The selected image has no usable dimensions.");
+    throw new Error(
+      "The selected image has no usable dimensions."
+    );
   }
 
   let maxDimension = 1500;
   let quality = 0.68;
   let result = "";
 
-  for (let attempt = 0; attempt < 4; attempt += 1) {
+  for (
+    let attempt = 0;
+    attempt < 4;
+    attempt += 1
+  ) {
     const scale = Math.min(
       1,
-      maxDimension / Math.max(sourceWidth, sourceHeight)
+      maxDimension /
+        Math.max(
+          sourceWidth,
+          sourceHeight
+        )
     );
 
-    const width = Math.max(1, Math.round(sourceWidth * scale));
-    const height = Math.max(1, Math.round(sourceHeight * scale));
+    const width = Math.max(
+      1,
+      Math.round(
+        sourceWidth * scale
+      )
+    );
 
-    const canvas = document.createElement("canvas");
+    const height = Math.max(
+      1,
+      Math.round(
+        sourceHeight * scale
+      )
+    );
+
+    const canvas =
+      document.createElement(
+        "canvas"
+      );
+
     canvas.width = width;
     canvas.height = height;
 
-    const context = canvas.getContext("2d");
+    const context =
+      canvas.getContext("2d");
 
     if (!context) {
-      throw new Error("Your browser could not prepare the image.");
+      throw new Error(
+        "Your browser could not prepare the image."
+      );
     }
 
-    context.drawImage(image, 0, 0, width, height);
-    result = canvas.toDataURL("image/jpeg", quality);
+    context.drawImage(
+      image,
+      0,
+      0,
+      width,
+      height
+    );
 
-    if (result.length <= TARGET_DATA_URL_LENGTH) {
+    result =
+      canvas.toDataURL(
+        "image/jpeg",
+        quality
+      );
+
+    if (
+      result.length <=
+      TARGET_DATA_URL_LENGTH
+    ) {
       return result;
     }
 
     maxDimension = Math.max(
       900,
-      Math.round(maxDimension * 0.84)
+      Math.round(
+        maxDimension * 0.84
+      )
     );
 
     quality = Math.max(
@@ -169,7 +250,11 @@ async function compressImage(file: File) {
     );
   }
 
-  if (!result || result.length > TARGET_DATA_URL_LENGTH) {
+  if (
+    !result ||
+    result.length >
+      TARGET_DATA_URL_LENGTH
+  ) {
     throw new Error(
       "This image is still too large after compression. Take the photo again with the page filling less of the frame."
     );
@@ -184,55 +269,87 @@ function makeImageId() {
     .slice(2)}`;
 }
 
-function outputLabel(mode: OutputType) {
+function outputLabel(
+  mode: OutputType
+) {
   return (
     OUTPUT_TYPES.find(
-      ([value]) => value === mode
-    )?.[1] || "Learning pack"
+      ([value]) =>
+        value === mode
+    )?.[1] ||
+    "Learning pack"
   );
 }
 
-function languageLabel(code: LanguageCode) {
+function languageLabel(
+  code: LanguageCode
+) {
   return (
     LANGUAGES.find(
-      ([value]) => value === code
-    )?.[1] || "English"
+      ([value]) =>
+        value === code
+    )?.[1] ||
+    "English"
   );
 }
 
-function audienceLabel(audience: Audience) {
+function audienceLabel(
+  audience: Audience
+) {
   return (
     AUDIENCES.find(
-      ([value]) => value === audience
-    )?.[1] || "General learning"
+      ([value]) =>
+        value === audience
+    )?.[1] ||
+    "General learning"
   );
 }
 
 export default function ScanAndLearn() {
   const cameraInputRef =
-    useRef<HTMLInputElement>(null);
+    useRef<HTMLInputElement>(
+      null
+    );
 
   const uploadInputRef =
-    useRef<HTMLInputElement>(null);
+    useRef<HTMLInputElement>(
+      null
+    );
 
   const [images, setImages] =
     useState<ScanImage[]>([]);
 
   const [mode, setMode] =
-    useState<OutputType>("lesson");
+    useState<OutputType>(
+      "lesson"
+    );
 
   const [language, setLanguage] =
-    useState<LanguageCode>("en");
+    useState<LanguageCode>(
+      "en"
+    );
 
   const [audience, setAudience] =
-    useState<Audience>("general");
+    useState<Audience>(
+      "general"
+    );
 
-  const [focus, setFocus] = useState("");
+  const [focus, setFocus] =
+    useState("");
 
   const [loading, setLoading] =
     useState(false);
 
+  const [savingDraft, setSavingDraft] =
+    useState(false);
+
   const [error, setError] =
+    useState<string | null>(null);
+
+  const [saveMessage, setSaveMessage] =
+    useState<string | null>(null);
+
+  const [savedDraftId, setSavedDraftId] =
     useState<string | null>(null);
 
   const [pack, setPack] =
@@ -246,6 +363,8 @@ export default function ScanAndLearn() {
     }
 
     setError(null);
+    setSaveMessage(null);
+    setSavedDraftId(null);
     setPack(null);
 
     const remaining =
@@ -269,12 +388,15 @@ export default function ScanAndLearn() {
     for (const file of selectedFiles) {
       if (!file.type.startsWith("image/")) {
         setError(
-          "Only image files are supported in this first scanner version."
+          "Only image files are supported in this scanner."
         );
         continue;
       }
 
-      if (file.size > 12 * 1024 * 1024) {
+      if (
+        file.size >
+        12 * 1024 * 1024
+      ) {
         setError(
           `${file.name} is too large. Use an image smaller than 12 MB.`
         );
@@ -310,7 +432,10 @@ export default function ScanAndLearn() {
   function handleInputChange(
     event: ChangeEvent<HTMLInputElement>
   ) {
-    void handleFiles(event.target.files);
+    void handleFiles(
+      event.target.files
+    );
+
     event.target.value = "";
   }
 
@@ -323,16 +448,20 @@ export default function ScanAndLearn() {
 
     setPack(null);
     setError(null);
+    setSaveMessage(null);
+    setSavedDraftId(null);
   }
 
   function clearAll() {
     setImages([]);
     setPack(null);
     setError(null);
+    setSaveMessage(null);
+    setSavedDraftId(null);
   }
 
   async function generateLearningPack() {
-    if (loading) {
+    if (loading || savingDraft) {
       return;
     }
 
@@ -345,28 +474,39 @@ export default function ScanAndLearn() {
 
     setLoading(true);
     setError(null);
+    setSaveMessage(null);
+    setSavedDraftId(null);
     setPack(null);
 
     try {
-      const response = await fetch(
-        "/api/student/scan",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            images: images.map(
-              (image) => image.dataUrl
-            ),
-            mode,
-            language,
-            audience,
-            focus: focus.trim(),
-          }),
-        }
-      );
+      const response =
+        await fetch(
+          "/api/student/scan",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              images: images.map(
+                (image) =>
+                  image.dataUrl
+              ),
+
+              mode,
+
+              language,
+
+              audience,
+
+              focus:
+                focus.trim(),
+            }),
+          }
+        );
 
       let result: ApiResponse = {};
 
@@ -393,7 +533,9 @@ export default function ScanAndLearn() {
       }
 
       setPack(result.pack);
-    } catch (generationError) {
+    } catch (
+      generationError
+    ) {
       setError(
         generationError instanceof Error
           ? generationError.message
@@ -401,6 +543,113 @@ export default function ScanAndLearn() {
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function saveDraft() {
+    if (
+      savingDraft ||
+      loading
+    ) {
+      return;
+    }
+
+    if (!pack) {
+      setError(
+        "Generate a learning pack before saving it."
+      );
+      return;
+    }
+
+    if (savedDraftId) {
+      setSaveMessage(
+        "This learning pack is already saved as a draft."
+      );
+      return;
+    }
+
+    setSavingDraft(true);
+    setError(null);
+    setSaveMessage(null);
+
+    try {
+      const response =
+        await fetch(
+          "/api/student/scan/drafts",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              title:
+                pack.title,
+
+              outputType:
+                mode,
+
+              languageCode:
+                language,
+
+              audience,
+
+              focusInstruction:
+                focus.trim() ||
+                null,
+
+              learningPack:
+                pack,
+            }),
+          }
+        );
+
+      let result: SaveDraftResponse =
+        {};
+
+      try {
+        result =
+          (await response.json()) as SaveDraftResponse;
+      } catch {
+        throw new Error(
+          "The draft service returned an invalid response."
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          result.error ||
+            "Unable to save the learning draft."
+        );
+      }
+
+      if (
+        !result.draft?.id
+      ) {
+        throw new Error(
+          "The draft was saved without a draft ID."
+        );
+      }
+
+      setSavedDraftId(
+        result.draft.id
+      );
+
+      setSaveMessage(
+        "Learning pack saved as a draft."
+      );
+    } catch (
+      draftError
+    ) {
+      setError(
+        draftError instanceof Error
+          ? draftError.message
+          : "Unable to save the learning draft."
+      );
+    } finally {
+      setSavingDraft(false);
     }
   }
 
@@ -416,6 +665,11 @@ export default function ScanAndLearn() {
       "",
       "Learning objectives",
       ...pack.learning_objectives.map(
+        (item) => `- ${item}`
+      ),
+      "",
+      "Prerequisites",
+      ...pack.prerequisites.map(
         (item) => `- ${item}`
       ),
       "",
@@ -446,11 +700,27 @@ export default function ScanAndLearn() {
         (question, index) =>
           `${index + 1}. ${question.question}\nAnswer: ${question.correct_answer}\n${question.explanation}`
       ),
+      "",
+      "Study plan",
+      ...pack.study_plan.map(
+        (step) =>
+          `${step.step}. ${step.action}`
+      ),
+      "",
+      "Flashcards",
+      ...pack.flashcards.map(
+        (card, index) =>
+          `${index + 1}. ${card.front}\n${card.back}`
+      ),
     ].join("\n");
 
     try {
       await navigator.clipboard.writeText(
         text
+      );
+
+      setSaveMessage(
+        "Learning pack copied to your clipboard."
       );
     } catch {
       setError(
@@ -467,7 +737,9 @@ export default function ScanAndLearn() {
             RUFFNECK LEARN AI
           </span>
 
-          <h1>Scan & Learn</h1>
+          <h1>
+            Scan & Learn
+          </h1>
 
           <p>
             Capture handwritten notes,
@@ -534,7 +806,9 @@ export default function ScanAndLearn() {
                 }
                 disabled={
                   loading ||
-                  images.length >= MAX_PAGES
+                  savingDraft ||
+                  images.length >=
+                    MAX_PAGES
                 }
               >
                 Take photo
@@ -548,7 +822,9 @@ export default function ScanAndLearn() {
                 }
                 disabled={
                   loading ||
-                  images.length >= MAX_PAGES
+                  savingDraft ||
+                  images.length >=
+                    MAX_PAGES
                 }
               >
                 Upload pages
@@ -558,8 +834,13 @@ export default function ScanAndLearn() {
                 <button
                   type="button"
                   className="rn-button rn-button-secondary"
-                  onClick={clearAll}
-                  disabled={loading}
+                  onClick={
+                    clearAll
+                  }
+                  disabled={
+                    loading ||
+                    savingDraft
+                  }
                 >
                   Clear all
                 </button>
@@ -587,7 +868,8 @@ export default function ScanAndLearn() {
                       <div className="rn-scan-page-meta">
                         <div>
                           <strong>
-                            Page {index + 1}
+                            Page{" "}
+                            {index + 1}
                           </strong>
 
                           <span>
@@ -603,7 +885,10 @@ export default function ScanAndLearn() {
                               image.id
                             )
                           }
-                          disabled={loading}
+                          disabled={
+                            loading ||
+                            savingDraft
+                          }
                         >
                           Remove
                         </button>
@@ -639,17 +924,30 @@ export default function ScanAndLearn() {
 
             <div className="rn-scan-form-grid">
               <label>
-                <span>Output</span>
+                <span>
+                  Output
+                </span>
 
                 <select
                   value={mode}
-                  onChange={(event) =>
+                  onChange={(event) => {
                     setMode(
                       event.target
                         .value as OutputType
-                    )
+                    );
+
+                    setPack(null);
+                    setSaveMessage(
+                      null
+                    );
+                    setSavedDraftId(
+                      null
+                    );
+                  }}
+                  disabled={
+                    loading ||
+                    savingDraft
                   }
-                  disabled={loading}
                 >
                   {OUTPUT_TYPES.map(
                     ([value, label]) => (
@@ -665,17 +963,30 @@ export default function ScanAndLearn() {
               </label>
 
               <label>
-                <span>Language</span>
+                <span>
+                  Language
+                </span>
 
                 <select
                   value={language}
-                  onChange={(event) =>
+                  onChange={(event) => {
                     setLanguage(
                       event.target
                         .value as LanguageCode
-                    )
+                    );
+
+                    setPack(null);
+                    setSaveMessage(
+                      null
+                    );
+                    setSavedDraftId(
+                      null
+                    );
+                  }}
+                  disabled={
+                    loading ||
+                    savingDraft
                   }
-                  disabled={loading}
                 >
                   {LANGUAGES.map(
                     ([value, label]) => (
@@ -691,17 +1002,30 @@ export default function ScanAndLearn() {
               </label>
 
               <label>
-                <span>Audience</span>
+                <span>
+                  Audience
+                </span>
 
                 <select
                   value={audience}
-                  onChange={(event) =>
+                  onChange={(event) => {
                     setAudience(
                       event.target
                         .value as Audience
-                    )
+                    );
+
+                    setPack(null);
+                    setSaveMessage(
+                      null
+                    );
+                    setSavedDraftId(
+                      null
+                    );
+                  }}
+                  disabled={
+                    loading ||
+                    savingDraft
                   }
-                  disabled={loading}
                 >
                   {AUDIENCES.map(
                     ([value, label]) => (
@@ -718,20 +1042,35 @@ export default function ScanAndLearn() {
 
               <label className="rn-scan-full-field">
                 <span>
-                  Additional instruction
+                  Additional instruction{" "}
+                  <small>
+                    (optional)
+                  </small>
                 </span>
 
                 <textarea
                   value={focus}
-                  onChange={(event) =>
+                  onChange={(event) => {
                     setFocus(
                       event.target.value
-                    )
-                  }
+                    );
+
+                    if (pack) {
+                      setSaveMessage(
+                        null
+                      );
+                      setSavedDraftId(
+                        null
+                      );
+                    }
+                  }}
                   maxLength={1500}
                   rows={5}
-                  placeholder="Example: Make this suitable for a Nigerian office worker and include practical examples using Excel."
-                  disabled={loading}
+                  placeholder="Optional: e.g. Make this suitable for a Nigerian office worker and include practical Excel examples."
+                  disabled={
+                    loading ||
+                    savingDraft
+                  }
                 />
 
                 <small>
@@ -743,8 +1082,12 @@ export default function ScanAndLearn() {
             <div className="rn-scan-generate-row">
               <div>
                 <strong>
-                  Create: {outputLabel(mode)} ·{" "}
-                  {languageLabel(language)}
+                  Create:{" "}
+                  {outputLabel(mode)}{" "}
+                  ·{" "}
+                  {languageLabel(
+                    language
+                  )}
                 </strong>
 
                 <span>
@@ -763,9 +1106,12 @@ export default function ScanAndLearn() {
                 }
                 disabled={
                   loading ||
+                  savingDraft ||
                   images.length === 0
                 }
-                aria-busy={loading}
+                aria-busy={
+                  loading
+                }
               >
                 {loading
                   ? "Creating learning pack…"
@@ -774,11 +1120,13 @@ export default function ScanAndLearn() {
             </div>
 
             <p className="rn-scan-privacy-note">
-              The first version processes the
-              selected images through the
-              server-side AI route and does not
-              save the scanned images to the LMS
-              database.
+              Additional instruction is optional.
+              Select the output, language and
+              audience, then create the learning
+              pack directly from your scanned
+              pages. The selected images are sent
+              through the server-side AI route and
+              are not saved to the LMS database.
             </p>
           </section>
         </div>
@@ -885,6 +1233,15 @@ export default function ScanAndLearn() {
         </div>
       ) : null}
 
+      {saveMessage ? (
+        <div
+          className="rn-scan-message"
+          role="status"
+        >
+          {saveMessage}
+        </div>
+      ) : null}
+
       {pack ? (
         <section
           className="rn-scan-result"
@@ -896,20 +1253,48 @@ export default function ScanAndLearn() {
                 GENERATED DRAFT
               </span>
 
-              <h2>{pack.title}</h2>
+              <h2>
+                {pack.title}
+              </h2>
 
               <p>
                 {pack.source_summary}
               </p>
             </div>
 
-            <button
-              type="button"
-              className="rn-button rn-button-secondary"
-              onClick={copyPack}
-            >
-              Copy learning pack
-            </button>
+            <div className="rn-scan-result-actions">
+              <button
+                type="button"
+                className="rn-button rn-button-secondary"
+                onClick={
+                  copyPack
+                }
+              >
+                Copy learning pack
+              </button>
+
+              <button
+                type="button"
+                className="rn-button rn-button-primary"
+                onClick={
+                  saveDraft
+                }
+                disabled={
+                  savingDraft ||
+                  loading ||
+                  !!savedDraftId
+                }
+                aria-busy={
+                  savingDraft
+                }
+              >
+                {savingDraft
+                  ? "Saving draft…"
+                  : savedDraftId
+                    ? "Draft saved"
+                    : "Save as Draft"}
+              </button>
+            </div>
           </div>
 
           {pack.source_warnings.length >
@@ -922,7 +1307,11 @@ export default function ScanAndLearn() {
               <ul>
                 {pack.source_warnings.map(
                   (warning) => (
-                    <li key={warning}>
+                    <li
+                      key={
+                        warning
+                      }
+                    >
                       {warning}
                     </li>
                   )
@@ -944,7 +1333,9 @@ export default function ScanAndLearn() {
               <ul>
                 {pack.learning_objectives.map(
                   (item) => (
-                    <li key={item}>
+                    <li
+                      key={item}
+                    >
                       {item}
                     </li>
                   )
@@ -1003,14 +1394,18 @@ export default function ScanAndLearn() {
               {pack.key_concepts.map(
                 (concept) => (
                   <div
-                    key={concept.term}
+                    key={
+                      concept.term
+                    }
                   >
                     <strong>
                       {concept.term}
                     </strong>
 
                     <span>
-                      {concept.explanation}
+                      {
+                        concept.explanation
+                      }
                     </span>
                   </div>
                 )
@@ -1036,11 +1431,15 @@ export default function ScanAndLearn() {
                     }
                   >
                     <h4>
-                      {section.heading}
+                      {
+                        section.heading
+                      }
                     </h4>
 
                     <p>
-                      {section.content}
+                      {
+                        section.content
+                      }
                     </p>
 
                     {section
@@ -1111,13 +1510,18 @@ export default function ScanAndLearn() {
 
             <div className="rn-scan-assessment-list">
               {pack.assessment_questions.map(
-                (question, index) => (
+                (
+                  question,
+                  index
+                ) => (
                   <article
                     key={`${question.question}-${index}`}
                   >
                     <strong>
                       {index + 1}.{" "}
-                      {question.question}
+                      {
+                        question.question
+                      }
                     </strong>
 
                     {question.options
@@ -1171,16 +1575,23 @@ export default function ScanAndLearn() {
 
               <div className="rn-scan-flashcards">
                 {pack.flashcards.map(
-                  (card, index) => (
+                  (
+                    card,
+                    index
+                  ) => (
                     <article
                       key={`${card.front}-${index}`}
                     >
                       <strong>
-                        {card.front}
+                        {
+                          card.front
+                        }
                       </strong>
 
                       <span>
-                        {card.back}
+                        {
+                          card.back
+                        }
                       </span>
                     </article>
                   )
@@ -1204,7 +1615,9 @@ export default function ScanAndLearn() {
                   <li
                     key={`${step.step}-${step.action}`}
                   >
-                    {step.action}
+                    {
+                      step.action
+                    }
                   </li>
                 )
               )}
@@ -1218,7 +1631,9 @@ export default function ScanAndLearn() {
               </summary>
 
               <pre>
-                {pack.extracted_text}
+                {
+                  pack.extracted_text
+                }
               </pre>
             </details>
           ) : null}
