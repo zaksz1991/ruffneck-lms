@@ -19,6 +19,14 @@ type Course = {
   duration_minutes: number | null;
 };
 
+type CurriculumLesson = {
+  course_id: string;
+  lesson_slug: string | null;
+  lesson_title: string | null;
+  lesson_sort_order: number | null;
+  is_published: boolean | null;
+};
+
 function formatDuration(minutes: number | null) {
   if (!minutes || minutes <= 0) {
     return "—";
@@ -69,22 +77,26 @@ export default async function StudentCoursesPage() {
     redirect("/login?next=/student/courses");
   }
 
-  const { data: enrollmentData } = await supabase
-    .from("enrollments")
-    .select(
-      `
-        id,
-        course_id,
-        enrollment_status,
-        payment_status,
-        enrolled_at
-      `
-    )
-    .eq("student_id", user.id)
-    .in("enrollment_status", ["active", "completed"])
-    .order("enrolled_at", {
-      ascending: false,
-    });
+  const { data: enrollmentData } =
+    await supabase
+      .from("enrollments")
+      .select(
+        `
+          id,
+          course_id,
+          enrollment_status,
+          payment_status,
+          enrolled_at
+        `
+      )
+      .eq("student_id", user.id)
+      .in("enrollment_status", [
+        "active",
+        "completed",
+      ])
+      .order("enrolled_at", {
+        ascending: false,
+      });
 
   const enrollments =
     (enrollmentData ?? []) as Enrollment[];
@@ -92,7 +104,8 @@ export default async function StudentCoursesPage() {
   const courseIds = Array.from(
     new Set(
       enrollments.map(
-        (enrollment) => enrollment.course_id
+        (enrollment) =>
+          enrollment.course_id
       )
     )
   );
@@ -100,19 +113,20 @@ export default async function StudentCoursesPage() {
   let courses: Course[] = [];
 
   if (courseIds.length > 0) {
-    const { data: courseData } = await supabase
-      .from("courses")
-      .select(
-        `
-          id,
-          title,
-          slug,
-          short_description,
-          level,
-          duration_minutes
-        `
-      )
-      .in("id", courseIds);
+    const { data: courseData } =
+      await supabase
+        .from("courses")
+        .select(
+          `
+            id,
+            title,
+            slug,
+            short_description,
+            level,
+            duration_minutes
+          `
+        )
+        .in("id", courseIds);
 
     courses =
       (courseData ?? []) as Course[];
@@ -124,6 +138,59 @@ export default async function StudentCoursesPage() {
       course,
     ])
   );
+
+  /*
+   * Load the published curriculum for the
+   * enrolled courses.
+   *
+   * course_curriculum is the existing safe
+   * curriculum view used by the public course
+   * and lesson flow.
+   */
+  let curriculum: CurriculumLesson[] = [];
+
+  if (courseIds.length > 0) {
+    const { data: curriculumData } =
+      await supabase
+        .from("course_curriculum")
+        .select(
+          `
+            course_id,
+            lesson_slug,
+            lesson_title,
+            lesson_sort_order,
+            is_published
+          `
+        )
+        .in("course_id", courseIds)
+        .eq("is_published", true)
+        .order("lesson_sort_order", {
+          ascending: true,
+        });
+
+    curriculum =
+      (curriculumData ??
+        []) as CurriculumLesson[];
+  }
+
+  const firstLessonByCourse =
+    new Map<string, CurriculumLesson>();
+
+  for (const lesson of curriculum) {
+    if (
+      !lesson.lesson_slug ||
+      firstLessonByCourse.has(
+        lesson.course_id
+      )
+    ) {
+      continue;
+    }
+
+    firstLessonByCourse.set(
+      lesson.course_id,
+      lesson
+    );
+  }
 
   const completedCount =
     enrollments.filter(
@@ -147,13 +214,11 @@ export default async function StudentCoursesPage() {
             Student Account
           </p>
 
-          <h1>
-            My Courses
-          </h1>
+          <h1>My Courses</h1>
 
           <p>
-            Access the courses you are enrolled in
-            and continue your learning.
+            Access the courses you are enrolled
+            in and continue your learning.
           </p>
         </div>
 
@@ -184,9 +249,7 @@ export default async function StudentCoursesPage() {
 
         <div className="admin-stat">
           <span>Active</span>
-          <strong>
-            {activeCount}
-          </strong>
+          <strong>{activeCount}</strong>
         </div>
 
         <div className="admin-stat">
@@ -200,13 +263,11 @@ export default async function StudentCoursesPage() {
       <section className="admin-card">
         <div className="admin-card-header">
           <div>
-            <h2>
-              Enrolled Courses
-            </h2>
+            <h2>Enrolled Courses</h2>
 
             <p>
-              Select a course to view its curriculum
-              and continue learning.
+              Select a course to continue learning
+              or review its curriculum.
             </p>
           </div>
         </div>
@@ -256,15 +317,35 @@ export default async function StudentCoursesPage() {
                         <tr
                           key={enrollment.id}
                         >
-                          <td
-                            colSpan={6}
-                          >
+                          <td colSpan={6}>
                             Course information is
                             currently unavailable.
                           </td>
                         </tr>
                       );
                     }
+
+                    const firstLesson =
+                      firstLessonByCourse.get(
+                        enrollment.course_id
+                      );
+
+                    const isCompleted =
+                      enrollment.enrollment_status ===
+                      "completed";
+
+                    const continueHref =
+                      !isCompleted &&
+                      firstLesson?.lesson_slug
+                        ? `/learn/${course.slug}/${firstLesson.lesson_slug}`
+                        : `/courses/${course.slug}`;
+
+                    const actionLabel =
+                      isCompleted
+                        ? "View Course"
+                        : firstLesson?.lesson_slug
+                          ? "Continue Learning"
+                          : "View Course";
 
                     return (
                       <tr
@@ -330,13 +411,12 @@ export default async function StudentCoursesPage() {
 
                         <td>
                           <Link
-                            href={`/courses/${course.slug}`}
+                            href={
+                              continueHref
+                            }
                             className="btn btn-primary"
                           >
-                            {enrollment.enrollment_status ===
-                            "completed"
-                              ? "View Course"
-                              : "Continue Learning"}
+                            {actionLabel}
                           </Link>
                         </td>
                       </tr>
