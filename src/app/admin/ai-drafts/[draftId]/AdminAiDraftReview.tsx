@@ -39,6 +39,24 @@ type StudyPlanItem = {
   duration?: unknown;
 };
 
+type KeyConcept = {
+  term?: unknown;
+  explanation?: unknown;
+};
+
+type PracticalActivity = {
+  title?: unknown;
+  instructions?: unknown;
+  expected_output?: unknown;
+};
+
+type AssessmentQuestion = {
+  question?: unknown;
+  options?: unknown;
+  correct_answer?: unknown;
+  explanation?: unknown;
+};
+
 type LearningPack = {
   overview?: unknown;
   objectives?: unknown;
@@ -53,6 +71,8 @@ type LearningPack = {
   source_warnings?: unknown;
   source_summary?: unknown;
   estimated_duration?: unknown;
+  estimated_duration_minutes?: unknown;
+  difficulty?: unknown;
   extracted_text?: unknown;
 };
 
@@ -80,7 +100,7 @@ type Props = {
   draft: Draft;
 };
 
-function asString(value: unknown): string {
+function asText(value: unknown): string {
   if (typeof value === "string") {
     return value.trim();
   }
@@ -92,24 +112,6 @@ function asString(value: unknown): string {
     return String(value);
   }
 
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => asString(item))
-      .filter(Boolean)
-      .join(", ");
-  }
-
-  if (
-    value &&
-    typeof value === "object"
-  ) {
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return "";
-    }
-  }
-
   return "";
 }
 
@@ -119,42 +121,26 @@ function asStringArray(value: unknown): string[] {
   }
 
   return value
-    .map((item) => asString(item))
+    .map((item) => asText(item))
     .filter(Boolean);
 }
 
-function asObjectArray<T>(
+function asObjectArray<T extends object>(
   value: unknown
 ): T[] {
-  return Array.isArray(value)
-    ? (value as T[])
-    : [];
-}
-
-function asNumber(
-  value: unknown
-): number | null {
-  if (
-    typeof value === "number" &&
-    Number.isFinite(value)
-  ) {
-    return value;
+  if (!Array.isArray(value)) {
+    return [];
   }
 
-  if (typeof value === "string") {
-    const parsed = Number(value);
-
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-
-  return null;
+  return value.filter(
+    (item): item is T =>
+      !!item &&
+      typeof item === "object" &&
+      !Array.isArray(item)
+  );
 }
 
-function formatDateTime(
-  value: string | null
-): string {
+function formatDateTime(value: string | null): string {
   if (!value) return "—";
 
   try {
@@ -172,19 +158,19 @@ function getPathTitle(
   item: StudyPlanItem,
   index: number
 ): string {
-  const candidates = [
-    item.title,
-    item.name,
-    item.step,
-    item.heading,
-  ];
+  const title =
+    asText(item.title) ||
+    asText(item.name) ||
+    asText(item.heading);
 
-  for (const candidate of candidates) {
-    const value = asString(candidate);
+  if (title) {
+    return title;
+  }
 
-    if (value) {
-      return value;
-    }
+  const step = asText(item.step);
+
+  if (step) {
+    return `Learning Step ${step}`;
   }
 
   return `Learning Step ${index + 1}`;
@@ -193,60 +179,101 @@ function getPathTitle(
 function getPathDescription(
   item: StudyPlanItem
 ): string {
-  const candidates = [
-    item.description,
-    item.content,
-    item.details,
-    item.action,
-    item.instruction,
-    item.what_to_do,
-    item.task,
-    item.summary,
-  ];
+  return (
+    asText(item.description) ||
+    asText(item.content) ||
+    asText(item.details) ||
+    asText(item.action) ||
+    asText(item.instruction) ||
+    asText(item.what_to_do) ||
+    asText(item.task) ||
+    asText(item.summary) ||
+    "No additional learning instruction was provided."
+  );
+}
 
-  for (const candidate of candidates) {
-    const value = asString(candidate);
+function getDuration(
+  item: StudyPlanItem
+): string {
+  const duration =
+    item.duration_minutes ??
+    item.duration;
 
-    if (value) {
-      return value;
+  if (
+    typeof duration === "number" &&
+    Number.isFinite(duration)
+  ) {
+    return String(duration);
+  }
+
+  if (typeof duration === "string") {
+    const trimmed = duration.trim();
+
+    if (trimmed) {
+      return trimmed;
     }
   }
 
-  return "No additional learning instruction was provided.";
+  return "";
 }
 
-function getSectionHeading(
-  section: Section,
-  index: number
+function getConceptTerm(
+  item: KeyConcept
 ): string {
-  const heading = asString(section.heading);
-
-  return heading || `Learning Section ${index + 1}`;
+  return (
+    asText(item.term) ||
+    "Key concept"
+  );
 }
 
-function getSectionContent(
-  section: Section
+function getConceptExplanation(
+  item: KeyConcept
 ): string {
-  const content = asString(section.content);
-
-  return content || "No section content was provided.";
+  return (
+    asText(item.explanation) ||
+    "No explanation was provided."
+  );
 }
 
-function getFlashcardFront(
-  flashcard: Flashcard,
-  index: number
-): string {
-  const front = asString(flashcard.front);
+function getPracticalActivity(
+  value: unknown
+): PracticalActivity {
+  if (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+  ) {
+    return value as PracticalActivity;
+  }
 
-  return front || `Flashcard ${index + 1}`;
+  return {};
 }
 
-function getFlashcardBack(
-  flashcard: Flashcard
+function getQuestionText(
+  item: AssessmentQuestion
 ): string {
-  const back = asString(flashcard.back);
+  return (
+    asText(item.question) ||
+    "Assessment question"
+  );
+}
 
-  return back || "No answer was provided.";
+function getQuestionOptions(
+  item: AssessmentQuestion
+): string[] {
+  return asStringArray(item.options);
+}
+
+function getQuestionAnswer(
+  item: AssessmentQuestion
+): string {
+  return asText(item.correct_answer);
+}
+
+function getQuestionExplanation(
+  item: AssessmentQuestion
+): string {
+  return asText(item.explanation);
 }
 
 export default function AdminAiDraftReview({
@@ -274,23 +301,24 @@ export default function AdminAiDraftReview({
   const [success, setSuccess] =
     useState("");
 
-  const pack: LearningPack =
-    draft.learning_pack &&
-    typeof draft.learning_pack === "object"
-      ? draft.learning_pack
-      : {};
+  const pack =
+    draft.learning_pack ?? {};
 
-  const objectives = asStringArray(
-    Array.isArray(pack.objectives)
-      ? pack.objectives
-      : pack.learning_objectives
-  );
+  const objectives =
+    asStringArray(
+      pack.objectives ??
+        pack.learning_objectives
+    );
 
   const concepts =
-    asStringArray(pack.key_concepts);
+    asObjectArray<KeyConcept>(
+      pack.key_concepts
+    );
 
   const prerequisites =
-    asStringArray(pack.prerequisites);
+    asStringArray(
+      pack.prerequisites
+    );
 
   const sections =
     asObjectArray<Section>(
@@ -308,13 +336,18 @@ export default function AdminAiDraftReview({
     );
 
   const assessmentQuestions =
-    asStringArray(
+    asObjectArray<AssessmentQuestion>(
       pack.assessment_questions
     );
 
   const sourceWarnings =
     asStringArray(
       pack.source_warnings
+    );
+
+  const practicalActivity =
+    getPracticalActivity(
+      pack.practical_activity
     );
 
   const isSubmitted =
@@ -347,7 +380,7 @@ export default function AdminAiDraftReview({
         return "Converted to LMS";
 
       default:
-        return asString(draft.status);
+        return draft.status;
     }
   }, [draft.status]);
 
@@ -360,12 +393,10 @@ export default function AdminAiDraftReview({
     setError("");
     setSuccess("");
 
-    const cleanReviewNote =
-      asString(reviewNote);
-
     if (
-      action === "revision_required" &&
-      !cleanReviewNote
+      action ===
+        "revision_required" &&
+      !reviewNote.trim()
     ) {
       setError(
         "A review note is required when requesting revision."
@@ -376,29 +407,32 @@ export default function AdminAiDraftReview({
     }
 
     try {
-      const response = await fetch(
-        "/api/admin/ai-drafts/review",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            id: draft.id,
-            action,
-            reviewNote:
-              cleanReviewNote,
-          }),
-        }
-      );
+      const response =
+        await fetch(
+          "/api/admin/ai-drafts/review",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              id: draft.id,
+              action,
+              reviewNote:
+                reviewNote.trim(),
+            }),
+          }
+        );
 
       const data =
         await response.json();
 
       if (!response.ok) {
         throw new Error(
-          asString(data?.error) ||
+          data?.error ||
             "The review action could not be completed."
         );
       }
@@ -419,7 +453,8 @@ export default function AdminAiDraftReview({
                 ? "approved"
                 : "revision_required",
             review_note:
-              cleanReviewNote || null,
+              reviewNote.trim() ||
+              null,
           })
         );
       }
@@ -429,9 +464,12 @@ export default function AdminAiDraftReview({
           ? "AI draft approved. It is now ready for LMS conversion."
           : "Revision requested. The student can now update the draft."
       );
-    } catch (reviewError) {
+    } catch (
+      reviewError
+    ) {
       setError(
-        reviewError instanceof Error
+        reviewError instanceof
+          Error
           ? reviewError.message
           : "The review action failed."
       );
@@ -463,26 +501,29 @@ export default function AdminAiDraftReview({
     setSuccess("");
 
     try {
-      const response = await fetch(
-        "/api/admin/ai-drafts/convert",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            id: draft.id,
-          }),
-        }
-      );
+      const response =
+        await fetch(
+          "/api/admin/ai-drafts/convert",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              id: draft.id,
+            }),
+          }
+        );
 
       const data =
         await response.json();
 
       if (!response.ok) {
         throw new Error(
-          asString(data?.error) ||
+          data?.error ||
             "The AI draft could not be converted into an LMS course."
         );
       }
@@ -502,11 +543,15 @@ export default function AdminAiDraftReview({
       setDraft(
         (current) => ({
           ...current,
+
           status: "converted",
+
           converted_course_id:
             courseId,
+
           converted_at:
             convertedAt,
+
           updated_at:
             convertedAt,
         })
@@ -515,9 +560,12 @@ export default function AdminAiDraftReview({
       setSuccess(
         "AI draft converted successfully. The LMS course is unpublished and ready for review."
       );
-    } catch (conversionError) {
+    } catch (
+      conversionError
+    ) {
       setError(
-        conversionError instanceof Error
+        conversionError instanceof
+          Error
           ? conversionError.message
           : "The conversion failed."
       );
@@ -525,18 +573,6 @@ export default function AdminAiDraftReview({
       setConvertBusy(false);
     }
   }
-
-  const overview =
-    asString(pack.overview) ||
-    "No overview was provided.";
-
-  const practicalActivity =
-    asString(
-      pack.practical_activity
-    );
-
-  const sourceWarningsExist =
-    sourceWarnings.length > 0;
 
   return (
     <main className="container rn-dashboard-shell">
@@ -546,7 +582,9 @@ export default function AdminAiDraftReview({
             AI Draft Review
           </p>
 
-          <h1>Review AI Draft</h1>
+          <h1>
+            Review AI Draft
+          </h1>
 
           <p className="rn-muted">
             Review generated learning material before it enters
@@ -574,10 +612,7 @@ export default function AdminAiDraftReview({
           Submitted learning material
         </p>
 
-        <h2>
-          {asString(draft.title) ||
-            "Untitled AI Draft"}
-        </h2>
+        <h2>{draft.title}</h2>
 
         <span className="badge">
           {statusLabel}
@@ -585,35 +620,35 @@ export default function AdminAiDraftReview({
 
         <div className="grid-2">
           <div>
-            <strong>Output</strong>
+            <strong>
+              Output
+            </strong>
+
             <p>
-              {asString(
-                draft.output_type
-              ) || "—"}
+              {draft.output_type}
             </p>
           </div>
 
           <div>
-            <strong>Language</strong>
+            <strong>
+              Language
+            </strong>
 
             <p>
-              {asString(
-                draft.language_code
-              ) === "en"
+              {draft.language_code ===
+              "en"
                 ? "English"
-                : asString(
-                    draft.language_code
-                  ) || "—"}
+                : draft.language_code}
             </p>
           </div>
 
           <div>
-            <strong>Audience</strong>
+            <strong>
+              Audience
+            </strong>
 
             <p>
-              {asString(
-                draft.audience
-              ) || "—"}
+              {draft.audience}
             </p>
           </div>
 
@@ -705,14 +740,17 @@ export default function AdminAiDraftReview({
         </h2>
 
         <p>
-          Original source text and source-specific identifiers
-          are not displayed in the review interface.
+          Original source text and
+          source-specific identifiers
+          are not displayed in the
+          review interface.
         </p>
 
         <p>
-          Privacy screening is applied before AI-generated
-          learning material is stored or converted into LMS
-          content.
+          Privacy screening is applied
+          before AI-generated learning
+          material is stored or converted
+          into LMS content.
         </p>
       </section>
 
@@ -727,16 +765,21 @@ export default function AdminAiDraftReview({
           </h2>
 
           <p>
-            This draft has passed review and can now be converted
-            into an unpublished LMS course.
+            This draft has passed review
+            and can now be converted into
+            an unpublished LMS course.
           </p>
 
           <div className="rn-actions">
             <button
               type="button"
               className="btn btn-primary"
-              onClick={convertToLms}
-              disabled={convertBusy}
+              onClick={
+                convertToLms
+              }
+              disabled={
+                convertBusy
+              }
             >
               {convertBusy
                 ? "Converting..."
@@ -745,9 +788,11 @@ export default function AdminAiDraftReview({
           </div>
 
           <p className="rn-muted">
-            The Generated Learning Path will determine the
-            initial course sequence. The course will remain
-            unpublished until it is reviewed in Admin LMS.
+            The Generated Learning Path
+            will determine the initial
+            course sequence. The course
+            will remain unpublished until
+            it is reviewed in Admin LMS.
           </p>
         </section>
       ) : null}
@@ -764,8 +809,9 @@ export default function AdminAiDraftReview({
           </h2>
 
           <p>
-            This approved AI draft has already been converted
-            into an unpublished LMS course.
+            This approved AI draft has
+            already been converted into
+            an unpublished LMS course.
           </p>
 
           <div className="grid-2">
@@ -775,9 +821,7 @@ export default function AdminAiDraftReview({
               </strong>
 
               <p>
-                {asString(
-                  draft.converted_course_id
-                )}
+                {draft.converted_course_id}
               </p>
             </div>
 
@@ -820,21 +864,23 @@ export default function AdminAiDraftReview({
         </h2>
 
         <p className="rn-muted">
-          This is the actual learning sequence generated from
-          the source material and used as the primary structure
-          for LMS conversion.
+          This is the actual learning
+          sequence generated from the
+          source material and used as
+          the primary structure for LMS
+          conversion.
         </p>
 
         {learningPath.length > 0 ? (
           <div className="stack">
             {learningPath.map(
-              (item, index) => {
+              (
+                item,
+                index
+              ) => {
                 const duration =
-                  asNumber(
-                    item.duration_minutes
-                  ) ??
-                  asNumber(
-                    item.duration
+                  getDuration(
+                    item
                   );
 
                 return (
@@ -860,8 +906,7 @@ export default function AdminAiDraftReview({
                       )}
                     </p>
 
-                    {duration !==
-                    null ? (
+                    {duration ? (
                       <p className="rn-muted">
                         Estimated duration:{" "}
                         {duration}{" "}
@@ -875,7 +920,8 @@ export default function AdminAiDraftReview({
           </div>
         ) : (
           <p>
-            No generated learning path was provided.
+            No generated learning path
+            was provided.
           </p>
         )}
       </section>
@@ -890,12 +936,12 @@ export default function AdminAiDraftReview({
         </h2>
 
         <p>
-          {overview}
+          {asText(pack.overview) ||
+            "No overview was provided."}
         </p>
       </section>
 
-      {objectives.length >
-      0 ? (
+      {objectives.length > 0 ? (
         <section className="card">
           <h2>
             Learning objectives
@@ -903,7 +949,10 @@ export default function AdminAiDraftReview({
 
           <ul>
             {objectives.map(
-              (item, index) => (
+              (
+                item,
+                index
+              ) => (
                 <li
                   key={`${draft.id}-objective-${index}`}
                 >
@@ -915,8 +964,7 @@ export default function AdminAiDraftReview({
         </section>
       ) : null}
 
-      {prerequisites.length >
-      0 ? (
+      {prerequisites.length > 0 ? (
         <section className="card">
           <h2>
             Prerequisites
@@ -924,7 +972,10 @@ export default function AdminAiDraftReview({
 
           <ul>
             {prerequisites.map(
-              (item, index) => (
+              (
+                item,
+                index
+              ) => (
                 <li
                   key={`${draft.id}-prerequisite-${index}`}
                 >
@@ -936,29 +987,40 @@ export default function AdminAiDraftReview({
         </section>
       ) : null}
 
-      {concepts.length >
-      0 ? (
+      {concepts.length > 0 ? (
         <section className="card">
           <h2>
             Key concepts
           </h2>
 
-          <ul>
+          <div className="stack">
             {concepts.map(
-              (item, index) => (
-                <li
+              (
+                item,
+                index
+              ) => (
+                <article
                   key={`${draft.id}-concept-${index}`}
                 >
-                  {item}
-                </li>
+                  <h3>
+                    {getConceptTerm(
+                      item
+                    )}
+                  </h3>
+
+                  <p>
+                    {getConceptExplanation(
+                      item
+                    )}
+                  </p>
+                </article>
               )
             )}
-          </ul>
+          </div>
         </section>
       ) : null}
 
-      {sections.length >
-      0 ? (
+      {sections.length > 0 ? (
         <section className="card">
           <h2>
             Learning content
@@ -966,7 +1028,20 @@ export default function AdminAiDraftReview({
 
           <div className="stack">
             {sections.map(
-              (section, index) => {
+              (
+                section,
+                index
+              ) => {
+                const heading =
+                  asText(
+                    section.heading
+                  );
+
+                const content =
+                  asText(
+                    section.content
+                  );
+
                 const examples =
                   asStringArray(
                     section.examples
@@ -977,18 +1052,17 @@ export default function AdminAiDraftReview({
                     key={`${draft.id}-section-${index}`}
                     className="card"
                   >
-                    <h3>
-                      {getSectionHeading(
-                        section,
-                        index
-                      )}
-                    </h3>
+                    {heading ? (
+                      <h3>
+                        {heading}
+                      </h3>
+                    ) : null}
 
-                    <p>
-                      {getSectionContent(
-                        section
-                      )}
-                    </p>
+                    {content ? (
+                      <p>
+                        {content}
+                      </p>
+                    ) : null}
 
                     {examples.length >
                     0 ? (
@@ -1023,8 +1097,7 @@ export default function AdminAiDraftReview({
         </section>
       ) : null}
 
-      {flashcards.length >
-      0 ? (
+      {flashcards.length > 0 ? (
         <section className="card">
           <h2>
             Flashcards
@@ -1035,39 +1108,88 @@ export default function AdminAiDraftReview({
               (
                 flashcard,
                 index
-              ) => (
-                <article
-                  key={`${draft.id}-flashcard-${index}`}
-                  className="card"
-                >
-                  <h3>
-                    {getFlashcardFront(
-                      flashcard,
-                      index
-                    )}
-                  </h3>
+              ) => {
+                const front =
+                  asText(
+                    flashcard.front
+                  );
 
-                  <p>
-                    {getFlashcardBack(
-                      flashcard
-                    )}
-                  </p>
-                </article>
-              )
+                const back =
+                  asText(
+                    flashcard.back
+                  );
+
+                return (
+                  <article
+                    key={`${draft.id}-flashcard-${index}`}
+                    className="card"
+                  >
+                    <h3>
+                      {front ||
+                        "Flashcard"}
+                    </h3>
+
+                    <p>
+                      {back ||
+                        "No answer was provided."}
+                    </p>
+                  </article>
+                );
+              }
             )}
           </div>
         </section>
       ) : null}
 
-      {practicalActivity ? (
+      {Object.keys(
+        practicalActivity
+      ).length > 0 ? (
         <section className="card">
           <h2>
             Practical activity
           </h2>
 
-          <p>
-            {practicalActivity}
-          </p>
+          {asText(
+            practicalActivity.title
+          ) ? (
+            <h3>
+              {asText(
+                practicalActivity.title
+              )}
+            </h3>
+          ) : null}
+
+          {asText(
+            practicalActivity.instructions
+          ) ? (
+            <>
+              <h4>
+                Instructions
+              </h4>
+
+              <p>
+                {asText(
+                  practicalActivity.instructions
+                )}
+              </p>
+            </>
+          ) : null}
+
+          {asText(
+            practicalActivity.expected_output
+          ) ? (
+            <>
+              <h4>
+                Expected output
+              </h4>
+
+              <p>
+                {asText(
+                  practicalActivity.expected_output
+                )}
+              </p>
+            </>
+          ) : null}
         </section>
       ) : null}
 
@@ -1078,24 +1200,93 @@ export default function AdminAiDraftReview({
             Assessment questions
           </h2>
 
-          <ol>
+          <div className="stack">
             {assessmentQuestions.map(
               (
                 question,
                 index
-              ) => (
-                <li
-                  key={`${draft.id}-question-${index}`}
-                >
-                  {question}
-                </li>
-              )
+              ) => {
+                const questionText =
+                  getQuestionText(
+                    question
+                  );
+
+                const options =
+                  getQuestionOptions(
+                    question
+                  );
+
+                const correctAnswer =
+                  getQuestionAnswer(
+                    question
+                  );
+
+                const explanation =
+                  getQuestionExplanation(
+                    question
+                  );
+
+                return (
+                  <article
+                    key={`${draft.id}-question-${index}`}
+                    className="card"
+                  >
+                    <h3>
+                      {index + 1}.{" "}
+                      {questionText}
+                    </h3>
+
+                    {options.length >
+                    0 ? (
+                      <ul>
+                        {options.map(
+                          (
+                            option,
+                            optionIndex
+                          ) => (
+                            <li
+                              key={`${draft.id}-question-${index}-option-${optionIndex}`}
+                            >
+                              {
+                                option
+                              }
+                            </li>
+                          )
+                        )}
+                      </ul>
+                    ) : null}
+
+                    {correctAnswer ? (
+                      <p>
+                        <strong>
+                          Correct answer:
+                        </strong>{" "}
+                        {
+                          correctAnswer
+                        }
+                      </p>
+                    ) : null}
+
+                    {explanation ? (
+                      <p>
+                        <strong>
+                          Explanation:
+                        </strong>{" "}
+                        {
+                          explanation
+                        }
+                      </p>
+                    ) : null}
+                  </article>
+                );
+              }
             )}
-          </ol>
+          </div>
         </section>
       ) : null}
 
-      {sourceWarningsExist ? (
+      {sourceWarnings.length >
+      0 ? (
         <section className="card">
           <h2>
             Privacy and source warnings
@@ -1177,8 +1368,9 @@ export default function AdminAiDraftReview({
       ) : (
         <section className="card">
           <p className="rn-muted">
-            This draft has already been reviewed. It cannot be
-            reviewed again from this screen.
+            This draft has already been
+            reviewed. It cannot be reviewed
+            again from this screen.
           </p>
         </section>
       )}
@@ -1190,9 +1382,7 @@ export default function AdminAiDraftReview({
           </h2>
 
           <p>
-            {asString(
-              draft.review_note
-            )}
+            {draft.review_note}
           </p>
         </section>
       ) : null}
