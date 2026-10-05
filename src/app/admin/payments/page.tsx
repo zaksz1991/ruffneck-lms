@@ -42,15 +42,11 @@ function formatMoney(
   amount: number,
   currency: string
 ) {
-  return new Intl.NumberFormat(
-    "en-NG",
-    {
-      style: "currency",
-      currency:
-        currency || "NGN",
-      maximumFractionDigits: 0,
-    }
-  ).format(amount);
+  return new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: currency || "NGN",
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
 
 function formatDate(
@@ -60,13 +56,10 @@ function formatDate(
     return "—";
   }
 
-  return new Intl.DateTimeFormat(
-    "en-NG",
-    {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }
-  ).format(new Date(value));
+  return new Intl.DateTimeFormat("en-NG", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 function statusLabel(
@@ -95,15 +88,11 @@ function statusClass(
 }
 
 export default async function AdminPaymentsPage() {
-  const supabase =
-    await createClient();
+  const supabase = await createClient();
 
   const {
-    data: {
-      user,
-    },
-  } =
-    await supabase.auth.getUser();
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
     redirect(
@@ -114,25 +103,17 @@ export default async function AdminPaymentsPage() {
   const {
     data: profile,
     error: profileError,
-  } =
-    await supabase
-      .from("profiles")
-      .select("id, role")
-      .eq(
-        "id",
-        user.id
-      )
-      .single();
+  } = await supabase
+    .from("profiles")
+    .select("id, role")
+    .eq("id", user.id)
+    .single();
 
-  if (
-    profileError ||
-    !profile
-  ) {
+  if (profileError || !profile) {
     redirect("/");
   }
 
-  const role =
-    profile.role as string;
+  const role = profile.role as string;
 
   if (
     role !== "admin" &&
@@ -141,8 +122,7 @@ export default async function AdminPaymentsPage() {
     redirect("/");
   }
 
-  const admin =
-    createAdminClient();
+  const admin = createAdminClient();
 
   let paymentQuery = admin
     .from("course_payments")
@@ -163,49 +143,33 @@ export default async function AdminPaymentsPage() {
         "verified_at",
       ].join(", ")
     )
-    .order(
-      "created_at",
-      {
-        ascending: false,
-      }
-    );
+    .order("created_at", {
+      ascending: false,
+    });
 
-  if (
-    role === "instructor"
-  ) {
+  if (role === "instructor") {
     const {
       data: assignedCourses,
-      error:
-        assignedCoursesError,
+      error: assignedCoursesError,
     } = await admin
       .from("courses")
       .select(
         "id, title, slug, instructor_id"
       )
-      .eq(
-        "instructor_id",
-        user.id
-      );
+      .eq("instructor_id", user.id);
 
-    if (
-      assignedCoursesError
-    ) {
+    if (assignedCoursesError) {
       throw new Error(
         assignedCoursesError.message
       );
     }
 
-    const courseIds =
-      (assignedCourses ?? [])
-        .map(
-          (course) =>
-            course.id
-        );
+    const assignedCourseIds =
+      (assignedCourses ?? []).map(
+        (course) => course.id
+      );
 
-    if (
-      courseIds.length ===
-      0
-    ) {
+    if (assignedCourseIds.length === 0) {
       return (
         <main className="container admin-page">
           <div className="admin-page-header">
@@ -213,11 +177,14 @@ export default async function AdminPaymentsPage() {
               <p className="eyebrow">
                 Payments
               </p>
+
               <h1>
                 Course Payments
               </h1>
+
               <p>
-                No courses are currently assigned to you.
+                No courses are currently
+                assigned to you.
               </p>
             </div>
 
@@ -234,11 +201,10 @@ export default async function AdminPaymentsPage() {
       );
     }
 
-    paymentQuery =
-      paymentQuery.in(
-        "course_id",
-        courseIds
-      );
+    paymentQuery = paymentQuery.in(
+      "course_id",
+      assignedCourseIds
+    );
   }
 
   const {
@@ -254,7 +220,7 @@ export default async function AdminPaymentsPage() {
 
   const payments =
     (paymentData ??
-      []) as Payment[];
+      []) as unknown as Payment[];
 
   const studentIds = [
     ...new Set(
@@ -284,41 +250,32 @@ export default async function AdminPaymentsPage() {
           .select(
             "id, full_name, email"
           )
-          .in(
-            "id",
-            studentIds
-          )
+          .in("id", studentIds)
       : Promise.resolve({
           data: [],
           error: null,
         }),
+
     courseIds.length
       ? admin
           .from("courses")
           .select(
             "id, title, slug, instructor_id"
           )
-          .in(
-            "id",
-            courseIds
-          )
+          .in("id", courseIds)
       : Promise.resolve({
           data: [],
           error: null,
         }),
   ]);
 
-  if (
-    profilesResult.error
-  ) {
+  if (profilesResult.error) {
     throw new Error(
       profilesResult.error.message
     );
   }
 
-  if (
-    coursesResult.error
-  ) {
+  if (coursesResult.error) {
     throw new Error(
       coursesResult.error.message
     );
@@ -326,31 +283,25 @@ export default async function AdminPaymentsPage() {
 
   const profiles =
     (profilesResult.data ??
-      []) as Profile[];
+      []) as unknown as Profile[];
 
   const courses =
     (coursesResult.data ??
-      []) as Course[];
+      []) as unknown as Course[];
 
-  const profileMap =
-    new Map(
-      profiles.map(
-        (profile) => [
-          profile.id,
-          profile,
-        ]
-      )
-    );
+  const profileMap = new Map(
+    profiles.map((profile) => [
+      profile.id,
+      profile,
+    ])
+  );
 
-  const courseMap =
-    new Map(
-      courses.map(
-        (course) => [
-          course.id,
-          course,
-        ]
-      )
-    );
+  const courseMap = new Map(
+    courses.map((course) => [
+      course.id,
+      course,
+    ])
+  );
 
   const successfulPayments =
     payments.filter(
@@ -439,6 +390,7 @@ export default async function AdminPaymentsPage() {
           <span>
             Collected
           </span>
+
           <strong>
             {formatMoney(
               totalCollected,
@@ -451,10 +403,9 @@ export default async function AdminPaymentsPage() {
           <span>
             Successful
           </span>
+
           <strong>
-            {
-              successfulPayments.length
-            }
+            {successfulPayments.length}
           </strong>
         </article>
 
@@ -462,10 +413,9 @@ export default async function AdminPaymentsPage() {
           <span>
             Pending
           </span>
+
           <strong>
-            {
-              pendingPayments.length
-            }
+            {pendingPayments.length}
           </strong>
         </article>
 
@@ -473,10 +423,9 @@ export default async function AdminPaymentsPage() {
           <span>
             Failed / Cancelled
           </span>
+
           <strong>
-            {
-              failedPayments.length
-            }
+            {failedPayments.length}
           </strong>
         </article>
       </section>
@@ -497,12 +446,12 @@ export default async function AdminPaymentsPage() {
           </div>
         </div>
 
-        {payments.length ===
-        0 ? (
+        {payments.length === 0 ? (
           <div className="admin-empty-state">
             <h3>
               No payments yet
             </h3>
+
             <p>
               Flutterwave course transactions
               will appear here after students
@@ -517,27 +466,35 @@ export default async function AdminPaymentsPage() {
                   <th>
                     Student
                   </th>
+
                   <th>
                     Course
                   </th>
+
                   <th>
                     Amount
                   </th>
+
                   <th>
                     Reference
                   </th>
+
                   <th>
                     Flutterwave ID
                   </th>
+
                   <th>
                     Status
                   </th>
+
                   <th>
                     Created
                   </th>
+
                   <th>
                     Verified
                   </th>
+
                   <th>
                     Action
                   </th>
