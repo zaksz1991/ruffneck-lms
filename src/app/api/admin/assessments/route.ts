@@ -32,6 +32,21 @@ type QuestionInput = {
   skill_id?: unknown;
 };
 
+type CreatedQuestion = {
+  id: string;
+  course_id: string;
+  skill_id: string | null;
+  question: string | null;
+  question_text: string | null;
+  options: unknown;
+  correct_answer: string | null;
+  explanation: string | null;
+  difficulty: string | null;
+  points: number | null;
+  question_type: string | null;
+  sort_order: number | null;
+};
+
 function asString(value: unknown): string {
   return typeof value === "string"
     ? value.trim()
@@ -266,6 +281,50 @@ function normalizeOptions(
   return asStringArray(value);
 }
 
+function formatQuestion(
+  row: CreatedQuestion
+) {
+  return {
+    id: row.id,
+    course_id: row.course_id,
+    skill_id: row.skill_id,
+    question:
+      displayQuestion(
+        row as AssessmentQuestion
+      ),
+    options:
+      normalizeOptions(
+        row.options
+      ),
+    correct_answer:
+      asString(
+        row.correct_answer
+      ),
+    explanation:
+      asString(
+        row.explanation
+      ),
+    difficulty:
+      normalizeDifficulty(
+        row.difficulty
+      ),
+    points:
+      asPositiveInteger(
+        row.points,
+        1
+      ),
+    question_type:
+      normalizeQuestionType(
+        row.question_type
+      ),
+    sort_order:
+      typeof row.sort_order ===
+      "number"
+        ? row.sort_order
+        : 0,
+  };
+}
+
 export async function GET(
   request: Request
 ) {
@@ -340,7 +399,10 @@ export async function GET(
           "sort_order",
         ].join(", ")
       )
-      .eq("course_id", courseId)
+      .eq(
+        "course_id",
+        courseId
+      )
       .order("sort_order", {
         ascending: true,
       });
@@ -361,8 +423,10 @@ export async function GET(
           []) as unknown as AssessmentQuestion[]
       ).map((row, index) => ({
         id: row.id,
-        course_id: row.course_id,
-        skill_id: row.skill_id,
+        course_id:
+          row.course_id,
+        skill_id:
+          row.skill_id,
         question:
           displayQuestion(row),
         options:
@@ -453,9 +517,8 @@ export async function POST(
       );
     }
 
-    const courseId = asString(
-      body.course_id
-    );
+    const courseId =
+      asString(body.course_id);
 
     if (!courseId) {
       return NextResponse.json(
@@ -579,7 +642,10 @@ export async function POST(
     } = await auth.supabase
       .from("assessment_questions")
       .select("sort_order")
-      .eq("course_id", courseId)
+      .eq(
+        "course_id",
+        courseId
+      )
       .order("sort_order", {
         ascending: false,
       })
@@ -596,10 +662,6 @@ export async function POST(
       );
     }
 
-    /*
-     * Read sort_order into a separate variable so TypeScript
-     * can safely narrow the nullable query result.
-     */
     const lastSortOrder =
       lastQuestion?.sort_order;
 
@@ -611,15 +673,18 @@ export async function POST(
         : 1;
 
     const {
-      data: created,
+      data: rawCreated,
       error: insertError,
     } = await auth.supabase
       .from("assessment_questions")
       .insert({
-        course_id: courseId,
-        skill_id: skillId,
+        course_id:
+          courseId,
+        skill_id:
+          skillId,
         question,
-        question_text: question,
+        question_text:
+          question,
         options,
         correct_answer:
           correctAnswer ||
@@ -660,19 +725,15 @@ export async function POST(
       );
     }
 
+    const created =
+      rawCreated as unknown as CreatedQuestion;
+
     return NextResponse.json(
       {
-        question: {
-          ...created,
-          question:
-            displayQuestion(
-              created as unknown as AssessmentQuestion
-            ),
-          options:
-            normalizeOptions(
-              created.options
-            ),
-        },
+        question:
+          formatQuestion(
+            created
+          ),
         message:
           "Assessment question added.",
       },
@@ -687,7 +748,9 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          "An unexpected error occurred while adding the assessment question.",
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred while adding the assessment question.",
       },
       { status: 500 }
     );
@@ -879,14 +942,16 @@ export async function PATCH(
     }
 
     const {
-      data: updated,
+      data: rawUpdated,
       error: updateError,
     } = await auth.supabase
       .from("assessment_questions")
       .update({
-        skill_id: skillId,
+        skill_id:
+          skillId,
         question,
-        question_text: question,
+        question_text:
+          question,
         options,
         correct_answer:
           correctAnswer ||
@@ -926,18 +991,14 @@ export async function PATCH(
       );
     }
 
+    const updated =
+      rawUpdated as unknown as CreatedQuestion;
+
     return NextResponse.json({
-      question: {
-        ...updated,
-        question:
-          displayQuestion(
-            updated as unknown as AssessmentQuestion
-          ),
-        options:
-          normalizeOptions(
-            updated.options
-          ),
-      },
+      question:
+        formatQuestion(
+          updated
+        ),
       message:
         "Assessment question updated.",
     });
@@ -950,7 +1011,9 @@ export async function PATCH(
     return NextResponse.json(
       {
         error:
-          "An unexpected error occurred while updating the assessment question.",
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred while updating the assessment question.",
       },
       { status: 500 }
     );
@@ -1109,7 +1172,9 @@ export async function DELETE(
     return NextResponse.json(
       {
         error:
-          "An unexpected error occurred while deleting the assessment question.",
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred while deleting the assessment question.",
       },
       { status: 500 }
     );
