@@ -449,6 +449,13 @@ export default async function AdminLmsPage({
             }}
           >
             <Link
+              href="/admin/ai-drafts"
+              className="btn btn-primary"
+            >
+              AI Drafts
+            </Link>
+
+            <Link
               href="/admin/projects"
               className="btn btn-primary"
             >
