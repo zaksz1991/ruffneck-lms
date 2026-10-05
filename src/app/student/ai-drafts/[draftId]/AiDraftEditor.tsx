@@ -77,8 +77,11 @@ type Draft = {
   created_at: string;
   updated_at: string;
   review_note?: string | null;
-  reviewed_by?: string | null;
   reviewed_at?: string | null;
+};
+
+type Props = {
+  draft: Draft;
 };
 
 type DraftApiResponse = {
@@ -96,13 +99,8 @@ type DraftApiResponse = {
     created_at?: string;
     updated_at?: string;
     review_note?: string | null;
-    reviewed_by?: string | null;
     reviewed_at?: string | null;
   };
-};
-
-type Props = {
-  draft: Draft;
 };
 
 function asString(value: unknown): string {
@@ -110,22 +108,16 @@ function asString(value: unknown): string {
 }
 
 function asStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-
-  return value.map((item) => {
-    if (typeof item === "string") return item;
-
-    return String(item ?? "");
-  });
+  return Array.isArray(value)
+    ? value.map((item) =>
+        typeof item === "string" ? item : String(item ?? "")
+      )
+    : [];
 }
 
 function normalizeSection(value: unknown): Section {
   if (!value || typeof value !== "object") {
-    return {
-      heading: "",
-      content: "",
-      examples: [],
-    };
+    return { heading: "", content: "", examples: [] };
   }
 
   const item = value as Record<string, unknown>;
@@ -139,10 +131,7 @@ function normalizeSection(value: unknown): Section {
 
 function normalizeFlashcard(value: unknown): Flashcard {
   if (!value || typeof value !== "object") {
-    return {
-      front: "",
-      back: "",
-    };
+    return { front: "", back: "" };
   }
 
   const item = value as Record<string, unknown>;
@@ -155,10 +144,7 @@ function normalizeFlashcard(value: unknown): Flashcard {
 
 function normalizeStudyPlanItem(value: unknown): StudyPlanItem {
   if (!value || typeof value !== "object") {
-    return {
-      step: "",
-      action: "",
-    };
+    return { step: "", action: "" };
   }
 
   const item = value as Record<string, unknown>;
@@ -174,10 +160,7 @@ function normalizeStudyPlanItem(value: unknown): StudyPlanItem {
 
 function normalizeKeyConcept(value: unknown): KeyConcept {
   if (!value || typeof value !== "object") {
-    return {
-      term: "",
-      explanation: "",
-    };
+    return { term: "", explanation: "" };
   }
 
   const item = value as Record<string, unknown>;
@@ -229,63 +212,62 @@ function normalizeActivity(value: unknown): PracticalActivity {
 function normalizePack(pack: LearningPack): LearningPack {
   return {
     ...pack,
-
     title: asString(pack.title),
-
     summary: asString(pack.summary),
-
     sections: Array.isArray(pack.sections)
       ? pack.sections.map(normalizeSection)
       : [],
-
     difficulty: asString(pack.difficulty),
-
     flashcards: Array.isArray(pack.flashcards)
       ? pack.flashcards.map(normalizeFlashcard)
       : [],
-
     study_plan: Array.isArray(pack.study_plan)
       ? pack.study_plan.map(normalizeStudyPlanItem)
       : [],
-
     key_concepts: Array.isArray(pack.key_concepts)
       ? pack.key_concepts.map(normalizeKeyConcept)
       : [],
-
     prerequisites: asStringArray(pack.prerequisites),
-
     source_warnings: asStringArray(pack.source_warnings),
-
     practical_activity: normalizeActivity(pack.practical_activity),
-
     learning_objectives: asStringArray(pack.learning_objectives),
-
     assessment_questions: Array.isArray(pack.assessment_questions)
       ? pack.assessment_questions.map(normalizeQuestion)
       : [],
-
     extracted_text: asString(pack.extracted_text),
-
     source_summary: asString(pack.source_summary),
   };
 }
 
-function formatDateTime(value: string | null | undefined) {
-  if (!value) {
-    return "Not recorded";
-  }
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) return "Not recorded";
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
-    return "Not recorded";
-  }
+  if (Number.isNaN(date.getTime())) return "Not recorded";
 
   return new Intl.DateTimeFormat("en-GB", {
     dateStyle: "long",
     timeStyle: "short",
     timeZone: "Africa/Lagos",
   }).format(date);
+}
+
+function statusLabel(status: DraftStatus): string {
+  switch (status) {
+    case "submitted":
+      return "Submitted for review";
+    case "revision_required":
+      return "Revision required";
+    case "approved":
+      return "Approved";
+    case "converted":
+      return "Converted";
+    case "edited":
+      return "Edited";
+    default:
+      return "Draft";
+  }
 }
 
 function SectionCard({
@@ -304,12 +286,7 @@ function SectionCard({
   const examples = section.examples ?? [];
 
   return (
-    <div
-      className="rn-card"
-      style={{
-        marginBottom: 16,
-      }}
-    >
+    <div className="rn-card" style={{ marginBottom: 16 }}>
       <div
         style={{
           display: "flex",
@@ -334,7 +311,6 @@ function SectionCard({
 
       <label className="rn-field">
         <span>Heading</span>
-
         <input
           value={section.heading}
           disabled={disabled}
@@ -349,7 +325,6 @@ function SectionCard({
 
       <label className="rn-field">
         <span>Content</span>
-
         <textarea
           value={section.content}
           disabled={disabled}
@@ -364,13 +339,7 @@ function SectionCard({
       </label>
 
       <div>
-        <div
-          style={{
-            marginBottom: 8,
-          }}
-        >
-          <strong>Examples</strong>
-        </div>
+        <strong>Examples</strong>
 
         {examples.map((example, exampleIndex) => (
           <div
@@ -379,7 +348,7 @@ function SectionCard({
               display: "flex",
               gap: 8,
               alignItems: "flex-start",
-              marginBottom: 8,
+              marginTop: 8,
             }}
           >
             <input
@@ -387,7 +356,6 @@ function SectionCard({
               disabled={disabled}
               onChange={(event) => {
                 const next = [...examples];
-
                 next[exampleIndex] = event.target.value;
 
                 onChange({
@@ -395,24 +363,22 @@ function SectionCard({
                   examples: next,
                 });
               }}
-              style={{
-                flex: 1,
-              }}
+              style={{ flex: 1 }}
             />
 
             {!disabled && (
               <button
                 type="button"
                 className="rn-button rn-button-secondary"
-                onClick={() => {
+                onClick={() =>
                   onChange({
                     ...section,
                     examples: examples.filter(
                       (_, itemIndex) =>
-                        itemIndex !== exampleIndex,
+                        itemIndex !== exampleIndex
                     ),
-                  });
-                }}
+                  })
+                }
               >
                 Remove
               </button>
@@ -424,6 +390,7 @@ function SectionCard({
           <button
             type="button"
             className="rn-button rn-button-secondary"
+            style={{ marginTop: 8 }}
             onClick={() =>
               onChange({
                 ...section,
@@ -443,41 +410,25 @@ export default function AiDraftEditor({ draft }: Props) {
   const router = useRouter();
 
   const [title, setTitle] = useState(draft.title);
-
   const [focusInstruction, setFocusInstruction] = useState(
-    draft.focus_instruction ?? "",
+    draft.focus_instruction ?? ""
   );
-
   const [pack, setPack] = useState<LearningPack>(() =>
-    normalizePack(draft.learning_pack ?? {}),
+    normalizePack(draft.learning_pack ?? {})
   );
-
   const [status, setStatus] = useState<DraftStatus>(draft.status);
 
-  const [reviewNote, setReviewNote] = useState(
-    draft.review_note ?? "",
+  const [sourceUploadedAt, setSourceUploadedAt] = useState<string | null>(
+    draft.source_uploaded_at ?? draft.created_at
   );
-
-  const [reviewedAt, setReviewedAt] = useState(
-    draft.reviewed_at ?? null,
-  );
-
-  const [sourceUploadedAt, setSourceUploadedAt] = useState<
-    string | null
-  >(draft.source_uploaded_at ?? draft.created_at);
-
   const [createdAt, setCreatedAt] = useState(draft.created_at);
-
   const [updatedAt, setUpdatedAt] = useState(draft.updated_at);
+  const [reviewNote, setReviewNote] = useState(draft.review_note ?? "");
 
   const [saving, setSaving] = useState(false);
-
   const [submitting, setSubmitting] = useState(false);
-
   const [deleting, setDeleting] = useState(false);
-
   const [message, setMessage] = useState("");
-
   const [error, setError] = useState("");
 
   const locked =
@@ -485,13 +436,13 @@ export default function AiDraftEditor({ draft }: Props) {
     status === "approved" ||
     status === "converted";
 
-  const revisionRequired = status === "revision_required";
-
-  const outputLabel = useMemo(() => {
-    return draft.output_type
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (letter) => letter.toUpperCase());
-  }, [draft.output_type]);
+  const outputLabel = useMemo(
+    () =>
+      draft.output_type
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    [draft.output_type]
+  );
 
   const languageLabel = useMemo(() => {
     const labels: Record<string, string> = {
@@ -505,15 +456,17 @@ export default function AiDraftEditor({ draft }: Props) {
     return labels[draft.language_code] ?? draft.language_code;
   }, [draft.language_code]);
 
-  const audienceLabel = useMemo(() => {
-    return draft.audience
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (letter) => letter.toUpperCase());
-  }, [draft.audience]);
+  const audienceLabel = useMemo(
+    () =>
+      draft.audience
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    [draft.audience]
+  );
 
   function updatePackField<K extends keyof LearningPack>(
     key: K,
-    value: LearningPack[K],
+    value: LearningPack[K]
   ) {
     setPack((current) => ({
       ...current,
@@ -522,9 +475,7 @@ export default function AiDraftEditor({ draft }: Props) {
   }
 
   async function saveDraft() {
-    if (locked) {
-      return;
-    }
+    if (locked) return;
 
     setSaving(true);
     setError("");
@@ -533,11 +484,9 @@ export default function AiDraftEditor({ draft }: Props) {
     try {
       const response = await fetch("/api/student/scan/drafts", {
         method: "PATCH",
-
         headers: {
           "Content-Type": "application/json",
         },
-
         body: JSON.stringify({
           id: draft.id,
           title,
@@ -553,8 +502,7 @@ export default function AiDraftEditor({ draft }: Props) {
 
       if (!response.ok) {
         throw new Error(
-          data?.error ||
-            "Unable to save the learning material.",
+          data?.error || "Unable to save the learning material."
         );
       }
 
@@ -572,22 +520,13 @@ export default function AiDraftEditor({ draft }: Props) {
         setSourceUploadedAt(data.draft.source_uploaded_at);
       }
 
-      if (data?.draft?.review_note !== undefined) {
-        setReviewNote(data.draft.review_note ?? "");
-      }
-
-      if (data?.draft?.reviewed_at !== undefined) {
-        setReviewedAt(data.draft.reviewed_at ?? null);
-      }
-
       setMessage("Learning material saved.");
-
       router.refresh();
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "Unable to save the learning material.",
+          : "Unable to save the learning material."
       );
     } finally {
       setSaving(false);
@@ -595,19 +534,17 @@ export default function AiDraftEditor({ draft }: Props) {
   }
 
   async function submitForReview() {
-    if (locked) {
-      return;
-    }
+    if (locked) return;
+
+    const isResubmission = status === "revision_required";
 
     const confirmed = window.confirm(
-      revisionRequired
+      isResubmission
         ? "Resubmit this revised AI-generated learning material for LMS review?"
-        : "Submit this AI-generated learning material for LMS review? You will not be able to edit or delete it while it is under review.",
+        : "Submit this AI-generated learning material for LMS review? You will not be able to edit or delete it while it is under review."
     );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     setSubmitting(true);
     setError("");
@@ -618,15 +555,13 @@ export default function AiDraftEditor({ draft }: Props) {
         "/api/student/scan/drafts/submit",
         {
           method: "POST",
-
           headers: {
             "Content-Type": "application/json",
           },
-
           body: JSON.stringify({
             id: draft.id,
           }),
-        },
+        }
       );
 
       const data = (await response.json().catch(() => null)) as
@@ -636,7 +571,7 @@ export default function AiDraftEditor({ draft }: Props) {
       if (!response.ok) {
         throw new Error(
           data?.error ||
-            "Unable to submit the learning material.",
+            "Unable to submit the learning material."
         );
       }
 
@@ -654,17 +589,8 @@ export default function AiDraftEditor({ draft }: Props) {
         setSourceUploadedAt(data.draft.source_uploaded_at);
       }
 
-      if (data?.draft?.review_note !== undefined) {
-        setReviewNote(data.draft.review_note ?? "");
-      }
-
-      if (data?.draft?.reviewed_at !== undefined) {
-        setReviewedAt(data.draft.reviewed_at ?? null);
-      }
-
       setMessage(
-        data?.message ||
-          "Draft submitted for LMS review.",
+        data?.message || "Draft submitted for LMS review."
       );
 
       router.refresh();
@@ -672,7 +598,7 @@ export default function AiDraftEditor({ draft }: Props) {
       setError(
         err instanceof Error
           ? err.message
-          : "Unable to submit the learning material.",
+          : "Unable to submit the learning material."
       );
     } finally {
       setSubmitting(false);
@@ -680,29 +606,23 @@ export default function AiDraftEditor({ draft }: Props) {
   }
 
   async function deleteDraft() {
-    if (locked) {
-      return;
-    }
+    if (locked) return;
 
     const confirmed = window.confirm(
-      "Delete this AI learning draft? This action cannot be undone.",
+      "Delete this AI learning draft? This action cannot be undone."
     );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     setDeleting(true);
     setError("");
 
     try {
       const response = await fetch(
-        `/api/student/scan/drafts?id=${encodeURIComponent(
-          draft.id,
-        )}`,
+        `/api/student/scan/drafts?id=${encodeURIComponent(draft.id)}`,
         {
           method: "DELETE",
-        },
+        }
       );
 
       const data = (await response.json().catch(() => null)) as
@@ -711,7 +631,7 @@ export default function AiDraftEditor({ draft }: Props) {
 
       if (!response.ok) {
         throw new Error(
-          data?.error || "Unable to delete the draft.",
+          data?.error || "Unable to delete the draft."
         );
       }
 
@@ -721,9 +641,8 @@ export default function AiDraftEditor({ draft }: Props) {
       setError(
         err instanceof Error
           ? err.message
-          : "Unable to delete the draft.",
+          : "Unable to delete the draft."
       );
-
       setDeleting(false);
     }
   }
@@ -734,12 +653,10 @@ export default function AiDraftEditor({ draft }: Props) {
       | "source_warnings"
       | "learning_objectives",
     index: number,
-    value: string,
+    value: string
   ) {
     const current = [...(pack[key] ?? [])];
-
     current[index] = value;
-
     updatePackField(key, current);
   }
 
@@ -748,15 +665,13 @@ export default function AiDraftEditor({ draft }: Props) {
       | "prerequisites"
       | "source_warnings"
       | "learning_objectives",
-    index: number,
+    index: number
   ) {
     const current = [...(pack[key] ?? [])];
 
     updatePackField(
       key,
-      current.filter(
-        (_, itemIndex) => itemIndex !== index,
-      ),
+      current.filter((_, itemIndex) => itemIndex !== index)
     );
   }
 
@@ -789,58 +704,29 @@ export default function AiDraftEditor({ draft }: Props) {
               AI Learning Draft
             </div>
 
-            <h1
-              style={{
-                margin: 0,
-              }}
-            >
+            <h1 style={{ margin: 0 }}>
               {title || "Untitled learning material"}
             </h1>
           </div>
 
-          <span className="rn-badge">
-            {status === "submitted"
-              ? "Submitted for review"
-              : status === "revision_required"
-                ? "Revision required"
-                : status === "approved"
-                  ? "Approved"
-                  : status === "converted"
-                    ? "Converted"
-                    : status === "edited"
-                      ? "Edited"
-                      : "Draft"}
-          </span>
+          <span className="rn-badge">{statusLabel(status)}</span>
         </div>
 
         <div className="rn-ai-draft-timestamps">
           <div>
             <span>Source uploaded</span>
-
-            <strong>
-              {formatDateTime(sourceUploadedAt)}
-            </strong>
+            <strong>{formatDateTime(sourceUploadedAt)}</strong>
           </div>
 
           <div>
             <span>Draft created</span>
-
             <strong>{formatDateTime(createdAt)}</strong>
           </div>
 
           <div>
             <span>Last updated</span>
-
             <strong>{formatDateTime(updatedAt)}</strong>
           </div>
-
-          {reviewedAt && (
-            <div>
-              <span>Last reviewed</span>
-
-              <strong>{formatDateTime(reviewedAt)}</strong>
-            </div>
-          )}
         </div>
       </div>
 
@@ -857,7 +743,7 @@ export default function AiDraftEditor({ draft }: Props) {
           <p>
             An LMS reviewer has returned this learning material for
             revision. Review the note below, make the required changes,
-            save your changes, and resubmit it for review.
+            save the draft, and resubmit it for review.
           </p>
 
           {reviewNote ? (
@@ -871,23 +757,11 @@ export default function AiDraftEditor({ draft }: Props) {
               }}
             >
               <strong>Reviewer note</strong>
-
-              <p
-                style={{
-                  marginBottom: 0,
-                  marginTop: 8,
-                }}
-              >
-                {reviewNote}
-              </p>
+              <p style={{ marginBottom: 0 }}>{reviewNote}</p>
             </div>
           ) : (
-            <p
-              style={{
-                marginBottom: 0,
-              }}
-            >
-              No reviewer note was provided.
+            <p style={{ marginBottom: 0 }}>
+              No additional reviewer note was provided.
             </p>
           )}
         </div>
@@ -902,15 +776,10 @@ export default function AiDraftEditor({ draft }: Props) {
           }}
         >
           <strong>Submitted for review</strong>
-
-          <p
-            style={{
-              marginBottom: 0,
-            }}
-          >
-            This AI-generated learning material has been submitted to
-            the LMS review workflow. You cannot edit or delete it while
-            it is under review.
+          <p style={{ marginBottom: 0 }}>
+            This AI-generated learning material has been submitted to the
+            LMS review workflow. You cannot edit or delete it while it is
+            under review.
           </p>
         </div>
       )}
@@ -923,32 +792,19 @@ export default function AiDraftEditor({ draft }: Props) {
             borderLeft: "4px solid currentColor",
           }}
         >
-          <strong>Approved for LMS</strong>
-
-          <p
-            style={{
-              marginBottom: 0,
-            }}
-          >
-            This learning material has been approved by an LMS
-            reviewer. It is no longer editable as a student draft.
+          <strong>Approved</strong>
+          <p style={{ marginBottom: 0 }}>
+            This learning material has been approved by an LMS reviewer
+            and is no longer editable as a student draft.
           </p>
 
           {reviewNote && (
-            <div
-              style={{
-                marginTop: 12,
-                paddingTop: 12,
-                borderTop: "1px solid currentColor",
-                whiteSpace: "pre-wrap",
-              }}
-            >
+            <div style={{ marginTop: 12 }}>
               <strong>Reviewer note</strong>
-
               <p
                 style={{
                   marginBottom: 0,
-                  marginTop: 8,
+                  whiteSpace: "pre-wrap",
                 }}
               >
                 {reviewNote}
@@ -967,12 +823,7 @@ export default function AiDraftEditor({ draft }: Props) {
           }}
         >
           <strong>Converted to LMS content</strong>
-
-          <p
-            style={{
-              marginBottom: 0,
-            }}
-          >
+          <p style={{ marginBottom: 0 }}>
             This learning material has already been converted into LMS
             content and is no longer editable as a draft.
           </p>
@@ -1003,25 +854,16 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       )}
 
-      <section
-        style={{
-          marginBottom: 24,
-        }}
-      >
-        <h2 className="rn-section-heading">
-          Learning material
-        </h2>
+      <section style={{ marginBottom: 24 }}>
+        <h2 className="rn-section-heading">Learning material</h2>
 
         <div className="rn-card">
           <label className="rn-field">
             <span>Title</span>
-
             <input
               value={title}
               disabled={locked}
-              onChange={(event) =>
-                setTitle(event.target.value)
-              }
+              onChange={(event) => setTitle(event.target.value)}
             />
           </label>
 
@@ -1036,7 +878,6 @@ export default function AiDraftEditor({ draft }: Props) {
           >
             <div>
               <small>Output type</small>
-
               <div>
                 <strong>{outputLabel}</strong>
               </div>
@@ -1044,7 +885,6 @@ export default function AiDraftEditor({ draft }: Props) {
 
             <div>
               <small>Language</small>
-
               <div>
                 <strong>{languageLabel}</strong>
               </div>
@@ -1052,7 +892,6 @@ export default function AiDraftEditor({ draft }: Props) {
 
             <div>
               <small>Audience</small>
-
               <div>
                 <strong>{audienceLabel}</strong>
               </div>
@@ -1060,7 +899,6 @@ export default function AiDraftEditor({ draft }: Props) {
 
             <div>
               <small>Difficulty</small>
-
               <div>
                 <strong>
                   {pack.difficulty || "Not specified"}
@@ -1071,15 +909,12 @@ export default function AiDraftEditor({ draft }: Props) {
 
           <label className="rn-field">
             <span>Additional instruction</span>
-
             <textarea
               value={focusInstruction}
               disabled={locked}
               rows={4}
               onChange={(event) =>
-                setFocusInstruction(
-                  event.target.value,
-                )
+                setFocusInstruction(event.target.value)
               }
               placeholder="Optional instruction for this learning material"
             />
@@ -1087,48 +922,35 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       </section>
 
-      <section
-        style={{
-          marginBottom: 24,
-        }}
-      >
+      <section style={{ marginBottom: 24 }}>
         <h2 className="rn-section-heading">Overview</h2>
 
         <div className="rn-card">
           <label className="rn-field">
             <span>Summary</span>
-
             <textarea
               value={pack.summary ?? ""}
               disabled={locked}
               rows={6}
               onChange={(event) =>
-                updatePackField(
-                  "summary",
-                  event.target.value,
-                )
+                updatePackField("summary", event.target.value)
               }
             />
           </label>
 
           <label className="rn-field">
             <span>Estimated duration (minutes)</span>
-
             <input
               type="number"
               min={1}
-              value={
-                pack.estimated_duration_minutes ?? ""
-              }
+              value={pack.estimated_duration_minutes ?? ""}
               disabled={locked}
               onChange={(event) => {
                 const value = event.target.value;
 
                 updatePackField(
                   "estimated_duration_minutes",
-                  value === ""
-                    ? null
-                    : Number(value),
+                  value === "" ? null : Number(value)
                 );
               }}
             />
@@ -1136,11 +958,7 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       </section>
 
-      <section
-        style={{
-          marginBottom: 24,
-        }}
-      >
+      <section style={{ marginBottom: 24 }}>
         <div
           style={{
             display: "flex",
@@ -1152,9 +970,7 @@ export default function AiDraftEditor({ draft }: Props) {
         >
           <h2
             className="rn-section-heading"
-            style={{
-              marginBottom: 0,
-            }}
+            style={{ marginBottom: 0 }}
           >
             Sections
           </h2>
@@ -1181,60 +997,34 @@ export default function AiDraftEditor({ draft }: Props) {
 
         {(pack.sections ?? []).length === 0 ? (
           <div className="rn-card">
-            <p
-              style={{
-                marginBottom: 0,
-              }}
-            >
+            <p style={{ marginBottom: 0 }}>
               No lesson sections were generated.
             </p>
           </div>
         ) : (
-          (pack.sections ?? []).map(
-            (section, index) => (
-              <SectionCard
-                key={index}
-                section={section}
-                index={index}
-                disabled={locked}
-                onChange={(next) => {
-                  const sections = [
-                    ...(pack.sections ?? []),
-                  ];
-
-                  sections[index] = next;
-
-                  updatePackField(
-                    "sections",
-                    sections,
-                  );
-                }}
-                onRemove={() => {
-                  const sections = [
-                    ...(pack.sections ?? []),
-                  ];
-
-                  sections.splice(index, 1);
-
-                  updatePackField(
-                    "sections",
-                    sections,
-                  );
-                }}
-              />
-            ),
-          )
+          (pack.sections ?? []).map((section, index) => (
+            <SectionCard
+              key={index}
+              section={section}
+              index={index}
+              disabled={locked}
+              onChange={(next) => {
+                const sections = [...(pack.sections ?? [])];
+                sections[index] = next;
+                updatePackField("sections", sections);
+              }}
+              onRemove={() => {
+                const sections = [...(pack.sections ?? [])];
+                sections.splice(index, 1);
+                updatePackField("sections", sections);
+              }}
+            />
+          ))
         )}
       </section>
 
-      <section
-        style={{
-          marginBottom: 24,
-        }}
-      >
-        <h2 className="rn-section-heading">
-          Learning objectives
-        </h2>
+      <section style={{ marginBottom: 24 }}>
+        <h2 className="rn-section-heading">Learning objectives</h2>
 
         <div className="rn-card">
           {(pack.learning_objectives ?? []).map(
@@ -1255,12 +1045,10 @@ export default function AiDraftEditor({ draft }: Props) {
                     updateStringArray(
                       "learning_objectives",
                       index,
-                      event.target.value,
+                      event.target.value
                     )
                   }
-                  style={{
-                    flex: 1,
-                  }}
+                  style={{ flex: 1 }}
                 />
 
                 {!locked && (
@@ -1270,7 +1058,7 @@ export default function AiDraftEditor({ draft }: Props) {
                     onClick={() =>
                       removeStringArrayItem(
                         "learning_objectives",
-                        index,
+                        index
                       )
                     }
                   >
@@ -1278,7 +1066,7 @@ export default function AiDraftEditor({ draft }: Props) {
                   </button>
                 )}
               </div>
-            ),
+            )
           )}
 
           {!locked && (
@@ -1286,13 +1074,10 @@ export default function AiDraftEditor({ draft }: Props) {
               type="button"
               className="rn-button rn-button-secondary"
               onClick={() =>
-                updatePackField(
-                  "learning_objectives",
-                  [
-                    ...(pack.learning_objectives ?? []),
-                    "",
-                  ],
-                )
+                updatePackField("learning_objectives", [
+                  ...(pack.learning_objectives ?? []),
+                  "",
+                ])
               }
             >
               Add objective
@@ -1301,116 +1086,99 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       </section>
 
-      <section
-        style={{
-          marginBottom: 24,
-        }}
-      >
-        <h2 className="rn-section-heading">
-          Key concepts
-        </h2>
+      <section style={{ marginBottom: 24 }}>
+        <h2 className="rn-section-heading">Key concepts</h2>
 
         <div className="rn-card">
-          {(pack.key_concepts ?? []).map(
-            (concept, index) => (
-              <div
-                key={index}
-                style={{
-                  borderBottom:
-                    "1px solid currentColor",
-                  paddingBottom: 16,
-                  marginBottom: 16,
-                  opacity: 0.9,
-                }}
-              >
-                <label className="rn-field">
-                  <span>Term</span>
+          {(pack.key_concepts ?? []).map((concept, index) => (
+            <div
+              key={index}
+              style={{
+                borderBottom: "1px solid currentColor",
+                paddingBottom: 16,
+                marginBottom: 16,
+                opacity: 0.9,
+              }}
+            >
+              <label className="rn-field">
+                <span>Term</span>
+                <input
+                  value={concept.term}
+                  disabled={locked}
+                  onChange={(event) => {
+                    const concepts = [
+                      ...(pack.key_concepts ?? []),
+                    ];
 
-                  <input
-                    value={concept.term}
-                    disabled={locked}
-                    onChange={(event) => {
-                      const concepts = [
-                        ...(pack.key_concepts ?? []),
-                      ];
+                    concepts[index] = {
+                      ...concept,
+                      term: event.target.value,
+                    };
 
-                      concepts[index] = {
-                        ...concept,
-                        term: event.target.value,
-                      };
+                    updatePackField(
+                      "key_concepts",
+                      concepts
+                    );
+                  }}
+                />
+              </label>
 
-                      updatePackField(
-                        "key_concepts",
-                        concepts,
-                      );
-                    }}
-                  />
-                </label>
+              <label className="rn-field">
+                <span>Explanation</span>
+                <textarea
+                  value={concept.explanation}
+                  disabled={locked}
+                  rows={4}
+                  onChange={(event) => {
+                    const concepts = [
+                      ...(pack.key_concepts ?? []),
+                    ];
 
-                <label className="rn-field">
-                  <span>Explanation</span>
+                    concepts[index] = {
+                      ...concept,
+                      explanation: event.target.value,
+                    };
 
-                  <textarea
-                    value={concept.explanation}
-                    disabled={locked}
-                    rows={4}
-                    onChange={(event) => {
-                      const concepts = [
-                        ...(pack.key_concepts ?? []),
-                      ];
+                    updatePackField(
+                      "key_concepts",
+                      concepts
+                    );
+                  }}
+                />
+              </label>
 
-                      concepts[index] = {
-                        ...concept,
-                        explanation:
-                          event.target.value,
-                      };
-
-                      updatePackField(
-                        "key_concepts",
-                        concepts,
-                      );
-                    }}
-                  />
-                </label>
-
-                {!locked && (
-                  <button
-                    type="button"
-                    className="rn-button rn-button-secondary"
-                    onClick={() => {
-                      updatePackField(
-                        "key_concepts",
-                        (
-                          pack.key_concepts ?? []
-                        ).filter(
-                          (_, itemIndex) =>
-                            itemIndex !== index,
-                        ),
-                      );
-                    }}
-                  >
-                    Remove concept
-                  </button>
-                )}
-              </div>
-            ),
-          )}
+              {!locked && (
+                <button
+                  type="button"
+                  className="rn-button rn-button-secondary"
+                  onClick={() =>
+                    updatePackField(
+                      "key_concepts",
+                      (pack.key_concepts ?? []).filter(
+                        (_, itemIndex) =>
+                          itemIndex !== index
+                      )
+                    )
+                  }
+                >
+                  Remove concept
+                </button>
+              )}
+            </div>
+          ))}
 
           {!locked && (
             <button
               type="button"
               className="rn-button rn-button-secondary"
               onClick={() =>
-                updatePackField(
-                  "key_concepts",
-                  [
-                    ...(pack.key_concepts ?? []),
-                    {
-                      term: "",
-                      explanation: "",
-                    },
-                  ],
-                )
+                updatePackField("key_concepts", [
+                  ...(pack.key_concepts ?? []),
+                  {
+                    term: "",
+                    explanation: "",
+                  },
+                ])
               }
             >
               Add concept
@@ -1419,71 +1187,58 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       </section>
 
-      <section
-        style={{
-          marginBottom: 24,
-        }}
-      >
-        <h2 className="rn-section-heading">
-          Prerequisites
-        </h2>
+      <section style={{ marginBottom: 24 }}>
+        <h2 className="rn-section-heading">Prerequisites</h2>
 
         <div className="rn-card">
-          {(pack.prerequisites ?? []).map(
-            (item, index) => (
-              <div
-                key={index}
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  marginBottom: 8,
-                }}
-              >
-                <input
-                  value={item}
-                  disabled={locked}
-                  onChange={(event) =>
-                    updateStringArray(
+          {(pack.prerequisites ?? []).map((item, index) => (
+            <div
+              key={index}
+              style={{
+                display: "flex",
+                gap: 8,
+                marginBottom: 8,
+              }}
+            >
+              <input
+                value={item}
+                disabled={locked}
+                onChange={(event) =>
+                  updateStringArray(
+                    "prerequisites",
+                    index,
+                    event.target.value
+                  )
+                }
+                style={{ flex: 1 }}
+              />
+
+              {!locked && (
+                <button
+                  type="button"
+                  className="rn-button rn-button-secondary"
+                  onClick={() =>
+                    removeStringArrayItem(
                       "prerequisites",
-                      index,
-                      event.target.value,
+                      index
                     )
                   }
-                  style={{
-                    flex: 1,
-                  }}
-                />
-
-                {!locked && (
-                  <button
-                    type="button"
-                    className="rn-button rn-button-secondary"
-                    onClick={() =>
-                      removeStringArrayItem(
-                        "prerequisites",
-                        index,
-                      )
-                    }
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-            ),
-          )}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          ))}
 
           {!locked && (
             <button
               type="button"
               className="rn-button rn-button-secondary"
               onClick={() =>
-                updatePackField(
-                  "prerequisites",
-                  [
-                    ...(pack.prerequisites ?? []),
-                    "",
-                  ],
-                )
+                updatePackField("prerequisites", [
+                  ...(pack.prerequisites ?? []),
+                  "",
+                ])
               }
             >
               Add prerequisite
@@ -1492,114 +1247,88 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       </section>
 
-      <section
-        style={{
-          marginBottom: 24,
-        }}
-      >
-        <h2 className="rn-section-heading">
-          Study plan
-        </h2>
+      <section style={{ marginBottom: 24 }}>
+        <h2 className="rn-section-heading">Study plan</h2>
 
         <div className="rn-card">
-          {(pack.study_plan ?? []).map(
-            (item, index) => (
-              <div
-                key={index}
-                style={{
-                  borderBottom:
-                    "1px solid currentColor",
-                  paddingBottom: 16,
-                  marginBottom: 16,
-                }}
-              >
-                <label className="rn-field">
-                  <span>Step</span>
+          {(pack.study_plan ?? []).map((item, index) => (
+            <div
+              key={index}
+              style={{
+                borderBottom: "1px solid currentColor",
+                paddingBottom: 16,
+                marginBottom: 16,
+              }}
+            >
+              <label className="rn-field">
+                <span>Step</span>
+                <input
+                  value={item.step}
+                  disabled={locked}
+                  onChange={(event) => {
+                    const plan = [...(pack.study_plan ?? [])];
 
-                  <input
-                    value={item.step}
-                    disabled={locked}
-                    onChange={(event) => {
-                      const plan = [
-                        ...(pack.study_plan ?? []),
-                      ];
+                    plan[index] = {
+                      ...item,
+                      step: event.target.value,
+                    };
 
-                      plan[index] = {
-                        ...item,
-                        step: event.target.value,
-                      };
+                    updatePackField("study_plan", plan);
+                  }}
+                />
+              </label>
 
-                      updatePackField(
-                        "study_plan",
-                        plan,
-                      );
-                    }}
-                  />
-                </label>
+              <label className="rn-field">
+                <span>Action</span>
+                <textarea
+                  value={item.action}
+                  disabled={locked}
+                  rows={3}
+                  onChange={(event) => {
+                    const plan = [...(pack.study_plan ?? [])];
 
-                <label className="rn-field">
-                  <span>Action</span>
+                    plan[index] = {
+                      ...item,
+                      action: event.target.value,
+                    };
 
-                  <textarea
-                    value={item.action}
-                    disabled={locked}
-                    rows={3}
-                    onChange={(event) => {
-                      const plan = [
-                        ...(pack.study_plan ?? []),
-                      ];
+                    updatePackField("study_plan", plan);
+                  }}
+                />
+              </label>
 
-                      plan[index] = {
-                        ...item,
-                        action: event.target.value,
-                      };
-
-                      updatePackField(
-                        "study_plan",
-                        plan,
-                      );
-                    }}
-                  />
-                </label>
-
-                {!locked && (
-                  <button
-                    type="button"
-                    className="rn-button rn-button-secondary"
-                    onClick={() =>
-                      updatePackField(
-                        "study_plan",
-                        (
-                          pack.study_plan ?? []
-                        ).filter(
-                          (_, itemIndex) =>
-                            itemIndex !== index,
-                        ),
+              {!locked && (
+                <button
+                  type="button"
+                  className="rn-button rn-button-secondary"
+                  onClick={() =>
+                    updatePackField(
+                      "study_plan",
+                      (pack.study_plan ?? []).filter(
+                        (_, itemIndex) =>
+                          itemIndex !== index
                       )
-                    }
-                  >
-                    Remove step
-                  </button>
-                )}
-              </div>
-            ),
-          )}
+                    )
+                  }
+                >
+                  Remove step
+                </button>
+              )}
+            </div>
+          ))}
 
           {!locked && (
             <button
               type="button"
               className="rn-button rn-button-secondary"
               onClick={() =>
-                updatePackField(
-                  "study_plan",
-                  [
-                    ...(pack.study_plan ?? []),
-                    {
-                      step: "",
-                      action: "",
-                    },
-                  ],
-                )
+                updatePackField("study_plan", [
+                  ...(pack.study_plan ?? []),
+                  {
+                    step: "",
+                    action: "",
+                  },
+                ])
               }
             >
               Add study step
@@ -1608,115 +1337,93 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       </section>
 
-      <section
-        style={{
-          marginBottom: 24,
-        }}
-      >
-        <h2 className="rn-section-heading">
-          Flashcards
-        </h2>
+      <section style={{ marginBottom: 24 }}>
+        <h2 className="rn-section-heading">Flashcards</h2>
 
         <div className="rn-card">
-          {(pack.flashcards ?? []).map(
-            (card, index) => (
-              <div
-                key={index}
-                style={{
-                  borderBottom:
-                    "1px solid currentColor",
-                  paddingBottom: 16,
-                  marginBottom: 16,
-                }}
-              >
-                <label className="rn-field">
-                  <span>Question / Front</span>
+          {(pack.flashcards ?? []).map((card, index) => (
+            <div
+              key={index}
+              style={{
+                borderBottom: "1px solid currentColor",
+                paddingBottom: 16,
+                marginBottom: 16,
+              }}
+            >
+              <label className="rn-field">
+                <span>Question / Front</span>
+                <textarea
+                  value={card.front}
+                  disabled={locked}
+                  rows={3}
+                  onChange={(event) => {
+                    const cards = [
+                      ...(pack.flashcards ?? []),
+                    ];
 
-                  <textarea
-                    value={card.front}
-                    disabled={locked}
-                    rows={3}
-                    onChange={(event) => {
-                      const cards = [
-                        ...(pack.flashcards ?? []),
-                      ];
+                    cards[index] = {
+                      ...card,
+                      front: event.target.value,
+                    };
 
-                      cards[index] = {
-                        ...card,
-                        front: event.target.value,
-                      };
+                    updatePackField("flashcards", cards);
+                  }}
+                />
+              </label>
 
-                      updatePackField(
-                        "flashcards",
-                        cards,
-                      );
-                    }}
-                  />
-                </label>
+              <label className="rn-field">
+                <span>Answer / Back</span>
+                <textarea
+                  value={card.back}
+                  disabled={locked}
+                  rows={3}
+                  onChange={(event) => {
+                    const cards = [
+                      ...(pack.flashcards ?? []),
+                    ];
 
-                <label className="rn-field">
-                  <span>Answer / Back</span>
+                    cards[index] = {
+                      ...card,
+                      back: event.target.value,
+                    };
 
-                  <textarea
-                    value={card.back}
-                    disabled={locked}
-                    rows={3}
-                    onChange={(event) => {
-                      const cards = [
-                        ...(pack.flashcards ?? []),
-                      ];
+                    updatePackField("flashcards", cards);
+                  }}
+                />
+              </label>
 
-                      cards[index] = {
-                        ...card,
-                        back: event.target.value,
-                      };
-
-                      updatePackField(
-                        "flashcards",
-                        cards,
-                      );
-                    }}
-                  />
-                </label>
-
-                {!locked && (
-                  <button
-                    type="button"
-                    className="rn-button rn-button-secondary"
-                    onClick={() =>
-                      updatePackField(
-                        "flashcards",
-                        (
-                          pack.flashcards ?? []
-                        ).filter(
-                          (_, itemIndex) =>
-                            itemIndex !== index,
-                        ),
+              {!locked && (
+                <button
+                  type="button"
+                  className="rn-button rn-button-secondary"
+                  onClick={() =>
+                    updatePackField(
+                      "flashcards",
+                      (pack.flashcards ?? []).filter(
+                        (_, itemIndex) =>
+                          itemIndex !== index
                       )
-                    }
-                  >
-                    Remove flashcard
-                  </button>
-                )}
-              </div>
-            ),
-          )}
+                    )
+                  }
+                >
+                  Remove flashcard
+                </button>
+              )}
+            </div>
+          ))}
 
           {!locked && (
             <button
               type="button"
               className="rn-button rn-button-secondary"
               onClick={() =>
-                updatePackField(
-                  "flashcards",
-                  [
-                    ...(pack.flashcards ?? []),
-                    {
-                      front: "",
-                      back: "",
-                    },
-                  ],
-                )
+                updatePackField("flashcards", [
+                  ...(pack.flashcards ?? []),
+                  {
+                    front: "",
+                    back: "",
+                  },
+                ])
               }
             >
               Add flashcard
@@ -1725,89 +1432,61 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       </section>
 
-      <section
-        style={{
-          marginBottom: 24,
-        }}
-      >
-        <h2 className="rn-section-heading">
-          Practical activity
-        </h2>
+      <section style={{ marginBottom: 24 }}>
+        <h2 className="rn-section-heading">Practical activity</h2>
 
         <div className="rn-card">
           <label className="rn-field">
             <span>Activity title</span>
-
             <input
-              value={
-                pack.practical_activity?.title ?? ""
-              }
+              value={pack.practical_activity?.title ?? ""}
               disabled={locked}
               onChange={(event) =>
-                updatePackField(
-                  "practical_activity",
-                  {
-                    ...(pack.practical_activity ?? {}),
-                    title: event.target.value,
-                  },
-                )
+                updatePackField("practical_activity", {
+                  ...(pack.practical_activity ?? {}),
+                  title: event.target.value,
+                })
               }
             />
           </label>
 
           <label className="rn-field">
             <span>Instructions</span>
-
             <textarea
               value={
-                pack.practical_activity?.instructions ??
-                ""
+                pack.practical_activity?.instructions ?? ""
               }
               disabled={locked}
               rows={6}
               onChange={(event) =>
-                updatePackField(
-                  "practical_activity",
-                  {
-                    ...(pack.practical_activity ?? {}),
-                    instructions:
-                      event.target.value,
-                  },
-                )
+                updatePackField("practical_activity", {
+                  ...(pack.practical_activity ?? {}),
+                  instructions: event.target.value,
+                })
               }
             />
           </label>
 
           <label className="rn-field">
             <span>Expected output</span>
-
             <textarea
               value={
-                pack.practical_activity?.expected_output ??
-                ""
+                pack.practical_activity?.expected_output ?? ""
               }
               disabled={locked}
               rows={4}
               onChange={(event) =>
-                updatePackField(
-                  "practical_activity",
-                  {
-                    ...(pack.practical_activity ?? {}),
-                    expected_output:
-                      event.target.value,
-                  },
-                )
+                updatePackField("practical_activity", {
+                  ...(pack.practical_activity ?? {}),
+                  expected_output: event.target.value,
+                })
               }
             />
           </label>
         </div>
       </section>
 
-      <section
-        style={{
-          marginBottom: 24,
-        }}
-      >
+      <section style={{ marginBottom: 24 }}>
         <h2 className="rn-section-heading">
           Assessment questions
         </h2>
@@ -1818,17 +1497,13 @@ export default function AiDraftEditor({ draft }: Props) {
               <div
                 key={index}
                 style={{
-                  borderBottom:
-                    "1px solid currentColor",
+                  borderBottom: "1px solid currentColor",
                   paddingBottom: 20,
                   marginBottom: 20,
                 }}
               >
                 <label className="rn-field">
-                  <span>
-                    Question {index + 1}
-                  </span>
-
+                  <span>Question {index + 1}</span>
                   <textarea
                     value={item.question}
                     disabled={locked}
@@ -1840,23 +1515,18 @@ export default function AiDraftEditor({ draft }: Props) {
 
                       questions[index] = {
                         ...item,
-                        question:
-                          event.target.value,
+                        question: event.target.value,
                       };
 
                       updatePackField(
                         "assessment_questions",
-                        questions,
+                        questions
                       );
                     }}
                   />
                 </label>
 
-                <div
-                  style={{
-                    marginBottom: 16,
-                  }}
-                >
+                <div style={{ marginBottom: 16 }}>
                   <strong>Options</strong>
 
                   {(item.options ?? []).map(
@@ -1892,12 +1562,10 @@ export default function AiDraftEditor({ draft }: Props) {
 
                             updatePackField(
                               "assessment_questions",
-                              questions,
+                              questions
                             );
                           }}
-                          style={{
-                            flex: 1,
-                          }}
+                          style={{ flex: 1 }}
                         />
 
                         {!locked && (
@@ -1916,14 +1584,13 @@ export default function AiDraftEditor({ draft }: Props) {
                                   item.options ?? []
                                 ).filter(
                                   (_, itemIndex) =>
-                                    itemIndex !==
-                                    optionIndex,
+                                    itemIndex !== optionIndex
                                 ),
                               };
 
                               updatePackField(
                                 "assessment_questions",
-                                questions,
+                                questions
                               );
                             }}
                           >
@@ -1931,20 +1598,17 @@ export default function AiDraftEditor({ draft }: Props) {
                           </button>
                         )}
                       </div>
-                    ),
+                    )
                   )}
 
                   {!locked && (
                     <button
                       type="button"
                       className="rn-button rn-button-secondary"
-                      style={{
-                        marginTop: 8,
-                      }}
+                      style={{ marginTop: 8 }}
                       onClick={() => {
                         const questions = [
-                          ...(pack.assessment_questions ??
-                            []),
+                          ...(pack.assessment_questions ?? []),
                         ];
 
                         questions[index] = {
@@ -1957,7 +1621,7 @@ export default function AiDraftEditor({ draft }: Props) {
 
                         updatePackField(
                           "assessment_questions",
-                          questions,
+                          questions
                         );
                       }}
                     >
@@ -1968,7 +1632,6 @@ export default function AiDraftEditor({ draft }: Props) {
 
                 <label className="rn-field">
                   <span>Correct answer</span>
-
                   <input
                     value={item.correct_answer ?? ""}
                     disabled={locked}
@@ -1979,13 +1642,12 @@ export default function AiDraftEditor({ draft }: Props) {
 
                       questions[index] = {
                         ...item,
-                        correct_answer:
-                          event.target.value,
+                        correct_answer: event.target.value,
                       };
 
                       updatePackField(
                         "assessment_questions",
-                        questions,
+                        questions
                       );
                     }}
                   />
@@ -1993,7 +1655,6 @@ export default function AiDraftEditor({ draft }: Props) {
 
                 <label className="rn-field">
                   <span>Explanation</span>
-
                   <textarea
                     value={item.explanation ?? ""}
                     disabled={locked}
@@ -2005,13 +1666,12 @@ export default function AiDraftEditor({ draft }: Props) {
 
                       questions[index] = {
                         ...item,
-                        explanation:
-                          event.target.value,
+                        explanation: event.target.value,
                       };
 
                       updatePackField(
                         "assessment_questions",
-                        questions,
+                        questions
                       );
                     }}
                   />
@@ -2028,8 +1688,8 @@ export default function AiDraftEditor({ draft }: Props) {
                           pack.assessment_questions ?? []
                         ).filter(
                           (_, itemIndex) =>
-                            itemIndex !== index,
-                        ),
+                            itemIndex !== index
+                        )
                       )
                     }
                   >
@@ -2037,7 +1697,7 @@ export default function AiDraftEditor({ draft }: Props) {
                   </button>
                 )}
               </div>
-            ),
+            )
           )}
 
           {!locked && (
@@ -2045,18 +1705,15 @@ export default function AiDraftEditor({ draft }: Props) {
               type="button"
               className="rn-button rn-button-secondary"
               onClick={() =>
-                updatePackField(
-                  "assessment_questions",
-                  [
-                    ...(pack.assessment_questions ?? []),
-                    {
-                      question: "",
-                      options: [],
-                      correct_answer: "",
-                      explanation: "",
-                    },
-                  ],
-                )
+                updatePackField("assessment_questions", [
+                  ...(pack.assessment_questions ?? []),
+                  {
+                    question: "",
+                    options: [],
+                    correct_answer: "",
+                    explanation: "",
+                  },
+                ])
               }
             >
               Add question
@@ -2065,14 +1722,8 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       </section>
 
-      <section
-        style={{
-          marginBottom: 24,
-        }}
-      >
-        <h2 className="rn-section-heading">
-          Source warnings
-        </h2>
+      <section style={{ marginBottom: 24 }}>
+        <h2 className="rn-section-heading">Source warnings</h2>
 
         <div className="rn-card">
           {(pack.source_warnings ?? []).map(
@@ -2093,12 +1744,10 @@ export default function AiDraftEditor({ draft }: Props) {
                     updateStringArray(
                       "source_warnings",
                       index,
-                      event.target.value,
+                      event.target.value
                     )
                   }
-                  style={{
-                    flex: 1,
-                  }}
+                  style={{ flex: 1 }}
                 />
 
                 {!locked && (
@@ -2108,7 +1757,7 @@ export default function AiDraftEditor({ draft }: Props) {
                     onClick={() =>
                       removeStringArrayItem(
                         "source_warnings",
-                        index,
+                        index
                       )
                     }
                   >
@@ -2116,7 +1765,7 @@ export default function AiDraftEditor({ draft }: Props) {
                   </button>
                 )}
               </div>
-            ),
+            )
           )}
 
           {!locked && (
@@ -2124,13 +1773,10 @@ export default function AiDraftEditor({ draft }: Props) {
               type="button"
               className="rn-button rn-button-secondary"
               onClick={() =>
-                updatePackField(
-                  "source_warnings",
-                  [
-                    ...(pack.source_warnings ?? []),
-                    "",
-                  ],
-                )
+                updatePackField("source_warnings", [
+                  ...(pack.source_warnings ?? []),
+                  "",
+                ])
               }
             >
               Add warning
@@ -2140,22 +1786,14 @@ export default function AiDraftEditor({ draft }: Props) {
       </section>
 
       {(pack.source_summary || pack.extracted_text) && (
-        <section
-          style={{
-            marginBottom: 24,
-          }}
-        >
+        <section style={{ marginBottom: 24 }}>
           <h2 className="rn-section-heading">
             Source information
           </h2>
 
           <div className="rn-card">
             {pack.source_summary && (
-              <div
-                style={{
-                  marginBottom: 20,
-                }}
-              >
+              <div style={{ marginBottom: 20 }}>
                 <strong>Source summary</strong>
 
                 <p
@@ -2198,11 +1836,7 @@ export default function AiDraftEditor({ draft }: Props) {
           <button
             type="button"
             className="rn-button rn-button-primary"
-            disabled={
-              saving ||
-              submitting ||
-              deleting
-            }
+            disabled={saving || submitting || deleting}
             onClick={saveDraft}
           >
             {saving ? "Saving..." : "Save changes"}
@@ -2211,16 +1845,12 @@ export default function AiDraftEditor({ draft }: Props) {
           <button
             type="button"
             className="rn-button rn-button-primary"
-            disabled={
-              saving ||
-              submitting ||
-              deleting
-            }
+            disabled={saving || submitting || deleting}
             onClick={submitForReview}
           >
             {submitting
               ? "Submitting..."
-              : revisionRequired
+              : status === "revision_required"
                 ? "Resubmit for LMS Review"
                 : "Submit for LMS Review"}
           </button>
@@ -2228,14 +1858,8 @@ export default function AiDraftEditor({ draft }: Props) {
           <button
             type="button"
             className="rn-button rn-button-secondary"
-            disabled={
-              saving ||
-              submitting ||
-              deleting
-            }
-            onClick={() =>
-              router.push("/student/scan")
-            }
+            disabled={saving || submitting || deleting}
+            onClick={() => router.push("/student/scan")}
           >
             Create another
           </button>
@@ -2243,11 +1867,7 @@ export default function AiDraftEditor({ draft }: Props) {
           <button
             type="button"
             className="rn-button rn-button-secondary"
-            disabled={
-              saving ||
-              submitting ||
-              deleting
-            }
+            disabled={saving || submitting || deleting}
             onClick={deleteDraft}
           >
             {deleting ? "Deleting..." : "Delete draft"}
