@@ -10,7 +10,10 @@ type AdminLmsPageProps = {
 };
 
 type Profile = {
-  role: "admin" | "instructor" | "student";
+  role:
+    | "admin"
+    | "instructor"
+    | "student";
   full_name: string | null;
   email: string | null;
 };
@@ -162,7 +165,8 @@ export default async function AdminLmsPage({
   }
 
   const courses =
-    (courseData ?? []) as unknown as AdminCourse[];
+    (courseData ??
+      []) as unknown as AdminCourse[];
 
   const courseIds = courses.map(
     (course) => course.id
@@ -200,9 +204,13 @@ export default async function AdminLmsPage({
           count: "exact",
           head: true,
         })
-        .in("course_id", courseIds);
+        .in(
+          "course_id",
+          courseIds
+        );
 
-    enrollCount = result.count ?? 0;
+    enrollCount =
+      result.count ?? 0;
   }
 
   let projectCount = 0;
@@ -214,9 +222,17 @@ export default async function AdminLmsPage({
       error: projectError,
     } = await supabase
       .from("course_projects")
-      .select("id, course_id")
-      .in("course_id", courseIds)
-      .eq("is_published", true);
+      .select(
+        "id, course_id"
+      )
+      .in(
+        "course_id",
+        courseIds
+      )
+      .eq(
+        "is_published",
+        true
+      );
 
     if (projectError) {
       console.error(
@@ -235,27 +251,41 @@ export default async function AdminLmsPage({
         course_id: string;
       }[]) || [];
 
-    projectCount = projects.length;
+    projectCount =
+      projects.length;
 
-    const projectIds = projects.map(
-      (project) => project.id
-    );
+    const projectIds =
+      projects.map(
+        (project) =>
+          project.id
+      );
 
-    if (projectIds.length > 0) {
+    if (
+      projectIds.length > 0
+    ) {
       const {
         count,
-        error: pendingError,
+        error:
+          pendingError,
       } = await supabase
-        .from("project_submissions")
+        .from(
+          "project_submissions"
+        )
         .select("*", {
           count: "exact",
           head: true,
         })
-        .in("project_id", projectIds)
-        .in("status", [
-          "submitted",
-          "under_review",
-        ]);
+        .in(
+          "project_id",
+          projectIds
+        )
+        .in(
+          "status",
+          [
+            "submitted",
+            "under_review",
+          ]
+        );
 
       if (pendingError) {
         console.error(
@@ -285,9 +315,12 @@ export default async function AdminLmsPage({
         "id, full_name, email, phone, created_at"
       )
       .eq("role", "student")
-      .order("created_at", {
-        ascending: false,
-      });
+      .order(
+        "created_at",
+        {
+          ascending: false,
+        }
+      );
 
     if (error) {
       console.error(
@@ -301,7 +334,8 @@ export default async function AdminLmsPage({
     }
 
     students =
-      (data as unknown as Student[]) || [];
+      (data as unknown as Student[]) ||
+      [];
   }
 
   if (
@@ -316,9 +350,12 @@ export default async function AdminLmsPage({
       .select(
         "id, student_id, course_id, payment_status, enrollment_status, progress_percent, enrolled_at"
       )
-      .order("enrolled_at", {
-        ascending: false,
-      });
+      .order(
+        "enrolled_at",
+        {
+          ascending: false,
+        }
+      );
 
     if (error) {
       console.error(
@@ -339,7 +376,8 @@ export default async function AdminLmsPage({
   const studentIds = [
     ...new Set(
       enrollments.map(
-        (item) => item.student_id
+        (item) =>
+          item.student_id
       )
     ),
   ];
@@ -347,14 +385,16 @@ export default async function AdminLmsPage({
   const enrollmentCourseIds = [
     ...new Set(
       enrollments.map(
-        (item) => item.course_id
+        (item) =>
+          item.course_id
       )
     ),
   ];
 
   const {
     data: enrollmentStudents,
-    error: enrollmentStudentsError,
+    error:
+      enrollmentStudentsError,
   } =
     profile.role === "admin" &&
     view === "enrollments" &&
@@ -364,7 +404,10 @@ export default async function AdminLmsPage({
           .select(
             "id, full_name, email"
           )
-          .in("id", studentIds)
+          .in(
+            "id",
+            studentIds
+          )
       : {
           data: [],
           error: null,
@@ -383,14 +426,17 @@ export default async function AdminLmsPage({
 
   const {
     data: enrollmentCourses,
-    error: enrollmentCoursesError,
+    error:
+      enrollmentCoursesError,
   } =
     profile.role === "admin" &&
     view === "enrollments" &&
     enrollmentCourseIds.length > 0
       ? await supabase
           .from("courses")
-          .select("id, title")
+          .select(
+            "id, title"
+          )
           .in(
             "id",
             enrollmentCourseIds
@@ -411,25 +457,31 @@ export default async function AdminLmsPage({
     );
   }
 
-  const studentMap = new Map(
-    (
-      (enrollmentStudents ||
-        []) as unknown as StudentLookup[]
-    ).map((student) => [
-      student.id,
-      student,
-    ])
-  );
+  const studentMap =
+    new Map(
+      (
+        (enrollmentStudents ||
+          []) as unknown as StudentLookup[]
+      ).map(
+        (student) => [
+          student.id,
+          student,
+        ]
+      )
+    );
 
-  const courseMap = new Map(
-    (
-      (enrollmentCourses ||
-        []) as unknown as CourseLookup[]
-    ).map((course) => [
-      course.id,
-      course,
-    ])
-  );
+  const courseMap =
+    new Map(
+      (
+        (enrollmentCourses ||
+          []) as unknown as CourseLookup[]
+      ).map(
+        (course) => [
+          course.id,
+          course,
+        ]
+      )
+    );
 
   return (
     <section className="section">
@@ -440,10 +492,13 @@ export default async function AdminLmsPage({
               RuffNeck Learn
             </div>
 
-            <h2>LMS Admin</h2>
+            <h2>
+              LMS Admin
+            </h2>
 
             <p className="muted">
-              Signed in as {profile.email} (
+              Signed in as{" "}
+              {profile.email} (
               {profile.role}).
             </p>
           </div>
@@ -451,10 +506,13 @@ export default async function AdminLmsPage({
           <div
             className="rn-admin-heading-actions"
             style={{
-              display: "flex",
+              display:
+                "flex",
               gap: 10,
-              flexWrap: "wrap",
-              alignItems: "center",
+              flexWrap:
+                "wrap",
+              alignItems:
+                "center",
             }}
           >
             <Link
@@ -472,11 +530,19 @@ export default async function AdminLmsPage({
             </Link>
 
             <Link
+              href="/admin/payments"
+              className="btn btn-primary"
+            >
+              Payments
+            </Link>
+
+            <Link
               href="/admin/projects"
               className="btn btn-primary"
             >
               Projects & Capstones
-              {pendingProjectCount > 0
+              {pendingProjectCount >
+              0
                 ? ` (${pendingProjectCount})`
                 : ""}
             </Link>
@@ -507,7 +573,8 @@ export default async function AdminLmsPage({
             </span>
           </Link>
 
-          {profile.role === "admin" ? (
+          {profile.role ===
+          "admin" ? (
             <Link
               href="/admin/lms?view=students"
               className={`rn-admin-stat ${
@@ -548,11 +615,13 @@ export default async function AdminLmsPage({
             </div>
           )}
 
-          {profile.role === "admin" ? (
+          {profile.role ===
+          "admin" ? (
             <Link
               href="/admin/lms?view=enrollments"
               className={`rn-admin-stat ${
-                view === "enrollments"
+                view ===
+                "enrollments"
                   ? "active"
                   : ""
               }`}
@@ -608,9 +677,11 @@ export default async function AdminLmsPage({
 
               <small
                 style={{
-                  display: "block",
+                  display:
+                    "block",
                   marginTop: 3,
-                  fontSize: "0.72rem",
+                  fontSize:
+                    "0.72rem",
                 }}
               >
                 {pendingProjectCount}{" "}
@@ -620,8 +691,10 @@ export default async function AdminLmsPage({
           </Link>
         </div>
 
-        {view === "students" &&
-        profile.role === "admin" ? (
+        {view ===
+          "students" &&
+        profile.role ===
+          "admin" ? (
           <section className="rn-admin-list-panel">
             <div className="rn-admin-list-header">
               <div>
@@ -629,11 +702,14 @@ export default async function AdminLmsPage({
                   User management
                 </div>
 
-                <h3>Students</h3>
+                <h3>
+                  Students
+                </h3>
 
                 <p className="muted">
-                  Registered student accounts on
-                  RuffNeck Learn.
+                  Registered student
+                  accounts on RuffNeck
+                  Learn.
                 </p>
               </div>
 
@@ -641,11 +717,13 @@ export default async function AdminLmsPage({
                 href="/admin/lms?view=courses"
                 className="btn btn-ghost"
               >
-                ← Back to courses
+                ← Back to
+                courses
               </Link>
             </div>
 
-            {students.length === 0 ? (
+            {students.length ===
+            0 ? (
               <div className="rn-empty-state">
                 <div className="rn-empty-icon">
                   ◉
@@ -656,8 +734,10 @@ export default async function AdminLmsPage({
                 </strong>
 
                 <p>
-                  New student registrations
-                  will appear here.
+                  New student
+                  registrations
+                  will appear
+                  here.
                 </p>
               </div>
             ) : (
@@ -665,9 +745,15 @@ export default async function AdminLmsPage({
                 <table className="rn-admin-table">
                   <thead>
                     <tr>
-                      <th>Student</th>
-                      <th>Email</th>
-                      <th>Phone</th>
+                      <th>
+                        Student
+                      </th>
+                      <th>
+                        Email
+                      </th>
+                      <th>
+                        Phone
+                      </th>
                       <th>
                         Registered
                       </th>
@@ -676,9 +762,13 @@ export default async function AdminLmsPage({
 
                   <tbody>
                     {students.map(
-                      (student) => (
+                      (
+                        student
+                      ) => (
                         <tr
-                          key={student.id}
+                          key={
+                            student.id
+                          }
                         >
                           <td>
                             <strong>
@@ -703,9 +793,12 @@ export default async function AdminLmsPage({
                             ).toLocaleDateString(
                               "en-NG",
                               {
-                                year: "numeric",
-                                month: "short",
-                                day: "numeric",
+                                year:
+                                  "numeric",
+                                month:
+                                  "short",
+                                day:
+                                  "numeric",
                               }
                             )}
                           </td>
@@ -719,8 +812,10 @@ export default async function AdminLmsPage({
           </section>
         ) : null}
 
-        {view === "enrollments" &&
-        profile.role === "admin" ? (
+        {view ===
+          "enrollments" &&
+        profile.role ===
+          "admin" ? (
           <section className="rn-admin-list-panel">
             <div className="rn-admin-list-header">
               <div>
@@ -728,11 +823,14 @@ export default async function AdminLmsPage({
                   Learning activity
                 </div>
 
-                <h3>Enrollments</h3>
+                <h3>
+                  Enrollments
+                </h3>
 
                 <p className="muted">
-                  Student course enrollments,
-                  payment status, and progress.
+                  Student course
+                  enrollments, payment
+                  status, and progress.
                 </p>
               </div>
 
@@ -740,11 +838,13 @@ export default async function AdminLmsPage({
                 href="/admin/lms?view=courses"
                 className="btn btn-ghost"
               >
-                ← Back to courses
+                ← Back to
+                courses
               </Link>
             </div>
 
-            {enrollments.length === 0 ? (
+            {enrollments.length ===
+            0 ? (
               <div className="rn-empty-state">
                 <div className="rn-empty-icon">
                   ✓
@@ -755,8 +855,9 @@ export default async function AdminLmsPage({
                 </strong>
 
                 <p>
-                  Student course enrollments
-                  will appear here.
+                  Student course
+                  enrollments will
+                  appear here.
                 </p>
               </div>
             ) : (
@@ -764,18 +865,32 @@ export default async function AdminLmsPage({
                 <table className="rn-admin-table">
                   <thead>
                     <tr>
-                      <th>Student</th>
-                      <th>Course</th>
-                      <th>Payment</th>
-                      <th>Status</th>
-                      <th>Progress</th>
-                      <th>Enrolled</th>
+                      <th>
+                        Student
+                      </th>
+                      <th>
+                        Course
+                      </th>
+                      <th>
+                        Payment
+                      </th>
+                      <th>
+                        Status
+                      </th>
+                      <th>
+                        Progress
+                      </th>
+                      <th>
+                        Enrolled
+                      </th>
                     </tr>
                   </thead>
 
                   <tbody>
                     {enrollments.map(
-                      (enrollment) => {
+                      (
+                        enrollment
+                      ) => {
                         const student =
                           studentMap.get(
                             enrollment.student_id
@@ -859,9 +974,12 @@ export default async function AdminLmsPage({
                               ).toLocaleDateString(
                                 "en-NG",
                                 {
-                                  year: "numeric",
-                                  month: "short",
-                                  day: "numeric",
+                                  year:
+                                    "numeric",
+                                  month:
+                                    "short",
+                                  day:
+                                    "numeric",
                                 }
                               )}
                             </td>
@@ -876,11 +994,18 @@ export default async function AdminLmsPage({
           </section>
         ) : null}
 
-        {view === "courses" ? (
+        {view ===
+        "courses" ? (
           <AdminLmsEditor
-            initialCourses={courses}
-            userId={user.id}
-            role={profile.role}
+            initialCourses={
+              courses
+            }
+            userId={
+              user.id
+            }
+            role={
+              profile.role
+            }
           />
         ) : null}
       </div>
