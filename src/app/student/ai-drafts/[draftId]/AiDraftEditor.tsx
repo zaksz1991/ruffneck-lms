@@ -249,7 +249,7 @@ function normalizePack(pack: LearningPack): LearningPack {
     assessment_questions: Array.isArray(pack.assessment_questions)
       ? pack.assessment_questions.map(normalizeQuestion)
       : [],
-    extracted_text: asString(pack.extracted_text),
+    extracted_text: "",
     source_summary: asString(pack.source_summary),
   };
 }
@@ -943,6 +943,13 @@ export default function AiDraftEditor({ draft }: Props) {
             <p>
               <strong>Approved:</strong>{" "}
               {formatDateTime(reviewedAt)}
+            </p>
+          ) : null}
+
+          {reviewedBy ? (
+            <p>
+              <strong>Reviewed by:</strong>{" "}
+              {reviewedBy}
             </p>
           ) : null}
 
@@ -2067,36 +2074,64 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       </section>
 
-      {pack.source_summary ? (
+      {pack.source_summary || pack.extracted_text ? (
         <section style={{ marginBottom: 24 }}>
           <h2 className="rn-section-heading">
             Source information
           </h2>
 
           <div className="rn-card">
-            <strong>Source summary</strong>
+            {pack.source_summary ? (
+              <>
+                <strong>Source summary</strong>
 
-            <p
-              style={{
-                whiteSpace: "pre-wrap",
-                marginBottom: 0,
-              }}
-            >
-              {pack.source_summary}
-            </p>
+                <p
+                  style={{
+                    whiteSpace: "pre-wrap",
+                    marginBottom: 0,
+                  }}
+                >
+                  {pack.source_summary}
+                </p>
+              </>
+            ) : null}
 
-            <p
-              style={{
-                marginTop: 16,
-                marginBottom: 0,
-                fontSize: "0.9rem",
-                opacity: 0.8,
-              }}
-            >
-              Original extracted source text is not displayed
-              here. Privacy screening removes sensitive source
-              information before learning material is stored.
-            </p>
+            {pack.extracted_text ? (
+              <div
+                style={{
+                  marginTop: pack.source_summary ? 16 : 0,
+                }}
+              >
+                <strong>Extracted source text</strong>
+
+                <p
+                  style={{
+                    marginBottom: 0,
+                    fontSize: "0.9rem",
+                    opacity: 0.8,
+                  }}
+                >
+                  Original extracted source text is not
+                  displayed here. Privacy screening removes
+                  sensitive source information before learning
+                  material is stored and reviewed.
+                </p>
+              </div>
+            ) : (
+              <p
+                style={{
+                  marginTop: 16,
+                  marginBottom: 0,
+                  fontSize: "0.9rem",
+                  opacity: 0.8,
+                }}
+              >
+                Original extracted source text is not
+                displayed here. Privacy screening removes
+                sensitive source information before learning
+                material is stored and reviewed.
+              </p>
+            )}
           </div>
         </section>
       ) : null}
