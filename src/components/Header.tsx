@@ -156,6 +156,10 @@ export function Header() {
                   Payment History
                 </Link>
 
+                <Link href="/student/assessment/results">
+                  Assessment Results
+                </Link>
+
                 <Link href="/student/certificates">
                   Certificates
                 </Link>
