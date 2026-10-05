@@ -12,7 +12,7 @@ type Draft = {
   audience: string;
   focus_instruction: string | null;
   learning_pack: Record<string, unknown>;
-  status: "draft" | "edited" | "converted";
+  status: "draft" | "edited" | "submitted" | "converted";
   created_at: string;
   updated_at: string;
 };
@@ -31,15 +31,24 @@ export default function AiDraftEditor({ draft }: Props) {
   const router = useRouter();
 
   const [title, setTitle] = useState(draft.title);
-  const [focus, setFocus] = useState(draft.focus_instruction ?? "");
+  const [focus, setFocus] = useState(
+    draft.focus_instruction ?? ""
+  );
+
   const [packJson, setPackJson] = useState(
     JSON.stringify(draft.learning_pack, null, 2)
   );
 
   const [saving, setSaving] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  const isLocked =
+    draft.status === "submitted" ||
+    draft.status === "converted";
 
   async function saveDraft() {
     setSaving(true);
@@ -57,19 +66,22 @@ export default function AiDraftEditor({ draft }: Props) {
     }
 
     try {
-      const response = await fetch("/api/student/scan/drafts", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: draft.id,
-          title,
-          focusInstruction: focus,
-          learningPack,
-          status: "edited",
-        }),
-      });
+      const response = await fetch(
+        "/api/student/scan/drafts",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id: draft.id,
+            title,
+            focusInstruction: focus,
+            learningPack,
+            status: "edited",
+          }),
+        }
+      );
 
       const data = await response.json();
 
@@ -80,9 +92,16 @@ export default function AiDraftEditor({ draft }: Props) {
       }
 
       setMessage("Draft saved.");
-      setPackJson(
-        JSON.stringify(data.draft.learning_pack, null, 2)
-      );
+
+      if (data?.draft?.learning_pack) {
+        setPackJson(
+          JSON.stringify(
+            data.draft.learning_pack,
+            null,
+            2
+          )
+        );
+      }
 
       router.refresh();
     } catch (err) {
@@ -93,6 +112,56 @@ export default function AiDraftEditor({ draft }: Props) {
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function submitForReview() {
+    const confirmed = window.confirm(
+      "Submit this draft for LMS review? You will no longer be able to edit or delete it unless an instructor or administrator returns it for revision."
+    );
+
+    if (!confirmed) return;
+
+    setSubmitting(true);
+    setMessage("");
+    setError("");
+
+    try {
+      const response = await fetch(
+        "/api/student/scan/drafts/submit",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id: draft.id,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error ??
+            "Unable to submit the draft for review."
+        );
+      }
+
+      setMessage(
+        "Draft submitted for LMS review."
+      );
+
+      router.refresh();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to submit the draft for review."
+      );
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -109,7 +178,9 @@ export default function AiDraftEditor({ draft }: Props) {
 
     try {
       const response = await fetch(
-        `/api/student/scan/drafts?id=${encodeURIComponent(draft.id)}`,
+        `/api/student/scan/drafts?id=${encodeURIComponent(
+          draft.id
+        )}`,
         {
           method: "DELETE",
         }
@@ -127,6 +198,7 @@ export default function AiDraftEditor({ draft }: Props) {
       router.refresh();
     } catch (err) {
       setDeleting(false);
+
       setError(
         err instanceof Error
           ? err.message
@@ -141,38 +213,62 @@ export default function AiDraftEditor({ draft }: Props) {
         <div className="rn-section-heading">
           <div>
             <h2>Draft information</h2>
-            <p>Edit the basic information before saving.</p>
+
+            <p>
+              {isLocked
+                ? "This draft is currently locked."
+                : "Edit the basic information before submitting it for review."}
+            </p>
           </div>
         </div>
 
         <div className="rn-form-grid">
           <label className="rn-field">
             <span>Title</span>
+
             <input
               type="text"
               value={title}
-              onChange={(event) => setTitle(event.target.value)}
+              onChange={(event) =>
+                setTitle(event.target.value)
+              }
               maxLength={300}
+              disabled={isLocked}
             />
           </label>
 
           <label className="rn-field">
             <span>Additional instruction</span>
+
             <textarea
               value={focus}
-              onChange={(event) => setFocus(event.target.value)}
+              onChange={(event) =>
+                setFocus(event.target.value)
+              }
               rows={5}
               maxLength={1500}
               placeholder="Optional focus or instruction."
+              disabled={isLocked}
             />
           </label>
         </div>
 
         <div className="rn-course-card-meta">
-          <span className="rn-badge">{draft.output_type}</span>
-          <span className="rn-badge">{draft.language_code}</span>
-          <span className="rn-badge">{draft.audience}</span>
-          <span className="rn-badge">{draft.status}</span>
+          <span className="rn-badge">
+            {draft.output_type}
+          </span>
+
+          <span className="rn-badge">
+            {draft.language_code}
+          </span>
+
+          <span className="rn-badge">
+            {draft.audience}
+          </span>
+
+          <span className="rn-badge">
+            {draft.status}
+          </span>
         </div>
       </section>
 
@@ -180,9 +276,10 @@ export default function AiDraftEditor({ draft }: Props) {
         <div className="rn-section-heading">
           <div>
             <h2>Learning Pack</h2>
+
             <p>
-              Review the generated structure. Advanced editing is
-              available through the JSON editor below.
+              Review the generated material before
+              submitting it for LMS review.
             </p>
           </div>
         </div>
@@ -192,9 +289,12 @@ export default function AiDraftEditor({ draft }: Props) {
 
           <textarea
             value={packJson}
-            onChange={(event) => setPackJson(event.target.value)}
+            onChange={(event) =>
+              setPackJson(event.target.value)
+            }
             rows={30}
             spellCheck={false}
+            disabled={isLocked}
             style={{
               width: "100%",
               fontFamily:
@@ -202,45 +302,122 @@ export default function AiDraftEditor({ draft }: Props) {
               fontSize: "0.875rem",
               lineHeight: 1.5,
               resize: "vertical",
+              boxSizing: "border-box",
             }}
           />
         </label>
 
-        <div className="rn-action-row">
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={saveDraft}
-            disabled={saving}
+        {!isLocked && (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "10px",
+              alignItems: "center",
+              marginTop: "16px",
+            }}
           >
-            {saving ? "Saving..." : "Save changes"}
-          </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={saveDraft}
+              disabled={saving || submitting || deleting}
+            >
+              {saving ? "Saving..." : "Save changes"}
+            </button>
 
-          <Link
-            href="/student/scan"
-            className="btn btn-ghost"
-          >
-            Create another
-          </Link>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={submitForReview}
+              disabled={saving || submitting || deleting}
+            >
+              {submitting
+                ? "Submitting..."
+                : "Submit for LMS Review"}
+            </button>
 
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={deleteDraft}
-            disabled={deleting}
+            <Link
+              href="/student/scan"
+              className="btn btn-ghost"
+            >
+              Create another
+            </Link>
+          </div>
+        )}
+
+        {!isLocked && (
+          <div
+            style={{
+              marginTop: "24px",
+              paddingTop: "20px",
+              borderTop:
+                "1px solid var(--border, #ddd)",
+            }}
           >
-            {deleting ? "Deleting..." : "Delete draft"}
-          </button>
-        </div>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={deleteDraft}
+              disabled={saving || submitting || deleting}
+              style={{
+                border: "1px solid #c62828",
+                color: "#c62828",
+              }}
+            >
+              {deleting
+                ? "Deleting..."
+                : "Delete draft"}
+            </button>
+          </div>
+        )}
+
+        {draft.status === "submitted" && (
+          <div
+            className="rn-card"
+            style={{ marginTop: "20px" }}
+          >
+            <h3>Submitted for review</h3>
+
+            <p>
+              This AI-generated learning material has
+              been submitted to the LMS review workflow.
+              You cannot edit or delete it while it is
+              under review.
+            </p>
+          </div>
+        )}
+
+        {draft.status === "converted" && (
+          <div
+            className="rn-card"
+            style={{ marginTop: "20px" }}
+          >
+            <h3>Converted to LMS content</h3>
+
+            <p>
+              This draft has already been converted into
+              LMS content.
+            </p>
+          </div>
+        )}
 
         {message && (
-          <p className="rn-form-success" role="status">
+          <p
+            className="rn-form-success"
+            role="status"
+            style={{ marginTop: "14px" }}
+          >
             {message}
           </p>
         )}
 
         {error && (
-          <p className="rn-form-error" role="alert">
+          <p
+            className="rn-form-error"
+            role="alert"
+            style={{ marginTop: "14px" }}
+          >
             {error}
           </p>
         )}
@@ -250,8 +427,10 @@ export default function AiDraftEditor({ draft }: Props) {
         <div className="rn-section-heading">
           <div>
             <h2>Generated preview</h2>
+
             <p>
-              A readable preview of the main generated fields.
+              A readable preview of the generated learning
+              material.
             </p>
           </div>
         </div>
@@ -259,12 +438,17 @@ export default function AiDraftEditor({ draft }: Props) {
         <div className="rn-learning-preview">
           {Object.entries(draft.learning_pack).map(
             ([key, value]) => (
-              <article key={key} className="rn-card">
+              <article
+                key={key}
+                className="rn-card"
+              >
                 <h3>
                   {key
                     .replace(/_/g, " ")
-                    .replace(/\b\w/g, (letter) =>
-                      letter.toUpperCase()
+                    .replace(
+                      /\b\w/g,
+                      (letter) =>
+                        letter.toUpperCase()
                     )}
                 </h3>
 

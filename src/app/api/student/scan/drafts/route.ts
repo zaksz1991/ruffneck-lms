@@ -20,7 +20,12 @@ const AUDIENCES = [
   "personal",
 ] as const;
 
-const STATUSES = ["draft", "edited", "converted"] as const;
+const STATUSES = [
+  "draft",
+  "edited",
+  "submitted",
+  "converted",
+] as const;
 
 type OutputType = (typeof OUTPUT_TYPES)[number];
 type LanguageCode = (typeof LANGUAGES)[number];
@@ -100,7 +105,9 @@ function normalizeStatus(value: unknown): DraftStatus | null {
   return null;
 }
 
-function normalizeLearningPack(value: unknown): Record<string, unknown> | null {
+function normalizeLearningPack(
+  value: unknown
+): Record<string, unknown> | null {
   if (!isObject(value)) return null;
 
   const title = cleanText(value.title, 300);
@@ -123,11 +130,11 @@ async function getAuthenticatedUser() {
 /**
  * GET /api/student/scan/drafts
  *
- * Without ?id=...:
- *   Returns the authenticated student's drafts.
+ * Without ?id=...
+ * Returns the authenticated student's drafts.
  *
- * With ?id=...:
- *   Returns one draft belonging to the authenticated student.
+ * With ?id=...
+ * Returns one draft belonging to the authenticated student.
  */
 export async function GET(request: Request) {
   const { supabase, user } = await getAuthenticatedUser();
@@ -331,6 +338,50 @@ export async function PATCH(request: Request) {
     );
   }
 
+  const { data: existingDraft, error: existingError } =
+    await supabase
+      .from("ai_learning_drafts")
+      .select("id, status")
+      .eq("id", id)
+      .eq("student_id", user.id)
+      .maybeSingle();
+
+  if (existingError) {
+    console.error("AI draft lookup error:", existingError);
+
+    return NextResponse.json(
+      { error: "Unable to verify the draft." },
+      { status: 500 }
+    );
+  }
+
+  if (!existingDraft) {
+    return NextResponse.json(
+      { error: "Draft not found." },
+      { status: 404 }
+    );
+  }
+
+  if (existingDraft.status === "submitted") {
+    return NextResponse.json(
+      {
+        error:
+          "This draft has already been submitted for LMS review and can no longer be edited.",
+      },
+      { status: 409 }
+    );
+  }
+
+  if (existingDraft.status === "converted") {
+    return NextResponse.json(
+      {
+        error:
+          "This draft has already been converted and can no longer be edited.",
+      },
+      { status: 409 }
+    );
+  }
+
   const updates: Record<string, unknown> = {};
 
   if (body.title !== undefined) {
@@ -432,6 +483,16 @@ export async function PATCH(request: Request) {
       );
     }
 
+    if (status === "submitted") {
+      return NextResponse.json(
+        {
+          error:
+            "Use the submission action to submit a draft for LMS review.",
+        },
+        { status: 400 }
+      );
+    }
+
     updates.status = status;
   }
 
@@ -479,6 +540,124 @@ export async function PATCH(request: Request) {
 }
 
 /**
+ * POST /api/student/scan/drafts/submit
+ *
+ * Submits a student's draft for instructor/admin review.
+ */
+export async function PUT(request: Request) {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  if (!user) {
+    return NextResponse.json(
+      { error: "Authentication required." },
+      { status: 401 }
+    );
+  }
+
+  let body: { id?: unknown };
+
+  try {
+    body = (await request.json()) as { id?: unknown };
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid JSON request body." },
+      { status: 400 }
+    );
+  }
+
+  const id = cleanText(body.id, 100);
+
+  if (!id) {
+    return NextResponse.json(
+      { error: "Draft ID is required." },
+      { status: 400 }
+    );
+  }
+
+  const { data: draft, error: draftError } = await supabase
+    .from("ai_learning_drafts")
+    .select(
+      "id, title, status, learning_pack, output_type, language_code, audience"
+    )
+    .eq("id", id)
+    .eq("student_id", user.id)
+    .maybeSingle();
+
+  if (draftError) {
+    console.error("AI draft submission lookup error:", draftError);
+
+    return NextResponse.json(
+      { error: "Unable to verify the draft." },
+      { status: 500 }
+    );
+  }
+
+  if (!draft) {
+    return NextResponse.json(
+      { error: "Draft not found." },
+      { status: 404 }
+    );
+  }
+
+  if (draft.status === "submitted") {
+    return NextResponse.json(
+      { error: "This draft has already been submitted for review." },
+      { status: 409 }
+    );
+  }
+
+  if (draft.status === "converted") {
+    return NextResponse.json(
+      { error: "This draft has already been converted." },
+      { status: 409 }
+    );
+  }
+
+  if (!isObject(draft.learning_pack)) {
+    return NextResponse.json(
+      { error: "The learning pack is invalid." },
+      { status: 400 }
+    );
+  }
+
+  const title = cleanText(draft.title, 300);
+
+  if (!title) {
+    return NextResponse.json(
+      { error: "A valid draft title is required." },
+      { status: 400 }
+    );
+  }
+
+  const { data, error } = await supabase
+    .from("ai_learning_drafts")
+    .update({
+      status: "submitted",
+    })
+    .eq("id", id)
+    .eq("student_id", user.id)
+    .select(
+      "id, title, output_type, language_code, audience, status, updated_at"
+    )
+    .single();
+
+  if (error) {
+    console.error("AI draft submission error:", error);
+
+    return NextResponse.json(
+      { error: "Unable to submit the draft for review." },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({
+    success: true,
+    message: "Draft submitted for LMS review.",
+    draft: data,
+  });
+}
+
+/**
  * DELETE /api/student/scan/drafts?id=...
  */
 export async function DELETE(request: Request) {
@@ -498,6 +677,50 @@ export async function DELETE(request: Request) {
     return NextResponse.json(
       { error: "Draft ID is required." },
       { status: 400 }
+    );
+  }
+
+  const { data: existingDraft, error: existingError } =
+    await supabase
+      .from("ai_learning_drafts")
+      .select("id, status")
+      .eq("id", id)
+      .eq("student_id", user.id)
+      .maybeSingle();
+
+  if (existingError) {
+    console.error("AI draft deletion lookup error:", existingError);
+
+    return NextResponse.json(
+      { error: "Unable to verify the draft." },
+      { status: 500 }
+    );
+  }
+
+  if (!existingDraft) {
+    return NextResponse.json(
+      { error: "Draft not found." },
+      { status: 404 }
+    );
+  }
+
+  if (existingDraft.status === "submitted") {
+    return NextResponse.json(
+      {
+        error:
+          "This draft has already been submitted for LMS review and cannot be deleted.",
+      },
+      { status: 409 }
+    );
+  }
+
+  if (existingDraft.status === "converted") {
+    return NextResponse.json(
+      {
+        error:
+          "This draft has already been converted and cannot be deleted.",
+      },
+      { status: 409 }
     );
   }
 
