@@ -77,7 +77,9 @@ export async function POST(request: Request) {
 
     const { data: course, error: courseError } =
       courseId
-        ? await courseQuery.eq("id", courseId).maybeSingle()
+        ? await courseQuery
+            .eq("id", courseId)
+            .maybeSingle()
         : await courseQuery
             .eq("slug", courseSlug as string)
             .maybeSingle();
@@ -190,18 +192,20 @@ export async function POST(request: Request) {
         });
       }
 
-      const { data: enrollment, error } =
-        await admin
-          .from("enrollments")
-          .insert({
-            student_id: user.id,
-            course_id: course.id,
-            enrollment_status: "active",
-            payment_status: "free",
-            enrolled_at: new Date().toISOString(),
-          })
-          .select("id")
-          .single();
+      const {
+        data: enrollment,
+        error,
+      } = await admin
+        .from("enrollments")
+        .insert({
+          student_id: user.id,
+          course_id: course.id,
+          enrollment_status: "active",
+          payment_status: "free",
+          enrolled_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
 
       if (error) {
         console.error(
@@ -230,7 +234,8 @@ export async function POST(request: Request) {
               success: true,
               alreadyEnrolled: true,
               paymentRequired: false,
-              enrollmentId: duplicate.id,
+              enrollmentId:
+                duplicate.id,
               courseSlug: course.slug,
             });
           }
@@ -298,7 +303,7 @@ export async function POST(request: Request) {
 
     if (
       existingPayment?.checkout_url &&
-      existingPayment.amount === amount &&
+      Number(existingPayment.amount) === amount &&
       existingPayment.currency === currency
     ) {
       return NextResponse.json({
@@ -307,7 +312,8 @@ export async function POST(request: Request) {
         paymentRequired: true,
         payment_url:
           existingPayment.checkout_url,
-        tx_ref: existingPayment.tx_ref,
+        tx_ref:
+          existingPayment.tx_ref,
         courseSlug: course.slug,
       });
     }
@@ -334,9 +340,12 @@ export async function POST(request: Request) {
       );
     }
 
+    const siteUrl =
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      "https://ruffneck-lms.vercel.app";
+
     const redirectUrl =
-      `${process.env.NEXT_PUBLIC_SITE_URL || "https://ruffneck-lms.vercel.app"}` +
-      `/api/payments/flutterwave/callback`;
+      `${siteUrl}/api/payments/flutterwave/callback`;
 
     const flutterwavePayment =
       await createFlutterwavePayment({
@@ -374,32 +383,36 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: payment, error: paymentError } =
-      await admin
-        .from("course_payments")
-        .insert({
-          student_id: user.id,
-          course_id: course.id,
-          course_slug: course.slug,
-          tx_ref: flutterwavePayment.tx_ref || txRef,
-          flutterwave_transaction_id:
-            flutterwavePayment.transaction_id ??
-            null,
-          amount,
-          currency,
-          status: "initiated",
-          checkout_url:
-            flutterwavePayment.payment_url,
-        })
-        .select(
-          `
-            id,
-            tx_ref,
-            checkout_url,
-            status
-          `
-        )
-        .single();
+    const {
+      data: payment,
+      error: paymentError,
+    } = await admin
+      .from("course_payments")
+      .insert({
+        student_id: user.id,
+        course_id: course.id,
+        course_slug: course.slug,
+        tx_ref:
+          flutterwavePayment.tx_ref ||
+          txRef,
+        flutterwave_transaction_id:
+          flutterwavePayment.transaction_id ??
+          null,
+        amount,
+        currency,
+        status: "initiated",
+        checkout_url:
+          flutterwavePayment.payment_url,
+      })
+      .select(
+        `
+          id,
+          tx_ref,
+          checkout_url,
+          status
+        `
+      )
+      .single();
 
     if (paymentError) {
       console.error(
@@ -408,28 +421,29 @@ export async function POST(request: Request) {
       );
 
       if (paymentError.code === "23505") {
-        const { data: duplicatePayment } =
-          await admin
-            .from("course_payments")
-            .select(
-              `
-                id,
-                tx_ref,
-                checkout_url,
-                status
-              `
-            )
-            .eq("student_id", user.id)
-            .eq("course_id", course.id)
-            .in("status", [
-              "initiated",
-              "pending",
-            ])
-            .order("created_at", {
-              ascending: false,
-            })
-            .limit(1)
-            .maybeSingle();
+        const {
+          data: duplicatePayment,
+        } = await admin
+          .from("course_payments")
+          .select(
+            `
+              id,
+              tx_ref,
+              checkout_url,
+              status
+            `
+          )
+          .eq("student_id", user.id)
+          .eq("course_id", course.id)
+          .in("status", [
+            "initiated",
+            "pending",
+          ])
+          .order("created_at", {
+            ascending: false,
+          })
+          .limit(1)
+          .maybeSingle();
 
         if (
           duplicatePayment?.checkout_url
@@ -460,7 +474,8 @@ export async function POST(request: Request) {
       success: true,
       alreadyEnrolled: false,
       paymentRequired: true,
-      payment_url: payment.checkout_url,
+      payment_url:
+        payment.checkout_url,
       tx_ref: payment.tx_ref,
       paymentId: payment.id,
       courseSlug: course.slug,
