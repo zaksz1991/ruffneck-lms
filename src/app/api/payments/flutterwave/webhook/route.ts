@@ -1,8 +1,5 @@
 import crypto from "crypto";
-import {
-  verifyFlutterwaveByReference,
-  verifyFlutterwaveTransaction,
-} from "@/lib/flutterwave";
+import { verifyFlutterwaveByReference, verifyFlutterwaveTransaction } from "@/lib/flutterwave";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type PaymentStatus =
@@ -18,11 +15,18 @@ type PaymentRecord = {
   course_id: string;
   course_slug: string;
   tx_ref: string;
-  flutterwave_transaction_id:
-    number | null;
+  flutterwave_transaction_id: number | null;
   amount: number;
   currency: string;
   status: PaymentStatus;
+};
+
+type EnrollmentRecord = {
+  id: string;
+  enrollment_status: string;
+  payment_status: string;
+  progress_percent: number;
+  enrolled_at: string;
 };
 
 type WebhookPayload = {
@@ -34,24 +38,16 @@ type WebhookPayload = {
   };
 };
 
-function json200(
-  body: Record<string, unknown>
-) {
-  return new Response(
-    JSON.stringify(body),
-    {
-      status: 200,
-      headers: {
-        "Content-Type":
-          "application/json",
-      },
-    }
-  );
+function json200(body: Record<string, unknown>) {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
 }
 
-function json500(
-  message: string
-) {
+function json500(message: string) {
   return new Response(
     JSON.stringify({
       error: message,
@@ -59,8 +55,7 @@ function json500(
     {
       status: 500,
       headers: {
-        "Content-Type":
-          "application/json",
+        "Content-Type": "application/json",
       },
     }
   );
@@ -74,20 +69,10 @@ function verifyWebhookHash(
     return false;
   }
 
-  const received =
-    Buffer.from(
-      receivedHash.trim()
-    );
+  const received = Buffer.from(receivedHash.trim());
+  const configured = Buffer.from(configuredHash.trim());
 
-  const configured =
-    Buffer.from(
-      configuredHash.trim()
-    );
-
-  if (
-    received.length !==
-    configured.length
-  ) {
+  if (received.length !== configured.length) {
     return false;
   }
 
@@ -97,29 +82,13 @@ function verifyWebhookHash(
   );
 }
 
-function normalizeStatus(
-  value: unknown
-): string {
+function normalizeStatus(value: unknown): string {
   return typeof value === "string"
-    ? value
-        .trim()
-        .toLowerCase()
+    ? value.trim().toLowerCase()
     : "";
 }
 
-function normalizeCurrency(
-  value: unknown
-): string {
-  return typeof value === "string"
-    ? value
-        .trim()
-        .toUpperCase()
-    : "";
-}
-
-function parseTransactionId(
-  value: unknown
-): string {
+function parseTransactionId(value: unknown): string {
   if (
     typeof value === "number" &&
     Number.isFinite(value)
@@ -128,12 +97,9 @@ function parseTransactionId(
   }
 
   if (typeof value === "string") {
-    const trimmed =
-      value.trim();
+    const trimmed = value.trim();
 
-    return /^\d+$/.test(
-      trimmed
-    )
+    return /^\d+$/.test(trimmed)
       ? trimmed
       : "";
   }
@@ -142,41 +108,29 @@ function parseTransactionId(
 }
 
 async function createOrActivateEnrollment(
-  admin: ReturnType<
-    typeof createAdminClient
-  >,
+  admin: ReturnType<typeof createAdminClient>,
   payment: PaymentRecord
-) {
+): Promise<EnrollmentRecord> {
   const {
-    data: existingEnrollment,
+    data: existingEnrollmentData,
     error: enrollmentLookupError,
-  } =
-    await admin
-      .from("enrollments")
-      .select(
-        [
-          "id",
-          "enrollment_status",
-          "payment_status",
-          "progress_percent",
-          "enrolled_at",
-        ].join(", ")
-      )
-      .eq(
-        "student_id",
-        payment.student_id
-      )
-      .eq(
-        "course_id",
-        payment.course_id
-      )
-      .maybeSingle();
+  } = await admin
+    .from("enrollments")
+    .select(
+      "id, enrollment_status, payment_status, progress_percent, enrolled_at"
+    )
+    .eq("student_id", payment.student_id)
+    .eq("course_id", payment.course_id)
+    .maybeSingle();
 
   if (enrollmentLookupError) {
     throw new Error(
       enrollmentLookupError.message
     );
   }
+
+  const existingEnrollment =
+    existingEnrollmentData as unknown as EnrollmentRecord | null;
 
   if (existingEnrollment) {
     const enrollmentStatus =
@@ -186,111 +140,61 @@ async function createOrActivateEnrollment(
         : "active";
 
     const {
-      data: updatedEnrollment,
+      data: updatedEnrollmentData,
       error: updateError,
-    } =
-      await admin
-        .from("enrollments")
-        .update({
-          payment_status:
-            "paid",
-          enrollment_status:
-            enrollmentStatus,
-        })
-        .eq(
-          "id",
-          existingEnrollment.id
-        )
-        .select(
-          [
-            "id",
-            "student_id",
-            "course_id",
-            "payment_status",
-            "enrollment_status",
-            "progress_percent",
-            "enrolled_at",
-          ].join(", ")
-        )
-        .single();
-
-    if (updateError) {
-      throw new Error(
-        updateError.message
-      );
-    }
-
-    return updatedEnrollment;
-  }
-
-  const {
-    data: createdEnrollment,
-    error: createError,
-  } =
-    await admin
+    } = await admin
       .from("enrollments")
-      .insert({
-        student_id:
-          payment.student_id,
-        course_id:
-          payment.course_id,
-        payment_status:
-          "paid",
-        enrollment_status:
-          "active",
-        progress_percent:
-          0,
+      .update({
+        payment_status: "paid",
+        enrollment_status: enrollmentStatus,
       })
+      .eq("id", existingEnrollment.id)
       .select(
-        [
-          "id",
-          "student_id",
-          "course_id",
-          "payment_status",
-          "enrollment_status",
-          "progress_percent",
-          "enrolled_at",
-        ].join(", ")
+        "id, enrollment_status, payment_status, progress_percent, enrolled_at"
       )
       .single();
 
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
+
+    return updatedEnrollmentData as unknown as EnrollmentRecord;
+  }
+
+  const {
+    data: createdEnrollmentData,
+    error: createError,
+  } = await admin
+    .from("enrollments")
+    .insert({
+      student_id: payment.student_id,
+      course_id: payment.course_id,
+      payment_status: "paid",
+      enrollment_status: "active",
+      progress_percent: 0,
+    })
+    .select(
+      "id, enrollment_status, payment_status, progress_percent, enrolled_at"
+    )
+    .single();
+
   if (createError) {
-    if (
-      createError.code ===
-      "23505"
-    ) {
+    if (createError.code === "23505") {
       const {
-        data:
-          concurrentEnrollment,
-        error:
-          concurrentLookupError,
-      } =
-        await admin
-          .from("enrollments")
-          .select(
-            [
-              "id",
-              "student_id",
-              "course_id",
-              "payment_status",
-              "enrollment_status",
-              "progress_percent",
-              "enrolled_at",
-            ].join(", ")
-          )
-          .eq(
-            "student_id",
-            payment.student_id
-          )
-          .eq(
-            "course_id",
-            payment.course_id
-          )
-          .maybeSingle();
+        data: concurrentEnrollmentData,
+        error: concurrentLookupError,
+      } = await admin
+        .from("enrollments")
+        .select(
+          "id, enrollment_status, payment_status, progress_percent, enrolled_at"
+        )
+        .eq("student_id", payment.student_id)
+        .eq("course_id", payment.course_id)
+        .maybeSingle();
 
       if (
         concurrentLookupError ||
-        !concurrentEnrollment
+        !concurrentEnrollmentData
       ) {
         throw new Error(
           concurrentLookupError?.message ||
@@ -298,39 +202,27 @@ async function createOrActivateEnrollment(
         );
       }
 
+      const concurrentEnrollment =
+        concurrentEnrollmentData as unknown as EnrollmentRecord;
+
       const {
-        data:
-          activatedConcurrentEnrollment,
-        error:
-          activateError,
-      } =
-        await admin
-          .from("enrollments")
-          .update({
-            payment_status:
-              "paid",
-            enrollment_status:
-              concurrentEnrollment.enrollment_status ===
-              "completed"
-                ? "completed"
-                : "active",
-          })
-          .eq(
-            "id",
-            concurrentEnrollment.id
-          )
-          .select(
-            [
-              "id",
-              "student_id",
-              "course_id",
-              "payment_status",
-              "enrollment_status",
-              "progress_percent",
-              "enrolled_at",
-            ].join(", ")
-          )
-          .single();
+        data: activatedEnrollmentData,
+        error: activateError,
+      } = await admin
+        .from("enrollments")
+        .update({
+          payment_status: "paid",
+          enrollment_status:
+            concurrentEnrollment.enrollment_status ===
+            "completed"
+              ? "completed"
+              : "active",
+        })
+        .eq("id", concurrentEnrollment.id)
+        .select(
+          "id, enrollment_status, payment_status, progress_percent, enrolled_at"
+        )
+        .single();
 
       if (activateError) {
         throw new Error(
@@ -338,46 +230,35 @@ async function createOrActivateEnrollment(
         );
       }
 
-      return activatedConcurrentEnrollment;
+      return activatedEnrollmentData as unknown as EnrollmentRecord;
     }
 
-    throw new Error(
-      createError.message
-    );
+    throw new Error(createError.message);
   }
 
-  return createdEnrollment;
+  return createdEnrollmentData as unknown as EnrollmentRecord;
 }
 
 async function markPaymentSuccessful(
-  admin: ReturnType<
-    typeof createAdminClient
-  >,
+  admin: ReturnType<typeof createAdminClient>,
   payment: PaymentRecord,
   transactionId: string
 ) {
-  const transaction =
-    transactionId
-      ? await verifyFlutterwaveTransaction(
-          transactionId
-        )
-      : await verifyFlutterwaveByReference(
-          payment.tx_ref
-        );
+  const transaction = transactionId
+    ? await verifyFlutterwaveTransaction(
+        transactionId
+      )
+    : await verifyFlutterwaveByReference(
+        payment.tx_ref
+      );
 
-  if (
-    transaction.txRef !==
-    payment.tx_ref
-  ) {
+  if (transaction.txRef !== payment.tx_ref) {
     throw new Error(
       "Verified transaction reference does not match the stored payment."
     );
   }
 
-  if (
-    transaction.status !==
-    "successful"
-  ) {
+  if (transaction.status !== "successful") {
     throw new Error(
       "Flutterwave has not verified this transaction as successful."
     );
@@ -392,10 +273,7 @@ async function markPaymentSuccessful(
     );
   }
 
-  if (
-    transaction.amount !==
-    payment.amount
-  ) {
+  if (transaction.amount !== payment.amount) {
     throw new Error(
       "Verified transaction amount does not exactly match the stored course price."
     );
@@ -409,23 +287,18 @@ async function markPaymentSuccessful(
 
   const {
     error: paymentUpdateError,
-  } =
-    await admin
-      .from("course_payments")
-      .update({
-        status:
-          "successful",
-        flutterwave_transaction_id:
-          transaction.id,
-        verified_at:
-          new Date().toISOString(),
-        updated_at:
-          new Date().toISOString(),
-      })
-      .eq(
-        "id",
-        payment.id
-      );
+  } = await admin
+    .from("course_payments")
+    .update({
+      status: "successful",
+      flutterwave_transaction_id:
+        transaction.id,
+      verified_at:
+        new Date().toISOString(),
+      updated_at:
+        new Date().toISOString(),
+    })
+    .eq("id", payment.id);
 
   if (paymentUpdateError) {
     throw new Error(
@@ -455,9 +328,7 @@ export async function POST(
   }
 
   const receivedHash =
-    request.headers.get(
-      "verif-hash"
-    );
+    request.headers.get("verif-hash");
 
   if (
     !verifyWebhookHash(
@@ -473,9 +344,7 @@ export async function POST(
     );
   }
 
-  let payload:
-    | WebhookPayload
-    | null = null;
+  let payload: WebhookPayload | null = null;
 
   try {
     payload =
@@ -484,14 +353,13 @@ export async function POST(
     return json200({
       received: true,
       ignored: true,
-      reason:
-        "Invalid JSON payload.",
+      reason: "Invalid JSON payload.",
     });
   }
 
   const txRef =
-    typeof payload.data
-      ?.tx_ref === "string"
+    typeof payload.data?.tx_ref ===
+    "string"
       ? payload.data.tx_ref.trim()
       : "";
 
@@ -518,43 +386,44 @@ export async function POST(
     createAdminClient();
 
   const {
-    data: payment,
+    data: paymentData,
     error: paymentError,
-  } =
-    await admin
-      .from("course_payments")
-      .select(
-        [
-          "id",
-          "student_id",
-          "course_id",
-          "course_slug",
-          "tx_ref",
-          "flutterwave_transaction_id",
-          "amount",
-          "currency",
-          "status",
-        ].join(", ")
-      )
-      .eq(
+  } = await admin
+    .from("course_payments")
+    .select(
+      [
+        "id",
+        "student_id",
+        "course_id",
+        "course_slug",
         "tx_ref",
-        txRef
-      )
-      .maybeSingle<PaymentRecord>();
+        "flutterwave_transaction_id",
+        "amount",
+        "currency",
+        "status",
+      ].join(", ")
+    )
+    .eq("tx_ref", txRef)
+    .maybeSingle();
 
-  if (
-    paymentError ||
-    !payment
-  ) {
+  if (paymentError) {
     console.error(
       "Flutterwave webhook payment lookup failed:",
       paymentError
     );
 
-    /*
-     * Acknowledge unknown references so unrelated
-     * Flutterwave transactions do not cause retries.
-     */
+    return json200({
+      received: true,
+      ignored: true,
+      reason:
+        "Payment lookup failed.",
+    });
+  }
+
+  const payment =
+    paymentData as unknown as PaymentRecord | null;
+
+  if (!payment) {
     return json200({
       received: true,
       ignored: true,
@@ -563,124 +432,75 @@ export async function POST(
     });
   }
 
-  /*
-   * Idempotency:
-   * Flutterwave may send the webhook more than once.
-   * Once successful, do not create/update the
-   * enrollment unnecessarily again.
-   */
-  if (
-    payment.status ===
-    "successful"
-  ) {
+  if (payment.status === "successful") {
     return json200({
       received: true,
-      already_processed:
-        true,
-      course_id:
-        payment.course_id,
+      already_processed: true,
+      course_id: payment.course_id,
     });
   }
 
-  /*
-   * Explicit non-success events update the payment
-   * record but never grant access.
-   */
   if (
-    reportedStatus ===
-      "cancelled" ||
-    reportedStatus ===
-      "canceled"
+    reportedStatus === "cancelled" ||
+    reportedStatus === "canceled"
   ) {
     await admin
       .from("course_payments")
       .update({
-        status:
-          "cancelled",
+        status: "cancelled",
         updated_at:
           new Date().toISOString(),
       })
-      .eq(
-        "id",
-        payment.id
-      );
+      .eq("id", payment.id);
 
     return json200({
       received: true,
       processed: true,
       successful: false,
-      status:
-        "cancelled",
+      status: "cancelled",
     });
   }
 
-  if (
-    reportedStatus ===
-      "failed"
-  ) {
+  if (reportedStatus === "failed") {
     await admin
       .from("course_payments")
       .update({
-        status:
-          "failed",
+        status: "failed",
         updated_at:
           new Date().toISOString(),
       })
-      .eq(
-        "id",
-        payment.id
-      );
+      .eq("id", payment.id);
 
     return json200({
       received: true,
       processed: true,
       successful: false,
-      status:
-        "failed",
+      status: "failed",
     });
   }
 
-  /*
-   * Pending transactions remain pending.
-   * Do not create enrollment yet.
-   */
   if (
-    reportedStatus ===
-      "pending" ||
-    reportedStatus ===
-      "processing"
+    reportedStatus === "pending" ||
+    reportedStatus === "processing"
   ) {
     await admin
       .from("course_payments")
       .update({
-        status:
-          "pending",
+        status: "pending",
         updated_at:
           new Date().toISOString(),
       })
-      .eq(
-        "id",
-        payment.id
-      );
+      .eq("id", payment.id);
 
     return json200({
       received: true,
       processed: true,
       successful: false,
-      status:
-        "pending",
+      status: "pending",
     });
   }
 
-  /*
-   * Only a successful webhook proceeds to verification.
-   * We independently verify the transaction against
-   * Flutterwave instead of trusting webhook payload data.
-   */
-  if (
-    reportedStatus !==
-    "successful"
-  ) {
+  if (reportedStatus !== "successful") {
     return json200({
       received: true,
       ignored: true,
@@ -704,8 +524,7 @@ export async function POST(
       course_id:
         payment.course_id,
       enrollment_id:
-        enrollment?.id ??
-        null,
+        enrollment?.id ?? null,
     });
   } catch (error) {
     console.error(
@@ -713,30 +532,20 @@ export async function POST(
       error
     );
 
-    /*
-     * Do not mark a payment failed merely because
-     * verification temporarily failed. Leaving it pending
-     * allows the callback/webhook to be reconciled again.
-     */
     await admin
       .from("course_payments")
       .update({
-        status:
-          "pending",
+        status: "pending",
         updated_at:
           new Date().toISOString(),
       })
-      .eq(
-        "id",
-        payment.id
-      );
+      .eq("id", payment.id);
 
     return json200({
       received: true,
       processed: false,
       successful: false,
-      status:
-        "pending",
+      status: "pending",
     });
   }
 }
