@@ -14770,3 +14770,63 @@ main form .rn-button {
     max-width: 220px !important;
   }
 }
+
+/* =========================================================
+   CERTIFICATE SYSTEM — VISUAL CONSISTENCY
+   ========================================================= */
+
+.rn-certificate-document {
+  font-family:
+    Inter,
+    Arial,
+    sans-serif !important;
+  color: var(--navy, #0b1e3a) !important;
+}
+
+.rn-certificate-document
+  .rn-certificate-brand {
+  font-family:
+    Georgia,
+    "Times New Roman",
+    serif !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.025em !important;
+  color: var(--navy, #0b1e3a) !important;
+}
+
+.rn-certificate-document
+  .rn-certificate-brand
+  strong {
+  color: var(--navy, #0b1e3a) !important;
+}
+
+.rn-certificate-document
+  .rn-certificate-verification {
+  color: var(--navy, #0b1e3a) !important;
+}
+
+.rn-certificate-document
+  .rn-certificate-footer {
+  color: #526173 !important;
+}
+
+.rn-certificate-document
+  .rn-certificate-footer strong {
+  color: var(--navy, #0b1e3a) !important;
+}
+
+.rn-certificate-revoked {
+  border-color: #fecaca !important;
+  background: #fef2f2 !important;
+  color: #991b1b !important;
+}
+
+@media (max-width: 720px) {
+  .rn-certificate-document {
+    padding: 20px !important;
+  }
+
+  .rn-certificate-border {
+    padding: 24px !important;
+  }
+}
