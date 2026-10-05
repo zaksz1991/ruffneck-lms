@@ -156,6 +156,10 @@ export function Header() {
                   Payment History
                 </Link>
 
+                <Link href="/student/certificates">
+                  Certificates
+                </Link>
+
                 {canAccessAdmin ? (
                   <Link href="/admin/lms">
                     Admin
