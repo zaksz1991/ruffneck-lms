@@ -110,10 +110,7 @@ const LEARNING_PACK_SCHEMA = {
             type: "STRING",
           },
         },
-        required: [
-          "term",
-          "explanation",
-        ],
+        required: ["term", "explanation"],
       },
     },
 
@@ -135,11 +132,7 @@ const LEARNING_PACK_SCHEMA = {
             },
           },
         },
-        required: [
-          "heading",
-          "content",
-          "examples",
-        ],
+        required: ["heading", "content", "examples"],
       },
     },
 
@@ -156,11 +149,7 @@ const LEARNING_PACK_SCHEMA = {
           type: "STRING",
         },
       },
-      required: [
-        "title",
-        "instructions",
-        "expected_output",
-      ],
+      required: ["title", "instructions", "expected_output"],
     },
 
     assessment_questions: {
@@ -205,10 +194,7 @@ const LEARNING_PACK_SCHEMA = {
             type: "STRING",
           },
         },
-        required: [
-          "step",
-          "action",
-        ],
+        required: ["step", "action"],
       },
     },
 
@@ -224,10 +210,7 @@ const LEARNING_PACK_SCHEMA = {
             type: "STRING",
           },
         },
-        required: [
-          "front",
-          "back",
-        ],
+        required: ["front", "back"],
       },
     },
 
@@ -435,8 +418,7 @@ function normalizeStringArray(value: unknown) {
 
   return value.filter(
     (item): item is string =>
-      typeof item === "string" &&
-      item.trim().length > 0
+      typeof item === "string" && item.trim().length > 0
   );
 }
 
@@ -480,57 +462,49 @@ function redactSensitiveText(value: string) {
   // Phone numbers following an explicit label.
   result = result.replace(
     /\b((?:phone|mobile|telephone|tel)(?:\s+number)?)\s*[:#-]\s*(?:\+?\d[\d\s().-]{7,18})\b/gi,
-    (_match, label: string) =>
-      label.trim()
+    (_match, label: string) => label.trim()
   );
 
   // BVN / NIN following an explicit label.
   result = result.replace(
     /\b((?:bvn|nin))\s*[:#-]\s*\d{11}\b/gi,
-    (_match, label: string) =>
-      label.trim().toUpperCase()
+    (_match, label: string) => label.trim().toUpperCase()
   );
 
   // Account number following an explicit label.
   result = result.replace(
     /\b((?:account|acct)(?:\s+(?:number|no\.?))?)\s*[:#-]\s*[A-Z0-9]{6,20}\b/gi,
-    (_match, label: string) =>
-      label.trim()
+    (_match, label: string) => label.trim()
   );
 
   // Account number expressed with "is".
   result = result.replace(
     /\b((?:account|acct)(?:\s+(?:number|no\.?))?)\s+(?:is|was)\s+[A-Z0-9]{6,20}\b/gi,
-    (_match, label: string) =>
-      label.trim()
+    (_match, label: string) => label.trim()
   );
 
   // Card number following an explicit label.
   result = result.replace(
     /\b((?:card)(?:\s+(?:number|no\.?))?)\s*[:#-]\s*(?:\d[ -]?){13,19}\b/gi,
-    (_match, label: string) =>
-      label.trim()
+    (_match, label: string) => label.trim()
   );
 
   // Transaction/payment/transfer/reference identifiers following a label.
   result = result.replace(
     /\b((?:(?:transaction|payment|transfer)\s+(?:id|reference|ref|number|no\.?)|reference(?:\s+(?:number|no\.?))?|rrn|stan))\s*[:#-]\s*[A-Z0-9-]{8,}\b/gi,
-    (_match, label: string) =>
-      label.trim()
+    (_match, label: string) => label.trim()
   );
 
   // Same identifiers expressed with "is" or "was".
   result = result.replace(
     /\b((?:(?:transaction|payment|transfer)\s+(?:id|reference|ref|number|no\.?)|reference(?:\s+(?:number|no\.?))?|rrn|stan))\s+(?:is|was)\s+[A-Z0-9-]{8,}\b/gi,
-    (_match, label: string) =>
-      label.trim()
+    (_match, label: string) => label.trim()
   );
 
   // Beneficiary/sender/recipient/customer account values.
   result = result.replace(
     /\b((?:beneficiary|sender|recipient|customer)\s+account(?:\s+(?:number|no\.?))?)\s*[:#-]\s*[A-Z0-9]{6,20}\b/gi,
-    (_match, label: string) =>
-      label.trim()
+    (_match, label: string) => label.trim()
   );
 
   // IBAN.
@@ -614,9 +588,7 @@ function redactSensitiveText(value: string) {
     );
 
   // Avoid accidental doubled whitespace after redaction.
-  result = result
-    .replace(/[ \t]{2,}/g, " ")
-    .trim();
+  result = result.replace(/[ \t]{2,}/g, " ").trim();
 
   return result;
 }
@@ -628,27 +600,15 @@ function redactSensitiveText(value: string) {
  * Explicit sensitive object fields are replaced.
  * Free-text values are cleaned with redactSensitiveText().
  */
-function sanitizeValue(
-  value: unknown,
-  fieldName = ""
-): unknown {
+function sanitizeValue(value: unknown, fieldName = ""): unknown {
   if (typeof value === "string") {
-    const normalizedFieldName =
-      normalizeFieldName(fieldName);
+    const normalizedFieldName = normalizeFieldName(fieldName);
 
-    if (
-      RAW_SOURCE_FIELD_NAMES.has(
-        normalizedFieldName
-      )
-    ) {
+    if (RAW_SOURCE_FIELD_NAMES.has(normalizedFieldName)) {
       return "";
     }
 
-    if (
-      SENSITIVE_FIELD_NAMES.has(
-        normalizedFieldName
-      )
-    ) {
+    if (SENSITIVE_FIELD_NAMES.has(normalizedFieldName)) {
       return REDACTED;
     }
 
@@ -656,31 +616,16 @@ function sanitizeValue(
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) =>
-      sanitizeValue(
-        item,
-        fieldName
-      )
-    );
+    return value.map((item) => sanitizeValue(item, fieldName));
   }
 
-  if (
-    typeof value === "object" &&
-    value !== null
-  ) {
-    const source =
-      value as Record<string, unknown>;
+  if (typeof value === "object" && value !== null) {
+    const source = value as Record<string, unknown>;
 
-    const result: Record<string, unknown> =
-      {};
+    const result: Record<string, unknown> = {};
 
-    for (const [key, item] of Object.entries(
-      source
-    )) {
-      result[key] = sanitizeValue(
-        item,
-        key
-      );
+    for (const [key, item] of Object.entries(source)) {
+      result[key] = sanitizeValue(item, key);
     }
 
     return result;
@@ -689,9 +634,7 @@ function sanitizeValue(
   return value;
 }
 
-function sanitizeLearningPack(
-  value: unknown
-) {
+function sanitizeLearningPack(value: unknown) {
   if (
     !value ||
     typeof value !== "object" ||
@@ -700,8 +643,7 @@ function sanitizeLearningPack(
     return null;
   }
 
-  const sanitized =
-    sanitizeValue(value);
+  const sanitized = sanitizeValue(value);
 
   if (
     !sanitized ||
@@ -711,15 +653,10 @@ function sanitizeLearningPack(
     return null;
   }
 
-  return sanitized as Record<
-    string,
-    unknown
-  >;
+  return sanitized as Record<string, unknown>;
 }
 
-function normalizeLearningPack(
-  value: unknown
-) {
+function normalizeLearningPack(value: unknown) {
   if (
     !value ||
     typeof value !== "object" ||
@@ -728,321 +665,190 @@ function normalizeLearningPack(
     return null;
   }
 
-  const source =
-    value as Record<string, unknown>;
+  const source = value as Record<string, unknown>;
 
-  const rawConcepts =
-    Array.isArray(
-      source.key_concepts
+  const rawConcepts = Array.isArray(source.key_concepts)
+    ? source.key_concepts
+    : [];
+
+  const keyConcepts = rawConcepts
+    .filter(
+      (
+        item
+      ): item is Record<string, unknown> =>
+        !!item &&
+        typeof item === "object" &&
+        !Array.isArray(item)
     )
-      ? source.key_concepts
-      : [];
+    .map((item) => ({
+      term:
+        typeof item.term === "string"
+          ? redactSensitiveText(item.term.trim())
+          : "",
 
-  const keyConcepts =
-    rawConcepts
-      .filter(
-        (
-          item
-        ): item is Record<
-          string,
-          unknown
-        > =>
-          !!item &&
-          typeof item ===
-            "object" &&
-          !Array.isArray(item)
-      )
-      .map((item) => ({
-        term:
-          typeof item.term ===
-          "string"
-            ? redactSensitiveText(
-                item.term.trim()
-              )
-            : "",
+      explanation:
+        typeof item.explanation === "string"
+          ? redactSensitiveText(item.explanation.trim())
+          : "",
+    }))
+    .filter((item) => item.term && item.explanation);
 
-        explanation:
-          typeof item.explanation ===
-          "string"
-            ? redactSensitiveText(
-                item.explanation.trim()
-              )
-            : "",
-      }))
-      .filter(
-        (item) =>
-          item.term &&
-          item.explanation
-      );
+  const rawSections = Array.isArray(source.sections)
+    ? source.sections
+    : [];
 
-  const rawSections =
-    Array.isArray(
-      source.sections
+  const sections = rawSections
+    .filter(
+      (
+        item
+      ): item is Record<string, unknown> =>
+        !!item &&
+        typeof item === "object" &&
+        !Array.isArray(item)
     )
-      ? source.sections
-      : [];
+    .map((item) => ({
+      heading:
+        typeof item.heading === "string"
+          ? redactSensitiveText(item.heading.trim())
+          : "",
 
-  const sections =
-    rawSections
-      .filter(
-        (
-          item
-        ): item is Record<
-          string,
-          unknown
-        > =>
-          !!item &&
-          typeof item ===
-            "object" &&
-          !Array.isArray(item)
-      )
-      .map((item) => ({
-        heading:
-          typeof item.heading ===
-          "string"
-            ? redactSensitiveText(
-                item.heading.trim()
-              )
-            : "",
+      content:
+        typeof item.content === "string"
+          ? redactSensitiveText(item.content.trim())
+          : "",
 
-        content:
-          typeof item.content ===
-          "string"
-            ? redactSensitiveText(
-                item.content.trim()
-              )
-            : "",
+      examples: normalizeStringArray(item.examples).map(
+        redactSensitiveText
+      ),
+    }))
+    .filter((item) => item.heading || item.content);
 
-        examples:
-          normalizeStringArray(
-            item.examples
-          ).map(
-            redactSensitiveText
-          ),
-      }))
-      .filter(
-        (item) =>
-          item.heading ||
-          item.content
-      );
-
-  const rawPractical =
-    source.practical_activity;
+  const rawPractical = source.practical_activity;
 
   const practical =
     rawPractical &&
-    typeof rawPractical ===
-      "object" &&
-    !Array.isArray(
-      rawPractical
-    )
-      ? (rawPractical as Record<
-          string,
-          unknown
-        >)
+    typeof rawPractical === "object" &&
+    !Array.isArray(rawPractical)
+      ? (rawPractical as Record<string, unknown>)
       : {};
 
-  const rawQuestions =
-    Array.isArray(
-      source.assessment_questions
+  const rawQuestions = Array.isArray(source.assessment_questions)
+    ? source.assessment_questions
+    : [];
+
+  const assessmentQuestions = rawQuestions
+    .filter(
+      (
+        item
+      ): item is Record<string, unknown> =>
+        !!item &&
+        typeof item === "object" &&
+        !Array.isArray(item)
     )
-      ? source.assessment_questions
-      : [];
+    .map((item) => ({
+      question:
+        typeof item.question === "string"
+          ? redactSensitiveText(item.question.trim())
+          : "",
 
-  const assessmentQuestions =
-    rawQuestions
-      .filter(
-        (
-          item
-        ): item is Record<
-          string,
-          unknown
-        > =>
-          !!item &&
-          typeof item ===
-            "object" &&
-          !Array.isArray(item)
-      )
-      .map((item) => ({
-        question:
-          typeof item.question ===
-          "string"
-            ? redactSensitiveText(
-                item.question.trim()
-              )
-            : "",
+      options: normalizeStringArray(item.options).map(
+        redactSensitiveText
+      ),
 
-        options:
-          normalizeStringArray(
-            item.options
-          ).map(
-            redactSensitiveText
-          ),
+      correct_answer:
+        typeof item.correct_answer === "string"
+          ? redactSensitiveText(item.correct_answer.trim())
+          : "",
 
-        correct_answer:
-          typeof item.correct_answer ===
-          "string"
-            ? redactSensitiveText(
-                item.correct_answer.trim()
-              )
-            : "",
+      explanation:
+        typeof item.explanation === "string"
+          ? redactSensitiveText(item.explanation.trim())
+          : "",
+    }))
+    .filter((item) => item.question);
 
-        explanation:
-          typeof item.explanation ===
-          "string"
-            ? redactSensitiveText(
-                item.explanation.trim()
-              )
-            : "",
-      }))
-      .filter(
-        (item) =>
-          item.question
-      );
+  const rawStudyPlan = Array.isArray(source.study_plan)
+    ? source.study_plan
+    : [];
 
-  const rawStudyPlan =
-    Array.isArray(
-      source.study_plan
+  const studyPlan = rawStudyPlan
+    .filter(
+      (
+        item
+      ): item is Record<string, unknown> =>
+        !!item &&
+        typeof item === "object" &&
+        !Array.isArray(item)
     )
-      ? source.study_plan
-      : [];
+    .map((item) => ({
+      step:
+        typeof item.step === "number" &&
+        Number.isFinite(item.step)
+          ? Math.max(1, Math.round(item.step))
+          : 1,
 
-  const studyPlan =
-    rawStudyPlan
-      .filter(
-        (
-          item
-        ): item is Record<
-          string,
-          unknown
-        > =>
-          !!item &&
-          typeof item ===
-            "object" &&
-          !Array.isArray(item)
-      )
-      .map((item) => ({
-        step:
-          typeof item.step ===
-            "number" &&
-          Number.isFinite(
-            item.step
-          )
-            ? Math.max(
-                1,
-                Math.round(
-                  item.step
-                )
-              )
-            : 1,
+      action:
+        typeof item.action === "string"
+          ? redactSensitiveText(item.action.trim())
+          : "",
+    }))
+    .filter((item) => item.action);
 
-        action:
-          typeof item.action ===
-          "string"
-            ? redactSensitiveText(
-                item.action.trim()
-              )
-            : "",
-      }))
-      .filter(
-        (item) =>
-          item.action
-      );
+  const rawFlashcards = Array.isArray(source.flashcards)
+    ? source.flashcards
+    : [];
 
-  const rawFlashcards =
-    Array.isArray(
-      source.flashcards
+  const flashcards = rawFlashcards
+    .filter(
+      (
+        item
+      ): item is Record<string, unknown> =>
+        !!item &&
+        typeof item === "object" &&
+        !Array.isArray(item)
     )
-      ? source.flashcards
-      : [];
+    .map((item) => ({
+      front:
+        typeof item.front === "string"
+          ? redactSensitiveText(item.front.trim())
+          : "",
 
-  const flashcards =
-    rawFlashcards
-      .filter(
-        (
-          item
-        ): item is Record<
-          string,
-          unknown
-        > =>
-          !!item &&
-          typeof item ===
-            "object" &&
-          !Array.isArray(item)
-      )
-      .map((item) => ({
-        front:
-          typeof item.front ===
-          "string"
-            ? redactSensitiveText(
-                item.front.trim()
-              )
-            : "",
-
-        back:
-          typeof item.back ===
-          "string"
-            ? redactSensitiveText(
-                item.back.trim()
-              )
-            : "",
-      }))
-      .filter(
-        (item) =>
-          item.front &&
-          item.back
-      );
+      back:
+        typeof item.back === "string"
+          ? redactSensitiveText(item.back.trim())
+          : "",
+    }))
+    .filter((item) => item.front && item.back);
 
   const duration =
-    typeof source
-      .estimated_duration_minutes ===
-      "number" &&
-    Number.isFinite(
-      source.estimated_duration_minutes
-    )
+    typeof source.estimated_duration_minutes === "number" &&
+    Number.isFinite(source.estimated_duration_minutes)
       ? Math.max(
           1,
-          Math.round(
-            source.estimated_duration_minutes
-          )
+          Math.round(source.estimated_duration_minutes)
         )
       : 30;
 
-  const warnings =
-    normalizeStringArray(
-      source.source_warnings
-    ).map(
-      redactSensitiveText
-    );
+  const warnings = normalizeStringArray(
+    source.source_warnings
+  ).map(redactSensitiveText);
 
   const privacyWarning =
     "Potential personal or financial identifiers were screened and redacted before this learning material was returned.";
 
-  if (
-    !warnings.includes(
-      privacyWarning
-    )
-  ) {
-    warnings.push(
-      privacyWarning
-    );
+  if (!warnings.includes(privacyWarning)) {
+    warnings.push(privacyWarning);
   }
 
   return {
     title:
-      typeof source.title ===
-      "string"
-        ? redactSensitiveText(
-            source.title.trim()
-          )
+      typeof source.title === "string"
+        ? redactSensitiveText(source.title.trim())
         : "Generated learning material",
 
     source_summary:
-      typeof source.source_summary ===
-      "string"
-        ? redactSensitiveText(
-            source.source_summary.trim()
-          )
+      typeof source.source_summary === "string"
+        ? redactSensitiveText(source.source_summary.trim())
         : "",
 
     /*
@@ -1051,84 +857,60 @@ function normalizeLearningPack(
      */
     extracted_text: "",
 
-    learning_objectives:
-      normalizeStringArray(
-        source.learning_objectives
-      ).map(
-        redactSensitiveText
-      ),
+    learning_objectives: normalizeStringArray(
+      source.learning_objectives
+    ).map(redactSensitiveText),
 
-    prerequisites:
-      normalizeStringArray(
-        source.prerequisites
-      ).map(
-        redactSensitiveText
-      ),
+    prerequisites: normalizeStringArray(
+      source.prerequisites
+    ).map(redactSensitiveText),
 
-    key_concepts:
-      keyConcepts,
+    key_concepts: keyConcepts,
 
     sections,
 
     practical_activity: {
       title:
-        typeof practical.title ===
-        "string"
-          ? redactSensitiveText(
-              practical.title.trim()
-            )
+        typeof practical.title === "string"
+          ? redactSensitiveText(practical.title.trim())
           : "Practical application",
 
       instructions:
-        typeof practical.instructions ===
-        "string"
+        typeof practical.instructions === "string"
           ? redactSensitiveText(
               practical.instructions.trim()
             )
           : "",
 
       expected_output:
-        typeof practical.expected_output ===
-        "string"
+        typeof practical.expected_output === "string"
           ? redactSensitiveText(
               practical.expected_output.trim()
             )
           : "",
     },
 
-    assessment_questions:
-      assessmentQuestions,
+    assessment_questions: assessmentQuestions,
 
-    study_plan:
-      studyPlan,
+    study_plan: studyPlan,
 
     flashcards,
 
-    source_warnings:
-      warnings,
+    source_warnings: warnings,
 
-    estimated_duration_minutes:
-      duration,
+    estimated_duration_minutes: duration,
 
     difficulty:
-      typeof source.difficulty ===
-      "string"
-        ? redactSensitiveText(
-            source.difficulty.trim()
-          )
+      typeof source.difficulty === "string"
+        ? redactSensitiveText(source.difficulty.trim())
         : "Beginner",
   };
 }
 
-function extractGeminiText(
-  response: GeminiResponse
-) {
+function extractGeminiText(response: GeminiResponse) {
   return (
     response.candidates?.[0]?.content?.parts
-      ?.map(
-        (part) =>
-          part.text || ""
-      )
+      ?.map((part) => part.text || "")
       .join("")
       .trim() || ""
   );
@@ -1142,23 +924,15 @@ function getGeminiErrorMessage(
     return response.error.message;
   }
 
-  if (
-    response.promptFeedback?.blockReason
-  ) {
+  if (response.promptFeedback?.blockReason) {
     return `Gemini blocked the request: ${response.promptFeedback.blockReason}.`;
   }
 
-  if (
-    response.candidates?.[0]
-      ?.finishReason
-  ) {
+  if (response.candidates?.[0]?.finishReason) {
     return `Gemini stopped the response with reason: ${response.candidates[0].finishReason}.`;
   }
 
-  if (
-    status === 401 ||
-    status === 403
-  ) {
+  if (status === 401 || status === 403) {
     return "Gemini rejected the API key or project access.";
   }
 
@@ -1177,23 +951,18 @@ function getGeminiErrorMessage(
   return "Gemini could not process the scanned pages.";
 }
 
-export async function POST(
-  request: Request
-) {
+export async function POST(request: Request) {
   try {
-    const supabase =
-      await createClient();
+    const supabase = await createClient();
 
     const {
       data: { user },
-    } =
-      await supabase.auth.getUser();
+    } = await supabase.auth.getUser();
 
     if (!user) {
       return NextResponse.json(
         {
-          error:
-            "Authentication required.",
+          error: "Authentication required.",
         },
         {
           status: 401,
@@ -1204,13 +973,11 @@ export async function POST(
     let body: ScanRequestBody;
 
     try {
-      body =
-        (await request.json()) as ScanRequestBody;
+      body = (await request.json()) as ScanRequestBody;
     } catch {
       return NextResponse.json(
         {
-          error:
-            "Invalid request body.",
+          error: "Invalid request body.",
         },
         {
           status: 400,
@@ -1218,54 +985,39 @@ export async function POST(
       );
     }
 
-    const images =
-      Array.isArray(body.images)
-        ? body.images.filter(
-            (
-              item
-            ): item is string =>
-              typeof item ===
-              "string"
-          )
-        : [];
+    const images = Array.isArray(body.images)
+      ? body.images.filter(
+          (item): item is string =>
+            typeof item === "string"
+        )
+      : [];
 
-    const mode =
-      OUTPUT_TYPES.includes(
-        body.mode as OutputType
-      )
-        ? (body.mode as OutputType)
-        : null;
+    const mode = OUTPUT_TYPES.includes(
+      body.mode as OutputType
+    )
+      ? (body.mode as OutputType)
+      : null;
 
-    const language =
-      LANGUAGES.includes(
-        body.language as LanguageCode
-      )
-        ? (body.language as LanguageCode)
-        : null;
+    const language = LANGUAGES.includes(
+      body.language as LanguageCode
+    )
+      ? (body.language as LanguageCode)
+      : null;
 
-    const audience =
-      AUDIENCES.includes(
-        body.audience as Audience
-      )
-        ? (body.audience as Audience)
-        : null;
+    const audience = AUDIENCES.includes(
+      body.audience as Audience
+    )
+      ? (body.audience as Audience)
+      : null;
 
     const rawFocus =
-      typeof body.focus ===
-      "string"
+      typeof body.focus === "string"
         ? body.focus.trim()
         : "";
 
-    const focus =
-      redactSensitiveText(
-        rawFocus
-      );
+    const focus = redactSensitiveText(rawFocus);
 
-    if (
-      !mode ||
-      !language ||
-      !audience
-    ) {
+    if (!mode || !language || !audience) {
       return NextResponse.json(
         {
           error:
@@ -1280,8 +1032,7 @@ export async function POST(
     if (images.length === 0) {
       return NextResponse.json(
         {
-          error:
-            "Add at least one scanned page.",
+          error: "Add at least one scanned page.",
         },
         {
           status: 400,
@@ -1289,14 +1040,10 @@ export async function POST(
       );
     }
 
-    if (
-      images.length >
-      MAX_PAGES
-    ) {
+    if (images.length > MAX_PAGES) {
       return NextResponse.json(
         {
-          error:
-            `You can process up to ${MAX_PAGES} pages at a time.`,
+          error: `You can process up to ${MAX_PAGES} pages at a time.`,
         },
         {
           status: 400,
@@ -1304,10 +1051,7 @@ export async function POST(
       );
     }
 
-    if (
-      focus.length >
-      MAX_FOCUS_LENGTH
-    ) {
+    if (focus.length > MAX_FOCUS_LENGTH) {
       return NextResponse.json(
         {
           error:
@@ -1321,19 +1065,15 @@ export async function POST(
 
     let totalImageChars = 0;
 
-    const imageParts:
-      {
-        inline_data: {
-          mime_type: string;
-          data: string;
-        };
-      }[] = [];
+    const imageParts: {
+      inline_data: {
+        mime_type: string;
+        data: string;
+      };
+    }[] = [];
 
     for (const image of images) {
-      if (
-        image.length >
-        MAX_IMAGE_CHARS
-      ) {
+      if (image.length > MAX_IMAGE_CHARS) {
         return NextResponse.json(
           {
             error:
@@ -1345,11 +1085,7 @@ export async function POST(
         );
       }
 
-      if (
-        !isAllowedDataUrl(
-          image
-        )
-      ) {
+      if (!isAllowedDataUrl(image)) {
         return NextResponse.json(
           {
             error:
@@ -1361,10 +1097,7 @@ export async function POST(
         );
       }
 
-      const parsed =
-        splitDataUrl(
-          image
-        );
+      const parsed = splitDataUrl(image);
 
       if (!parsed) {
         return NextResponse.json(
@@ -1378,23 +1111,17 @@ export async function POST(
         );
       }
 
-      totalImageChars +=
-        image.length;
+      totalImageChars += image.length;
 
       imageParts.push({
         inline_data: {
-          mime_type:
-            parsed.mimeType,
-          data:
-            parsed.data,
+          mime_type: parsed.mimeType,
+          data: parsed.data,
         },
       });
     }
 
-    if (
-      totalImageChars >
-      MAX_TOTAL_IMAGE_CHARS
-    ) {
+    if (totalImageChars > MAX_TOTAL_IMAGE_CHARS) {
       return NextResponse.json(
         {
           error:
@@ -1406,8 +1133,7 @@ export async function POST(
       );
     }
 
-    const apiKey =
-      process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
       return NextResponse.json(
@@ -1422,8 +1148,7 @@ export async function POST(
     }
 
     const model =
-      process.env.GEMINI_LMS_MODEL ||
-      DEFAULT_MODEL;
+      process.env.GEMINI_LMS_MODEL || DEFAULT_MODEL;
 
     const prompt = [
       "You are RuffNeck Learn's AI learning-content transformation engine.",
@@ -1439,29 +1164,46 @@ export async function POST(
       "Do not silently invent unclear words or facts. Record uncertainties in source_warnings.",
 
       "PRIVACY REQUIREMENT:",
-      "Never reproduce personal or financial identifiers from the source material.",
+
+      "Never reproduce personal, financial, transactional, authentication, contact or identifying information from the source material.",
+
       "Do not reproduce bank account numbers, card numbers, BVN, NIN, phone numbers, email addresses, transaction references, payment references, beneficiary account details, customer identifiers, PINs, CVVs or similar private identifiers.",
-      "When a sensitive identifier is encountered, do not reproduce the original value.",
-      "Use the general concept instead, for example 'account number', 'transaction reference number', 'phone number' or 'email address'.",
-      "Do not copy names, account details or other private identifying information into the learning pack unless they are clearly necessary as a generic public entity or concept.",
+
+      "Do not reproduce exact transaction amounts, balances, account balances, payment values, dates, timestamps or other source-specific financial transaction values when they belong to the photographed document.",
+
+      "Do not reproduce sender names, recipient names, beneficiary names, customer names or other private individuals identified in the source.",
+
+      "Do not reproduce specific bank account details, payment identifiers or other source-specific financial records even when they are visible in the image.",
+
+      "When sensitive or source-specific information is encountered, convert it into a generic educational concept instead of reproducing the original value.",
+
+      "Examples: use 'account number' instead of an account number, 'transaction reference number' instead of a reference value, 'transaction amount' instead of the exact amount, 'transaction date' instead of the exact date, 'transaction timestamp' instead of the exact time, and 'sender' or 'recipient' instead of a private person's name.",
+
+      "Do not reproduce a combination of details that could reconstruct the original private transaction.",
+
+      "Use generic examples for teaching. If an exact value is not necessary to explain the concept, omit it.",
+
+      "Do not copy names, account details or other private identifying information into the learning pack unless they are clearly established public entities and are genuinely necessary to explain a general concept.",
+
       "Do not put raw OCR text or a verbatim copy of a private source document into extracted_text.",
+
       "Leave extracted_text empty because raw source text is not retained for reusable LMS content.",
 
-      `Create a ${outputName(
-        mode
-      )}.`,
+      `Create a ${outputName(mode)}.`,
 
       `Write the generated learning material in ${languageName(
         language
       )}.`,
 
-      `Make it suitable for ${audienceName(
-        audience
-      )}.`,
+      `Make it suitable for ${audienceName(audience)}.`,
 
       "Use Nigerian or broader African examples when they improve practical relevance, but do not present invented examples as source facts.",
 
       "Make the output practical, structured and useful for real learning.",
+
+      "When the source is a receipt, bank statement, payment confirmation, invoice, transfer record or other financial document, teach the document type and its general fields rather than reproducing the specific transaction.",
+
+      "Prefer generic educational phrasing such as 'a successful transfer', 'a monetary amount', 'a transaction date', 'a receiving institution' and 'a reference number' rather than copying source-specific values.",
 
       "For a full lesson, include clear objectives, prerequisites, concepts, structured sections, examples, practical application, assessment, study path and revision support.",
 
@@ -1478,8 +1220,7 @@ export async function POST(
       "Return only the structured response required by the schema.",
 
       `Additional learner instruction: ${
-        focus ||
-        "None provided."
+        focus || "None provided."
       }`,
     ].join("\n");
 
@@ -1500,42 +1241,30 @@ export async function POST(
         model
       )}:generateContent`;
 
-    const geminiResponse =
-      await fetch(
-        endpoint,
-        {
-          method: "POST",
+    const geminiResponse = await fetch(endpoint, {
+      method: "POST",
 
-          headers: {
-            "Content-Type":
-              "application/json",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
 
-            "x-goog-api-key":
-              apiKey,
-          },
+      body: JSON.stringify({
+        contents,
 
-          body: JSON.stringify({
-            contents,
+        generationConfig: {
+          responseMimeType: "application/json",
 
-            generationConfig: {
-              responseMimeType:
-                "application/json",
+          responseSchema: LEARNING_PACK_SCHEMA,
 
-              responseSchema:
-                LEARNING_PACK_SCHEMA,
+          maxOutputTokens: 6000,
 
-              maxOutputTokens:
-                6000,
+          mediaResolution: "MEDIA_RESOLUTION_HIGH",
+        },
+      }),
+    });
 
-              mediaResolution:
-                "MEDIA_RESOLUTION_HIGH",
-            },
-          }),
-        }
-      );
-
-    let providerData:
-      GeminiResponse = {};
+    let providerData: GeminiResponse = {};
 
     try {
       providerData =
@@ -1543,8 +1272,7 @@ export async function POST(
     } catch {
       return NextResponse.json(
         {
-          error:
-            "Gemini returned an invalid response.",
+          error: "Gemini returned an invalid response.",
         },
         {
           status: 502,
@@ -1552,18 +1280,12 @@ export async function POST(
       );
     }
 
-    if (
-      !geminiResponse.ok
-    ) {
+    if (!geminiResponse.ok) {
       console.error(
         "Gemini Scan & Learn request failed:",
         {
-          status:
-            geminiResponse.status,
-
-          error:
-            providerData.error,
-
+          status: geminiResponse.status,
+          error: providerData.error,
           promptFeedback:
             providerData.promptFeedback,
         }
@@ -1571,14 +1293,12 @@ export async function POST(
 
       return NextResponse.json(
         {
-          error:
-            getGeminiErrorMessage(
-              providerData,
-              geminiResponse.status
-            ),
+          error: getGeminiErrorMessage(
+            providerData,
+            geminiResponse.status
+          ),
 
-          providerStatus:
-            geminiResponse.status,
+          providerStatus: geminiResponse.status,
         },
         {
           status: 502,
@@ -1587,9 +1307,7 @@ export async function POST(
     }
 
     const outputText =
-      extractGeminiText(
-        providerData
-      );
+      extractGeminiText(providerData);
 
     if (!outputText) {
       return NextResponse.json(
@@ -1603,21 +1321,14 @@ export async function POST(
       );
     }
 
-    let parsedOutput:
-      unknown;
+    let parsedOutput: unknown;
 
     try {
-      parsedOutput =
-        JSON.parse(
-          outputText
-        );
+      parsedOutput = JSON.parse(outputText);
     } catch {
       console.error(
         "Gemini returned non-JSON output:",
-        outputText.slice(
-          0,
-          1000
-        )
+        outputText.slice(0, 1000)
       );
 
       return NextResponse.json(
@@ -1636,9 +1347,7 @@ export async function POST(
      * sanitize Gemini output before returning it to the browser.
      */
     const sanitizedOutput =
-      sanitizeLearningPack(
-        parsedOutput
-      );
+      sanitizeLearningPack(parsedOutput);
 
     if (!sanitizedOutput) {
       return NextResponse.json(
@@ -1653,9 +1362,7 @@ export async function POST(
     }
 
     const pack =
-      normalizeLearningPack(
-        sanitizedOutput
-      );
+      normalizeLearningPack(sanitizedOutput);
 
     if (!pack) {
       return NextResponse.json(
@@ -1669,41 +1376,32 @@ export async function POST(
       );
     }
 
-    const activityInsert =
-      await supabase
-        .from(
-          "learning_activity"
-        )
-        .insert({
-          student_id:
-            user.id,
+    const activityInsert = await supabase
+      .from("learning_activity")
+      .insert({
+        student_id: user.id,
 
-          activity_type:
-            "ai_learning_pack_generated",
+        activity_type:
+          "ai_learning_pack_generated",
 
-          metadata: {
-            provider:
-              "google_gemini",
+        metadata: {
+          provider: "google_gemini",
 
-            model,
+          model,
 
-            mode,
+          mode,
 
-            language,
+          language,
 
-            audience,
+          audience,
 
-            page_count:
-              images.length,
+          page_count: images.length,
 
-            privacy_sanitized:
-              true,
-          },
-        });
+          privacy_sanitized: true,
+        },
+      });
 
-    if (
-      activityInsert.error
-    ) {
+    if (activityInsert.error) {
       console.warn(
         "Scan activity logging failed:",
         activityInsert.error
