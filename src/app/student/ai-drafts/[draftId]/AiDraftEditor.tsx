@@ -444,6 +444,107 @@ function SectionCard({
   );
 }
 
+function LearningPathItemCard({
+  item,
+  index,
+  disabled,
+  onChange,
+  onRemove,
+}: {
+  item: StudyPlanItem;
+  index: number;
+  disabled: boolean;
+  onChange: (next: StudyPlanItem) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <article
+      className="rn-card"
+      style={{
+        marginBottom: 16,
+        borderLeft: "4px solid currentColor",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 16,
+          marginBottom: 14,
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontSize: "0.76rem",
+              fontWeight: 800,
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              opacity: 0.65,
+              marginBottom: 4,
+            }}
+          >
+            Learning step {index + 1}
+          </div>
+
+          <strong
+            style={{
+              fontSize: "1rem",
+            }}
+          >
+            {item.step || `Step ${index + 1}`}
+          </strong>
+        </div>
+
+        {!disabled && (
+          <button
+            type="button"
+            className="rn-button rn-button-secondary"
+            onClick={onRemove}
+          >
+            Remove step
+          </button>
+        )}
+      </div>
+
+      <label className="rn-field">
+        <span>Step name</span>
+
+        <input
+          value={item.step}
+          disabled={disabled}
+          onChange={(event) =>
+            onChange({
+              ...item,
+              step: event.target.value,
+            })
+          }
+        />
+      </label>
+
+      <label
+        className="rn-field"
+        style={{ marginBottom: 0 }}
+      >
+        <span>What the learner should do</span>
+
+        <textarea
+          value={item.action}
+          disabled={disabled}
+          rows={4}
+          onChange={(event) =>
+            onChange({
+              ...item,
+              action: event.target.value,
+            })
+          }
+        />
+      </label>
+    </article>
+  );
+}
+
 export default function AiDraftEditor({ draft }: Props) {
   const router = useRouter();
 
@@ -525,6 +626,8 @@ export default function AiDraftEditor({ draft }: Props) {
         .replace(/\b\w/g, (letter) => letter.toUpperCase()),
     [draft.audience]
   );
+
+  const learningPath = pack.study_plan ?? [];
 
   function updatePackField<K extends keyof LearningPack>(
     key: K,
@@ -1090,6 +1193,129 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       </section>
 
+      <section style={{ marginBottom: 28 }}>
+        <div
+          className="rn-card"
+          style={{
+            marginBottom: 16,
+            padding: 18,
+            borderLeft: "6px solid currentColor",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "0.78rem",
+              fontWeight: 800,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              opacity: 0.7,
+              marginBottom: 6,
+            }}
+          >
+            Primary learning sequence
+          </div>
+
+          <h2
+            style={{
+              marginTop: 0,
+              marginBottom: 8,
+              fontSize: "1.35rem",
+            }}
+          >
+            Generated Learning Path
+          </h2>
+
+          <p style={{ marginBottom: 0 }}>
+            This is the actual learning sequence created
+            by RuffNeck Learn AI from the source material.
+            The steps below represent the order in which
+            the learner should study, practise, and progress.
+          </p>
+        </div>
+
+        {learningPath.length === 0 ? (
+          <div className="rn-card">
+            <p style={{ marginBottom: 0 }}>
+              No learning path was generated for this draft.
+            </p>
+          </div>
+        ) : (
+          learningPath.map((item, index) => (
+            <LearningPathItemCard
+              key={index}
+              item={item}
+              index={index}
+              disabled={locked}
+              onChange={(next) => {
+                const nextPath = [
+                  ...(pack.study_plan ?? []),
+                ];
+
+                nextPath[index] = next;
+
+                updatePackField(
+                  "study_plan",
+                  nextPath
+                );
+              }}
+              onRemove={() => {
+                const nextPath = [
+                  ...(pack.study_plan ?? []),
+                ];
+
+                nextPath.splice(index, 1);
+
+                updatePackField(
+                  "study_plan",
+                  nextPath
+                );
+              }}
+            />
+          ))
+        )}
+
+        {!locked && (
+          <button
+            type="button"
+            className="rn-button rn-button-secondary"
+            onClick={() =>
+              updatePackField("study_plan", [
+                ...(pack.study_plan ?? []),
+                {
+                  step: "",
+                  action: "",
+                },
+              ])
+            }
+          >
+            Add learning step
+          </button>
+        )}
+      </section>
+
+      <section style={{ marginBottom: 24 }}>
+        <h2 className="rn-section-heading">
+          Supporting learning material
+        </h2>
+
+        <div
+          className="rn-card"
+          style={{
+            marginBottom: 16,
+          }}
+        >
+          <strong>
+            The sections below support the learning path.
+          </strong>
+
+          <p style={{ marginBottom: 0 }}>
+            These are the explanations, objectives,
+            concepts, activities, flashcards, and
+            assessments used to support the sequence above.
+          </p>
+        </div>
+      </section>
+
       <section style={{ marginBottom: 24 }}>
         <h2 className="rn-section-heading">Overview</h2>
 
@@ -1147,7 +1373,7 @@ export default function AiDraftEditor({ draft }: Props) {
             className="rn-section-heading"
             style={{ marginBottom: 0 }}
           >
-            Sections
+            Lesson sections
           </h2>
 
           {!locked && (
@@ -1450,115 +1676,6 @@ export default function AiDraftEditor({ draft }: Props) {
               }
             >
               Add prerequisite
-            </button>
-          )}
-        </div>
-      </section>
-
-      <section style={{ marginBottom: 24 }}>
-        <h2 className="rn-section-heading">
-          Study plan
-        </h2>
-
-        <div className="rn-card">
-          {(pack.study_plan ?? []).map(
-            (item, index) => (
-              <div
-                key={index}
-                style={{
-                  borderBottom:
-                    "1px solid currentColor",
-                  paddingBottom: 16,
-                  marginBottom: 16,
-                }}
-              >
-                <label className="rn-field">
-                  <span>Step</span>
-
-                  <input
-                    value={item.step}
-                    disabled={locked}
-                    onChange={(event) => {
-                      const plan = [
-                        ...(pack.study_plan ?? []),
-                      ];
-
-                      plan[index] = {
-                        ...item,
-                        step: event.target.value,
-                      };
-
-                      updatePackField(
-                        "study_plan",
-                        plan
-                      );
-                    }}
-                  />
-                </label>
-
-                <label className="rn-field">
-                  <span>Action</span>
-
-                  <textarea
-                    value={item.action}
-                    disabled={locked}
-                    rows={3}
-                    onChange={(event) => {
-                      const plan = [
-                        ...(pack.study_plan ?? []),
-                      ];
-
-                      plan[index] = {
-                        ...item,
-                        action: event.target.value,
-                      };
-
-                      updatePackField(
-                        "study_plan",
-                        plan
-                      );
-                    }}
-                  />
-                </label>
-
-                {!locked && (
-                  <button
-                    type="button"
-                    className="rn-button rn-button-secondary"
-                    onClick={() =>
-                      updatePackField(
-                        "study_plan",
-                        (
-                          pack.study_plan ?? []
-                        ).filter(
-                          (_, itemIndex) =>
-                            itemIndex !== index
-                        )
-                      )
-                    }
-                  >
-                    Remove step
-                  </button>
-                )}
-              </div>
-            )
-          )}
-
-          {!locked && (
-            <button
-              type="button"
-              className="rn-button rn-button-secondary"
-              onClick={() =>
-                updatePackField("study_plan", [
-                  ...(pack.study_plan ?? []),
-                  {
-                    step: "",
-                    action: "",
-                  },
-                ])
-              }
-            >
-              Add study step
             </button>
           )}
         </div>
