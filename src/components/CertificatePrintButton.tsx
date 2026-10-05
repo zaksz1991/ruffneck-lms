@@ -6,6 +6,10 @@ export default function CertificatePrintButton() {
   const [printing, setPrinting] = useState(false);
 
   function handlePrint() {
+    if (printing) {
+      return;
+    }
+
     setPrinting(true);
 
     window.setTimeout(() => {
@@ -31,7 +35,9 @@ export default function CertificatePrintButton() {
           cursor: printing ? "wait" : "pointer",
         }}
       >
-        {printing ? "Preparing Certificate..." : "Print / Save PDF"}
+        {printing
+          ? "Preparing Certificate..."
+          : "Print / Save PDF"}
       </button>
 
       <style jsx global>{`
@@ -54,12 +60,12 @@ export default function CertificatePrintButton() {
             visibility: hidden !important;
           }
 
-          .certificate-print-area,
-          .certificate-print-area * {
+          .rn-certificate-document,
+          .rn-certificate-document * {
             visibility: visible !important;
           }
 
-          .certificate-print-area {
+          .rn-certificate-document {
             position: absolute !important;
             left: 0 !important;
             top: 0 !important;
@@ -72,9 +78,25 @@ export default function CertificatePrintButton() {
             border: none !important;
           }
 
-          .certificate-print-area button,
-          .certificate-print-area a,
-          .certificate-print-area .no-print {
+          .rn-certificate-document
+            .rn-certificate-verification {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+          }
+
+          .rn-certificate-document
+            .rn-certificate-border {
+            width: 100% !important;
+            min-height: 210mm !important;
+            box-sizing: border-box !important;
+          }
+
+          .rn-certificate-document
+            .no-print,
+          .rn-certificate-document
+            button,
+          .rn-certificate-document
+            a {
             display: none !important;
           }
 
