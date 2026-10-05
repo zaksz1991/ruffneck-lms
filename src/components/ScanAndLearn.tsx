@@ -1,7 +1,13 @@
 "use client";
 
-import { ChangeEvent, useRef, useState } from "react";
-import { redactImagesBeforeGemini } from "@/lib/client/privacyRedaction";
+import {
+  ChangeEvent,
+  useRef,
+  useState,
+} from "react";
+import {
+  redactImagesBeforeGemini,
+} from "@/lib/client/privacyRedaction";
 
 const MAX_PAGES = 5;
 const TARGET_DATA_URL_LENGTH = 480_000;
@@ -32,9 +38,14 @@ const AUDIENCES = [
   ["personal", "Personal productivity"],
 ] as const;
 
-type OutputType = (typeof OUTPUT_TYPES)[number][0];
-type LanguageCode = (typeof LANGUAGES)[number][0];
-type Audience = (typeof AUDIENCES)[number][0];
+type OutputType =
+  (typeof OUTPUT_TYPES)[number][0];
+
+type LanguageCode =
+  (typeof LANGUAGES)[number][0];
+
+type Audience =
+  (typeof AUDIENCES)[number][0];
 
 type ScanImage = {
   id: string;
@@ -97,60 +108,95 @@ type SaveDraftResponse = {
     language_code: string;
     audience: string;
     status: string;
+    source_uploaded_at?: string | null;
     created_at: string;
     updated_at: string;
   };
 };
 
-function readFileAsDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
+function readFileAsDataUrl(
+  file: File
+) {
+  return new Promise<string>(
+    (resolve, reject) => {
+      const reader =
+        new FileReader();
 
-    reader.onload = () => {
-      if (typeof reader.result !== "string") {
-        reject(new Error("Unable to read the image."));
-        return;
-      }
+      reader.onload = () => {
+        if (
+          typeof reader.result !==
+          "string"
+        ) {
+          reject(
+            new Error(
+              "Unable to read the image."
+            )
+          );
+          return;
+        }
 
-      resolve(reader.result);
-    };
+        resolve(reader.result);
+      };
 
-    reader.onerror = () => {
-      reject(new Error("Unable to read the selected image."));
-    };
+      reader.onerror = () => {
+        reject(
+          new Error(
+            "Unable to read the selected image."
+          )
+        );
+      };
 
-    reader.readAsDataURL(file);
-  });
+      reader.readAsDataURL(file);
+    }
+  );
 }
 
-function loadImage(dataUrl: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
+function loadImage(
+  dataUrl: string
+) {
+  return new Promise<HTMLImageElement>(
+    (resolve, reject) => {
+      const image =
+        new Image();
 
-    image.onload = () => resolve(image);
+      image.onload = () =>
+        resolve(image);
 
-    image.onerror = () =>
-      reject(
-        new Error(
-          "The selected image could not be processed."
-        )
-      );
+      image.onerror = () =>
+        reject(
+          new Error(
+            "The selected image could not be processed."
+          )
+        );
 
-    image.src = dataUrl;
-  });
+      image.src = dataUrl;
+    }
+  );
 }
 
-async function compressImage(file: File) {
-  const sourceDataUrl = await readFileAsDataUrl(file);
-  const image = await loadImage(sourceDataUrl);
+async function compressImage(
+  file: File
+) {
+  const sourceDataUrl =
+    await readFileAsDataUrl(file);
+
+  const image =
+    await loadImage(
+      sourceDataUrl
+    );
 
   const sourceWidth =
-    image.naturalWidth || image.width;
+    image.naturalWidth ||
+    image.width;
 
   const sourceHeight =
-    image.naturalHeight || image.height;
+    image.naturalHeight ||
+    image.height;
 
-  if (!sourceWidth || !sourceHeight) {
+  if (
+    !sourceWidth ||
+    !sourceHeight
+  ) {
     throw new Error(
       "The selected image has no usable dimensions."
     );
@@ -160,38 +206,49 @@ async function compressImage(file: File) {
   let quality = 0.68;
   let result = "";
 
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const scale = Math.min(
-      1,
-      maxDimension /
-        Math.max(
-          sourceWidth,
-          sourceHeight
+  for (
+    let attempt = 0;
+    attempt < 4;
+    attempt += 1
+  ) {
+    const scale =
+      Math.min(
+        1,
+        maxDimension /
+          Math.max(
+            sourceWidth,
+            sourceHeight
+          )
+      );
+
+    const width =
+      Math.max(
+        1,
+        Math.round(
+          sourceWidth * scale
         )
-    );
+      );
 
-    const width = Math.max(
-      1,
-      Math.round(
-        sourceWidth * scale
-      )
-    );
+    const height =
+      Math.max(
+        1,
+        Math.round(
+          sourceHeight * scale
+        )
+      );
 
-    const height = Math.max(
-      1,
-      Math.round(
-        sourceHeight * scale
-      )
-    );
-
-    const canvas = document.createElement(
-      "canvas"
-    );
+    const canvas =
+      document.createElement(
+        "canvas"
+      );
 
     canvas.width = width;
     canvas.height = height;
 
-    const context = canvas.getContext("2d");
+    const context =
+      canvas.getContext(
+        "2d"
+      );
 
     if (!context) {
       throw new Error(
@@ -207,10 +264,11 @@ async function compressImage(file: File) {
       height
     );
 
-    result = canvas.toDataURL(
-      "image/jpeg",
-      quality
-    );
+    result =
+      canvas.toDataURL(
+        "image/jpeg",
+        quality
+      );
 
     if (
       result.length <=
@@ -219,17 +277,19 @@ async function compressImage(file: File) {
       return result;
     }
 
-    maxDimension = Math.max(
-      900,
-      Math.round(
-        maxDimension * 0.84
-      )
-    );
+    maxDimension =
+      Math.max(
+        900,
+        Math.round(
+          maxDimension * 0.84
+        )
+      );
 
-    quality = Math.max(
-      0.48,
-      quality - 0.07
-    );
+    quality =
+      Math.max(
+        0.48,
+        quality - 0.07
+      );
   }
 
   if (
@@ -287,6 +347,35 @@ function audienceLabel(
   );
 }
 
+function formatDateTime(
+  value: string | null | undefined
+) {
+  if (!value) {
+    return "Not recorded";
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return "Not recorded";
+  }
+
+  return new Intl.DateTimeFormat(
+    "en-GB",
+    {
+      dateStyle: "long",
+      timeStyle: "short",
+      timeZone:
+        "Africa/Lagos",
+    }
+  ).format(date);
+}
+
 export default function ScanAndLearn() {
   const cameraInputRef =
     useRef<HTMLInputElement>(null);
@@ -297,14 +386,34 @@ export default function ScanAndLearn() {
   const [images, setImages] =
     useState<ScanImage[]>([]);
 
+  const [
+    sourceUploadedAt,
+    setSourceUploadedAt,
+  ] = useState<string | null>(
+    null
+  );
+
+  const [
+    draftCreatedAt,
+    setDraftCreatedAt,
+  ] = useState<string | null>(
+    null
+  );
+
   const [mode, setMode] =
-    useState<OutputType>("lesson");
+    useState<OutputType>(
+      "lesson"
+    );
 
   const [language, setLanguage] =
-    useState<LanguageCode>("en");
+    useState<LanguageCode>(
+      "en"
+    );
 
   const [audience, setAudience] =
-    useState<Audience>("general");
+    useState<Audience>(
+      "general"
+    );
 
   const [focus, setFocus] =
     useState("");
@@ -312,23 +421,39 @@ export default function ScanAndLearn() {
   const [loading, setLoading] =
     useState(false);
 
-  const [privacyScanning, setPrivacyScanning] =
-    useState(false);
+  const [
+    privacyScanning,
+    setPrivacyScanning,
+  ] = useState(false);
 
-  const [savingDraft, setSavingDraft] =
-    useState(false);
+  const [
+    savingDraft,
+    setSavingDraft,
+  ] = useState(false);
 
   const [error, setError] =
-    useState<string | null>(null);
+    useState<string | null>(
+      null
+    );
 
-  const [saveMessage, setSaveMessage] =
-    useState<string | null>(null);
+  const [
+    saveMessage,
+    setSaveMessage,
+  ] = useState<string | null>(
+    null
+  );
 
-  const [savedDraftId, setSavedDraftId] =
-    useState<string | null>(null);
+  const [
+    savedDraftId,
+    setSavedDraftId,
+  ] = useState<string | null>(
+    null
+  );
 
   const [pack, setPack] =
-    useState<LearningPack | null>(null);
+    useState<LearningPack | null>(
+      null
+    );
 
   async function handleFiles(
     fileList: FileList | null
@@ -340,10 +465,12 @@ export default function ScanAndLearn() {
     setError(null);
     setSaveMessage(null);
     setSavedDraftId(null);
+    setDraftCreatedAt(null);
     setPack(null);
 
     const remaining =
-      MAX_PAGES - images.length;
+      MAX_PAGES -
+      images.length;
 
     if (remaining <= 0) {
       setError(
@@ -353,22 +480,34 @@ export default function ScanAndLearn() {
     }
 
     const selectedFiles =
-      Array.from(fileList).slice(
+      Array.from(
+        fileList
+      ).slice(
         0,
         remaining
       );
 
-    const nextImages: ScanImage[] = [];
+    const nextImages: ScanImage[] =
+      [];
 
-    for (const file of selectedFiles) {
-      if (!file.type.startsWith("image/")) {
+    for (
+      const file of selectedFiles
+    ) {
+      if (
+        !file.type.startsWith(
+          "image/"
+        )
+      ) {
         setError(
           "Only image files are supported in this scanner."
         );
         continue;
       }
 
-      if (file.size > 12 * 1024 * 1024) {
+      if (
+        file.size >
+        12 * 1024 * 1024
+      ) {
         setError(
           `${file.name} is too large. Use an image smaller than 12 MB.`
         );
@@ -377,52 +516,106 @@ export default function ScanAndLearn() {
 
       try {
         const dataUrl =
-          await compressImage(file);
+          await compressImage(
+            file
+          );
 
         nextImages.push({
           id: makeImageId(),
           name: file.name,
           dataUrl,
         });
-      } catch (processingError) {
+      } catch (
+        processingError
+      ) {
         setError(
-          processingError instanceof Error
+          processingError instanceof
+            Error
             ? processingError.message
             : `Unable to process ${file.name}.`
         );
       }
     }
 
-    if (nextImages.length > 0) {
-      setImages((current) => [
-        ...current,
-        ...nextImages,
-      ]);
+    if (
+      nextImages.length >
+      0
+    ) {
+      /*
+       * Record the source upload/capture time
+       * only when the first page is added.
+       *
+       * Additional pages added to the same
+       * source set do not overwrite the
+       * original source timestamp.
+       */
+      if (
+        !sourceUploadedAt
+      ) {
+        setSourceUploadedAt(
+          new Date().toISOString()
+        );
+      }
+
+      setImages(
+        (current) => [
+          ...current,
+          ...nextImages,
+        ]
+      );
     }
   }
 
   function handleInputChange(
     event: ChangeEvent<HTMLInputElement>
   ) {
-    void handleFiles(event.target.files);
+    void handleFiles(
+      event.target.files
+    );
+
     event.target.value = "";
   }
 
-  function removeImage(id: string) {
-    setImages((current) =>
-      current.filter(
-        (image) => image.id !== id
-      )
+  function removeImage(
+    id: string
+  ) {
+    setImages(
+      (current) =>
+        current.filter(
+          (image) =>
+            image.id !== id
+        )
     );
 
     setPack(null);
     setError(null);
     setSaveMessage(null);
     setSavedDraftId(null);
+    setDraftCreatedAt(null);
+
+    /*
+     * If the removed page was the last
+     * remaining source page, the next upload
+     * starts a new source session and gets a
+     * fresh timestamp.
+     */
+    setImages((current) => {
+      if (
+        current.length === 0
+      ) {
+        setSourceUploadedAt(
+          null
+        );
+      }
+
+      return current;
+    });
   }
 
   function clearAll() {
     setImages([]);
+    setSourceUploadedAt(null);
+    setDraftCreatedAt(null);
     setPack(null);
     setError(null);
     setSaveMessage(null);
@@ -438,7 +631,9 @@ export default function ScanAndLearn() {
       return;
     }
 
-    if (images.length === 0) {
+    if (
+      images.length === 0
+    ) {
       setError(
         "Capture or upload at least one page first."
       );
@@ -450,20 +645,22 @@ export default function ScanAndLearn() {
     setError(null);
     setSaveMessage(null);
     setSavedDraftId(null);
+    setDraftCreatedAt(null);
     setPack(null);
 
     try {
       /*
        * Privacy boundary:
        *
-       * The original images remain only in browser state for
-       * display. A locally OCR-screened/redacted copy is sent
-       * to the server and therefore to Gemini.
+       * The original images remain only in browser state
+       * for display. A locally OCR-screened/redacted copy
+       * is sent to the server and therefore to Gemini.
        */
       const privacyResult =
         await redactImagesBeforeGemini(
           images.map(
-            (image) => image.dataUrl
+            (image) =>
+              image.dataUrl
           )
         );
 
@@ -479,7 +676,9 @@ export default function ScanAndLearn() {
         );
       }
 
-      setPrivacyScanning(false);
+      setPrivacyScanning(
+        false
+      );
 
       const response =
         await fetch(
@@ -508,7 +707,8 @@ export default function ScanAndLearn() {
           }
         );
 
-      let result: ApiResponse = {};
+      let result: ApiResponse =
+        {};
 
       try {
         result =
@@ -519,7 +719,9 @@ export default function ScanAndLearn() {
         );
       }
 
-      if (!response.ok) {
+      if (
+        !response.ok
+      ) {
         throw new Error(
           result.error ||
             "Unable to generate learning material."
@@ -532,7 +734,9 @@ export default function ScanAndLearn() {
         );
       }
 
-      setPack(result.pack);
+      setPack(
+        result.pack
+      );
 
       if (
         privacyResult.redactedCount >
@@ -555,12 +759,16 @@ export default function ScanAndLearn() {
       generationError
     ) {
       setError(
-        generationError instanceof Error
+        generationError instanceof
+          Error
           ? generationError.message
           : "Unable to generate learning material."
       );
     } finally {
-      setPrivacyScanning(false);
+      setPrivacyScanning(
+        false
+      );
+
       setLoading(false);
     }
   }
@@ -593,6 +801,13 @@ export default function ScanAndLearn() {
     setSaveMessage(null);
 
     try {
+      /*
+       * sourceUploadedAt is created locally when
+       * the first source page is added.
+       *
+       * The server records created_at automatically
+       * when the draft is inserted.
+       */
       const response =
         await fetch(
           "/api/student/scan/drafts",
@@ -622,6 +837,10 @@ export default function ScanAndLearn() {
 
               learningPack:
                 pack,
+
+              sourceUploadedAt:
+                sourceUploadedAt ||
+                new Date().toISOString(),
             }),
           }
         );
@@ -638,14 +857,18 @@ export default function ScanAndLearn() {
         );
       }
 
-      if (!response.ok) {
+      if (
+        !response.ok
+      ) {
         throw new Error(
           result.error ||
             "Unable to save the learning draft."
         );
       }
 
-      if (!result.draft?.id) {
+      if (
+        !result.draft?.id
+      ) {
         throw new Error(
           "The draft was saved without a draft ID."
         );
@@ -655,6 +878,20 @@ export default function ScanAndLearn() {
         result.draft.id
       );
 
+      setDraftCreatedAt(
+        result.draft.created_at
+      );
+
+      if (
+        result.draft
+          .source_uploaded_at
+      ) {
+        setSourceUploadedAt(
+          result.draft
+            .source_uploaded_at
+        );
+      }
+
       setSaveMessage(
         "Learning pack saved as a draft."
       );
@@ -662,12 +899,15 @@ export default function ScanAndLearn() {
       draftError
     ) {
       setError(
-        draftError instanceof Error
+        draftError instanceof
+          Error
           ? draftError.message
           : "Unable to save the learning draft."
       );
     } finally {
-      setSavingDraft(false);
+      setSavingDraft(
+        false
+      );
     }
   }
 
@@ -683,12 +923,14 @@ export default function ScanAndLearn() {
       "",
       "Learning objectives",
       ...pack.learning_objectives.map(
-        (item) => `- ${item}`
+        (item) =>
+          `- ${item}`
       ),
       "",
       "Prerequisites",
       ...pack.prerequisites.map(
-        (item) => `- ${item}`
+        (item) =>
+          `- ${item}`
       ),
       "",
       "Key concepts",
@@ -698,7 +940,9 @@ export default function ScanAndLearn() {
       ),
       "",
       ...pack.sections.flatMap(
-        (section) => [
+        (
+          section
+        ) => [
           section.heading,
           section.content,
           ...section.examples.map(
@@ -715,7 +959,10 @@ export default function ScanAndLearn() {
       "",
       "Assessment",
       ...pack.assessment_questions.map(
-        (question, index) =>
+        (
+          question,
+          index
+        ) =>
           `${index + 1}. ${question.question}\nAnswer: ${question.correct_answer}\n${question.explanation}`
       ),
       "",
@@ -727,13 +974,18 @@ export default function ScanAndLearn() {
       "",
       "Flashcards",
       ...pack.flashcards.map(
-        (card, index) =>
+        (
+          card,
+          index
+        ) =>
           `${index + 1}. ${card.front}\n${card.back}`
       ),
     ].join("\n");
 
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(
+        text
+      );
 
       setSaveMessage(
         "Learning pack copied to your clipboard."
@@ -801,21 +1053,29 @@ export default function ScanAndLearn() {
             </div>
 
             <input
-              ref={cameraInputRef}
+              ref={
+                cameraInputRef
+              }
               type="file"
               accept="image/*"
               capture="environment"
               hidden
-              onChange={handleInputChange}
+              onChange={
+                handleInputChange
+              }
             />
 
             <input
-              ref={uploadInputRef}
+              ref={
+                uploadInputRef
+              }
               type="file"
               accept="image/*"
               multiple
               hidden
-              onChange={handleInputChange}
+              onChange={
+                handleInputChange
+              }
             />
 
             <div className="rn-scan-source-actions">
@@ -849,12 +1109,17 @@ export default function ScanAndLearn() {
                 Upload pages
               </button>
 
-              {images.length > 0 ? (
+              {images.length >
+              0 ? (
                 <button
                   type="button"
                   className="rn-button rn-button-secondary"
-                  onClick={clearAll}
-                  disabled={busy}
+                  onClick={
+                    clearAll
+                  }
+                  disabled={
+                    busy
+                  }
                 >
                   Clear all
                 </button>
@@ -873,19 +1138,27 @@ export default function ScanAndLearn() {
               </div>
             ) : null}
 
-            {images.length > 0 ? (
+            {images.length >
+            0 ? (
               <div
                 className="rn-scan-pages"
                 aria-live="polite"
               >
                 {images.map(
-                  (image, index) => (
+                  (
+                    image,
+                    index
+                  ) => (
                     <article
-                      key={image.id}
+                      key={
+                        image.id
+                      }
                       className="rn-scan-page-card"
                     >
                       <img
-                        src={image.dataUrl}
+                        src={
+                          image.dataUrl
+                        }
                         alt={`Scanned page ${
                           index + 1
                         }`}
@@ -895,11 +1168,14 @@ export default function ScanAndLearn() {
                         <div>
                           <strong>
                             Page{" "}
-                            {index + 1}
+                            {index +
+                              1}
                           </strong>
 
                           <span>
-                            {image.name}
+                            {
+                              image.name
+                            }
                           </span>
                         </div>
 
@@ -934,6 +1210,36 @@ export default function ScanAndLearn() {
                 </span>
               </div>
             )}
+
+            {sourceUploadedAt ? (
+              <div className="rn-scan-timestamps">
+                <div>
+                  <span>
+                    Source uploaded
+                  </span>
+
+                  <strong>
+                    {formatDateTime(
+                      sourceUploadedAt
+                    )}
+                  </strong>
+                </div>
+
+                {draftCreatedAt ? (
+                  <div>
+                    <span>
+                      Draft created
+                    </span>
+
+                    <strong>
+                      {formatDateTime(
+                        draftCreatedAt
+                      )}
+                    </strong>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </section>
 
           <section className="rn-scan-card">
@@ -954,30 +1260,53 @@ export default function ScanAndLearn() {
                 </span>
 
                 <select
-                  value={mode}
-                  onChange={(event) => {
+                  value={
+                    mode
+                  }
+                  onChange={(
+                    event
+                  ) => {
                     setMode(
                       event.target
                         .value as OutputType
                     );
 
-                    setPack(null);
+                    setPack(
+                      null
+                    );
+
                     setSaveMessage(
                       null
                     );
+
                     setSavedDraftId(
                       null
                     );
+
+                    setDraftCreatedAt(
+                      null
+                    );
                   }}
-                  disabled={busy}
+                  disabled={
+                    busy
+                  }
                 >
                   {OUTPUT_TYPES.map(
-                    ([value, label]) => (
+                    ([
+                      value,
+                      label,
+                    ]) => (
                       <option
-                        key={value}
-                        value={value}
+                        key={
+                          value
+                        }
+                        value={
+                          value
+                        }
                       >
-                        {label}
+                        {
+                          label
+                        }
                       </option>
                     )
                   )}
@@ -990,30 +1319,53 @@ export default function ScanAndLearn() {
                 </span>
 
                 <select
-                  value={language}
-                  onChange={(event) => {
+                  value={
+                    language
+                  }
+                  onChange={(
+                    event
+                  ) => {
                     setLanguage(
                       event.target
                         .value as LanguageCode
                     );
 
-                    setPack(null);
+                    setPack(
+                      null
+                    );
+
                     setSaveMessage(
                       null
                     );
+
                     setSavedDraftId(
                       null
                     );
+
+                    setDraftCreatedAt(
+                      null
+                    );
                   }}
-                  disabled={busy}
+                  disabled={
+                    busy
+                  }
                 >
                   {LANGUAGES.map(
-                    ([value, label]) => (
+                    ([
+                      value,
+                      label,
+                    ]) => (
                       <option
-                        key={value}
-                        value={value}
+                        key={
+                          value
+                        }
+                        value={
+                          value
+                        }
                       >
-                        {label}
+                        {
+                          label
+                        }
                       </option>
                     )
                   )}
@@ -1026,30 +1378,53 @@ export default function ScanAndLearn() {
                 </span>
 
                 <select
-                  value={audience}
-                  onChange={(event) => {
+                  value={
+                    audience
+                  }
+                  onChange={(
+                    event
+                  ) => {
                     setAudience(
                       event.target
                         .value as Audience
                     );
 
-                    setPack(null);
+                    setPack(
+                      null
+                    );
+
                     setSaveMessage(
                       null
                     );
+
                     setSavedDraftId(
                       null
                     );
+
+                    setDraftCreatedAt(
+                      null
+                    );
                   }}
-                  disabled={busy}
+                  disabled={
+                    busy
+                  }
                 >
                   {AUDIENCES.map(
-                    ([value, label]) => (
+                    ([
+                      value,
+                      label,
+                    ]) => (
                       <option
-                        key={value}
-                        value={value}
+                        key={
+                          value
+                        }
+                        value={
+                          value
+                        }
                       >
-                        {label}
+                        {
+                          label
+                        }
                       </option>
                     )
                   )}
@@ -1065,17 +1440,27 @@ export default function ScanAndLearn() {
                 </span>
 
                 <textarea
-                  value={focus}
-                  onChange={(event) => {
+                  value={
+                    focus
+                  }
+                  onChange={(
+                    event
+                  ) => {
                     setFocus(
-                      event.target.value
+                      event.target
+                        .value
                     );
 
                     if (pack) {
                       setSaveMessage(
                         null
                       );
+
                       setSavedDraftId(
+                        null
+                      );
+
+                      setDraftCreatedAt(
                         null
                       );
                     }
@@ -1083,13 +1468,23 @@ export default function ScanAndLearn() {
                   maxLength={
                     MAX_FOCUS_LENGTH
                   }
-                  rows={5}
+                  rows={
+                    5
+                  }
                   placeholder="Optional: e.g. Make this suitable for a Nigerian office worker and include practical Excel examples."
-                  disabled={busy}
+                  disabled={
+                    busy
+                  }
                 />
 
                 <small>
-                  {focus.length} / {MAX_FOCUS_LENGTH}
+                  {
+                    focus.length
+                  }{" "}
+                  /{" "}
+                  {
+                    MAX_FOCUS_LENGTH
+                  }
                 </small>
               </label>
             </div>
@@ -1098,13 +1493,26 @@ export default function ScanAndLearn() {
               <div>
                 <strong>
                   Create:{" "}
-                  {outputLabel(mode)} ·{" "}
-                  {languageLabel(language)}
+                  {
+                    outputLabel(
+                      mode
+                    )
+                  }{" "}
+                  ·{" "}
+                  {
+                    languageLabel(
+                      language
+                    )
+                  }
                 </strong>
 
                 <span>
                   Audience:{" "}
-                  {audienceLabel(audience)}
+                  {
+                    audienceLabel(
+                      audience
+                    )
+                  }
                 </span>
               </div>
 
@@ -1116,9 +1524,12 @@ export default function ScanAndLearn() {
                 }
                 disabled={
                   busy ||
-                  images.length === 0
+                  images.length ===
+                    0
                 }
-                aria-busy={busy}
+                aria-busy={
+                  busy
+                }
               >
                 {privacyScanning
                   ? "Privacy screening…"
@@ -1176,14 +1587,25 @@ export default function ScanAndLearn() {
                   "Compact prompt-and-answer revision cards.",
                 ],
               ].map(
-                ([title, description]) => (
-                  <div key={title}>
+                ([
+                  title,
+                  description,
+                ]) => (
+                  <div
+                    key={
+                      title
+                    }
+                  >
                     <strong>
-                      {title}
+                      {
+                        title
+                      }
                     </strong>
 
                     <span>
-                      {description}
+                      {
+                        description
+                      }
                     </span>
                   </div>
                 )
@@ -1265,7 +1687,9 @@ export default function ScanAndLearn() {
               </h2>
 
               <p>
-                {pack.source_summary}
+                {
+                  pack.source_summary
+                }
               </p>
             </div>
 
@@ -1273,7 +1697,9 @@ export default function ScanAndLearn() {
               <button
                 type="button"
                 className="rn-button rn-button-secondary"
-                onClick={copyPack}
+                onClick={
+                  copyPack
+                }
               >
                 Copy learning pack
               </button>
@@ -1281,7 +1707,9 @@ export default function ScanAndLearn() {
               <button
                 type="button"
                 className="rn-button rn-button-primary"
-                onClick={saveDraft}
+                onClick={
+                  saveDraft
+                }
                 disabled={
                   busy ||
                   !!savedDraftId
@@ -1299,7 +1727,36 @@ export default function ScanAndLearn() {
             </div>
           </div>
 
-          {pack.source_warnings.length > 0 ? (
+          <div className="rn-scan-timestamps rn-scan-result-timestamps">
+            <div>
+              <span>
+                Source uploaded
+              </span>
+
+              <strong>
+                {formatDateTime(
+                  sourceUploadedAt
+                )}
+              </strong>
+            </div>
+
+            <div>
+              <span>
+                Draft created
+              </span>
+
+              <strong>
+                {draftCreatedAt
+                  ? formatDateTime(
+                      draftCreatedAt
+                    )
+                  : "Not saved yet"}
+              </strong>
+            </div>
+          </div>
+
+          {pack.source_warnings.length >
+          0 ? (
             <div className="rn-scan-warning">
               <strong>
                 Source warnings
@@ -1309,9 +1766,13 @@ export default function ScanAndLearn() {
                 {pack.source_warnings.map(
                   (warning) => (
                     <li
-                      key={warning}
+                      key={
+                        warning
+                      }
                     >
-                      {warning}
+                      {
+                        warning
+                      }
                     </li>
                   )
                 )}
@@ -1333,7 +1794,9 @@ export default function ScanAndLearn() {
                 {pack.learning_objectives.map(
                   (item) => (
                     <li
-                      key={item}
+                      key={
+                        item
+                      }
                     >
                       {item}
                     </li>
@@ -1355,7 +1818,9 @@ export default function ScanAndLearn() {
                 <strong>
                   Difficulty:
                 </strong>{" "}
-                {pack.difficulty}
+                {
+                  pack.difficulty
+                }
               </p>
 
               <p>
@@ -1372,10 +1837,12 @@ export default function ScanAndLearn() {
                 <strong>
                   Prerequisites:
                 </strong>{" "}
-                {pack.prerequisites.join(
-                  ", "
-                ) ||
-                  "None specified"}
+                {
+                  pack.prerequisites.join(
+                    ", "
+                  ) ||
+                  "None specified"
+                }
               </p>
             </section>
           </div>
@@ -1391,14 +1858,18 @@ export default function ScanAndLearn() {
 
             <div className="rn-scan-concepts">
               {pack.key_concepts.map(
-                (concept) => (
+                (
+                  concept
+                ) => (
                   <div
                     key={
                       concept.term
                     }
                   >
                     <strong>
-                      {concept.term}
+                      {
+                        concept.term
+                      }
                     </strong>
 
                     <span>
@@ -1423,7 +1894,9 @@ export default function ScanAndLearn() {
 
             <div className="rn-scan-sections">
               {pack.sections.map(
-                (section) => (
+                (
+                  section
+                ) => (
                   <article
                     key={
                       section.heading
@@ -1445,13 +1918,17 @@ export default function ScanAndLearn() {
                     0 ? (
                       <ul>
                         {section.examples.map(
-                          (example) => (
+                          (
+                            example
+                          ) => (
                             <li
                               key={
                                 example
                               }
                             >
-                              {example}
+                              {
+                                example
+                              }
                             </li>
                           )
                         )}
@@ -1515,7 +1992,9 @@ export default function ScanAndLearn() {
                     key={`${question.question}-${index}`}
                   >
                     <strong>
-                      {index + 1}.{" "}
+                      {index +
+                        1}
+                      .{" "}
                       {
                         question.question
                       }
@@ -1525,13 +2004,17 @@ export default function ScanAndLearn() {
                     0 ? (
                       <ul>
                         {question.options.map(
-                          (option) => (
+                          (
+                            option
+                          ) => (
                             <li
                               key={
                                 option
                               }
                             >
-                              {option}
+                              {
+                                option
+                              }
                             </li>
                           )
                         )}
@@ -1558,7 +2041,8 @@ export default function ScanAndLearn() {
             </div>
           </section>
 
-          {pack.flashcards.length > 0 ? (
+          {pack.flashcards.length >
+          0 ? (
             <section className="rn-scan-result-card">
               <span className="rn-eyebrow">
                 REVISION
@@ -1578,11 +2062,15 @@ export default function ScanAndLearn() {
                       key={`${card.front}-${index}`}
                     >
                       <strong>
-                        {card.front}
+                        {
+                          card.front
+                        }
                       </strong>
 
                       <span>
-                        {card.back}
+                        {
+                          card.back
+                        }
                       </span>
                     </article>
                   )
@@ -1602,11 +2090,15 @@ export default function ScanAndLearn() {
 
             <ol>
               {pack.study_plan.map(
-                (step) => (
+                (
+                  step
+                ) => (
                   <li
                     key={`${step.step}-${step.action}`}
                   >
-                    {step.action}
+                    {
+                      step.action
+                    }
                   </li>
                 )
               )}

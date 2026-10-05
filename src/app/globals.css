@@ -14100,3 +14100,77 @@ main form .rn-button {
     width: 100%;
   }
 }
+
+.rn-scan-timestamps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.rn-scan-timestamps > div {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--rn-border, #e5e7eb);
+  border-radius: 10px;
+  background: var(--rn-surface-soft, #f8fafc);
+}
+
+.rn-scan-timestamps span,
+.rn-scan-timestamps strong {
+  display: block;
+}
+
+.rn-scan-timestamps span {
+  margin-bottom: 4px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rn-scan-timestamps strong {
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.rn-scan-result-timestamps {
+  margin-top: 0;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 640px) {
+  .rn-scan-timestamps {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rn-ai-draft-timestamps {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rn-border, #e5e7eb);
+}
+
+.rn-ai-draft-timestamps > div {
+  min-width: 0;
+}
+
+.rn-ai-draft-timestamps span,
+.rn-ai-draft-timestamps strong {
+  display: block;
+}
+
+.rn-ai-draft-timestamps span {
+  margin-bottom: 2px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rn-ai-draft-timestamps strong {
+  font-size: 0.88rem;
+  line-height: 1.4;
+}

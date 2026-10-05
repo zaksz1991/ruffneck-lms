@@ -3,7 +3,13 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type DraftStatus = "draft" | "edited" | "submitted" | "converted";
+type DraftStatus =
+  | "draft"
+  | "edited"
+  | "submitted"
+  | "revision_required"
+  | "approved"
+  | "converted";
 
 type Section = {
   heading: string;
@@ -67,8 +73,32 @@ type Draft = {
   focus_instruction: string | null;
   learning_pack: LearningPack;
   status: DraftStatus;
+  source_uploaded_at: string | null;
   created_at: string;
   updated_at: string;
+  review_note?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+};
+
+type DraftApiResponse = {
+  success?: boolean;
+  error?: string;
+  message?: string;
+  draft?: {
+    id?: string;
+    title?: string;
+    output_type?: string;
+    language_code?: string;
+    audience?: string;
+    status?: DraftStatus;
+    source_uploaded_at?: string | null;
+    created_at?: string;
+    updated_at?: string;
+    review_note?: string | null;
+    reviewed_by?: string | null;
+    reviewed_at?: string | null;
+  };
 };
 
 type Props = {
@@ -84,6 +114,7 @@ function asStringArray(value: unknown): string[] {
 
   return value.map((item) => {
     if (typeof item === "string") return item;
+
     return String(item ?? "");
   });
 }
@@ -133,7 +164,10 @@ function normalizeStudyPlanItem(value: unknown): StudyPlanItem {
   const item = value as Record<string, unknown>;
 
   return {
-    step: asString(item.step),
+    step:
+      typeof item.step === "number"
+        ? String(item.step)
+        : asString(item.step),
     action: asString(item.action),
   };
 }
@@ -195,31 +229,63 @@ function normalizeActivity(value: unknown): PracticalActivity {
 function normalizePack(pack: LearningPack): LearningPack {
   return {
     ...pack,
+
     title: asString(pack.title),
+
     summary: asString(pack.summary),
+
     sections: Array.isArray(pack.sections)
       ? pack.sections.map(normalizeSection)
       : [],
+
     difficulty: asString(pack.difficulty),
+
     flashcards: Array.isArray(pack.flashcards)
       ? pack.flashcards.map(normalizeFlashcard)
       : [],
+
     study_plan: Array.isArray(pack.study_plan)
       ? pack.study_plan.map(normalizeStudyPlanItem)
       : [],
+
     key_concepts: Array.isArray(pack.key_concepts)
       ? pack.key_concepts.map(normalizeKeyConcept)
       : [],
+
     prerequisites: asStringArray(pack.prerequisites),
+
     source_warnings: asStringArray(pack.source_warnings),
+
     practical_activity: normalizeActivity(pack.practical_activity),
+
     learning_objectives: asStringArray(pack.learning_objectives),
+
     assessment_questions: Array.isArray(pack.assessment_questions)
       ? pack.assessment_questions.map(normalizeQuestion)
       : [],
+
     extracted_text: asString(pack.extracted_text),
+
     source_summary: asString(pack.source_summary),
   };
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) {
+    return "Not recorded";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Not recorded";
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "long",
+    timeStyle: "short",
+    timeZone: "Africa/Lagos",
+  }).format(date);
 }
 
 function SectionCard({
@@ -238,7 +304,12 @@ function SectionCard({
   const examples = section.examples ?? [];
 
   return (
-    <div className="rn-card" style={{ marginBottom: 16 }}>
+    <div
+      className="rn-card"
+      style={{
+        marginBottom: 16,
+      }}
+    >
       <div
         style={{
           display: "flex",
@@ -263,6 +334,7 @@ function SectionCard({
 
       <label className="rn-field">
         <span>Heading</span>
+
         <input
           value={section.heading}
           disabled={disabled}
@@ -277,6 +349,7 @@ function SectionCard({
 
       <label className="rn-field">
         <span>Content</span>
+
         <textarea
           value={section.content}
           disabled={disabled}
@@ -291,7 +364,11 @@ function SectionCard({
       </label>
 
       <div>
-        <div style={{ marginBottom: 8 }}>
+        <div
+          style={{
+            marginBottom: 8,
+          }}
+        >
           <strong>Examples</strong>
         </div>
 
@@ -310,6 +387,7 @@ function SectionCard({
               disabled={disabled}
               onChange={(event) => {
                 const next = [...examples];
+
                 next[exampleIndex] = event.target.value;
 
                 onChange({
@@ -317,7 +395,9 @@ function SectionCard({
                   examples: next,
                 });
               }}
-              style={{ flex: 1 }}
+              style={{
+                flex: 1,
+              }}
             />
 
             {!disabled && (
@@ -328,7 +408,8 @@ function SectionCard({
                   onChange({
                     ...section,
                     examples: examples.filter(
-                      (_, itemIndex) => itemIndex !== exampleIndex,
+                      (_, itemIndex) =>
+                        itemIndex !== exampleIndex,
                     ),
                   });
                 }}
@@ -362,6 +443,7 @@ export default function AiDraftEditor({ draft }: Props) {
   const router = useRouter();
 
   const [title, setTitle] = useState(draft.title);
+
   const [focusInstruction, setFocusInstruction] = useState(
     draft.focus_instruction ?? "",
   );
@@ -371,13 +453,39 @@ export default function AiDraftEditor({ draft }: Props) {
   );
 
   const [status, setStatus] = useState<DraftStatus>(draft.status);
+
+  const [reviewNote, setReviewNote] = useState(
+    draft.review_note ?? "",
+  );
+
+  const [reviewedAt, setReviewedAt] = useState(
+    draft.reviewed_at ?? null,
+  );
+
+  const [sourceUploadedAt, setSourceUploadedAt] = useState<
+    string | null
+  >(draft.source_uploaded_at ?? draft.created_at);
+
+  const [createdAt, setCreatedAt] = useState(draft.created_at);
+
+  const [updatedAt, setUpdatedAt] = useState(draft.updated_at);
+
   const [saving, setSaving] = useState(false);
+
   const [submitting, setSubmitting] = useState(false);
+
   const [deleting, setDeleting] = useState(false);
+
   const [message, setMessage] = useState("");
+
   const [error, setError] = useState("");
 
-  const locked = status === "submitted" || status === "converted";
+  const locked =
+    status === "submitted" ||
+    status === "approved" ||
+    status === "converted";
+
+  const revisionRequired = status === "revision_required";
 
   const outputLabel = useMemo(() => {
     return draft.output_type
@@ -414,7 +522,9 @@ export default function AiDraftEditor({ draft }: Props) {
   }
 
   async function saveDraft() {
-    if (locked) return;
+    if (locked) {
+      return;
+    }
 
     setSaving(true);
     setError("");
@@ -423,9 +533,11 @@ export default function AiDraftEditor({ draft }: Props) {
     try {
       const response = await fetch("/api/student/scan/drafts", {
         method: "PATCH",
+
         headers: {
           "Content-Type": "application/json",
         },
+
         body: JSON.stringify({
           id: draft.id,
           title,
@@ -435,16 +547,41 @@ export default function AiDraftEditor({ draft }: Props) {
         }),
       });
 
-      const data = await response.json().catch(() => null);
+      const data = (await response.json().catch(() => null)) as
+        | DraftApiResponse
+        | null;
 
       if (!response.ok) {
         throw new Error(
-          data?.error || "Unable to save the learning material.",
+          data?.error ||
+            "Unable to save the learning material.",
         );
       }
 
       setStatus("edited");
+
+      if (data?.draft?.updated_at) {
+        setUpdatedAt(data.draft.updated_at);
+      }
+
+      if (data?.draft?.created_at) {
+        setCreatedAt(data.draft.created_at);
+      }
+
+      if (data?.draft?.source_uploaded_at) {
+        setSourceUploadedAt(data.draft.source_uploaded_at);
+      }
+
+      if (data?.draft?.review_note !== undefined) {
+        setReviewNote(data.draft.review_note ?? "");
+      }
+
+      if (data?.draft?.reviewed_at !== undefined) {
+        setReviewedAt(data.draft.reviewed_at ?? null);
+      }
+
       setMessage("Learning material saved.");
+
       router.refresh();
     } catch (err) {
       setError(
@@ -458,39 +595,78 @@ export default function AiDraftEditor({ draft }: Props) {
   }
 
   async function submitForReview() {
-    if (locked) return;
+    if (locked) {
+      return;
+    }
 
     const confirmed = window.confirm(
-      "Submit this AI-generated learning material for LMS review? You will not be able to edit or delete it while it is under review.",
+      revisionRequired
+        ? "Resubmit this revised AI-generated learning material for LMS review?"
+        : "Submit this AI-generated learning material for LMS review? You will not be able to edit or delete it while it is under review.",
     );
 
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     setSubmitting(true);
     setError("");
     setMessage("");
 
     try {
-      const response = await fetch("/api/student/scan/drafts/submit", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: draft.id,
-        }),
-      });
+      const response = await fetch(
+        "/api/student/scan/drafts/submit",
+        {
+          method: "POST",
 
-      const data = await response.json().catch(() => null);
+          headers: {
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify({
+            id: draft.id,
+          }),
+        },
+      );
+
+      const data = (await response.json().catch(() => null)) as
+        | DraftApiResponse
+        | null;
 
       if (!response.ok) {
         throw new Error(
-          data?.error || "Unable to submit the learning material.",
+          data?.error ||
+            "Unable to submit the learning material.",
         );
       }
 
       setStatus("submitted");
-      setMessage("Draft submitted for LMS review.");
+
+      if (data?.draft?.updated_at) {
+        setUpdatedAt(data.draft.updated_at);
+      }
+
+      if (data?.draft?.created_at) {
+        setCreatedAt(data.draft.created_at);
+      }
+
+      if (data?.draft?.source_uploaded_at) {
+        setSourceUploadedAt(data.draft.source_uploaded_at);
+      }
+
+      if (data?.draft?.review_note !== undefined) {
+        setReviewNote(data.draft.review_note ?? "");
+      }
+
+      if (data?.draft?.reviewed_at !== undefined) {
+        setReviewedAt(data.draft.reviewed_at ?? null);
+      }
+
+      setMessage(
+        data?.message ||
+          "Draft submitted for LMS review.",
+      );
+
       router.refresh();
     } catch (err) {
       setError(
@@ -504,37 +680,50 @@ export default function AiDraftEditor({ draft }: Props) {
   }
 
   async function deleteDraft() {
-    if (locked) return;
+    if (locked) {
+      return;
+    }
 
     const confirmed = window.confirm(
       "Delete this AI learning draft? This action cannot be undone.",
     );
 
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     setDeleting(true);
     setError("");
 
     try {
       const response = await fetch(
-        `/api/student/scan/drafts?id=${encodeURIComponent(draft.id)}`,
+        `/api/student/scan/drafts?id=${encodeURIComponent(
+          draft.id,
+        )}`,
         {
           method: "DELETE",
         },
       );
 
-      const data = await response.json().catch(() => null);
+      const data = (await response.json().catch(() => null)) as
+        | DraftApiResponse
+        | null;
 
       if (!response.ok) {
-        throw new Error(data?.error || "Unable to delete the draft.");
+        throw new Error(
+          data?.error || "Unable to delete the draft.",
+        );
       }
 
       router.push("/student/ai-drafts");
       router.refresh();
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Unable to delete the draft.",
+        err instanceof Error
+          ? err.message
+          : "Unable to delete the draft.",
       );
+
       setDeleting(false);
     }
   }
@@ -548,6 +737,7 @@ export default function AiDraftEditor({ draft }: Props) {
     value: string,
   ) {
     const current = [...(pack[key] ?? [])];
+
     current[index] = value;
 
     updatePackField(key, current);
@@ -564,7 +754,9 @@ export default function AiDraftEditor({ draft }: Props) {
 
     updatePackField(
       key,
-      current.filter((_, itemIndex) => itemIndex !== index),
+      current.filter(
+        (_, itemIndex) => itemIndex !== index,
+      ),
     );
   }
 
@@ -597,20 +789,109 @@ export default function AiDraftEditor({ draft }: Props) {
               AI Learning Draft
             </div>
 
-            <h1 style={{ margin: 0 }}>{title || "Untitled learning material"}</h1>
+            <h1
+              style={{
+                margin: 0,
+              }}
+            >
+              {title || "Untitled learning material"}
+            </h1>
           </div>
 
           <span className="rn-badge">
             {status === "submitted"
               ? "Submitted for review"
-              : status === "converted"
-                ? "Converted"
-                : status === "edited"
-                  ? "Edited"
-                  : "Draft"}
+              : status === "revision_required"
+                ? "Revision required"
+                : status === "approved"
+                  ? "Approved"
+                  : status === "converted"
+                    ? "Converted"
+                    : status === "edited"
+                      ? "Edited"
+                      : "Draft"}
           </span>
         </div>
+
+        <div className="rn-ai-draft-timestamps">
+          <div>
+            <span>Source uploaded</span>
+
+            <strong>
+              {formatDateTime(sourceUploadedAt)}
+            </strong>
+          </div>
+
+          <div>
+            <span>Draft created</span>
+
+            <strong>{formatDateTime(createdAt)}</strong>
+          </div>
+
+          <div>
+            <span>Last updated</span>
+
+            <strong>{formatDateTime(updatedAt)}</strong>
+          </div>
+
+          {reviewedAt && (
+            <div>
+              <span>Last reviewed</span>
+
+              <strong>{formatDateTime(reviewedAt)}</strong>
+            </div>
+          )}
+        </div>
       </div>
+
+      {status === "revision_required" && (
+        <div
+          className="rn-card"
+          style={{
+            marginBottom: 20,
+            borderLeft: "4px solid currentColor",
+          }}
+        >
+          <strong>Revision required</strong>
+
+          <p>
+            An LMS reviewer has returned this learning material for
+            revision. Review the note below, make the required changes,
+            save your changes, and resubmit it for review.
+          </p>
+
+          {reviewNote ? (
+            <div
+              style={{
+                marginTop: 12,
+                padding: 14,
+                border: "1px solid currentColor",
+                borderRadius: 8,
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              <strong>Reviewer note</strong>
+
+              <p
+                style={{
+                  marginBottom: 0,
+                  marginTop: 8,
+                }}
+              >
+                {reviewNote}
+              </p>
+            </div>
+          ) : (
+            <p
+              style={{
+                marginBottom: 0,
+              }}
+            >
+              No reviewer note was provided.
+            </p>
+          )}
+        </div>
+      )}
 
       {status === "submitted" && (
         <div
@@ -621,11 +902,59 @@ export default function AiDraftEditor({ draft }: Props) {
           }}
         >
           <strong>Submitted for review</strong>
-          <p style={{ marginBottom: 0 }}>
-            This AI-generated learning material has been submitted to the LMS
-            review workflow. You cannot edit or delete it while it is under
-            review.
+
+          <p
+            style={{
+              marginBottom: 0,
+            }}
+          >
+            This AI-generated learning material has been submitted to
+            the LMS review workflow. You cannot edit or delete it while
+            it is under review.
           </p>
+        </div>
+      )}
+
+      {status === "approved" && (
+        <div
+          className="rn-card"
+          style={{
+            marginBottom: 20,
+            borderLeft: "4px solid currentColor",
+          }}
+        >
+          <strong>Approved for LMS</strong>
+
+          <p
+            style={{
+              marginBottom: 0,
+            }}
+          >
+            This learning material has been approved by an LMS
+            reviewer. It is no longer editable as a student draft.
+          </p>
+
+          {reviewNote && (
+            <div
+              style={{
+                marginTop: 12,
+                paddingTop: 12,
+                borderTop: "1px solid currentColor",
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              <strong>Reviewer note</strong>
+
+              <p
+                style={{
+                  marginBottom: 0,
+                  marginTop: 8,
+                }}
+              >
+                {reviewNote}
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -638,7 +967,12 @@ export default function AiDraftEditor({ draft }: Props) {
           }}
         >
           <strong>Converted to LMS content</strong>
-          <p style={{ marginBottom: 0 }}>
+
+          <p
+            style={{
+              marginBottom: 0,
+            }}
+          >
             This learning material has already been converted into LMS
             content and is no longer editable as a draft.
           </p>
@@ -669,29 +1003,40 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       )}
 
-      <section style={{ marginBottom: 24 }}>
-        <h2 className="rn-section-heading">Learning material</h2>
+      <section
+        style={{
+          marginBottom: 24,
+        }}
+      >
+        <h2 className="rn-section-heading">
+          Learning material
+        </h2>
 
         <div className="rn-card">
           <label className="rn-field">
             <span>Title</span>
+
             <input
               value={title}
               disabled={locked}
-              onChange={(event) => setTitle(event.target.value)}
+              onChange={(event) =>
+                setTitle(event.target.value)
+              }
             />
           </label>
 
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(180px, 1fr))",
               gap: 12,
               marginBottom: 16,
             }}
           >
             <div>
               <small>Output type</small>
+
               <div>
                 <strong>{outputLabel}</strong>
               </div>
@@ -699,6 +1044,7 @@ export default function AiDraftEditor({ draft }: Props) {
 
             <div>
               <small>Language</small>
+
               <div>
                 <strong>{languageLabel}</strong>
               </div>
@@ -706,6 +1052,7 @@ export default function AiDraftEditor({ draft }: Props) {
 
             <div>
               <small>Audience</small>
+
               <div>
                 <strong>{audienceLabel}</strong>
               </div>
@@ -713,54 +1060,75 @@ export default function AiDraftEditor({ draft }: Props) {
 
             <div>
               <small>Difficulty</small>
+
               <div>
-                <strong>{pack.difficulty || "Not specified"}</strong>
+                <strong>
+                  {pack.difficulty || "Not specified"}
+                </strong>
               </div>
             </div>
           </div>
 
           <label className="rn-field">
             <span>Additional instruction</span>
+
             <textarea
               value={focusInstruction}
               disabled={locked}
               rows={4}
-              onChange={(event) => setFocusInstruction(event.target.value)}
+              onChange={(event) =>
+                setFocusInstruction(
+                  event.target.value,
+                )
+              }
               placeholder="Optional instruction for this learning material"
             />
           </label>
         </div>
       </section>
 
-      <section style={{ marginBottom: 24 }}>
+      <section
+        style={{
+          marginBottom: 24,
+        }}
+      >
         <h2 className="rn-section-heading">Overview</h2>
 
         <div className="rn-card">
           <label className="rn-field">
             <span>Summary</span>
+
             <textarea
               value={pack.summary ?? ""}
               disabled={locked}
               rows={6}
               onChange={(event) =>
-                updatePackField("summary", event.target.value)
+                updatePackField(
+                  "summary",
+                  event.target.value,
+                )
               }
             />
           </label>
 
           <label className="rn-field">
             <span>Estimated duration (minutes)</span>
+
             <input
               type="number"
               min={1}
-              value={pack.estimated_duration_minutes ?? ""}
+              value={
+                pack.estimated_duration_minutes ?? ""
+              }
               disabled={locked}
               onChange={(event) => {
                 const value = event.target.value;
 
                 updatePackField(
                   "estimated_duration_minutes",
-                  value === "" ? null : Number(value),
+                  value === ""
+                    ? null
+                    : Number(value),
                 );
               }}
             />
@@ -768,7 +1136,11 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       </section>
 
-      <section style={{ marginBottom: 24 }}>
+      <section
+        style={{
+          marginBottom: 24,
+        }}
+      >
         <div
           style={{
             display: "flex",
@@ -778,7 +1150,12 @@ export default function AiDraftEditor({ draft }: Props) {
             marginBottom: 12,
           }}
         >
-          <h2 className="rn-section-heading" style={{ marginBottom: 0 }}>
+          <h2
+            className="rn-section-heading"
+            style={{
+              marginBottom: 0,
+            }}
+          >
             Sections
           </h2>
 
@@ -804,82 +1181,118 @@ export default function AiDraftEditor({ draft }: Props) {
 
         {(pack.sections ?? []).length === 0 ? (
           <div className="rn-card">
-            <p style={{ marginBottom: 0 }}>
+            <p
+              style={{
+                marginBottom: 0,
+              }}
+            >
               No lesson sections were generated.
             </p>
           </div>
         ) : (
-          (pack.sections ?? []).map((section, index) => (
-            <SectionCard
-              key={index}
-              section={section}
-              index={index}
-              disabled={locked}
-              onChange={(next) => {
-                const sections = [...(pack.sections ?? [])];
-                sections[index] = next;
-                updatePackField("sections", sections);
-              }}
-              onRemove={() => {
-                const sections = [...(pack.sections ?? [])];
-                sections.splice(index, 1);
-                updatePackField("sections", sections);
-              }}
-            />
-          ))
+          (pack.sections ?? []).map(
+            (section, index) => (
+              <SectionCard
+                key={index}
+                section={section}
+                index={index}
+                disabled={locked}
+                onChange={(next) => {
+                  const sections = [
+                    ...(pack.sections ?? []),
+                  ];
+
+                  sections[index] = next;
+
+                  updatePackField(
+                    "sections",
+                    sections,
+                  );
+                }}
+                onRemove={() => {
+                  const sections = [
+                    ...(pack.sections ?? []),
+                  ];
+
+                  sections.splice(index, 1);
+
+                  updatePackField(
+                    "sections",
+                    sections,
+                  );
+                }}
+              />
+            ),
+          )
         )}
       </section>
 
-      <section style={{ marginBottom: 24 }}>
-        <h2 className="rn-section-heading">Learning objectives</h2>
+      <section
+        style={{
+          marginBottom: 24,
+        }}
+      >
+        <h2 className="rn-section-heading">
+          Learning objectives
+        </h2>
 
         <div className="rn-card">
-          {(pack.learning_objectives ?? []).map((objective, index) => (
-            <div
-              key={index}
-              style={{
-                display: "flex",
-                gap: 8,
-                marginBottom: 8,
-                alignItems: "flex-start",
-              }}
-            >
-              <input
-                value={objective}
-                disabled={locked}
-                onChange={(event) =>
-                  updateStringArray(
-                    "learning_objectives",
-                    index,
-                    event.target.value,
-                  )
-                }
-                style={{ flex: 1 }}
-              />
-
-              {!locked && (
-                <button
-                  type="button"
-                  className="rn-button rn-button-secondary"
-                  onClick={() =>
-                    removeStringArrayItem("learning_objectives", index)
+          {(pack.learning_objectives ?? []).map(
+            (objective, index) => (
+              <div
+                key={index}
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  marginBottom: 8,
+                  alignItems: "flex-start",
+                }}
+              >
+                <input
+                  value={objective}
+                  disabled={locked}
+                  onChange={(event) =>
+                    updateStringArray(
+                      "learning_objectives",
+                      index,
+                      event.target.value,
+                    )
                   }
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-          ))}
+                  style={{
+                    flex: 1,
+                  }}
+                />
+
+                {!locked && (
+                  <button
+                    type="button"
+                    className="rn-button rn-button-secondary"
+                    onClick={() =>
+                      removeStringArrayItem(
+                        "learning_objectives",
+                        index,
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            ),
+          )}
 
           {!locked && (
             <button
               type="button"
               className="rn-button rn-button-secondary"
               onClick={() =>
-                updatePackField("learning_objectives", [
-                  ...(pack.learning_objectives ?? []),
-                  "",
-                ])
+                updatePackField(
+                  "learning_objectives",
+                  [
+                    ...(pack.learning_objectives ?? []),
+                    "",
+                  ],
+                )
               }
             >
               Add objective
@@ -888,86 +1301,116 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       </section>
 
-      <section style={{ marginBottom: 24 }}>
-        <h2 className="rn-section-heading">Key concepts</h2>
+      <section
+        style={{
+          marginBottom: 24,
+        }}
+      >
+        <h2 className="rn-section-heading">
+          Key concepts
+        </h2>
 
         <div className="rn-card">
-          {(pack.key_concepts ?? []).map((concept, index) => (
-            <div
-              key={index}
-              style={{
-                borderBottom: "1px solid currentColor",
-                paddingBottom: 16,
-                marginBottom: 16,
-                opacity: 0.9,
-              }}
-            >
-              <label className="rn-field">
-                <span>Term</span>
-                <input
-                  value={concept.term}
-                  disabled={locked}
-                  onChange={(event) => {
-                    const concepts = [...(pack.key_concepts ?? [])];
-                    concepts[index] = {
-                      ...concept,
-                      term: event.target.value,
-                    };
+          {(pack.key_concepts ?? []).map(
+            (concept, index) => (
+              <div
+                key={index}
+                style={{
+                  borderBottom:
+                    "1px solid currentColor",
+                  paddingBottom: 16,
+                  marginBottom: 16,
+                  opacity: 0.9,
+                }}
+              >
+                <label className="rn-field">
+                  <span>Term</span>
 
-                    updatePackField("key_concepts", concepts);
-                  }}
-                />
-              </label>
+                  <input
+                    value={concept.term}
+                    disabled={locked}
+                    onChange={(event) => {
+                      const concepts = [
+                        ...(pack.key_concepts ?? []),
+                      ];
 
-              <label className="rn-field">
-                <span>Explanation</span>
-                <textarea
-                  value={concept.explanation}
-                  disabled={locked}
-                  rows={4}
-                  onChange={(event) => {
-                    const concepts = [...(pack.key_concepts ?? [])];
-                    concepts[index] = {
-                      ...concept,
-                      explanation: event.target.value,
-                    };
+                      concepts[index] = {
+                        ...concept,
+                        term: event.target.value,
+                      };
 
-                    updatePackField("key_concepts", concepts);
-                  }}
-                />
-              </label>
+                      updatePackField(
+                        "key_concepts",
+                        concepts,
+                      );
+                    }}
+                  />
+                </label>
 
-              {!locked && (
-                <button
-                  type="button"
-                  className="rn-button rn-button-secondary"
-                  onClick={() => {
-                    updatePackField(
-                      "key_concepts",
-                      (pack.key_concepts ?? []).filter(
-                        (_, itemIndex) => itemIndex !== index,
-                      ),
-                    );
-                  }}
-                >
-                  Remove concept
-                </button>
-              )}
-            </div>
-          ))}
+                <label className="rn-field">
+                  <span>Explanation</span>
+
+                  <textarea
+                    value={concept.explanation}
+                    disabled={locked}
+                    rows={4}
+                    onChange={(event) => {
+                      const concepts = [
+                        ...(pack.key_concepts ?? []),
+                      ];
+
+                      concepts[index] = {
+                        ...concept,
+                        explanation:
+                          event.target.value,
+                      };
+
+                      updatePackField(
+                        "key_concepts",
+                        concepts,
+                      );
+                    }}
+                  />
+                </label>
+
+                {!locked && (
+                  <button
+                    type="button"
+                    className="rn-button rn-button-secondary"
+                    onClick={() => {
+                      updatePackField(
+                        "key_concepts",
+                        (
+                          pack.key_concepts ?? []
+                        ).filter(
+                          (_, itemIndex) =>
+                            itemIndex !== index,
+                        ),
+                      );
+                    }}
+                  >
+                    Remove concept
+                  </button>
+                )}
+              </div>
+            ),
+          )}
 
           {!locked && (
             <button
               type="button"
               className="rn-button rn-button-secondary"
               onClick={() =>
-                updatePackField("key_concepts", [
-                  ...(pack.key_concepts ?? []),
-                  {
-                    term: "",
-                    explanation: "",
-                  },
-                ])
+                updatePackField(
+                  "key_concepts",
+                  [
+                    ...(pack.key_concepts ?? []),
+                    {
+                      term: "",
+                      explanation: "",
+                    },
+                  ],
+                )
               }
             >
               Add concept
@@ -976,55 +1419,71 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       </section>
 
-      <section style={{ marginBottom: 24 }}>
-        <h2 className="rn-section-heading">Prerequisites</h2>
+      <section
+        style={{
+          marginBottom: 24,
+        }}
+      >
+        <h2 className="rn-section-heading">
+          Prerequisites
+        </h2>
 
         <div className="rn-card">
-          {(pack.prerequisites ?? []).map((item, index) => (
-            <div
-              key={index}
-              style={{
-                display: "flex",
-                gap: 8,
-                marginBottom: 8,
-              }}
-            >
-              <input
-                value={item}
-                disabled={locked}
-                onChange={(event) =>
-                  updateStringArray(
-                    "prerequisites",
-                    index,
-                    event.target.value,
-                  )
-                }
-                style={{ flex: 1 }}
-              />
-
-              {!locked && (
-                <button
-                  type="button"
-                  className="rn-button rn-button-secondary"
-                  onClick={() =>
-                    removeStringArrayItem("prerequisites", index)
+          {(pack.prerequisites ?? []).map(
+            (item, index) => (
+              <div
+                key={index}
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  marginBottom: 8,
+                }}
+              >
+                <input
+                  value={item}
+                  disabled={locked}
+                  onChange={(event) =>
+                    updateStringArray(
+                      "prerequisites",
+                      index,
+                      event.target.value,
+                    )
                   }
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-          ))}
+                  style={{
+                    flex: 1,
+                  }}
+                />
+
+                {!locked && (
+                  <button
+                    type="button"
+                    className="rn-button rn-button-secondary"
+                    onClick={() =>
+                      removeStringArrayItem(
+                        "prerequisites",
+                        index,
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            ),
+          )}
 
           {!locked && (
             <button
               type="button"
               className="rn-button rn-button-secondary"
               onClick={() =>
-                updatePackField("prerequisites", [
-                  ...(pack.prerequisites ?? []),
-                  "",
-                ])
+                updatePackField(
+                  "prerequisites",
+                  [
+                    ...(pack.prerequisites ?? []),
+                    "",
+                  ],
+                )
               }
             >
               Add prerequisite
@@ -1033,85 +1492,114 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       </section>
 
-      <section style={{ marginBottom: 24 }}>
-        <h2 className="rn-section-heading">Study plan</h2>
+      <section
+        style={{
+          marginBottom: 24,
+        }}
+      >
+        <h2 className="rn-section-heading">
+          Study plan
+        </h2>
 
         <div className="rn-card">
-          {(pack.study_plan ?? []).map((item, index) => (
-            <div
-              key={index}
-              style={{
-                borderBottom: "1px solid currentColor",
-                paddingBottom: 16,
-                marginBottom: 16,
-              }}
-            >
-              <label className="rn-field">
-                <span>Step</span>
-                <input
-                  value={item.step}
-                  disabled={locked}
-                  onChange={(event) => {
-                    const plan = [...(pack.study_plan ?? [])];
-                    plan[index] = {
-                      ...item,
-                      step: event.target.value,
-                    };
+          {(pack.study_plan ?? []).map(
+            (item, index) => (
+              <div
+                key={index}
+                style={{
+                  borderBottom:
+                    "1px solid currentColor",
+                  paddingBottom: 16,
+                  marginBottom: 16,
+                }}
+              >
+                <label className="rn-field">
+                  <span>Step</span>
 
-                    updatePackField("study_plan", plan);
-                  }}
-                />
-              </label>
+                  <input
+                    value={item.step}
+                    disabled={locked}
+                    onChange={(event) => {
+                      const plan = [
+                        ...(pack.study_plan ?? []),
+                      ];
 
-              <label className="rn-field">
-                <span>Action</span>
-                <textarea
-                  value={item.action}
-                  disabled={locked}
-                  rows={3}
-                  onChange={(event) => {
-                    const plan = [...(pack.study_plan ?? [])];
-                    plan[index] = {
-                      ...item,
-                      action: event.target.value,
-                    };
+                      plan[index] = {
+                        ...item,
+                        step: event.target.value,
+                      };
 
-                    updatePackField("study_plan", plan);
-                  }}
-                />
-              </label>
+                      updatePackField(
+                        "study_plan",
+                        plan,
+                      );
+                    }}
+                  />
+                </label>
 
-              {!locked && (
-                <button
-                  type="button"
-                  className="rn-button rn-button-secondary"
-                  onClick={() =>
-                    updatePackField(
-                      "study_plan",
-                      (pack.study_plan ?? []).filter(
-                        (_, itemIndex) => itemIndex !== index,
-                      ),
-                    )
-                  }
-                >
-                  Remove step
-                </button>
-              )}
-            </div>
-          ))}
+                <label className="rn-field">
+                  <span>Action</span>
+
+                  <textarea
+                    value={item.action}
+                    disabled={locked}
+                    rows={3}
+                    onChange={(event) => {
+                      const plan = [
+                        ...(pack.study_plan ?? []),
+                      ];
+
+                      plan[index] = {
+                        ...item,
+                        action: event.target.value,
+                      };
+
+                      updatePackField(
+                        "study_plan",
+                        plan,
+                      );
+                    }}
+                  />
+                </label>
+
+                {!locked && (
+                  <button
+                    type="button"
+                    className="rn-button rn-button-secondary"
+                    onClick={() =>
+                      updatePackField(
+                        "study_plan",
+                        (
+                          pack.study_plan ?? []
+                        ).filter(
+                          (_, itemIndex) =>
+                            itemIndex !== index,
+                        ),
+                      )
+                    }
+                  >
+                    Remove step
+                  </button>
+                )}
+              </div>
+            ),
+          )}
 
           {!locked && (
             <button
               type="button"
               className="rn-button rn-button-secondary"
               onClick={() =>
-                updatePackField("study_plan", [
-                  ...(pack.study_plan ?? []),
-                  {
-                    step: "",
-                    action: "",
-                  },
-                ])
+                updatePackField(
+                  "study_plan",
+                  [
+                    ...(pack.study_plan ?? []),
+                    {
+                      step: "",
+                      action: "",
+                    },
+                  ],
+                )
               }
             >
               Add study step
@@ -1120,86 +1608,115 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       </section>
 
-      <section style={{ marginBottom: 24 }}>
-        <h2 className="rn-section-heading">Flashcards</h2>
+      <section
+        style={{
+          marginBottom: 24,
+        }}
+      >
+        <h2 className="rn-section-heading">
+          Flashcards
+        </h2>
 
         <div className="rn-card">
-          {(pack.flashcards ?? []).map((card, index) => (
-            <div
-              key={index}
-              style={{
-                borderBottom: "1px solid currentColor",
-                paddingBottom: 16,
-                marginBottom: 16,
-              }}
-            >
-              <label className="rn-field">
-                <span>Question / Front</span>
-                <textarea
-                  value={card.front}
-                  disabled={locked}
-                  rows={3}
-                  onChange={(event) => {
-                    const cards = [...(pack.flashcards ?? [])];
-                    cards[index] = {
-                      ...card,
-                      front: event.target.value,
-                    };
+          {(pack.flashcards ?? []).map(
+            (card, index) => (
+              <div
+                key={index}
+                style={{
+                  borderBottom:
+                    "1px solid currentColor",
+                  paddingBottom: 16,
+                  marginBottom: 16,
+                }}
+              >
+                <label className="rn-field">
+                  <span>Question / Front</span>
 
-                    updatePackField("flashcards", cards);
-                  }}
-                />
-              </label>
+                  <textarea
+                    value={card.front}
+                    disabled={locked}
+                    rows={3}
+                    onChange={(event) => {
+                      const cards = [
+                        ...(pack.flashcards ?? []),
+                      ];
 
-              <label className="rn-field">
-                <span>Answer / Back</span>
-                <textarea
-                  value={card.back}
-                  disabled={locked}
-                  rows={3}
-                  onChange={(event) => {
-                    const cards = [...(pack.flashcards ?? [])];
-                    cards[index] = {
-                      ...card,
-                      back: event.target.value,
-                    };
+                      cards[index] = {
+                        ...card,
+                        front: event.target.value,
+                      };
 
-                    updatePackField("flashcards", cards);
-                  }}
-                />
-              </label>
+                      updatePackField(
+                        "flashcards",
+                        cards,
+                      );
+                    }}
+                  />
+                </label>
 
-              {!locked && (
-                <button
-                  type="button"
-                  className="rn-button rn-button-secondary"
-                  onClick={() =>
-                    updatePackField(
-                      "flashcards",
-                      (pack.flashcards ?? []).filter(
-                        (_, itemIndex) => itemIndex !== index,
-                      ),
-                    )
-                  }
-                >
-                  Remove flashcard
-                </button>
-              )}
-            </div>
-          ))}
+                <label className="rn-field">
+                  <span>Answer / Back</span>
+
+                  <textarea
+                    value={card.back}
+                    disabled={locked}
+                    rows={3}
+                    onChange={(event) => {
+                      const cards = [
+                        ...(pack.flashcards ?? []),
+                      ];
+
+                      cards[index] = {
+                        ...card,
+                        back: event.target.value,
+                      };
+
+                      updatePackField(
+                        "flashcards",
+                        cards,
+                      );
+                    }}
+                  />
+                </label>
+
+                {!locked && (
+                  <button
+                    type="button"
+                    className="rn-button rn-button-secondary"
+                    onClick={() =>
+                      updatePackField(
+                        "flashcards",
+                        (
+                          pack.flashcards ?? []
+                        ).filter(
+                          (_, itemIndex) =>
+                            itemIndex !== index,
+                        ),
+                      )
+                    }
+                  >
+                    Remove flashcard
+                  </button>
+                )}
+              </div>
+            ),
+          )}
 
           {!locked && (
             <button
               type="button"
               className="rn-button rn-button-secondary"
               onClick={() =>
-                updatePackField("flashcards", [
-                  ...(pack.flashcards ?? []),
-                  {
-                    front: "",
-                    back: "",
-                  },
-                ])
+                updatePackField(
+                  "flashcards",
+                  [
+                    ...(pack.flashcards ?? []),
+                    {
+                      front: "",
+                      back: "",
+                    },
+                  ],
+                )
               }
             >
               Add flashcard
@@ -1208,249 +1725,338 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       </section>
 
-      <section style={{ marginBottom: 24 }}>
-        <h2 className="rn-section-heading">Practical activity</h2>
+      <section
+        style={{
+          marginBottom: 24,
+        }}
+      >
+        <h2 className="rn-section-heading">
+          Practical activity
+        </h2>
 
         <div className="rn-card">
           <label className="rn-field">
             <span>Activity title</span>
+
             <input
-              value={pack.practical_activity?.title ?? ""}
+              value={
+                pack.practical_activity?.title ?? ""
+              }
               disabled={locked}
               onChange={(event) =>
-                updatePackField("practical_activity", {
-                  ...(pack.practical_activity ?? {}),
-                  title: event.target.value,
-                })
+                updatePackField(
+                  "practical_activity",
+                  {
+                    ...(pack.practical_activity ?? {}),
+                    title: event.target.value,
+                  },
+                )
               }
             />
           </label>
 
           <label className="rn-field">
             <span>Instructions</span>
+
             <textarea
-              value={pack.practical_activity?.instructions ?? ""}
+              value={
+                pack.practical_activity?.instructions ??
+                ""
+              }
               disabled={locked}
               rows={6}
               onChange={(event) =>
-                updatePackField("practical_activity", {
-                  ...(pack.practical_activity ?? {}),
-                  instructions: event.target.value,
-                })
+                updatePackField(
+                  "practical_activity",
+                  {
+                    ...(pack.practical_activity ?? {}),
+                    instructions:
+                      event.target.value,
+                  },
+                )
               }
             />
           </label>
 
           <label className="rn-field">
             <span>Expected output</span>
+
             <textarea
-              value={pack.practical_activity?.expected_output ?? ""}
+              value={
+                pack.practical_activity?.expected_output ??
+                ""
+              }
               disabled={locked}
               rows={4}
               onChange={(event) =>
-                updatePackField("practical_activity", {
-                  ...(pack.practical_activity ?? {}),
-                  expected_output: event.target.value,
-                })
+                updatePackField(
+                  "practical_activity",
+                  {
+                    ...(pack.practical_activity ?? {}),
+                    expected_output:
+                      event.target.value,
+                  },
+                )
               }
             />
           </label>
         </div>
       </section>
 
-      <section style={{ marginBottom: 24 }}>
-        <h2 className="rn-section-heading">Assessment questions</h2>
+      <section
+        style={{
+          marginBottom: 24,
+        }}
+      >
+        <h2 className="rn-section-heading">
+          Assessment questions
+        </h2>
 
         <div className="rn-card">
-          {(pack.assessment_questions ?? []).map((item, index) => (
-            <div
-              key={index}
-              style={{
-                borderBottom: "1px solid currentColor",
-                paddingBottom: 20,
-                marginBottom: 20,
-              }}
-            >
-              <label className="rn-field">
-                <span>Question {index + 1}</span>
-                <textarea
-                  value={item.question}
-                  disabled={locked}
-                  rows={4}
-                  onChange={(event) => {
-                    const questions = [
-                      ...(pack.assessment_questions ?? []),
-                    ];
+          {(pack.assessment_questions ?? []).map(
+            (item, index) => (
+              <div
+                key={index}
+                style={{
+                  borderBottom:
+                    "1px solid currentColor",
+                  paddingBottom: 20,
+                  marginBottom: 20,
+                }}
+              >
+                <label className="rn-field">
+                  <span>
+                    Question {index + 1}
+                  </span>
 
-                    questions[index] = {
-                      ...item,
-                      question: event.target.value,
-                    };
-
-                    updatePackField("assessment_questions", questions);
-                  }}
-                />
-              </label>
-
-              <div style={{ marginBottom: 16 }}>
-                <strong>Options</strong>
-
-                {(item.options ?? []).map((option, optionIndex) => (
-                  <div
-                    key={optionIndex}
-                    style={{
-                      display: "flex",
-                      gap: 8,
-                      marginTop: 8,
-                    }}
-                  >
-                    <input
-                      value={option}
-                      disabled={locked}
-                      onChange={(event) => {
-                        const questions = [
-                          ...(pack.assessment_questions ?? []),
-                        ];
-
-                        const options = [...(item.options ?? [])];
-                        options[optionIndex] = event.target.value;
-
-                        questions[index] = {
-                          ...item,
-                          options,
-                        };
-
-                        updatePackField("assessment_questions", questions);
-                      }}
-                      style={{ flex: 1 }}
-                    />
-
-                    {!locked && (
-                      <button
-                        type="button"
-                        className="rn-button rn-button-secondary"
-                        onClick={() => {
-                          const questions = [
-                            ...(pack.assessment_questions ?? []),
-                          ];
-
-                          questions[index] = {
-                            ...item,
-                            options: (item.options ?? []).filter(
-                              (_, itemIndex) =>
-                                itemIndex !== optionIndex,
-                            ),
-                          };
-
-                          updatePackField(
-                            "assessment_questions",
-                            questions,
-                          );
-                        }}
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                ))}
-
-                {!locked && (
-                  <button
-                    type="button"
-                    className="rn-button rn-button-secondary"
-                    style={{ marginTop: 8 }}
-                    onClick={() => {
+                  <textarea
+                    value={item.question}
+                    disabled={locked}
+                    rows={4}
+                    onChange={(event) => {
                       const questions = [
                         ...(pack.assessment_questions ?? []),
                       ];
 
                       questions[index] = {
                         ...item,
-                        options: [...(item.options ?? []), ""],
+                        question:
+                          event.target.value,
                       };
 
-                      updatePackField("assessment_questions", questions);
+                      updatePackField(
+                        "assessment_questions",
+                        questions,
+                      );
                     }}
+                  />
+                </label>
+
+                <div
+                  style={{
+                    marginBottom: 16,
+                  }}
+                >
+                  <strong>Options</strong>
+
+                  {(item.options ?? []).map(
+                    (option, optionIndex) => (
+                      <div
+                        key={optionIndex}
+                        style={{
+                          display: "flex",
+                          gap: 8,
+                          marginTop: 8,
+                        }}
+                      >
+                        <input
+                          value={option}
+                          disabled={locked}
+                          onChange={(event) => {
+                            const questions = [
+                              ...(pack.assessment_questions ??
+                                []),
+                            ];
+
+                            const options = [
+                              ...(item.options ?? []),
+                            ];
+
+                            options[optionIndex] =
+                              event.target.value;
+
+                            questions[index] = {
+                              ...item,
+                              options,
+                            };
+
+                            updatePackField(
+                              "assessment_questions",
+                              questions,
+                            );
+                          }}
+                          style={{
+                            flex: 1,
+                          }}
+                        />
+
+                        {!locked && (
+                          <button
+                            type="button"
+                            className="rn-button rn-button-secondary"
+                            onClick={() => {
+                              const questions = [
+                                ...(pack.assessment_questions ??
+                                  []),
+                              ];
+
+                              questions[index] = {
+                                ...item,
+                                options: (
+                                  item.options ?? []
+                                ).filter(
+                                  (_, itemIndex) =>
+                                    itemIndex !==
+                                    optionIndex,
+                                ),
+                              };
+
+                              updatePackField(
+                                "assessment_questions",
+                                questions,
+                              );
+                            }}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    ),
+                  )}
+
+                  {!locked && (
+                    <button
+                      type="button"
+                      className="rn-button rn-button-secondary"
+                      style={{
+                        marginTop: 8,
+                      }}
+                      onClick={() => {
+                        const questions = [
+                          ...(pack.assessment_questions ??
+                            []),
+                        ];
+
+                        questions[index] = {
+                          ...item,
+                          options: [
+                            ...(item.options ?? []),
+                            "",
+                          ],
+                        };
+
+                        updatePackField(
+                          "assessment_questions",
+                          questions,
+                        );
+                      }}
+                    >
+                      Add option
+                    </button>
+                  )}
+                </div>
+
+                <label className="rn-field">
+                  <span>Correct answer</span>
+
+                  <input
+                    value={item.correct_answer ?? ""}
+                    disabled={locked}
+                    onChange={(event) => {
+                      const questions = [
+                        ...(pack.assessment_questions ?? []),
+                      ];
+
+                      questions[index] = {
+                        ...item,
+                        correct_answer:
+                          event.target.value,
+                      };
+
+                      updatePackField(
+                        "assessment_questions",
+                        questions,
+                      );
+                    }}
+                  />
+                </label>
+
+                <label className="rn-field">
+                  <span>Explanation</span>
+
+                  <textarea
+                    value={item.explanation ?? ""}
+                    disabled={locked}
+                    rows={4}
+                    onChange={(event) => {
+                      const questions = [
+                        ...(pack.assessment_questions ?? []),
+                      ];
+
+                      questions[index] = {
+                        ...item,
+                        explanation:
+                          event.target.value,
+                      };
+
+                      updatePackField(
+                        "assessment_questions",
+                        questions,
+                      );
+                    }}
+                  />
+                </label>
+
+                {!locked && (
+                  <button
+                    type="button"
+                    className="rn-button rn-button-secondary"
+                    onClick={() =>
+                      updatePackField(
+                        "assessment_questions",
+                        (
+                          pack.assessment_questions ?? []
+                        ).filter(
+                          (_, itemIndex) =>
+                            itemIndex !== index,
+                        ),
+                      )
+                    }
                   >
-                    Add option
+                    Remove question
                   </button>
                 )}
               </div>
-
-              <label className="rn-field">
-                <span>Correct answer</span>
-                <input
-                  value={item.correct_answer ?? ""}
-                  disabled={locked}
-                  onChange={(event) => {
-                    const questions = [
-                      ...(pack.assessment_questions ?? []),
-                    ];
-
-                    questions[index] = {
-                      ...item,
-                      correct_answer: event.target.value,
-                    };
-
-                    updatePackField("assessment_questions", questions);
-                  }}
-                />
-              </label>
-
-              <label className="rn-field">
-                <span>Explanation</span>
-                <textarea
-                  value={item.explanation ?? ""}
-                  disabled={locked}
-                  rows={4}
-                  onChange={(event) => {
-                    const questions = [
-                      ...(pack.assessment_questions ?? []),
-                    ];
-
-                    questions[index] = {
-                      ...item,
-                      explanation: event.target.value,
-                    };
-
-                    updatePackField("assessment_questions", questions);
-                  }}
-                />
-              </label>
-
-              {!locked && (
-                <button
-                  type="button"
-                  className="rn-button rn-button-secondary"
-                  onClick={() =>
-                    updatePackField(
-                      "assessment_questions",
-                      (pack.assessment_questions ?? []).filter(
-                        (_, itemIndex) => itemIndex !== index,
-                      ),
-                    )
-                  }
-                >
-                  Remove question
-                </button>
-              )}
-            </div>
-          ))}
+            ),
+          )}
 
           {!locked && (
             <button
               type="button"
               className="rn-button rn-button-secondary"
               onClick={() =>
-                updatePackField("assessment_questions", [
-                  ...(pack.assessment_questions ?? []),
-                  {
-                    question: "",
-                    options: [],
-                    correct_answer: "",
-                    explanation: "",
-                  },
-                ])
+                updatePackField(
+                  "assessment_questions",
+                  [
+                    ...(pack.assessment_questions ?? []),
+                    {
+                      question: "",
+                      options: [],
+                      correct_answer: "",
+                      explanation: "",
+                    },
+                  ],
+                )
               }
             >
               Add question
@@ -1459,56 +2065,72 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       </section>
 
-      <section style={{ marginBottom: 24 }}>
-        <h2 className="rn-section-heading">Source warnings</h2>
+      <section
+        style={{
+          marginBottom: 24,
+        }}
+      >
+        <h2 className="rn-section-heading">
+          Source warnings
+        </h2>
 
         <div className="rn-card">
-          {(pack.source_warnings ?? []).map((warning, index) => (
-            <div
-              key={index}
-              style={{
-                display: "flex",
-                gap: 8,
-                marginBottom: 8,
-              }}
-            >
-              <textarea
-                value={warning}
-                disabled={locked}
-                rows={3}
-                onChange={(event) =>
-                  updateStringArray(
-                    "source_warnings",
-                    index,
-                    event.target.value,
-                  )
-                }
-                style={{ flex: 1 }}
-              />
-
-              {!locked && (
-                <button
-                  type="button"
-                  className="rn-button rn-button-secondary"
-                  onClick={() =>
-                    removeStringArrayItem("source_warnings", index)
+          {(pack.source_warnings ?? []).map(
+            (warning, index) => (
+              <div
+                key={index}
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  marginBottom: 8,
+                }}
+              >
+                <textarea
+                  value={warning}
+                  disabled={locked}
+                  rows={3}
+                  onChange={(event) =>
+                    updateStringArray(
+                      "source_warnings",
+                      index,
+                      event.target.value,
+                    )
                   }
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-          ))}
+                  style={{
+                    flex: 1,
+                  }}
+                />
+
+                {!locked && (
+                  <button
+                    type="button"
+                    className="rn-button rn-button-secondary"
+                    onClick={() =>
+                      removeStringArrayItem(
+                        "source_warnings",
+                        index,
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            ),
+          )}
 
           {!locked && (
             <button
               type="button"
               className="rn-button rn-button-secondary"
               onClick={() =>
-                updatePackField("source_warnings", [
-                  ...(pack.source_warnings ?? []),
-                  "",
-                ])
+                updatePackField(
+                  "source_warnings",
+                  [
+                    ...(pack.source_warnings ?? []),
+                    "",
+                  ],
+                )
               }
             >
               Add warning
@@ -1518,14 +2140,29 @@ export default function AiDraftEditor({ draft }: Props) {
       </section>
 
       {(pack.source_summary || pack.extracted_text) && (
-        <section style={{ marginBottom: 24 }}>
-          <h2 className="rn-section-heading">Source information</h2>
+        <section
+          style={{
+            marginBottom: 24,
+          }}
+        >
+          <h2 className="rn-section-heading">
+            Source information
+          </h2>
 
           <div className="rn-card">
             {pack.source_summary && (
-              <div style={{ marginBottom: 20 }}>
+              <div
+                style={{
+                  marginBottom: 20,
+                }}
+              >
                 <strong>Source summary</strong>
-                <p style={{ whiteSpace: "pre-wrap" }}>
+
+                <p
+                  style={{
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
                   {pack.source_summary}
                 </p>
               </div>
@@ -1534,7 +2171,12 @@ export default function AiDraftEditor({ draft }: Props) {
             {pack.extracted_text && (
               <div>
                 <strong>Extracted source text</strong>
-                <p style={{ whiteSpace: "pre-wrap" }}>
+
+                <p
+                  style={{
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
                   {pack.extracted_text}
                 </p>
               </div>
@@ -1556,7 +2198,11 @@ export default function AiDraftEditor({ draft }: Props) {
           <button
             type="button"
             className="rn-button rn-button-primary"
-            disabled={saving || submitting || deleting}
+            disabled={
+              saving ||
+              submitting ||
+              deleting
+            }
             onClick={saveDraft}
           >
             {saving ? "Saving..." : "Save changes"}
@@ -1565,17 +2211,31 @@ export default function AiDraftEditor({ draft }: Props) {
           <button
             type="button"
             className="rn-button rn-button-primary"
-            disabled={saving || submitting || deleting}
+            disabled={
+              saving ||
+              submitting ||
+              deleting
+            }
             onClick={submitForReview}
           >
-            {submitting ? "Submitting..." : "Submit for LMS Review"}
+            {submitting
+              ? "Submitting..."
+              : revisionRequired
+                ? "Resubmit for LMS Review"
+                : "Submit for LMS Review"}
           </button>
 
           <button
             type="button"
             className="rn-button rn-button-secondary"
-            disabled={saving || submitting || deleting}
-            onClick={() => router.push("/student/scan")}
+            disabled={
+              saving ||
+              submitting ||
+              deleting
+            }
+            onClick={() =>
+              router.push("/student/scan")
+            }
           >
             Create another
           </button>
@@ -1583,7 +2243,11 @@ export default function AiDraftEditor({ draft }: Props) {
           <button
             type="button"
             className="rn-button rn-button-secondary"
-            disabled={saving || submitting || deleting}
+            disabled={
+              saving ||
+              submitting ||
+              deleting
+            }
             onClick={deleteDraft}
           >
             {deleting ? "Deleting..." : "Delete draft"}
