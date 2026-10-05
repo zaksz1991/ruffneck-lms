@@ -20,6 +20,51 @@ type ConversionResult = {
   converted_at?: string;
 };
 
+type AiSection = {
+  heading?: unknown;
+  content?: unknown;
+  examples?: unknown;
+};
+
+type AiStudyPlanItem = {
+  step?: unknown;
+  action?: unknown;
+};
+
+type AiKeyConcept = {
+  term?: unknown;
+  explanation?: unknown;
+};
+
+type AiPracticalActivity = {
+  title?: unknown;
+  instructions?: unknown;
+  expected_output?: unknown;
+};
+
+type LearningPack = {
+  title?: unknown;
+  source_summary?: unknown;
+  learning_objectives?: unknown;
+  prerequisites?: unknown;
+  key_concepts?: unknown;
+  sections?: unknown;
+  practical_activity?: unknown;
+  assessment_questions?: unknown;
+  study_plan?: unknown;
+  flashcards?: unknown;
+  source_warnings?: unknown;
+  estimated_duration_minutes?: unknown;
+  difficulty?: unknown;
+};
+
+type LessonRecord = {
+  id: string;
+  title: string;
+  sort_order: number | null;
+  section_id: string;
+};
+
 type DraftRecord = {
   id: string;
   title: string;
@@ -29,35 +74,15 @@ type DraftRecord = {
   converted_at: string | null;
 };
 
-type AiAssessmentQuestion = {
-  question?: unknown;
-  options?: unknown;
-  correct_answer?: unknown;
-  explanation?: unknown;
-  difficulty?: unknown;
-  points?: unknown;
-  question_type?: unknown;
-};
-
-type AssessmentInsertRow = {
-  course_id: string;
-  skill_id: string | null;
-  question: string;
-  question_text: string;
-  options: string[];
-  correct_answer: string;
-  explanation: string | null;
-  difficulty: string;
-  points: number;
-  question_type: string;
-  sort_order: number;
-};
-
 function asString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  return typeof value === "string"
+    ? value.trim()
+    : "";
 }
 
-function asStringArray(value: unknown): string[] {
+function asStringArray(
+  value: unknown
+): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -71,16 +96,38 @@ function asStringArray(value: unknown): string[] {
     .filter(Boolean);
 }
 
-function asObject(value: unknown): Record<string, unknown> {
+function asObject(
+  value: unknown
+): Record<string, unknown> {
   if (
     value &&
     typeof value === "object" &&
     !Array.isArray(value)
   ) {
-    return value as Record<string, unknown>;
+    return value as Record<
+      string,
+      unknown
+    >;
   }
 
   return {};
+}
+
+function asObjectArray(
+  value: unknown
+): Record<string, unknown>[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter(
+    (
+      item
+    ): item is Record<string, unknown> =>
+      Boolean(item) &&
+      typeof item === "object" &&
+      !Array.isArray(item)
+  );
 }
 
 function isConversionResult(
@@ -92,133 +139,558 @@ function isConversionResult(
   );
 }
 
-function normalizeAnswer(value: string): string {
+function normalizeAnswer(
+  value: string
+): string {
   return value.trim().toLowerCase();
 }
 
-function getAiAssessmentQuestions(
-  learningPack: unknown
-): AiAssessmentQuestion[] {
-  const pack = asObject(learningPack);
-  const value = pack.assessment_questions;
-
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value.filter(
-    (
-      item
-    ): item is AiAssessmentQuestion =>
-      Boolean(item) &&
-      typeof item === "object" &&
-      !Array.isArray(item)
-  );
+function escapeHtml(
+  value: string
+): string {
+  return value
+    .replace(
+      /&/g,
+      "&amp;"
+    )
+    .replace(
+      /</g,
+      "&lt;"
+    )
+    .replace(
+      />/g,
+      "&gt;"
+    )
+    .replace(
+      /"/g,
+      "&quot;"
+    )
+    .replace(
+      /'/g,
+      "&#39;"
+    );
 }
 
-function buildAssessmentRows(
-  courseId: string,
-  learningPack: unknown
-): AssessmentInsertRow[] {
-  const questions =
-    getAiAssessmentQuestions(
-      learningPack
+function textToParagraphs(
+  value: string
+): string {
+  const paragraphs =
+    value
+      .split(/\n\s*\n/)
+      .map((part) =>
+        part
+          .replace(/\r/g, "")
+          .trim()
+      )
+      .filter(Boolean);
+
+  if (paragraphs.length === 0) {
+    return "";
+  }
+
+  return paragraphs
+    .map(
+      (paragraph) =>
+        `<p>${escapeHtml(
+          paragraph
+        ).replace(
+          /\n/g,
+          "<br />"
+        )}</p>`
+    )
+    .join("\n");
+}
+
+function getLearningPack(
+  value: unknown
+): LearningPack {
+  return asObject(
+    value
+  ) as LearningPack;
+}
+
+function getSections(
+  pack: LearningPack
+): AiSection[] {
+  return asObjectArray(
+    pack.sections
+  ) as AiSection[];
+}
+
+function getStudyPlan(
+  pack: LearningPack
+): AiStudyPlanItem[] {
+  return asObjectArray(
+    pack.study_plan
+  ) as AiStudyPlanItem[];
+}
+
+function getKeyConcepts(
+  pack: LearningPack
+): AiKeyConcept[] {
+  return asObjectArray(
+    pack.key_concepts
+  ) as AiKeyConcept[];
+}
+
+function getPracticalActivity(
+  pack: LearningPack
+): AiPracticalActivity | null {
+  const value =
+    asObject(
+      pack.practical_activity
     );
 
-  return questions.map(
-    (item, index) => {
-      const question = asString(
-        item.question
-      );
+  if (
+    Object.keys(value).length ===
+    0
+  ) {
+    return null;
+  }
 
-      const options = asStringArray(
-        item.options
-      );
+  return value as AiPracticalActivity;
+}
 
-      const correctAnswer = asString(
-        item.correct_answer
+function buildLessonContentHtml(
+  lessonIndex: number,
+  totalLessons: number,
+  lesson: LessonRecord,
+  pack: LearningPack
+): string {
+  const sections =
+    getSections(pack);
+
+  const studyPlan =
+    getStudyPlan(pack);
+
+  const keyConcepts =
+    getKeyConcepts(pack);
+
+  const practicalActivity =
+    getPracticalActivity(pack);
+
+  const section =
+    sections[lessonIndex] ??
+    sections[
+      Math.min(
+        lessonIndex,
+        Math.max(
+          0,
+          sections.length - 1
+        )
+      )
+    ] ??
+    null;
+
+  const planItem =
+    studyPlan[lessonIndex] ??
+    null;
+
+  const heading =
+    asString(
+      section?.heading
+    ) ||
+    lesson.title;
+
+  const action =
+    asString(
+      planItem?.action
+    );
+
+  const sectionContent =
+    asString(
+      section?.content
+    );
+
+  const examples =
+    asStringArray(
+      section?.examples
+    );
+
+  const learningObjectives =
+    asStringArray(
+      pack.learning_objectives
+    );
+
+  const prerequisites =
+    asStringArray(
+      pack.prerequisites
+    );
+
+  const html: string[] = [];
+
+  html.push(
+    `<h2>${escapeHtml(
+      heading
+    )}</h2>`
+  );
+
+  if (action) {
+    html.push(
+      `<p><strong>Learning focus:</strong> ${escapeHtml(
+        action
+      )}</p>`
+    );
+  }
+
+  if (sectionContent) {
+    html.push(
+      textToParagraphs(
+        sectionContent
+      )
+    );
+  } else if (action) {
+    html.push(
+      `<p>${escapeHtml(
+        action
+      )}</p>`
+    );
+  } else {
+    html.push(
+      `<p>This lesson provides practical learning material for ${escapeHtml(
+        lesson.title
+      )}.</p>`
+    );
+  }
+
+  /*
+   * Put course objectives and prerequisites
+   * into the first generated lesson.
+   */
+  if (
+    lessonIndex === 0 &&
+    learningObjectives.length > 0
+  ) {
+    html.push(
+      "<h3>Learning objectives</h3>"
+    );
+
+    html.push(
+      "<ul>"
+    );
+
+    for (
+      const objective of learningObjectives
+    ) {
+      html.push(
+        `<li>${escapeHtml(
+          objective
+        )}</li>`
       );
+    }
+
+    html.push(
+      "</ul>"
+    );
+  }
+
+  if (
+    lessonIndex === 0 &&
+    prerequisites.length > 0
+  ) {
+    html.push(
+      "<h3>Prerequisites</h3>"
+    );
+
+    html.push(
+      "<ul>"
+    );
+
+    for (
+      const prerequisite of prerequisites
+    ) {
+      html.push(
+        `<li>${escapeHtml(
+          prerequisite
+        )}</li>`
+      );
+    }
+
+    html.push(
+      "</ul>"
+    );
+  }
+
+  if (
+    examples.length > 0
+  ) {
+    html.push(
+      "<h3>Practical examples</h3>"
+    );
+
+    html.push(
+      "<ul>"
+    );
+
+    for (
+      const example of examples
+    ) {
+      html.push(
+        `<li>${escapeHtml(
+          example
+        )}</li>`
+      );
+    }
+
+    html.push(
+      "</ul>"
+    );
+  }
+
+  /*
+   * Add key concepts to the first lesson so
+   * the core terminology is available inside
+   * the actual course material.
+   */
+  if (
+    lessonIndex === 0 &&
+    keyConcepts.length > 0
+  ) {
+    html.push(
+      "<h3>Key concepts</h3>"
+    );
+
+    html.push(
+      "<dl>"
+    );
+
+    for (
+      const concept of keyConcepts
+    ) {
+      const term =
+        asString(
+          concept.term
+        );
 
       const explanation =
-        asString(item.explanation) ||
-        null;
-
-      const difficulty =
-        asString(item.difficulty) ||
-        "beginner";
-
-      const questionType =
         asString(
-          item.question_type
-        ) || "multiple_choice";
-
-      const points =
-        typeof item.points === "number" &&
-        Number.isFinite(item.points) &&
-        item.points > 0
-          ? Math.round(item.points)
-          : 1;
-
-      if (!question) {
-        throw new Error(
-          `AI assessment question ${
-            index + 1
-          } is missing question text.`
+          concept.explanation
         );
+
+      if (!term && !explanation) {
+        continue;
       }
 
-      if (options.length < 2) {
-        throw new Error(
-          `AI assessment question ${
-            index + 1
-          } must contain at least two options.`
+      html.push(
+        `<dt><strong>${escapeHtml(
+          term ||
+            "Key concept"
+        )}</strong></dt>`
+      );
+
+      if (explanation) {
+        html.push(
+          `<dd>${escapeHtml(
+            explanation
+          )}</dd>`
         );
       }
-
-      if (!correctAnswer) {
-        throw new Error(
-          `AI assessment question ${
-            index + 1
-          } is missing its correct answer.`
-        );
-      }
-
-      const matchingOption =
-        options.find(
-          (option) =>
-            normalizeAnswer(
-              option
-            ) ===
-            normalizeAnswer(
-              correctAnswer
-            )
-        );
-
-      if (!matchingOption) {
-        throw new Error(
-          `AI assessment question ${
-            index + 1
-          } has a correct answer that does not match any of its options.`
-        );
-      }
-
-      return {
-        course_id: courseId,
-        skill_id: null,
-        question,
-        question_text: question,
-        options,
-        correct_answer:
-          matchingOption,
-        explanation,
-        difficulty,
-        points,
-        question_type:
-          questionType,
-        sort_order: index + 1,
-      };
     }
-  );
+
+    html.push(
+      "</dl>"
+    );
+  }
+
+  /*
+   * Put the practical activity in the final
+   * generated lesson.
+   */
+  if (
+    lessonIndex ===
+      totalLessons - 1 &&
+    practicalActivity
+  ) {
+    const activityTitle =
+      asString(
+        practicalActivity.title
+      );
+
+    const instructions =
+      asString(
+        practicalActivity.instructions
+      );
+
+    const expectedOutput =
+      asString(
+        practicalActivity.expected_output
+      );
+
+    html.push(
+      "<h3>Practical activity</h3>"
+    );
+
+    if (activityTitle) {
+      html.push(
+        `<h4>${escapeHtml(
+          activityTitle
+        )}</h4>`
+      );
+    }
+
+    if (instructions) {
+      html.push(
+        textToParagraphs(
+          instructions
+        )
+      );
+    }
+
+    if (expectedOutput) {
+      html.push(
+        `<p><strong>Expected output:</strong> ${escapeHtml(
+          expectedOutput
+        )}</p>`
+      );
+    }
+  }
+
+  return html
+    .filter(Boolean)
+    .join("\n");
+}
+
+async function populateLessonContent(
+  supabase: Awaited<
+    ReturnType<typeof createClient>
+  >,
+  courseId: string,
+  learningPackValue: unknown
+) {
+  const pack =
+    getLearningPack(
+      learningPackValue
+    );
+
+  const {
+    data: lessonData,
+    error: lessonError,
+  } = await supabase
+    .from("lessons")
+    .select(
+      "id, title, sort_order, section_id"
+    )
+    .eq(
+      "course_id",
+      courseId
+    )
+    .order("sort_order", {
+      ascending: true,
+    });
+
+  if (lessonError) {
+    throw new Error(
+      lessonError.message ||
+        "Unable to load LMS lessons for AI content population."
+    );
+  }
+
+  const lessons =
+    (lessonData ??
+      []) as unknown as LessonRecord[];
+
+  if (lessons.length === 0) {
+    return {
+      populated: 0,
+      skipped: 0,
+    };
+  }
+
+  let populated = 0;
+  let skipped = 0;
+
+  for (
+    let index = 0;
+    index < lessons.length;
+    index += 1
+  ) {
+    const lesson =
+      lessons[index];
+
+    const contentHtml =
+      buildLessonContentHtml(
+        index,
+        lessons.length,
+        lesson,
+        pack
+      );
+
+    if (!contentHtml.trim()) {
+      skipped += 1;
+      continue;
+    }
+
+    /*
+     * Only populate an empty lesson. This prevents
+     * later synchronization from overwriting content
+     * an admin has manually edited.
+     */
+    const {
+      data: existingLesson,
+      error: existingError,
+    } = await supabase
+      .from("lessons")
+      .select(
+        "id, content_html"
+      )
+      .eq(
+        "id",
+        lesson.id
+      )
+      .eq(
+        "course_id",
+        courseId
+      )
+      .maybeSingle();
+
+    if (existingError) {
+      throw new Error(
+        existingError.message ||
+          "Unable to inspect LMS lesson content."
+      );
+    }
+
+    const existingContent =
+      asString(
+        existingLesson?.content_html
+      );
+
+    if (existingContent) {
+      skipped += 1;
+      continue;
+    }
+
+    const {
+      error: updateError,
+    } = await supabase
+      .from("lessons")
+      .update({
+        content_html:
+          contentHtml,
+      })
+      .eq(
+        "id",
+        lesson.id
+      )
+      .eq(
+        "course_id",
+        courseId
+      );
+
+    if (updateError) {
+      throw new Error(
+        updateError.message ||
+          `Unable to populate lesson ${index + 1}.`
+      );
+    }
+
+    populated += 1;
+  }
+
+  return {
+    populated,
+    skipped,
+  };
 }
 
 async function importAssessmentQuestions(
@@ -228,13 +700,34 @@ async function importAssessmentQuestions(
   courseId: string,
   learningPack: unknown
 ) {
-  const aiRows =
-    buildAssessmentRows(
-      courseId,
+  const pack =
+    getLearningPack(
       learningPack
     );
 
-  if (aiRows.length === 0) {
+  const rawQuestions =
+    Array.isArray(
+      pack.assessment_questions
+    )
+      ? pack.assessment_questions
+      : [];
+
+  const questions =
+    rawQuestions.filter(
+      (
+        item
+      ): item is Record<
+        string,
+        unknown
+      > =>
+        Boolean(item) &&
+        typeof item === "object" &&
+        !Array.isArray(item)
+    );
+
+  if (
+    questions.length === 0
+  ) {
     return {
       imported: 0,
       existing: 0,
@@ -247,9 +740,14 @@ async function importAssessmentQuestions(
     data: existingQuestions,
     error: existingError,
   } = await supabase
-    .from("assessment_questions")
+    .from(
+      "assessment_questions"
+    )
     .select("id")
-    .eq("course_id", courseId);
+    .eq(
+      "course_id",
+      courseId
+    );
 
   if (existingError) {
     throw new Error(
@@ -259,12 +757,12 @@ async function importAssessmentQuestions(
   }
 
   const existingCount =
-    existingQuestions?.length ?? 0;
+    existingQuestions?.length ??
+    0;
 
   /*
-   * Never overwrite questions that already exist.
-   * This protects manually created or previously
-   * imported assessment content.
+   * Preserve questions already maintained
+   * by an administrator.
    */
   if (existingCount > 0) {
     return {
@@ -275,11 +773,142 @@ async function importAssessmentQuestions(
     };
   }
 
+  const rows = [];
+
+  for (
+    let index = 0;
+    index < questions.length;
+    index += 1
+  ) {
+    const item =
+      questions[index];
+
+    const question =
+      asString(
+        item.question
+      );
+
+    const options =
+      asStringArray(
+        item.options
+      );
+
+    const correctAnswer =
+      asString(
+        item.correct_answer
+      );
+
+    const explanation =
+      asString(
+        item.explanation
+      ) || null;
+
+    const difficultyRaw =
+      asString(
+        item.difficulty
+      ).toLowerCase();
+
+    const difficulty =
+      difficultyRaw ===
+        "intermediate" ||
+      difficultyRaw ===
+        "advanced"
+        ? difficultyRaw
+        : "beginner";
+
+    const questionTypeRaw =
+      asString(
+        item.question_type
+      ).toLowerCase();
+
+    const questionType =
+      questionTypeRaw ===
+        "true_false" ||
+      questionTypeRaw ===
+        "short_answer"
+        ? questionTypeRaw
+        : "multiple_choice";
+
+    const points =
+      typeof item.points ===
+        "number" &&
+      Number.isFinite(
+        item.points
+      ) &&
+      item.points > 0
+        ? Math.round(
+            item.points
+          )
+        : 1;
+
+    if (!question) {
+      throw new Error(
+        `AI assessment question ${
+          index + 1
+        } is missing question text.`
+      );
+    }
+
+    if (
+      questionType ===
+        "multiple_choice" &&
+      options.length < 2
+    ) {
+      throw new Error(
+        `AI assessment question ${
+          index + 1
+        } must contain at least two options.`
+      );
+    }
+
+    if (
+      questionType ===
+        "multiple_choice" &&
+      !options.some(
+        (option) =>
+          normalizeAnswer(
+            option
+          ) ===
+          normalizeAnswer(
+            correctAnswer
+          )
+      )
+    ) {
+      throw new Error(
+        `AI assessment question ${
+          index + 1
+        } has a correct answer that does not match one of its options.`
+      );
+    }
+
+    rows.push({
+      course_id:
+        courseId,
+      skill_id: null,
+      question,
+      question_text:
+        question,
+      options,
+      correct_answer:
+        correctAnswer ||
+        null,
+      explanation,
+      difficulty,
+      points,
+      question_type:
+        questionType,
+      sort_order:
+        index + 1,
+    });
+  }
+
   const {
     error: insertError,
   } = await supabase
-    .from("assessment_questions")
-    .insert(aiRows);
+    .from(
+      "assessment_questions"
+    )
+    .insert(rows);
 
   if (insertError) {
     throw new Error(
@@ -289,56 +918,15 @@ async function importAssessmentQuestions(
   }
 
   return {
-    imported: aiRows.length,
+    imported:
+      rows.length,
     existing: 0,
     message:
-      `${aiRows.length} AI-generated assessment question${
-        aiRows.length === 1
+      `${rows.length} AI-generated assessment question${
+        rows.length === 1
           ? ""
           : "s"
       } imported successfully.`,
-  };
-}
-
-async function getDraft(
-  supabase: Awaited<
-    ReturnType<typeof createClient>
-  >,
-  draftId: string
-): Promise<{
-  draft: DraftRecord | null;
-  error: string | null;
-}> {
-  const {
-    data,
-    error,
-  } = await supabase
-    .from("ai_learning_drafts")
-    .select(
-      [
-        "id",
-        "title",
-        "status",
-        "learning_pack",
-        "converted_course_id",
-        "converted_at",
-      ].join(", ")
-    )
-    .eq("id", draftId)
-    .single<DraftRecord>();
-
-  if (error || !data) {
-    return {
-      draft: null,
-      error:
-        error?.message ||
-        "AI draft not found.",
-    };
-  }
-
-  return {
-    draft: data,
-    error: null,
   };
 }
 
@@ -373,7 +961,7 @@ export async function POST(
         .from("profiles")
         .select("role")
         .eq("id", user.id)
-        .single<Profile>();
+        .maybeSingle();
 
     if (
       profileError ||
@@ -388,9 +976,12 @@ export async function POST(
       );
     }
 
+    const role =
+      profile.role as Profile["role"];
+
     if (
-      profile.role !== "admin" &&
-      profile.role !== "instructor"
+      role !== "admin" &&
+      role !== "instructor"
     ) {
       return NextResponse.json(
         {
@@ -416,9 +1007,8 @@ export async function POST(
       );
     }
 
-    const draftId = asString(
-      body.id
-    );
+    const draftId =
+      asString(body.id);
 
     if (!draftId) {
       return NextResponse.json(
@@ -431,21 +1021,31 @@ export async function POST(
     }
 
     const {
-      draft,
-      error: draftLookupError,
-    } = await getDraft(
-      supabase,
-      draftId
-    );
+      data: draft,
+      error: draftError,
+    } =
+      await supabase
+        .from("ai_learning_drafts")
+        .select(
+          [
+            "id",
+            "title",
+            "status",
+            "learning_pack",
+            "converted_course_id",
+            "converted_at",
+          ].join(", ")
+        )
+        .eq("id", draftId)
+        .single<DraftRecord>();
 
     if (
-      draftLookupError ||
+      draftError ||
       !draft
     ) {
       return NextResponse.json(
         {
           error:
-            draftLookupError ||
             "AI draft not found.",
         },
         { status: 404 }
@@ -453,28 +1053,38 @@ export async function POST(
     }
 
     /*
-     * Already-converted drafts are still allowed to
-     * synchronize their assessment questions. This is
-     * important for courses converted before assessment
-     * import was added.
+     * Already converted courses can still be synchronized
+     * with lesson content and assessment questions.
      */
     if (
-      draft.status === "converted" &&
+      draft.status ===
+        "converted" &&
       draft.converted_course_id
     ) {
       try {
-        const assessment =
-          await importAssessmentQuestions(
+        const [
+          lessonContent,
+          assessment,
+        ] = await Promise.all([
+          populateLessonContent(
             supabase,
             draft.converted_course_id,
             draft.learning_pack
-          );
+          ),
+          importAssessmentQuestions(
+            supabase,
+            draft.converted_course_id,
+            draft.learning_pack
+          ),
+        ]);
 
         return NextResponse.json({
           success: true,
           already_converted: true,
           course_id:
             draft.converted_course_id,
+          lesson_content:
+            lessonContent,
           assessment,
           draft: {
             id: draft.id,
@@ -486,23 +1096,31 @@ export async function POST(
               draft.converted_at,
           },
           message:
-            assessment.imported > 0
-              ? assessment.message
-              : "This AI draft has already been converted to an LMS course.",
+            `Existing converted LMS course synchronized. ${lessonContent.populated} lesson${
+              lessonContent.populated ===
+              1
+                ? ""
+                : "s"
+            } populated and ${assessment.imported} assessment question${
+              assessment.imported ===
+              1
+                ? ""
+                : "s"
+            } imported.`,
         });
-      } catch (assessmentError) {
+      } catch (syncError) {
         console.error(
-          "Assessment synchronization failed:",
-          assessmentError
+          "Existing AI course synchronization failed:",
+          syncError
         );
 
         return NextResponse.json(
           {
             error:
-              assessmentError instanceof
+              syncError instanceof
               Error
-                ? assessmentError.message
-                : "The converted LMS course could not receive its AI assessment questions.",
+                ? syncError.message
+                : "The converted LMS course could not be synchronized.",
             course_id:
               draft.converted_course_id,
           },
@@ -512,7 +1130,8 @@ export async function POST(
     }
 
     if (
-      draft.status !== "approved"
+      draft.status !==
+      "approved"
     ) {
       return NextResponse.json(
         {
@@ -530,8 +1149,10 @@ export async function POST(
     } = await supabase.rpc(
       "convert_ai_draft_to_course",
       {
-        p_draft_id: draftId,
-        p_reviewer_id: user.id,
+        p_draft_id:
+          draftId,
+        p_reviewer_id:
+          user.id,
       }
     );
 
@@ -570,9 +1191,10 @@ export async function POST(
       );
     }
 
-    const courseId = asString(
-      result.course_id
-    );
+    const courseId =
+      asString(
+        result.course_id
+      );
 
     if (!courseId) {
       console.error(
@@ -589,32 +1211,37 @@ export async function POST(
       );
     }
 
-    /*
-     * Import the AI-generated assessment immediately
-     * after the LMS course is created.
-     */
+    let lessonContent;
+
     let assessment;
 
     try {
+      lessonContent =
+        await populateLessonContent(
+          supabase,
+          courseId,
+          draft.learning_pack
+        );
+
       assessment =
         await importAssessmentQuestions(
           supabase,
           courseId,
           draft.learning_pack
         );
-    } catch (assessmentError) {
+    } catch (syncError) {
       console.error(
-        "AI assessment import failed:",
-        assessmentError
+        "AI LMS content synchronization failed:",
+        syncError
       );
 
       return NextResponse.json(
         {
           error:
-            assessmentError instanceof
+            syncError instanceof
             Error
-              ? `The LMS course was created, but assessment import failed: ${assessmentError.message}`
-              : "The LMS course was created, but assessment import failed.",
+              ? `The LMS course was created, but AI learning content could not be synchronized: ${syncError.message}`
+              : "The LMS course was created, but AI learning content could not be synchronized.",
           course_id:
             courseId,
           result,
@@ -631,15 +1258,21 @@ export async function POST(
       course_id:
         courseId,
       result,
+      lesson_content:
+        lessonContent,
       assessment,
       message:
-        assessment.imported > 0
-          ? `AI draft converted successfully. ${assessment.imported} assessment question${
-              assessment.imported === 1
-                ? ""
-                : "s"
-            } imported into the LMS course.`
-          : "AI draft converted successfully. No AI assessment questions were included.",
+        `AI draft converted successfully. ${lessonContent.populated} lesson${
+          lessonContent.populated ===
+          1
+            ? ""
+            : "s"
+        } populated with AI learning content and ${assessment.imported} assessment question${
+          assessment.imported ===
+          1
+            ? ""
+            : "s"
+        } imported.`,
     });
   } catch (error) {
     console.error(
@@ -650,7 +1283,8 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          error instanceof Error
+          error instanceof
+          Error
             ? error.message
             : "An unexpected error occurred while converting the AI draft.",
       },
