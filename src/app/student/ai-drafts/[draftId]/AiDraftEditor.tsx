@@ -112,7 +112,7 @@ function asString(value: unknown): string {
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.map((item) =>
-        typeof item === "string" ? item : String(item ?? ""),
+        typeof item === "string" ? item : String(item ?? "")
       )
     : [];
 }
@@ -255,7 +255,9 @@ function normalizePack(pack: LearningPack): LearningPack {
 }
 
 function formatDateTime(value: string | null | undefined): string {
-  if (!value) return "Not recorded";
+  if (!value) {
+    return "Not recorded";
+  }
 
   const date = new Date(value);
 
@@ -411,7 +413,7 @@ function SectionCard({
                     ...section,
                     examples: examples.filter(
                       (_, itemIndex) =>
-                        itemIndex !== exampleIndex,
+                        itemIndex !== exampleIndex
                     ),
                   })
                 }
@@ -448,37 +450,46 @@ export default function AiDraftEditor({ draft }: Props) {
   const [title, setTitle] = useState(draft.title);
 
   const [focusInstruction, setFocusInstruction] = useState(
-    draft.focus_instruction ?? "",
+    draft.focus_instruction ?? ""
   );
 
   const [pack, setPack] = useState<LearningPack>(() =>
-    normalizePack(draft.learning_pack ?? {}),
+    normalizePack(draft.learning_pack ?? {})
   );
 
-  const [status, setStatus] = useState<DraftStatus>(draft.status);
-
-  const [sourceUploadedAt, setSourceUploadedAt] = useState<string | null>(
-    draft.source_uploaded_at ?? draft.created_at,
+  const [status, setStatus] = useState<DraftStatus>(
+    draft.status
   );
 
-  const [createdAt, setCreatedAt] = useState(draft.created_at);
-  const [updatedAt, setUpdatedAt] = useState(draft.updated_at);
+  const [sourceUploadedAt, setSourceUploadedAt] =
+    useState<string | null>(
+      draft.source_uploaded_at ?? draft.created_at
+    );
+
+  const [createdAt, setCreatedAt] = useState(
+    draft.created_at
+  );
+
+  const [updatedAt, setUpdatedAt] = useState(
+    draft.updated_at
+  );
 
   const [reviewNote, setReviewNote] = useState(
-    draft.review_note ?? "",
+    draft.review_note ?? ""
   );
 
-  const [reviewedBy, setReviewedBy] = useState<string | null>(
-    draft.reviewed_by ?? null,
+  const [reviewedBy, setReviewedBy] = useState(
+    draft.reviewed_by ?? ""
   );
 
   const [reviewedAt, setReviewedAt] = useState<string | null>(
-    draft.reviewed_at ?? null,
+    draft.reviewed_at ?? null
   );
 
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -492,7 +503,7 @@ export default function AiDraftEditor({ draft }: Props) {
       draft.output_type
         .replace(/_/g, " ")
         .replace(/\b\w/g, (letter) => letter.toUpperCase()),
-    [draft.output_type],
+    [draft.output_type]
   );
 
   const languageLabel = useMemo(() => {
@@ -512,51 +523,17 @@ export default function AiDraftEditor({ draft }: Props) {
       draft.audience
         .replace(/_/g, " ")
         .replace(/\b\w/g, (letter) => letter.toUpperCase()),
-    [draft.audience],
+    [draft.audience]
   );
 
   function updatePackField<K extends keyof LearningPack>(
     key: K,
-    value: LearningPack[K],
+    value: LearningPack[K]
   ) {
     setPack((current) => ({
       ...current,
       [key]: value,
     }));
-  }
-
-  function applyDraftResponse(
-    responseDraft: DraftApiResponse["draft"],
-  ) {
-    if (!responseDraft) return;
-
-    if (responseDraft.status) {
-      setStatus(responseDraft.status);
-    }
-
-    if (responseDraft.updated_at) {
-      setUpdatedAt(responseDraft.updated_at);
-    }
-
-    if (responseDraft.created_at) {
-      setCreatedAt(responseDraft.created_at);
-    }
-
-    if (responseDraft.source_uploaded_at) {
-      setSourceUploadedAt(responseDraft.source_uploaded_at);
-    }
-
-    if (typeof responseDraft.review_note !== "undefined") {
-      setReviewNote(responseDraft.review_note ?? "");
-    }
-
-    if (typeof responseDraft.reviewed_by !== "undefined") {
-      setReviewedBy(responseDraft.reviewed_by ?? null);
-    }
-
-    if (typeof responseDraft.reviewed_at !== "undefined") {
-      setReviewedAt(responseDraft.reviewed_at ?? null);
-    }
   }
 
   async function saveDraft() {
@@ -567,19 +544,22 @@ export default function AiDraftEditor({ draft }: Props) {
     setMessage("");
 
     try {
-      const response = await fetch("/api/student/scan/drafts", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: draft.id,
-          title,
-          focusInstruction,
-          learningPack: pack,
-          status: "edited",
-        }),
-      });
+      const response = await fetch(
+        "/api/student/scan/drafts",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id: draft.id,
+            title,
+            focusInstruction,
+            learningPack: pack,
+            status: "edited",
+          }),
+        }
+      );
 
       const data = (await response.json().catch(() => null)) as
         | DraftApiResponse
@@ -588,13 +568,38 @@ export default function AiDraftEditor({ draft }: Props) {
       if (!response.ok) {
         throw new Error(
           data?.error ||
-            "Unable to save the learning material.",
+            "Unable to save the learning material."
         );
       }
 
-      applyDraftResponse(data?.draft);
-
       setStatus("edited");
+
+      if (data?.draft?.updated_at) {
+        setUpdatedAt(data.draft.updated_at);
+      }
+
+      if (data?.draft?.created_at) {
+        setCreatedAt(data.draft.created_at);
+      }
+
+      if (data?.draft?.source_uploaded_at) {
+        setSourceUploadedAt(
+          data.draft.source_uploaded_at
+        );
+      }
+
+      if (data?.draft?.review_note !== undefined) {
+        setReviewNote(data.draft.review_note ?? "");
+      }
+
+      if (data?.draft?.reviewed_by !== undefined) {
+        setReviewedBy(data.draft.reviewed_by ?? "");
+      }
+
+      if (data?.draft?.reviewed_at !== undefined) {
+        setReviewedAt(data.draft.reviewed_at ?? null);
+      }
+
       setMessage("Learning material saved.");
 
       router.refresh();
@@ -602,7 +607,7 @@ export default function AiDraftEditor({ draft }: Props) {
       setError(
         err instanceof Error
           ? err.message
-          : "Unable to save the learning material.",
+          : "Unable to save the learning material."
       );
     } finally {
       setSaving(false);
@@ -612,12 +617,13 @@ export default function AiDraftEditor({ draft }: Props) {
   async function submitForReview() {
     if (locked) return;
 
-    const isResubmission = status === "revision_required";
+    const isResubmission =
+      status === "revision_required";
 
     const confirmed = window.confirm(
       isResubmission
         ? "Resubmit this revised AI-generated learning material for LMS review?"
-        : "Submit this AI-generated learning material for LMS review? You will not be able to edit or delete it while it is under review.",
+        : "Submit this AI-generated learning material for LMS review? You will not be able to edit or delete it while it is under review."
     );
 
     if (!confirmed) return;
@@ -637,7 +643,7 @@ export default function AiDraftEditor({ draft }: Props) {
           body: JSON.stringify({
             id: draft.id,
           }),
-        },
+        }
       );
 
       const data = (await response.json().catch(() => null)) as
@@ -647,17 +653,41 @@ export default function AiDraftEditor({ draft }: Props) {
       if (!response.ok) {
         throw new Error(
           data?.error ||
-            "Unable to submit the learning material.",
+            "Unable to submit the learning material."
         );
       }
 
-      applyDraftResponse(data?.draft);
-
       setStatus("submitted");
+
+      if (data?.draft?.updated_at) {
+        setUpdatedAt(data.draft.updated_at);
+      }
+
+      if (data?.draft?.created_at) {
+        setCreatedAt(data.draft.created_at);
+      }
+
+      if (data?.draft?.source_uploaded_at) {
+        setSourceUploadedAt(
+          data.draft.source_uploaded_at
+        );
+      }
+
+      if (data?.draft?.review_note !== undefined) {
+        setReviewNote(data.draft.review_note ?? "");
+      }
+
+      if (data?.draft?.reviewed_by !== undefined) {
+        setReviewedBy(data.draft.reviewed_by ?? "");
+      }
+
+      if (data?.draft?.reviewed_at !== undefined) {
+        setReviewedAt(data.draft.reviewed_at ?? null);
+      }
 
       setMessage(
         data?.message ||
-          "Draft submitted for LMS review.",
+          "Draft submitted for LMS review."
       );
 
       router.refresh();
@@ -665,7 +695,7 @@ export default function AiDraftEditor({ draft }: Props) {
       setError(
         err instanceof Error
           ? err.message
-          : "Unable to submit the learning material.",
+          : "Unable to submit the learning material."
       );
     } finally {
       setSubmitting(false);
@@ -676,22 +706,23 @@ export default function AiDraftEditor({ draft }: Props) {
     if (locked) return;
 
     const confirmed = window.confirm(
-      "Delete this AI learning draft? This action cannot be undone.",
+      "Delete this AI learning draft? This action cannot be undone."
     );
 
     if (!confirmed) return;
 
     setDeleting(true);
     setError("");
+    setMessage("");
 
     try {
       const response = await fetch(
         `/api/student/scan/drafts?id=${encodeURIComponent(
-          draft.id,
+          draft.id
         )}`,
         {
           method: "DELETE",
-        },
+        }
       );
 
       const data = (await response.json().catch(() => null)) as
@@ -700,7 +731,7 @@ export default function AiDraftEditor({ draft }: Props) {
 
       if (!response.ok) {
         throw new Error(
-          data?.error || "Unable to delete the draft.",
+          data?.error || "Unable to delete the draft."
         );
       }
 
@@ -710,8 +741,9 @@ export default function AiDraftEditor({ draft }: Props) {
       setError(
         err instanceof Error
           ? err.message
-          : "Unable to delete the draft.",
+          : "Unable to delete the draft."
       );
+
       setDeleting(false);
     }
   }
@@ -722,7 +754,7 @@ export default function AiDraftEditor({ draft }: Props) {
       | "source_warnings"
       | "learning_objectives",
     index: number,
-    value: string,
+    value: string
   ) {
     const current = [...(pack[key] ?? [])];
 
@@ -736,15 +768,15 @@ export default function AiDraftEditor({ draft }: Props) {
       | "prerequisites"
       | "source_warnings"
       | "learning_objectives",
-    index: number,
+    index: number
   ) {
     const current = [...(pack[key] ?? [])];
 
     updatePackField(
       key,
       current.filter(
-        (_, itemIndex) => itemIndex !== index,
-      ),
+        (_, itemIndex) => itemIndex !== index
+      )
     );
   }
 
@@ -790,28 +822,35 @@ export default function AiDraftEditor({ draft }: Props) {
         <div className="rn-ai-draft-timestamps">
           <div>
             <span>Source uploaded</span>
-            <strong>{formatDateTime(sourceUploadedAt)}</strong>
+
+            <strong>
+              {formatDateTime(sourceUploadedAt)}
+            </strong>
           </div>
 
           <div>
             <span>Draft created</span>
-            <strong>{formatDateTime(createdAt)}</strong>
+
+            <strong>
+              {formatDateTime(createdAt)}
+            </strong>
           </div>
 
           <div>
             <span>Last updated</span>
-            <strong>{formatDateTime(updatedAt)}</strong>
+
+            <strong>
+              {formatDateTime(updatedAt)}
+            </strong>
           </div>
 
           {reviewedAt ? (
             <div>
-              <span>
-                {status === "approved"
-                  ? "Approved"
-                  : "Reviewed"}
-              </span>
+              <span>Reviewed</span>
 
-              <strong>{formatDateTime(reviewedAt)}</strong>
+              <strong>
+                {formatDateTime(reviewedAt)}
+              </strong>
             </div>
           ) : null}
         </div>
@@ -828,9 +867,10 @@ export default function AiDraftEditor({ draft }: Props) {
           <strong>Revision required</strong>
 
           <p>
-            An LMS reviewer has returned this learning material for
-            revision. Review the note below, make the required changes,
-            save the draft, and resubmit it for review.
+            An LMS reviewer has returned this learning
+            material for revision. Review the note below,
+            make the required changes, save the draft, and
+            resubmit it for review.
           </p>
 
           {reviewNote ? (
@@ -848,19 +888,19 @@ export default function AiDraftEditor({ draft }: Props) {
               <p style={{ marginBottom: 0 }}>
                 {reviewNote}
               </p>
-
-              {reviewedAt ? (
-                <p style={{ marginBottom: 0, marginTop: 10 }}>
-                  <strong>Reviewed:</strong>{" "}
-                  {formatDateTime(reviewedAt)}
-                </p>
-              ) : null}
             </div>
           ) : (
             <p style={{ marginBottom: 0 }}>
               No additional reviewer note was provided.
             </p>
           )}
+
+          {reviewedAt ? (
+            <p style={{ marginTop: 12, marginBottom: 0 }}>
+              <strong>Reviewed:</strong>{" "}
+              {formatDateTime(reviewedAt)}
+            </p>
+          ) : null}
         </div>
       )}
 
@@ -875,9 +915,10 @@ export default function AiDraftEditor({ draft }: Props) {
           <strong>Submitted for review</strong>
 
           <p style={{ marginBottom: 0 }}>
-            This AI-generated learning material has been submitted to
-            the LMS review workflow. You cannot edit or delete it while
-            it is under review.
+            This AI-generated learning material has been
+            submitted to the LMS review workflow. You
+            cannot edit or delete it while it is under
+            review.
           </p>
         </div>
       )}
@@ -893,20 +934,15 @@ export default function AiDraftEditor({ draft }: Props) {
           <strong>Approved</strong>
 
           <p>
-            This learning material has been approved by an LMS reviewer
-            and is no longer editable as a student draft.
+            This learning material has been approved by an
+            LMS reviewer and is no longer editable as a
+            student draft.
           </p>
 
           {reviewedAt ? (
             <p>
               <strong>Approved:</strong>{" "}
               {formatDateTime(reviewedAt)}
-            </p>
-          ) : null}
-
-          {reviewedBy ? (
-            <p>
-              <strong>Reviewer:</strong> Reviewer account
             </p>
           ) : null}
 
@@ -938,8 +974,9 @@ export default function AiDraftEditor({ draft }: Props) {
           <strong>Converted to LMS content</strong>
 
           <p style={{ marginBottom: 0 }}>
-            This learning material has already been converted into LMS
-            content and is no longer editable as a draft.
+            This learning material has already been
+            converted into LMS content and is no longer
+            editable as a draft.
           </p>
         </div>
       )}
@@ -1060,7 +1097,7 @@ export default function AiDraftEditor({ draft }: Props) {
               onChange={(event) =>
                 updatePackField(
                   "summary",
-                  event.target.value,
+                  event.target.value
                 )
               }
             />
@@ -1081,7 +1118,7 @@ export default function AiDraftEditor({ draft }: Props) {
 
                 updatePackField(
                   "estimated_duration_minutes",
-                  value === "" ? null : Number(value),
+                  value === "" ? null : Number(value)
                 );
               }}
             />
@@ -1146,7 +1183,10 @@ export default function AiDraftEditor({ draft }: Props) {
 
                 sections[index] = next;
 
-                updatePackField("sections", sections);
+                updatePackField(
+                  "sections",
+                  sections
+                );
               }}
               onRemove={() => {
                 const sections = [
@@ -1155,7 +1195,10 @@ export default function AiDraftEditor({ draft }: Props) {
 
                 sections.splice(index, 1);
 
-                updatePackField("sections", sections);
+                updatePackField(
+                  "sections",
+                  sections
+                );
               }}
             />
           ))
@@ -1186,7 +1229,7 @@ export default function AiDraftEditor({ draft }: Props) {
                     updateStringArray(
                       "learning_objectives",
                       index,
-                      event.target.value,
+                      event.target.value
                     )
                   }
                   style={{ flex: 1 }}
@@ -1199,7 +1242,7 @@ export default function AiDraftEditor({ draft }: Props) {
                     onClick={() =>
                       removeStringArrayItem(
                         "learning_objectives",
-                        index,
+                        index
                       )
                     }
                   >
@@ -1207,7 +1250,7 @@ export default function AiDraftEditor({ draft }: Props) {
                   </button>
                 )}
               </div>
-            ),
+            )
           )}
 
           {!locked && (
@@ -1220,7 +1263,7 @@ export default function AiDraftEditor({ draft }: Props) {
                   [
                     ...(pack.learning_objectives ?? []),
                     "",
-                  ],
+                  ]
                 )
               }
             >
@@ -1266,7 +1309,7 @@ export default function AiDraftEditor({ draft }: Props) {
 
                       updatePackField(
                         "key_concepts",
-                        concepts,
+                        concepts
                       );
                     }}
                   />
@@ -1292,7 +1335,7 @@ export default function AiDraftEditor({ draft }: Props) {
 
                       updatePackField(
                         "key_concepts",
-                        concepts,
+                        concepts
                       );
                     }}
                   />
@@ -1309,8 +1352,8 @@ export default function AiDraftEditor({ draft }: Props) {
                           pack.key_concepts ?? []
                         ).filter(
                           (_, itemIndex) =>
-                            itemIndex !== index,
-                        ),
+                            itemIndex !== index
+                        )
                       )
                     }
                   >
@@ -1318,7 +1361,7 @@ export default function AiDraftEditor({ draft }: Props) {
                   </button>
                 )}
               </div>
-            ),
+            )
           )}
 
           {!locked && (
@@ -1364,7 +1407,7 @@ export default function AiDraftEditor({ draft }: Props) {
                     updateStringArray(
                       "prerequisites",
                       index,
-                      event.target.value,
+                      event.target.value
                     )
                   }
                   style={{ flex: 1 }}
@@ -1377,7 +1420,7 @@ export default function AiDraftEditor({ draft }: Props) {
                     onClick={() =>
                       removeStringArrayItem(
                         "prerequisites",
-                        index,
+                        index
                       )
                     }
                   >
@@ -1385,7 +1428,7 @@ export default function AiDraftEditor({ draft }: Props) {
                   </button>
                 )}
               </div>
-            ),
+            )
           )}
 
           {!locked && (
@@ -1440,7 +1483,7 @@ export default function AiDraftEditor({ draft }: Props) {
 
                       updatePackField(
                         "study_plan",
-                        plan,
+                        plan
                       );
                     }}
                   />
@@ -1465,7 +1508,7 @@ export default function AiDraftEditor({ draft }: Props) {
 
                       updatePackField(
                         "study_plan",
-                        plan,
+                        plan
                       );
                     }}
                   />
@@ -1482,8 +1525,8 @@ export default function AiDraftEditor({ draft }: Props) {
                           pack.study_plan ?? []
                         ).filter(
                           (_, itemIndex) =>
-                            itemIndex !== index,
-                        ),
+                            itemIndex !== index
+                        )
                       )
                     }
                   >
@@ -1491,7 +1534,7 @@ export default function AiDraftEditor({ draft }: Props) {
                   </button>
                 )}
               </div>
-            ),
+            )
           )}
 
           {!locked && (
@@ -1550,7 +1593,7 @@ export default function AiDraftEditor({ draft }: Props) {
 
                       updatePackField(
                         "flashcards",
-                        cards,
+                        cards
                       );
                     }}
                   />
@@ -1575,7 +1618,7 @@ export default function AiDraftEditor({ draft }: Props) {
 
                       updatePackField(
                         "flashcards",
-                        cards,
+                        cards
                       );
                     }}
                   />
@@ -1592,8 +1635,8 @@ export default function AiDraftEditor({ draft }: Props) {
                           pack.flashcards ?? []
                         ).filter(
                           (_, itemIndex) =>
-                            itemIndex !== index,
-                        ),
+                            itemIndex !== index
+                        )
                       )
                     }
                   >
@@ -1601,7 +1644,7 @@ export default function AiDraftEditor({ draft }: Props) {
                   </button>
                 )}
               </div>
-            ),
+            )
           )}
 
           {!locked && (
@@ -1644,7 +1687,7 @@ export default function AiDraftEditor({ draft }: Props) {
                   {
                     ...(pack.practical_activity ?? {}),
                     title: event.target.value,
-                  },
+                  }
                 )
               }
             />
@@ -1667,7 +1710,7 @@ export default function AiDraftEditor({ draft }: Props) {
                     ...(pack.practical_activity ?? {}),
                     instructions:
                       event.target.value,
-                  },
+                  }
                 )
               }
             />
@@ -1690,7 +1733,7 @@ export default function AiDraftEditor({ draft }: Props) {
                     ...(pack.practical_activity ?? {}),
                     expected_output:
                       event.target.value,
-                  },
+                  }
                 )
               }
             />
@@ -1716,7 +1759,9 @@ export default function AiDraftEditor({ draft }: Props) {
                 }}
               >
                 <label className="rn-field">
-                  <span>Question {index + 1}</span>
+                  <span>
+                    Question {index + 1}
+                  </span>
 
                   <textarea
                     value={item.question}
@@ -1736,7 +1781,7 @@ export default function AiDraftEditor({ draft }: Props) {
 
                       updatePackField(
                         "assessment_questions",
-                        questions,
+                        questions
                       );
                     }}
                   />
@@ -1778,7 +1823,7 @@ export default function AiDraftEditor({ draft }: Props) {
 
                             updatePackField(
                               "assessment_questions",
-                              questions,
+                              questions
                             );
                           }}
                           style={{ flex: 1 }}
@@ -1801,13 +1846,13 @@ export default function AiDraftEditor({ draft }: Props) {
                                 ).filter(
                                   (_, itemIndex) =>
                                     itemIndex !==
-                                    optionIndex,
+                                    optionIndex
                                 ),
                               };
 
                               updatePackField(
                                 "assessment_questions",
-                                questions,
+                                questions
                               );
                             }}
                           >
@@ -1815,7 +1860,7 @@ export default function AiDraftEditor({ draft }: Props) {
                           </button>
                         )}
                       </div>
-                    ),
+                    )
                   )}
 
                   {!locked && (
@@ -1839,7 +1884,7 @@ export default function AiDraftEditor({ draft }: Props) {
 
                         updatePackField(
                           "assessment_questions",
-                          questions,
+                          questions
                         );
                       }}
                     >
@@ -1870,7 +1915,7 @@ export default function AiDraftEditor({ draft }: Props) {
 
                       updatePackField(
                         "assessment_questions",
-                        questions,
+                        questions
                       );
                     }}
                   />
@@ -1880,7 +1925,9 @@ export default function AiDraftEditor({ draft }: Props) {
                   <span>Explanation</span>
 
                   <textarea
-                    value={item.explanation ?? ""}
+                    value={
+                      item.explanation ?? ""
+                    }
                     disabled={locked}
                     rows={4}
                     onChange={(event) => {
@@ -1897,7 +1944,7 @@ export default function AiDraftEditor({ draft }: Props) {
 
                       updatePackField(
                         "assessment_questions",
-                        questions,
+                        questions
                       );
                     }}
                   />
@@ -1915,8 +1962,8 @@ export default function AiDraftEditor({ draft }: Props) {
                           []
                         ).filter(
                           (_, itemIndex) =>
-                            itemIndex !== index,
-                        ),
+                            itemIndex !== index
+                        )
                       )
                     }
                   >
@@ -1924,7 +1971,7 @@ export default function AiDraftEditor({ draft }: Props) {
                   </button>
                 )}
               </div>
-            ),
+            )
           )}
 
           {!locked && (
@@ -1935,15 +1982,14 @@ export default function AiDraftEditor({ draft }: Props) {
                 updatePackField(
                   "assessment_questions",
                   [
-                    ...(pack.assessment_questions ??
-                      []),
+                    ...(pack.assessment_questions ?? []),
                     {
                       question: "",
                       options: [],
                       correct_answer: "",
                       explanation: "",
                     },
-                  ],
+                  ]
                 )
               }
             >
@@ -1977,7 +2023,7 @@ export default function AiDraftEditor({ draft }: Props) {
                     updateStringArray(
                       "source_warnings",
                       index,
-                      event.target.value,
+                      event.target.value
                     )
                   }
                   style={{ flex: 1 }}
@@ -1990,7 +2036,7 @@ export default function AiDraftEditor({ draft }: Props) {
                     onClick={() =>
                       removeStringArrayItem(
                         "source_warnings",
-                        index,
+                        index
                       )
                     }
                   >
@@ -1998,7 +2044,7 @@ export default function AiDraftEditor({ draft }: Props) {
                   </button>
                 )}
               </div>
-            ),
+            )
           )}
 
           {!locked && (
@@ -2006,10 +2052,13 @@ export default function AiDraftEditor({ draft }: Props) {
               type="button"
               className="rn-button rn-button-secondary"
               onClick={() =>
-                updatePackField("source_warnings", [
-                  ...(pack.source_warnings ?? []),
-                  "",
-                ])
+                updatePackField(
+                  "source_warnings",
+                  [
+                    ...(pack.source_warnings ?? []),
+                    "",
+                  ]
+                )
               }
             >
               Add warning
@@ -2018,43 +2067,39 @@ export default function AiDraftEditor({ draft }: Props) {
         </div>
       </section>
 
-      {(pack.source_summary || pack.extracted_text) && (
+      {pack.source_summary ? (
         <section style={{ marginBottom: 24 }}>
           <h2 className="rn-section-heading">
             Source information
           </h2>
 
           <div className="rn-card">
-            {pack.source_summary && (
-              <div style={{ marginBottom: 20 }}>
-                <strong>Source summary</strong>
+            <strong>Source summary</strong>
 
-                <p
-                  style={{
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {pack.source_summary}
-                </p>
-              </div>
-            )}
+            <p
+              style={{
+                whiteSpace: "pre-wrap",
+                marginBottom: 0,
+              }}
+            >
+              {pack.source_summary}
+            </p>
 
-            {pack.extracted_text && (
-              <div>
-                <strong>Extracted source text</strong>
-
-                <p
-                  style={{
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {pack.extracted_text}
-                </p>
-              </div>
-            )}
+            <p
+              style={{
+                marginTop: 16,
+                marginBottom: 0,
+                fontSize: "0.9rem",
+                opacity: 0.8,
+              }}
+            >
+              Original extracted source text is not displayed
+              here. Privacy screening removes sensitive source
+              information before learning material is stored.
+            </p>
           </div>
         </section>
-      )}
+      ) : null}
 
       {!locked && (
         <div
