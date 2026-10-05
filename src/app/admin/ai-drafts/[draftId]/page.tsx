@@ -1,17 +1,20 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import AdminAiDraftReview from "./AdminAiDraftReview";
 
-type AdminAiDraftPageProps = {
+type PageProps = {
   params: Promise<{
     draftId: string;
   }>;
 };
 
+type Profile = {
+  role: "admin" | "instructor" | "student";
+};
+
 export default async function AdminAiDraftPage({
   params,
-}: AdminAiDraftPageProps) {
+}: PageProps) {
   const { draftId } = await params;
 
   const supabase = await createClient();
@@ -21,27 +24,32 @@ export default async function AdminAiDraftPage({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect(`/login?next=/admin/ai-drafts/${draftId}`);
+    redirect(
+      `/login?next=/admin/ai-drafts/${draftId}`
+    );
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
+  const { data: profile, error: profileError } =
+    await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single<Profile>();
 
   if (
     profileError ||
     !profile ||
-    (profile.role !== "admin" && profile.role !== "instructor")
+    (profile.role !== "admin" &&
+      profile.role !== "instructor")
   ) {
     redirect("/student/dashboard");
   }
 
-  const { data: draft, error: draftError } = await supabase
-    .from("ai_learning_drafts")
-    .select(
-      `
+  const { data: draft, error: draftError } =
+    await supabase
+      .from("ai_learning_drafts")
+      .select(
+        `
         id,
         student_id,
         title,
@@ -56,46 +64,23 @@ export default async function AdminAiDraftPage({
         updated_at,
         review_note,
         reviewed_by,
-        reviewed_at
-      `,
-    )
-    .eq("id", draftId)
-    .maybeSingle();
+        reviewed_at,
+        converted_course_id,
+        converted_at
+      `
+      )
+      .eq("id", draftId)
+      .single();
 
-  if (draftError) {
-    console.error("Admin AI draft detail error:", draftError);
-  }
-
-  if (!draft) {
+  if (draftError || !draft) {
     notFound();
   }
 
   return (
-    <main className="page">
-      <div className="container">
-        <div className="page-heading">
-          <div>
-            <p className="eyebrow">Admin LMS</p>
-            <h1>Review AI Draft</h1>
-            <p className="muted">
-              Review the generated learning material before approving it for
-              the LMS workflow.
-            </p>
-          </div>
-
-          <Link
-            href="/admin/ai-drafts"
-            className="rn-button rn-button-secondary"
-          >
-            Back to AI Draft Review
-          </Link>
-        </div>
-
-        <AdminAiDraftReview
-          draft={draft}
-          reviewerRole={profile.role}
-        />
-      </div>
-    </main>
+    <div>
+      <AdminAiDraftReview
+        draft={draft}
+      />
+    </div>
   );
 }
