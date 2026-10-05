@@ -2,11 +2,23 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notFound } from "next/navigation";
 
-type Certificate = {
+type CertificateMetadata = {
   certificate_number: string;
   holder_name: string;
   course_title: string;
   is_revoked: boolean;
+};
+
+type Certificate = {
+  id: string;
+  certificate_number: string;
+  holder_name: string;
+  course_title: string;
+  issued_at: string;
+  assessment_score: number | null;
+  capstone_score: number | null;
+  is_revoked: boolean;
+  revoked_reason: string | null;
 };
 
 function buildVerificationUrl(
@@ -70,7 +82,7 @@ export async function generateMetadata({
     .maybeSingle();
 
   const certificate =
-    data as Certificate | null;
+    data as unknown as CertificateMetadata | null;
 
   if (!certificate) {
     return {
@@ -177,17 +189,8 @@ export default async function CertificateVerificationPage({
     notFound();
   }
 
-  const certificate = data as {
-    id: string;
-    certificate_number: string;
-    holder_name: string;
-    course_title: string;
-    issued_at: string;
-    assessment_score: number | null;
-    capstone_score: number | null;
-    is_revoked: boolean;
-    revoked_reason: string | null;
-  };
+  const certificate =
+    data as unknown as Certificate;
 
   const verificationUrl =
     buildVerificationUrl(
@@ -250,12 +253,10 @@ export default async function CertificateVerificationPage({
 
           <p
             style={{
-              margin:
-                "14px auto 0",
+              margin: "14px auto 0",
               maxWidth: 680,
               lineHeight: 1.7,
-              color:
-                "var(--muted, #64748b)",
+              color: "var(--muted, #64748b)",
             }}
           >
             This page provides official
@@ -266,11 +267,9 @@ export default async function CertificateVerificationPage({
 
         <section
           style={{
-            border:
-              "1px solid var(--border)",
+            border: "1px solid var(--border)",
             borderRadius: 16,
-            background:
-              "var(--surface, #ffffff)",
+            background: "var(--surface, #ffffff)",
             padding: "clamp(24px, 5vw, 48px)",
             boxShadow:
               "0 12px 35px rgba(11, 30, 58, 0.08)",
@@ -290,10 +289,8 @@ export default async function CertificateVerificationPage({
                 fontSize: 13,
                 fontWeight: 700,
                 letterSpacing: 2,
-                textTransform:
-                  "uppercase",
-                color:
-                  "var(--muted, #64748b)",
+                textTransform: "uppercase",
+                color: "var(--muted, #64748b)",
                 marginBottom: 12,
               }}
             >
@@ -313,8 +310,7 @@ export default async function CertificateVerificationPage({
 
             <p
               style={{
-                margin:
-                  "18px 0 0",
+                margin: "18px 0 0",
                 fontSize:
                   "clamp(18px, 2.5vw, 24px)",
                 fontWeight: 600,
@@ -346,8 +342,7 @@ export default async function CertificateVerificationPage({
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  textTransform:
-                    "uppercase",
+                  textTransform: "uppercase",
                   letterSpacing: 1,
                   color:
                     "var(--muted, #64748b)",
@@ -359,8 +354,7 @@ export default async function CertificateVerificationPage({
 
               <strong
                 style={{
-                  wordBreak:
-                    "break-word",
+                  wordBreak: "break-word",
                 }}
               >
                 {certificate.certificate_number}
@@ -379,8 +373,7 @@ export default async function CertificateVerificationPage({
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  textTransform:
-                    "uppercase",
+                  textTransform: "uppercase",
                   letterSpacing: 1,
                   color:
                     "var(--muted, #64748b)",
@@ -407,8 +400,7 @@ export default async function CertificateVerificationPage({
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  textTransform:
-                    "uppercase",
+                  textTransform: "uppercase",
                   letterSpacing: 1,
                   color:
                     "var(--muted, #64748b)",
@@ -440,8 +432,7 @@ export default async function CertificateVerificationPage({
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  textTransform:
-                    "uppercase",
+                  textTransform: "uppercase",
                   letterSpacing: 1,
                   color:
                     "var(--muted, #64748b)",
@@ -515,10 +506,8 @@ export default async function CertificateVerificationPage({
                   fontSize: 12,
                   fontWeight: 700,
                   letterSpacing: 1,
-                  textTransform:
-                    "uppercase",
-                  color:
-                    "var(--cyan)",
+                  textTransform: "uppercase",
+                  color: "var(--cyan)",
                   marginBottom: 10,
                 }}
               >
@@ -546,8 +535,7 @@ export default async function CertificateVerificationPage({
                   borderRadius: 8,
                   fontSize: 13,
                   lineHeight: 1.5,
-                  wordBreak:
-                    "break-all",
+                  wordBreak: "break-all",
                 }}
               >
                 {verificationUrl}
@@ -562,8 +550,7 @@ export default async function CertificateVerificationPage({
                 border:
                   "1px solid var(--border)",
                 borderRadius: 10,
-                background:
-                  "#ffffff",
+                background: "#ffffff",
               }}
             >
               <img
@@ -601,8 +588,7 @@ export default async function CertificateVerificationPage({
         <div
           style={{
             display: "flex",
-            justifyContent:
-              "center",
+            justifyContent: "center",
             gap: 12,
             flexWrap: "wrap",
             marginTop: 28,
