@@ -98,7 +98,7 @@ function asArray<T>(value: T[] | undefined | null): T[] {
   return Array.isArray(value) ? value : [];
 }
 
-function getLearningPathTitle(
+function getPathTitle(
   item: StudyPlanItem,
   index: number
 ): string {
@@ -111,9 +111,7 @@ function getLearningPathTitle(
   );
 }
 
-function getLearningPathDescription(
-  item: StudyPlanItem
-): string {
+function getPathDescription(item: StudyPlanItem): string {
   return (
     item.description?.trim() ||
     item.content?.trim() ||
@@ -181,13 +179,20 @@ export default function AdminAiDraftReview({
     }
   }, [draft.status]);
 
-  async function review(action: "approve" | "revision_required") {
+  async function review(
+    action: "approve" | "revision_required"
+  ) {
     setBusy(true);
     setError("");
     setSuccess("");
 
-    if (action === "revision_required" && !reviewNote.trim()) {
-      setError("A review note is required when requesting revision.");
+    if (
+      action === "revision_required" &&
+      !reviewNote.trim()
+    ) {
+      setError(
+        "A review note is required when requesting revision."
+      );
       setBusy(false);
       return;
     }
@@ -212,7 +217,8 @@ export default function AdminAiDraftReview({
 
       if (!response.ok) {
         throw new Error(
-          data?.error || "The review action could not be completed."
+          data?.error ||
+            "The review action could not be completed."
         );
       }
 
@@ -234,7 +240,7 @@ export default function AdminAiDraftReview({
 
       setSuccess(
         action === "approve"
-          ? "AI draft approved. It can now be converted into an LMS course."
+          ? "AI draft approved. It is now ready for LMS conversion."
           : "Revision requested. The student can now update the draft."
       );
     } catch (reviewError) {
@@ -292,25 +298,24 @@ export default function AdminAiDraftReview({
       const result = data?.result;
 
       const courseId =
-        result?.course_id ||
-        data?.draft?.converted_course_id ||
-        draft.converted_course_id;
+        result?.course_id ??
+        draft.converted_course_id ??
+        null;
 
       const convertedAt =
-        result?.converted_at ||
-        data?.draft?.converted_at ||
+        result?.converted_at ??
         new Date().toISOString();
 
       setDraft((current) => ({
         ...current,
         status: "converted",
-        converted_course_id: courseId ?? null,
+        converted_course_id: courseId,
         converted_at: convertedAt,
         updated_at: convertedAt,
       }));
 
       setSuccess(
-        "AI draft converted successfully. The new LMS course is unpublished and ready for review."
+        "AI draft converted successfully. The LMS course is unpublished and ready for review."
       );
     } catch (conversionError) {
       setError(
@@ -329,11 +334,11 @@ export default function AdminAiDraftReview({
         <div>
           <p className="rn-eyebrow">AI Draft Review</p>
 
-          <h1>{draft.title}</h1>
+          <h1>Review AI Draft</h1>
 
           <p className="rn-muted">
-            Review AI-generated learning material before it
-            enters the RuffNeck Learn course catalogue.
+            Review generated learning material before it enters
+            the RuffNeck Learn LMS workflow.
           </p>
         </div>
 
@@ -341,44 +346,37 @@ export default function AdminAiDraftReview({
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => router.push("/admin/ai-drafts")}
+            onClick={() =>
+              router.push("/admin/ai-drafts")
+            }
           >
-            Back to AI Drafts
+            Back to AI Draft Review
           </button>
-
-          {isConverted && draft.converted_course_id ? (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() =>
-                router.push(
-                  `/admin/lms?course=${draft.converted_course_id}`
-                )
-              }
-            >
-              Open LMS Course
-            </button>
-          ) : null}
         </div>
       </div>
 
       <section className="card">
-        <div className="card-header">
-          <div>
-            <span className="badge">{statusLabel}</span>
-            <h2>Draft information</h2>
-          </div>
-        </div>
+        <p className="rn-eyebrow">
+          Submitted learning material
+        </p>
+
+        <h2>{draft.title}</h2>
+
+        <span className="badge">{statusLabel}</span>
 
         <div className="grid-2">
           <div>
-            <strong>Output type</strong>
+            <strong>Output</strong>
             <p>{draft.output_type}</p>
           </div>
 
           <div>
             <strong>Language</strong>
-            <p>{draft.language_code}</p>
+            <p>
+              {draft.language_code === "en"
+                ? "English"
+                : draft.language_code}
+            </p>
           </div>
 
           <div>
@@ -388,30 +386,46 @@ export default function AdminAiDraftReview({
 
           <div>
             <strong>Source uploaded</strong>
-            <p>{formatDateTime(draft.source_uploaded_at)}</p>
+            <p>
+              {formatDateTime(
+                draft.source_uploaded_at
+              )}
+            </p>
           </div>
 
           <div>
             <strong>Draft created</strong>
-            <p>{formatDateTime(draft.created_at)}</p>
+            <p>
+              {formatDateTime(draft.created_at)}
+            </p>
           </div>
 
           <div>
             <strong>Last updated</strong>
-            <p>{formatDateTime(draft.updated_at)}</p>
+            <p>
+              {formatDateTime(draft.updated_at)}
+            </p>
           </div>
 
           {draft.reviewed_at ? (
             <div>
               <strong>Reviewed</strong>
-              <p>{formatDateTime(draft.reviewed_at)}</p>
+              <p>
+                {formatDateTime(
+                  draft.reviewed_at
+                )}
+              </p>
             </div>
           ) : null}
 
           {draft.converted_at ? (
             <div>
               <strong>Converted</strong>
-              <p>{formatDateTime(draft.converted_at)}</p>
+              <p>
+                {formatDateTime(
+                  draft.converted_at
+                )}
+              </p>
             </div>
           ) : null}
         </div>
@@ -429,29 +443,80 @@ export default function AdminAiDraftReview({
         </section>
       ) : null}
 
-      {isConverted && draft.converted_course_id ? (
+      <section className="card">
+        <h2>Privacy protection</h2>
+
+        <p>
+          Original source text and source-specific identifiers
+          are not displayed in the review interface.
+        </p>
+
+        <p>
+          Privacy screening is applied before AI-generated
+          learning material is stored or converted into LMS
+          content.
+        </p>
+      </section>
+
+      {isApproved ? (
         <section className="card">
-          <div className="card-header">
-            <div>
-              <span className="badge">LMS Course Created</span>
-              <h2>Converted course</h2>
-            </div>
-          </div>
+          <p className="rn-eyebrow">Approved</p>
+
+          <h2>Convert to LMS</h2>
 
           <p>
-            This approved AI draft has already been converted into
-            an LMS course.
+            This draft has passed review and can now be converted
+            into an unpublished LMS course.
+          </p>
+
+          <div className="rn-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={convertToLms}
+              disabled={convertBusy}
+            >
+              {convertBusy
+                ? "Converting..."
+                : "Convert to LMS"}
+            </button>
+          </div>
+
+          <p className="rn-muted">
+            The Generated Learning Path will determine the
+            initial course sequence. The course will remain
+            unpublished until it is reviewed in Admin LMS.
+          </p>
+        </section>
+      ) : null}
+
+      {isConverted &&
+      draft.converted_course_id ? (
+        <section className="card">
+          <p className="rn-eyebrow">Converted</p>
+
+          <h2>LMS course created</h2>
+
+          <p>
+            This approved AI draft has already been converted
+            into an unpublished LMS course.
           </p>
 
           <div className="grid-2">
             <div>
               <strong>Course ID</strong>
-              <p>{draft.converted_course_id}</p>
+              <p>
+                {draft.converted_course_id}
+              </p>
             </div>
 
             <div>
               <strong>Converted at</strong>
-              <p>{formatDateTime(draft.converted_at)}</p>
+              <p>
+                {formatDateTime(
+                  draft.converted_at
+                )}
+              </p>
             </div>
           </div>
 
@@ -471,52 +536,17 @@ export default function AdminAiDraftReview({
         </section>
       ) : null}
 
-      {isApproved ? (
-        <section className="card">
-          <div className="card-header">
-            <div>
-              <span className="badge">Approved</span>
-              <h2>Convert to LMS</h2>
-            </div>
-          </div>
-
-          <p>
-            This AI draft has passed review. Convert the approved
-            learning material into an unpublished LMS course.
-          </p>
-
-          <div className="rn-actions">
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={convertToLms}
-              disabled={convertBusy}
-            >
-              {convertBusy
-                ? "Converting..."
-                : "Convert to LMS"}
-            </button>
-          </div>
-
-          <p className="rn-muted">
-            The generated learning path becomes the primary course
-            sequence. The new course remains unpublished until an
-            administrator or instructor reviews it.
-          </p>
-        </section>
-      ) : null}
-
       <section className="card">
-        <div className="card-header">
-          <div>
-            <span className="badge">Generated Learning Path</span>
-            <h2>Primary learning sequence</h2>
-          </div>
-        </div>
+        <p className="rn-eyebrow">
+          Generated Learning Path
+        </p>
+
+        <h2>Primary learning sequence</h2>
 
         <p className="rn-muted">
-          This is the primary sequence that will be used when the
-          approved draft is converted into an LMS course.
+          This is the actual learning sequence generated from
+          the source material and used as the primary structure
+          for LMS conversion.
         </p>
 
         {learningPath.length > 0 ? (
@@ -531,11 +561,11 @@ export default function AdminAiDraftReview({
                 </p>
 
                 <h3>
-                  {getLearningPathTitle(item, index)}
+                  {getPathTitle(item, index)}
                 </h3>
 
                 <p>
-                  {getLearningPathDescription(item)}
+                  {getPathDescription(item)}
                 </p>
 
                 {item.duration_minutes ||
@@ -551,23 +581,22 @@ export default function AdminAiDraftReview({
             ))}
           </div>
         ) : (
-          <p>No generated learning path was provided.</p>
+          <p>
+            No generated learning path was provided.
+          </p>
         )}
       </section>
 
       <section className="card">
-        <div className="card-header">
-          <div>
-            <span className="badge">
-              Supporting learning material
-            </span>
-            <h2>Overview</h2>
-          </div>
-        </div>
+        <p className="rn-eyebrow">
+          Supporting learning material
+        </p>
+
+        <h2>Overview</h2>
 
         <p>
           {pack.overview ||
-            "No overview was provided for this learning material."}
+            "No overview was provided."}
         </p>
       </section>
 
@@ -576,9 +605,11 @@ export default function AdminAiDraftReview({
           <h2>Learning objectives</h2>
 
           <ul>
-            {objectives.map((objective, index) => (
-              <li key={`${draft.id}-objective-${index}`}>
-                {objective}
+            {objectives.map((item, index) => (
+              <li
+                key={`${draft.id}-objective-${index}`}
+              >
+                {item}
               </li>
             ))}
           </ul>
@@ -591,7 +622,9 @@ export default function AdminAiDraftReview({
 
           <ul>
             {prerequisites.map((item, index) => (
-              <li key={`${draft.id}-prerequisite-${index}`}>
+              <li
+                key={`${draft.id}-prerequisite-${index}`}
+              >
                 {item}
               </li>
             ))}
@@ -604,9 +637,11 @@ export default function AdminAiDraftReview({
           <h2>Key concepts</h2>
 
           <ul>
-            {concepts.map((concept, index) => (
-              <li key={`${draft.id}-concept-${index}`}>
-                {concept}
+            {concepts.map((item, index) => (
+              <li
+                key={`${draft.id}-concept-${index}`}
+              >
+                {item}
               </li>
             ))}
           </ul>
@@ -615,7 +650,7 @@ export default function AdminAiDraftReview({
 
       {sections.length > 0 ? (
         <section className="card">
-          <h2>Generated lesson material</h2>
+          <h2>Learning content</h2>
 
           <div className="stack">
             {sections.map((section, index) => (
@@ -681,22 +716,28 @@ export default function AdminAiDraftReview({
           <h2>Assessment questions</h2>
 
           <ol>
-            {assessmentQuestions.map((question, index) => (
-              <li key={`${draft.id}-question-${index}`}>
-                {question}
-              </li>
-            ))}
+            {assessmentQuestions.map(
+              (question, index) => (
+                <li
+                  key={`${draft.id}-question-${index}`}
+                >
+                  {question}
+                </li>
+              )
+            )}
           </ol>
         </section>
       ) : null}
 
       {sourceWarnings.length > 0 ? (
         <section className="card">
-          <h2>Source warnings</h2>
+          <h2>Privacy and source warnings</h2>
 
           <ul>
             {sourceWarnings.map((warning, index) => (
-              <li key={`${draft.id}-warning-${index}`}>
+              <li
+                key={`${draft.id}-warning-${index}`}
+              >
                 {warning}
               </li>
             ))}
@@ -704,26 +745,13 @@ export default function AdminAiDraftReview({
         </section>
       ) : null}
 
-      <section className="card">
-        <h2>Privacy protection</h2>
-
-        <p>
-          Original extracted source text is not displayed here.
-          Privacy screening removes sensitive source information
-          before learning material is stored and reviewed.
-        </p>
-      </section>
-
       {isSubmitted ? (
         <section className="card">
-          <div className="card-header">
-            <div>
-              <span className="badge">
-                Awaiting decision
-              </span>
-              <h2>Reviewer decision</h2>
-            </div>
-          </div>
+          <p className="rn-eyebrow">
+            Reviewer decision
+          </p>
+
+          <h2>Review this learning material</h2>
 
           <label htmlFor="review-note">
             Review note
@@ -743,7 +771,9 @@ export default function AdminAiDraftReview({
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={() => review("revision_required")}
+              onClick={() =>
+                review("revision_required")
+              }
               disabled={busy}
             >
               {busy
@@ -757,11 +787,20 @@ export default function AdminAiDraftReview({
               onClick={() => review("approve")}
               disabled={busy}
             >
-              {busy ? "Processing..." : "Approve draft"}
+              {busy
+                ? "Processing..."
+                : "Approve draft"}
             </button>
           </div>
         </section>
-      ) : null}
+      ) : (
+        <section className="card">
+          <p className="rn-muted">
+            This draft has already been reviewed. It cannot be
+            reviewed again from this screen.
+          </p>
+        </section>
+      )}
 
       {draft.review_note ? (
         <section className="card">
