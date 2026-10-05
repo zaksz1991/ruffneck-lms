@@ -9,8 +9,23 @@ type Profile = {
   role: "admin" | "instructor" | "student";
 };
 
+type ConversionResult = {
+  success?: boolean;
+  already_converted?: boolean;
+  draft_id?: string;
+  course_id?: string;
+  course_title?: string;
+  section_count?: number;
+  duration_minutes?: number;
+  converted_at?: string;
+};
+
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function isConversionResult(value: unknown): value is ConversionResult {
+  return typeof value === "object" && value !== null;
 }
 
 export async function POST(request: Request) {
@@ -71,9 +86,7 @@ export async function POST(request: Request) {
 
     const { data: draft, error: draftError } = await supabase
       .from("ai_learning_drafts")
-      .select(
-        "id, title, status, converted_course_id, converted_at"
-      )
+      .select("id, title, status, converted_course_id, converted_at")
       .eq("id", draftId)
       .single();
 
@@ -88,6 +101,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         already_converted: true,
+        course_id: draft.converted_course_id,
         draft: {
           id: draft.id,
           title: draft.title,
@@ -95,7 +109,8 @@ export async function POST(request: Request) {
           converted_course_id: draft.converted_course_id,
           converted_at: draft.converted_at,
         },
-        message: "This AI draft has already been converted to an LMS course.",
+        message:
+          "This AI draft has already been converted to an LMS course.",
       });
     }
 
@@ -118,10 +133,7 @@ export async function POST(request: Request) {
     );
 
     if (conversionError) {
-      console.error(
-        "AI draft conversion failed:",
-        conversionError
-      );
+      console.error("AI draft conversion failed:", conversionError);
 
       return NextResponse.json(
         {
@@ -133,8 +145,42 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!isConversionResult(result)) {
+      console.error(
+        "AI draft conversion returned an unexpected result:",
+        result
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "The AI draft conversion completed with an invalid server response.",
+        },
+        { status: 500 }
+      );
+    }
+
+    const courseId = asString(result.course_id);
+
+    if (!courseId) {
+      console.error(
+        "AI draft conversion returned no course_id:",
+        result
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "The AI draft conversion did not return the created course ID.",
+        },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
+      already_converted: result.already_converted === true,
+      course_id: courseId,
       result,
       message: "AI draft converted to an unpublished LMS course.",
     });
@@ -143,7 +189,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
-        error: "An unexpected error occurred while converting the AI draft.",
+        error:
+          "An unexpected error occurred while converting the AI draft.",
       },
       { status: 500 }
     );

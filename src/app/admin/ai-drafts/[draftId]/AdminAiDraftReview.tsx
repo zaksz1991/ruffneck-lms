@@ -100,6 +100,17 @@ type Props = {
   draft: Draft;
 };
 
+type ConversionResult = {
+  success?: boolean;
+  already_converted?: boolean;
+  draft_id?: string;
+  course_id?: string;
+  course_title?: string;
+  section_count?: number;
+  duration_minutes?: number;
+  converted_at?: string;
+};
+
 function asText(value: unknown): string {
   if (typeof value === "string") {
     return value.trim();
@@ -528,16 +539,34 @@ export default function AdminAiDraftReview({
         );
       }
 
+      /*
+       * The conversion API now returns course_id
+       * at the top level.
+       *
+       * Keep result.course_id as a fallback so this
+       * client remains compatible with the RPC result.
+       */
       const result =
-        data?.result;
+        data?.result as
+          | ConversionResult
+          | undefined;
 
       const courseId =
-        result?.course_id ??
-        draft.converted_course_id ??
-        null;
+        asText(data?.course_id) ||
+        asText(result?.course_id) ||
+        asText(
+          draft.converted_course_id
+        );
+
+      if (!courseId) {
+        throw new Error(
+          "The conversion completed, but no LMS course ID was returned."
+        );
+      }
 
       const convertedAt =
-        result?.converted_at ??
+        asText(data?.converted_at) ||
+        asText(result?.converted_at) ||
         new Date().toISOString();
 
       setDraft(
