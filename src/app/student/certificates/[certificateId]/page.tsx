@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import CertificatePrintButton from "@/components/CertificatePrintButton";
+import CertificateVerificationLink from "@/components/CertificateVerificationLink";
 
 type Certificate = {
   id: string;
@@ -22,12 +23,9 @@ function formatDate(value: string) {
     return "—";
   }
 
-  return new Intl.DateTimeFormat(
-    "en-NG",
-    {
-      dateStyle: "long",
-    }
-  ).format(date);
+  return new Intl.DateTimeFormat("en-NG", {
+    dateStyle: "long",
+  }).format(date);
 }
 
 export default async function CertificatePage({
@@ -37,23 +35,19 @@ export default async function CertificatePage({
     certificateId: string;
   }>;
 }) {
-  const { certificateId } =
-    await params;
+  const { certificateId } = await params;
 
-  const normalizedCertificateId =
-    certificateId.trim();
+  const normalizedCertificateId = certificateId.trim();
 
   if (!normalizedCertificateId) {
     notFound();
   }
 
-  const supabase =
-    await createClient();
+  const supabase = await createClient();
 
   const {
     data: { user },
-  } =
-    await supabase.auth.getUser();
+  } = await supabase.auth.getUser();
 
   if (!user) {
     redirect(
@@ -63,10 +57,7 @@ export default async function CertificatePage({
     );
   }
 
-  const {
-    data: certificateData,
-    error: certificateError,
-  } =
+  const { data: certificateData, error: certificateError } =
     await supabase
       .from("course_certificates")
       .select(
@@ -82,14 +73,8 @@ export default async function CertificatePage({
           "revoked_reason",
         ].join(", ")
       )
-      .eq(
-        "id",
-        normalizedCertificateId
-      )
-      .eq(
-        "student_id",
-        user.id
-      )
+      .eq("id", normalizedCertificateId)
+      .eq("student_id", user.id)
       .maybeSingle();
 
   if (certificateError) {
@@ -98,29 +83,24 @@ export default async function CertificatePage({
       certificateError
     );
 
-    throw new Error(
-      "Unable to load certificate."
-    );
+    throw new Error("Unable to load certificate.");
   }
 
   const certificate =
-    certificateData as unknown as
-      | Certificate
-      | null;
+    certificateData as unknown as Certificate | null;
 
   if (!certificate) {
     notFound();
   }
 
-  const verificationUrl =
-    `/verify/${encodeURIComponent(
-      certificate.certificate_number
-    )}`;
+  const verificationUrl = `/verify/${encodeURIComponent(
+    certificate.certificate_number
+  )}`;
 
   return (
     <main className="rn-certificate-view-page">
       <div className="container">
-        <div className="rn-certificate-view-actions">
+        <div className="rn-certificate-view-actions no-print">
           <Link
             href="/student/certificates"
             className="rn-learning-back"
@@ -149,21 +129,15 @@ export default async function CertificatePage({
         </div>
 
         <article
-          className={`rn-certificate-document ${
-            certificate.is_revoked
-              ? "is-revoked"
-              : ""
+          className={`rn-certificate-document certificate-print-area ${
+            certificate.is_revoked ? "is-revoked" : ""
           }`}
         >
           <div className="rn-certificate-border">
             <div className="rn-certificate-brand">
-              <span aria-hidden="true">
-                RN
-              </span>
+              <span aria-hidden="true">RN</span>
 
-              <strong>
-                RuffNeck Learn
-              </strong>
+              <strong>RuffNeck Learn</strong>
             </div>
 
             {certificate.is_revoked ? (
@@ -179,76 +153,53 @@ export default async function CertificatePage({
               </span>
             )}
 
-            <h1>
-              Certificate of Completion
-            </h1>
+            <h1>Certificate of Completion</h1>
 
             <p className="rn-certificate-presented">
-              This certificate is presented
-              to
+              This certificate is presented to
             </p>
 
-            <h2>
-              {certificate.holder_name}
-            </h2>
+            <h2>{certificate.holder_name}</h2>
 
             <p className="rn-certificate-completion-text">
-              for successfully completing
-              the RuffNeck Learn course
+              for successfully completing the RuffNeck Learn
+              course
             </p>
 
-            <h3>
-              {certificate.course_title}
-            </h3>
+            <h3>{certificate.course_title}</h3>
 
             <div className="rn-certificate-divider" />
 
             <div className="rn-certificate-details">
               <div>
-                <span>
-                  Certificate Number
-                </span>
+                <span>Certificate Number</span>
 
                 <strong>
-                  {
-                    certificate.certificate_number
-                  }
+                  {certificate.certificate_number}
                 </strong>
               </div>
 
               <div>
-                <span>
-                  Date Issued
-                </span>
+                <span>Date Issued</span>
 
                 <strong>
-                  {formatDate(
-                    certificate.issued_at
-                  )}
+                  {formatDate(certificate.issued_at)}
                 </strong>
               </div>
 
               <div>
-                <span>
-                  Assessment
-                </span>
+                <span>Assessment</span>
 
                 <strong>
-                  {certificate.assessment_score ??
-                    "—"}
-                  %
+                  {certificate.assessment_score ?? "—"}%
                 </strong>
               </div>
 
               <div>
-                <span>
-                  Capstone
-                </span>
+                <span>Capstone</span>
 
                 <strong>
-                  {certificate.capstone_score ??
-                    "—"}
-                  /100
+                  {certificate.capstone_score ?? "—"}/100
                 </strong>
               </div>
             </div>
@@ -261,9 +212,7 @@ export default async function CertificatePage({
             ) : null}
 
             <div className="rn-certificate-footer">
-              <span>
-                RuffNeck Entertainment
-              </span>
+              <span>RuffNeck Entertainment</span>
 
               <span>
                 Practical professional learning
@@ -271,6 +220,16 @@ export default async function CertificatePage({
             </div>
           </div>
         </article>
+
+        {!certificate.is_revoked ? (
+          <div className="no-print">
+            <CertificateVerificationLink
+              certificateNumber={
+                certificate.certificate_number
+              }
+            />
+          </div>
+        ) : null}
       </div>
     </main>
   );
