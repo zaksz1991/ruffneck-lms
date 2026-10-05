@@ -12,48 +12,48 @@ type DraftStatus =
   | "converted";
 
 type Section = {
-  heading: string;
-  content: string;
-  examples?: string[];
+  heading?: unknown;
+  content?: unknown;
+  examples?: unknown;
 };
 
 type Flashcard = {
-  front: string;
-  back: string;
+  front?: unknown;
+  back?: unknown;
 };
 
 type StudyPlanItem = {
-  title?: string;
-  name?: string;
-  step?: string;
-  heading?: string;
-  description?: string;
-  content?: string;
-  details?: string;
-  action?: string;
-  instruction?: string;
-  what_to_do?: string;
-  task?: string;
-  summary?: string;
-  duration_minutes?: number;
-  duration?: number;
+  title?: unknown;
+  name?: unknown;
+  step?: unknown;
+  heading?: unknown;
+  description?: unknown;
+  content?: unknown;
+  details?: unknown;
+  action?: unknown;
+  instruction?: unknown;
+  what_to_do?: unknown;
+  task?: unknown;
+  summary?: unknown;
+  duration_minutes?: unknown;
+  duration?: unknown;
 };
 
 type LearningPack = {
-  overview?: string;
-  objectives?: string[];
-  learning_objectives?: string[];
-  key_concepts?: string[];
-  prerequisites?: string[];
-  sections?: Section[];
-  study_plan?: StudyPlanItem[];
-  flashcards?: Flashcard[];
-  practical_activity?: string;
-  assessment_questions?: string[];
-  source_warnings?: string[];
-  source_summary?: string;
-  estimated_duration?: string;
-  extracted_text?: string;
+  overview?: unknown;
+  objectives?: unknown;
+  learning_objectives?: unknown;
+  key_concepts?: unknown;
+  prerequisites?: unknown;
+  sections?: unknown;
+  study_plan?: unknown;
+  flashcards?: unknown;
+  practical_activity?: unknown;
+  assessment_questions?: unknown;
+  source_warnings?: unknown;
+  source_summary?: unknown;
+  estimated_duration?: unknown;
+  extracted_text?: unknown;
 };
 
 type Draft = {
@@ -80,7 +80,81 @@ type Props = {
   draft: Draft;
 };
 
-function formatDateTime(value: string | null): string {
+function asString(value: unknown): string {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => asString(item))
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  if (
+    value &&
+    typeof value === "object"
+  ) {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "";
+    }
+  }
+
+  return "";
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => asString(item))
+    .filter(Boolean);
+}
+
+function asObjectArray<T>(
+  value: unknown
+): T[] {
+  return Array.isArray(value)
+    ? (value as T[])
+    : [];
+}
+
+function asNumber(
+  value: unknown
+): number | null {
+  if (
+    typeof value === "number" &&
+    Number.isFinite(value)
+  ) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function formatDateTime(
+  value: string | null
+): string {
   if (!value) return "—";
 
   try {
@@ -94,35 +168,85 @@ function formatDateTime(value: string | null): string {
   }
 }
 
-function asArray<T>(value: T[] | undefined | null): T[] {
-  return Array.isArray(value) ? value : [];
-}
-
 function getPathTitle(
   item: StudyPlanItem,
   index: number
 ): string {
-  return (
-    item.title?.trim() ||
-    item.name?.trim() ||
-    item.step?.trim() ||
-    item.heading?.trim() ||
-    `Learning Step ${index + 1}`
-  );
+  const candidates = [
+    item.title,
+    item.name,
+    item.step,
+    item.heading,
+  ];
+
+  for (const candidate of candidates) {
+    const value = asString(candidate);
+
+    if (value) {
+      return value;
+    }
+  }
+
+  return `Learning Step ${index + 1}`;
 }
 
-function getPathDescription(item: StudyPlanItem): string {
-  return (
-    item.description?.trim() ||
-    item.content?.trim() ||
-    item.details?.trim() ||
-    item.action?.trim() ||
-    item.instruction?.trim() ||
-    item.what_to_do?.trim() ||
-    item.task?.trim() ||
-    item.summary?.trim() ||
-    "No additional learning instruction was provided."
-  );
+function getPathDescription(
+  item: StudyPlanItem
+): string {
+  const candidates = [
+    item.description,
+    item.content,
+    item.details,
+    item.action,
+    item.instruction,
+    item.what_to_do,
+    item.task,
+    item.summary,
+  ];
+
+  for (const candidate of candidates) {
+    const value = asString(candidate);
+
+    if (value) {
+      return value;
+    }
+  }
+
+  return "No additional learning instruction was provided.";
+}
+
+function getSectionHeading(
+  section: Section,
+  index: number
+): string {
+  const heading = asString(section.heading);
+
+  return heading || `Learning Section ${index + 1}`;
+}
+
+function getSectionContent(
+  section: Section
+): string {
+  const content = asString(section.content);
+
+  return content || "No section content was provided.";
+}
+
+function getFlashcardFront(
+  flashcard: Flashcard,
+  index: number
+): string {
+  const front = asString(flashcard.front);
+
+  return front || `Flashcard ${index + 1}`;
+}
+
+function getFlashcardBack(
+  flashcard: Flashcard
+): string {
+  const back = asString(flashcard.back);
+
+  return back || "No answer was provided.";
 }
 
 export default function AdminAiDraftReview({
@@ -130,69 +254,123 @@ export default function AdminAiDraftReview({
 }: Props) {
   const router = useRouter();
 
-  const [draft, setDraft] = useState(initialDraft);
-  const [reviewNote, setReviewNote] = useState(
-    initialDraft.review_note ?? ""
+  const [draft, setDraft] =
+    useState<Draft>(initialDraft);
+
+  const [reviewNote, setReviewNote] =
+    useState(
+      initialDraft.review_note ?? ""
+    );
+
+  const [busy, setBusy] =
+    useState(false);
+
+  const [convertBusy, setConvertBusy] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  const [success, setSuccess] =
+    useState("");
+
+  const pack: LearningPack =
+    draft.learning_pack &&
+    typeof draft.learning_pack === "object"
+      ? draft.learning_pack
+      : {};
+
+  const objectives = asStringArray(
+    Array.isArray(pack.objectives)
+      ? pack.objectives
+      : pack.learning_objectives
   );
 
-  const [busy, setBusy] = useState(false);
-  const [convertBusy, setConvertBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const concepts =
+    asStringArray(pack.key_concepts);
 
-  const pack = draft.learning_pack ?? {};
+  const prerequisites =
+    asStringArray(pack.prerequisites);
 
-  const objectives = asArray(
-    pack.objectives ?? pack.learning_objectives
-  );
+  const sections =
+    asObjectArray<Section>(
+      pack.sections
+    );
 
-  const concepts = asArray(pack.key_concepts);
-  const prerequisites = asArray(pack.prerequisites);
-  const sections = asArray(pack.sections);
-  const learningPath = asArray(pack.study_plan);
-  const flashcards = asArray(pack.flashcards);
-  const assessmentQuestions = asArray(
-    pack.assessment_questions
-  );
-  const sourceWarnings = asArray(pack.source_warnings);
+  const learningPath =
+    asObjectArray<StudyPlanItem>(
+      pack.study_plan
+    );
 
-  const isSubmitted = draft.status === "submitted";
-  const isApproved = draft.status === "approved";
-  const isConverted = draft.status === "converted";
+  const flashcards =
+    asObjectArray<Flashcard>(
+      pack.flashcards
+    );
+
+  const assessmentQuestions =
+    asStringArray(
+      pack.assessment_questions
+    );
+
+  const sourceWarnings =
+    asStringArray(
+      pack.source_warnings
+    );
+
+  const isSubmitted =
+    draft.status === "submitted";
+
+  const isApproved =
+    draft.status === "approved";
+
+  const isConverted =
+    draft.status === "converted";
 
   const statusLabel = useMemo(() => {
     switch (draft.status) {
       case "draft":
         return "Draft";
+
       case "edited":
         return "Edited";
+
       case "submitted":
         return "Submitted for review";
+
       case "revision_required":
         return "Revision required";
+
       case "approved":
         return "Approved";
+
       case "converted":
         return "Converted to LMS";
+
       default:
-        return draft.status;
+        return asString(draft.status);
     }
   }, [draft.status]);
 
   async function review(
-    action: "approve" | "revision_required"
+    action:
+      | "approve"
+      | "revision_required"
   ) {
     setBusy(true);
     setError("");
     setSuccess("");
 
+    const cleanReviewNote =
+      asString(reviewNote);
+
     if (
       action === "revision_required" &&
-      !reviewNote.trim()
+      !cleanReviewNote
     ) {
       setError(
         "A review note is required when requesting revision."
       );
+
       setBusy(false);
       return;
     }
@@ -203,39 +381,47 @@ export default function AdminAiDraftReview({
         {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
           },
           body: JSON.stringify({
             id: draft.id,
             action,
-            reviewNote: reviewNote.trim(),
+            reviewNote:
+              cleanReviewNote,
           }),
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data?.error ||
+          asString(data?.error) ||
             "The review action could not be completed."
         );
       }
 
       if (data?.draft) {
-        setDraft((current) => ({
-          ...current,
-          ...data.draft,
-        }));
+        setDraft(
+          (current) => ({
+            ...current,
+            ...data.draft,
+          })
+        );
       } else {
-        setDraft((current) => ({
-          ...current,
-          status:
-            action === "approve"
-              ? "approved"
-              : "revision_required",
-          review_note: reviewNote.trim() || null,
-        }));
+        setDraft(
+          (current) => ({
+            ...current,
+            status:
+              action === "approve"
+                ? "approved"
+                : "revision_required",
+            review_note:
+              cleanReviewNote || null,
+          })
+        );
       }
 
       setSuccess(
@@ -259,14 +445,18 @@ export default function AdminAiDraftReview({
       setError(
         "Only an approved AI draft can be converted to an LMS course."
       );
+
       return;
     }
 
-    const confirmed = window.confirm(
-      "Convert this approved AI draft into an unpublished LMS course?"
-    );
+    const confirmed =
+      window.confirm(
+        "Convert this approved AI draft into an unpublished LMS course?"
+      );
 
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     setConvertBusy(true);
     setError("");
@@ -278,7 +468,8 @@ export default function AdminAiDraftReview({
         {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
           },
           body: JSON.stringify({
             id: draft.id,
@@ -286,16 +477,18 @@ export default function AdminAiDraftReview({
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data?.error ||
+          asString(data?.error) ||
             "The AI draft could not be converted into an LMS course."
         );
       }
 
-      const result = data?.result;
+      const result =
+        data?.result;
 
       const courseId =
         result?.course_id ??
@@ -306,13 +499,18 @@ export default function AdminAiDraftReview({
         result?.converted_at ??
         new Date().toISOString();
 
-      setDraft((current) => ({
-        ...current,
-        status: "converted",
-        converted_course_id: courseId,
-        converted_at: convertedAt,
-        updated_at: convertedAt,
-      }));
+      setDraft(
+        (current) => ({
+          ...current,
+          status: "converted",
+          converted_course_id:
+            courseId,
+          converted_at:
+            convertedAt,
+          updated_at:
+            convertedAt,
+        })
+      );
 
       setSuccess(
         "AI draft converted successfully. The LMS course is unpublished and ready for review."
@@ -328,11 +526,25 @@ export default function AdminAiDraftReview({
     }
   }
 
+  const overview =
+    asString(pack.overview) ||
+    "No overview was provided.";
+
+  const practicalActivity =
+    asString(
+      pack.practical_activity
+    );
+
+  const sourceWarningsExist =
+    sourceWarnings.length > 0;
+
   return (
     <main className="container rn-dashboard-shell">
       <div className="rn-page-header">
         <div>
-          <p className="rn-eyebrow">AI Draft Review</p>
+          <p className="rn-eyebrow">
+            AI Draft Review
+          </p>
 
           <h1>Review AI Draft</h1>
 
@@ -347,7 +559,9 @@ export default function AdminAiDraftReview({
             type="button"
             className="btn btn-secondary"
             onClick={() =>
-              router.push("/admin/ai-drafts")
+              router.push(
+                "/admin/ai-drafts"
+              )
             }
           >
             Back to AI Draft Review
@@ -360,32 +574,54 @@ export default function AdminAiDraftReview({
           Submitted learning material
         </p>
 
-        <h2>{draft.title}</h2>
+        <h2>
+          {asString(draft.title) ||
+            "Untitled AI Draft"}
+        </h2>
 
-        <span className="badge">{statusLabel}</span>
+        <span className="badge">
+          {statusLabel}
+        </span>
 
         <div className="grid-2">
           <div>
             <strong>Output</strong>
-            <p>{draft.output_type}</p>
+            <p>
+              {asString(
+                draft.output_type
+              ) || "—"}
+            </p>
           </div>
 
           <div>
             <strong>Language</strong>
+
             <p>
-              {draft.language_code === "en"
+              {asString(
+                draft.language_code
+              ) === "en"
                 ? "English"
-                : draft.language_code}
+                : asString(
+                    draft.language_code
+                  ) || "—"}
             </p>
           </div>
 
           <div>
             <strong>Audience</strong>
-            <p>{draft.audience}</p>
+
+            <p>
+              {asString(
+                draft.audience
+              ) || "—"}
+            </p>
           </div>
 
           <div>
-            <strong>Source uploaded</strong>
+            <strong>
+              Source uploaded
+            </strong>
+
             <p>
               {formatDateTime(
                 draft.source_uploaded_at
@@ -394,22 +630,35 @@ export default function AdminAiDraftReview({
           </div>
 
           <div>
-            <strong>Draft created</strong>
+            <strong>
+              Draft created
+            </strong>
+
             <p>
-              {formatDateTime(draft.created_at)}
+              {formatDateTime(
+                draft.created_at
+              )}
             </p>
           </div>
 
           <div>
-            <strong>Last updated</strong>
+            <strong>
+              Last updated
+            </strong>
+
             <p>
-              {formatDateTime(draft.updated_at)}
+              {formatDateTime(
+                draft.updated_at
+              )}
             </p>
           </div>
 
           {draft.reviewed_at ? (
             <div>
-              <strong>Reviewed</strong>
+              <strong>
+                Reviewed
+              </strong>
+
               <p>
                 {formatDateTime(
                   draft.reviewed_at
@@ -420,7 +669,10 @@ export default function AdminAiDraftReview({
 
           {draft.converted_at ? (
             <div>
-              <strong>Converted</strong>
+              <strong>
+                Converted
+              </strong>
+
               <p>
                 {formatDateTime(
                   draft.converted_at
@@ -433,18 +685,24 @@ export default function AdminAiDraftReview({
 
       {error ? (
         <section className="card">
-          <p role="alert">{error}</p>
+          <p role="alert">
+            {error}
+          </p>
         </section>
       ) : null}
 
       {success ? (
         <section className="card">
-          <p role="status">{success}</p>
+          <p role="status">
+            {success}
+          </p>
         </section>
       ) : null}
 
       <section className="card">
-        <h2>Privacy protection</h2>
+        <h2>
+          Privacy protection
+        </h2>
 
         <p>
           Original source text and source-specific identifiers
@@ -460,9 +718,13 @@ export default function AdminAiDraftReview({
 
       {isApproved ? (
         <section className="card">
-          <p className="rn-eyebrow">Approved</p>
+          <p className="rn-eyebrow">
+            Approved
+          </p>
 
-          <h2>Convert to LMS</h2>
+          <h2>
+            Convert to LMS
+          </h2>
 
           <p>
             This draft has passed review and can now be converted
@@ -493,9 +755,13 @@ export default function AdminAiDraftReview({
       {isConverted &&
       draft.converted_course_id ? (
         <section className="card">
-          <p className="rn-eyebrow">Converted</p>
+          <p className="rn-eyebrow">
+            Converted
+          </p>
 
-          <h2>LMS course created</h2>
+          <h2>
+            LMS course created
+          </h2>
 
           <p>
             This approved AI draft has already been converted
@@ -504,14 +770,22 @@ export default function AdminAiDraftReview({
 
           <div className="grid-2">
             <div>
-              <strong>Course ID</strong>
+              <strong>
+                Course ID
+              </strong>
+
               <p>
-                {draft.converted_course_id}
+                {asString(
+                  draft.converted_course_id
+                )}
               </p>
             </div>
 
             <div>
-              <strong>Converted at</strong>
+              <strong>
+                Converted at
+              </strong>
+
               <p>
                 {formatDateTime(
                   draft.converted_at
@@ -541,7 +815,9 @@ export default function AdminAiDraftReview({
           Generated Learning Path
         </p>
 
-        <h2>Primary learning sequence</h2>
+        <h2>
+          Primary learning sequence
+        </h2>
 
         <p className="rn-muted">
           This is the actual learning sequence generated from
@@ -551,34 +827,51 @@ export default function AdminAiDraftReview({
 
         {learningPath.length > 0 ? (
           <div className="stack">
-            {learningPath.map((item, index) => (
-              <article
-                key={`${draft.id}-path-${index}`}
-                className="card"
-              >
-                <p className="rn-eyebrow">
-                  Learning step {index + 1}
-                </p>
+            {learningPath.map(
+              (item, index) => {
+                const duration =
+                  asNumber(
+                    item.duration_minutes
+                  ) ??
+                  asNumber(
+                    item.duration
+                  );
 
-                <h3>
-                  {getPathTitle(item, index)}
-                </h3>
+                return (
+                  <article
+                    key={`${draft.id}-path-${index}`}
+                    className="card"
+                  >
+                    <p className="rn-eyebrow">
+                      Learning step{" "}
+                      {index + 1}
+                    </p>
 
-                <p>
-                  {getPathDescription(item)}
-                </p>
+                    <h3>
+                      {getPathTitle(
+                        item,
+                        index
+                      )}
+                    </h3>
 
-                {item.duration_minutes ||
-                item.duration ? (
-                  <p className="rn-muted">
-                    Estimated duration:{" "}
-                    {item.duration_minutes ??
-                      item.duration}{" "}
-                    minutes
-                  </p>
-                ) : null}
-              </article>
-            ))}
+                    <p>
+                      {getPathDescription(
+                        item
+                      )}
+                    </p>
+
+                    {duration !==
+                    null ? (
+                      <p className="rn-muted">
+                        Estimated duration:{" "}
+                        {duration}{" "}
+                        minutes
+                      </p>
+                    ) : null}
+                  </article>
+                );
+              }
+            )}
           </div>
         ) : (
           <p>
@@ -592,132 +885,205 @@ export default function AdminAiDraftReview({
           Supporting learning material
         </p>
 
-        <h2>Overview</h2>
+        <h2>
+          Overview
+        </h2>
 
         <p>
-          {pack.overview ||
-            "No overview was provided."}
+          {overview}
         </p>
       </section>
 
-      {objectives.length > 0 ? (
+      {objectives.length >
+      0 ? (
         <section className="card">
-          <h2>Learning objectives</h2>
+          <h2>
+            Learning objectives
+          </h2>
 
           <ul>
-            {objectives.map((item, index) => (
-              <li
-                key={`${draft.id}-objective-${index}`}
-              >
-                {item}
-              </li>
-            ))}
+            {objectives.map(
+              (item, index) => (
+                <li
+                  key={`${draft.id}-objective-${index}`}
+                >
+                  {item}
+                </li>
+              )
+            )}
           </ul>
         </section>
       ) : null}
 
-      {prerequisites.length > 0 ? (
+      {prerequisites.length >
+      0 ? (
         <section className="card">
-          <h2>Prerequisites</h2>
+          <h2>
+            Prerequisites
+          </h2>
 
           <ul>
-            {prerequisites.map((item, index) => (
-              <li
-                key={`${draft.id}-prerequisite-${index}`}
-              >
-                {item}
-              </li>
-            ))}
+            {prerequisites.map(
+              (item, index) => (
+                <li
+                  key={`${draft.id}-prerequisite-${index}`}
+                >
+                  {item}
+                </li>
+              )
+            )}
           </ul>
         </section>
       ) : null}
 
-      {concepts.length > 0 ? (
+      {concepts.length >
+      0 ? (
         <section className="card">
-          <h2>Key concepts</h2>
+          <h2>
+            Key concepts
+          </h2>
 
           <ul>
-            {concepts.map((item, index) => (
-              <li
-                key={`${draft.id}-concept-${index}`}
-              >
-                {item}
-              </li>
-            ))}
+            {concepts.map(
+              (item, index) => (
+                <li
+                  key={`${draft.id}-concept-${index}`}
+                >
+                  {item}
+                </li>
+              )
+            )}
           </ul>
         </section>
       ) : null}
 
-      {sections.length > 0 ? (
+      {sections.length >
+      0 ? (
         <section className="card">
-          <h2>Learning content</h2>
+          <h2>
+            Learning content
+          </h2>
 
           <div className="stack">
-            {sections.map((section, index) => (
-              <article
-                key={`${draft.id}-section-${index}`}
-                className="card"
-              >
-                <h3>{section.heading}</h3>
+            {sections.map(
+              (section, index) => {
+                const examples =
+                  asStringArray(
+                    section.examples
+                  );
 
-                <p>{section.content}</p>
-
-                {section.examples &&
-                section.examples.length > 0 ? (
-                  <>
-                    <h4>Examples</h4>
-
-                    <ul>
-                      {section.examples.map(
-                        (example, exampleIndex) => (
-                          <li
-                            key={`${draft.id}-example-${index}-${exampleIndex}`}
-                          >
-                            {example}
-                          </li>
-                        )
+                return (
+                  <article
+                    key={`${draft.id}-section-${index}`}
+                    className="card"
+                  >
+                    <h3>
+                      {getSectionHeading(
+                        section,
+                        index
                       )}
-                    </ul>
-                  </>
-                ) : null}
-              </article>
-            ))}
+                    </h3>
+
+                    <p>
+                      {getSectionContent(
+                        section
+                      )}
+                    </p>
+
+                    {examples.length >
+                    0 ? (
+                      <>
+                        <h4>
+                          Examples
+                        </h4>
+
+                        <ul>
+                          {examples.map(
+                            (
+                              example,
+                              exampleIndex
+                            ) => (
+                              <li
+                                key={`${draft.id}-example-${index}-${exampleIndex}`}
+                              >
+                                {
+                                  example
+                                }
+                              </li>
+                            )
+                          )}
+                        </ul>
+                      </>
+                    ) : null}
+                  </article>
+                );
+              }
+            )}
           </div>
         </section>
       ) : null}
 
-      {flashcards.length > 0 ? (
+      {flashcards.length >
+      0 ? (
         <section className="card">
-          <h2>Flashcards</h2>
+          <h2>
+            Flashcards
+          </h2>
 
           <div className="stack">
-            {flashcards.map((flashcard, index) => (
-              <article
-                key={`${draft.id}-flashcard-${index}`}
-                className="card"
-              >
-                <h3>{flashcard.front}</h3>
-                <p>{flashcard.back}</p>
-              </article>
-            ))}
+            {flashcards.map(
+              (
+                flashcard,
+                index
+              ) => (
+                <article
+                  key={`${draft.id}-flashcard-${index}`}
+                  className="card"
+                >
+                  <h3>
+                    {getFlashcardFront(
+                      flashcard,
+                      index
+                    )}
+                  </h3>
+
+                  <p>
+                    {getFlashcardBack(
+                      flashcard
+                    )}
+                  </p>
+                </article>
+              )
+            )}
           </div>
         </section>
       ) : null}
 
-      {pack.practical_activity ? (
+      {practicalActivity ? (
         <section className="card">
-          <h2>Practical activity</h2>
-          <p>{pack.practical_activity}</p>
+          <h2>
+            Practical activity
+          </h2>
+
+          <p>
+            {practicalActivity}
+          </p>
         </section>
       ) : null}
 
-      {assessmentQuestions.length > 0 ? (
+      {assessmentQuestions.length >
+      0 ? (
         <section className="card">
-          <h2>Assessment questions</h2>
+          <h2>
+            Assessment questions
+          </h2>
 
           <ol>
             {assessmentQuestions.map(
-              (question, index) => (
+              (
+                question,
+                index
+              ) => (
                 <li
                   key={`${draft.id}-question-${index}`}
                 >
@@ -729,18 +1095,25 @@ export default function AdminAiDraftReview({
         </section>
       ) : null}
 
-      {sourceWarnings.length > 0 ? (
+      {sourceWarningsExist ? (
         <section className="card">
-          <h2>Privacy and source warnings</h2>
+          <h2>
+            Privacy and source warnings
+          </h2>
 
           <ul>
-            {sourceWarnings.map((warning, index) => (
-              <li
-                key={`${draft.id}-warning-${index}`}
-              >
-                {warning}
-              </li>
-            ))}
+            {sourceWarnings.map(
+              (
+                warning,
+                index
+              ) => (
+                <li
+                  key={`${draft.id}-warning-${index}`}
+                >
+                  {warning}
+                </li>
+              )
+            )}
           </ul>
         </section>
       ) : null}
@@ -751,7 +1124,9 @@ export default function AdminAiDraftReview({
             Reviewer decision
           </p>
 
-          <h2>Review this learning material</h2>
+          <h2>
+            Review this learning material
+          </h2>
 
           <label htmlFor="review-note">
             Review note
@@ -761,7 +1136,9 @@ export default function AdminAiDraftReview({
             id="review-note"
             value={reviewNote}
             onChange={(event) =>
-              setReviewNote(event.target.value)
+              setReviewNote(
+                event.target.value
+              )
             }
             rows={5}
             placeholder="Add feedback for the student..."
@@ -772,7 +1149,9 @@ export default function AdminAiDraftReview({
               type="button"
               className="btn btn-secondary"
               onClick={() =>
-                review("revision_required")
+                review(
+                  "revision_required"
+                )
               }
               disabled={busy}
             >
@@ -784,7 +1163,9 @@ export default function AdminAiDraftReview({
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => review("approve")}
+              onClick={() =>
+                review("approve")
+              }
               disabled={busy}
             >
               {busy
@@ -804,8 +1185,15 @@ export default function AdminAiDraftReview({
 
       {draft.review_note ? (
         <section className="card">
-          <h2>Reviewer note</h2>
-          <p>{draft.review_note}</p>
+          <h2>
+            Reviewer note
+          </h2>
+
+          <p>
+            {asString(
+              draft.review_note
+            )}
+          </p>
         </section>
       ) : null}
     </main>
