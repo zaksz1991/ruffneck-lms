@@ -5,8 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 type Enrollment = {
   id: string;
   course_id: string;
-  enrollment_status: string | null;
-  payment_status: string | null;
+  enrollment_status: string;
+  payment_status: string;
+  progress_percent: number | null;
   created_at: string;
 };
 
@@ -21,19 +22,33 @@ type Course = {
 
 type CurriculumLesson = {
   course_id: string;
+  lesson_id: string;
   lesson_slug: string;
   lesson_title: string;
   lesson_sort_order: number;
   is_published: boolean;
 };
 
-type CourseSummary = Course & {
-  enrollment_status: string | null;
-  payment_status: string | null;
-  enrolled_at: string;
-  lesson_count: number;
-  first_lesson_slug: string | null;
-  first_lesson_title: string | null;
+type LessonProgress = {
+  student_id: string;
+  lesson_id: string;
+  course_id: string;
+  completed: boolean;
+};
+
+type AssessmentAttempt = {
+  id: string;
+  course_id: string | null;
+  assessment_type: string;
+  score_percent: number | null;
+  level: string | null;
+  started_at: string;
+  completed_at: string | null;
+};
+
+type CourseAssessment = {
+  status: "not_started" | "in_progress" | "completed";
+  score_percent: number | null;
 };
 
 export default async function StudentCoursesPage() {
@@ -47,25 +62,54 @@ export default async function StudentCoursesPage() {
     redirect("/login?next=/student/courses");
   }
 
-  const { data: enrollmentData } = await supabase
-    .from("enrollments")
-    .select(
-      `
-        id,
-        course_id,
-        enrollment_status,
-        payment_status,
-        created_at
-      `
-    )
-    .eq("student_id", user.id)
-    .in("enrollment_status", ["active", "completed"])
-    .order("created_at", {
-      ascending: false,
-    });
+  const { data: enrollmentData, error: enrollmentError } =
+    await supabase
+      .from("enrollments")
+      .select(
+        "id, course_id, enrollment_status, payment_status, progress_percent, created_at"
+      )
+      .eq("student_id", user.id)
+      .in("enrollment_status", ["active", "completed"])
+      .order("created_at", {
+        ascending: false,
+      });
+
+  if (enrollmentError) {
+    throw new Error(enrollmentError.message);
+  }
 
   const enrollments =
     (enrollmentData ?? []) as Enrollment[];
+
+  if (enrollments.length === 0) {
+    return (
+      <main className="container">
+        <section className="page-header">
+          <h1>My Courses</h1>
+          <p>
+            Your enrolled courses and learning progress
+            will appear here.
+          </p>
+        </section>
+
+        <section className="card">
+          <h2>No courses yet</h2>
+
+          <p>
+            You are not currently enrolled in any
+            courses.
+          </p>
+
+          <Link
+            href="/courses"
+            className="button primary"
+          >
+            Browse Courses
+          </Link>
+        </section>
+      </main>
+    );
+  }
 
   const courseIds = Array.from(
     new Set(
@@ -75,50 +119,84 @@ export default async function StudentCoursesPage() {
     )
   );
 
-  let courses: Course[] = [];
-
-  if (courseIds.length > 0) {
-    const { data: courseData } = await supabase
+  const [
+    courseResult,
+    curriculumResult,
+    progressResult,
+    assessmentResult,
+  ] = await Promise.all([
+    supabase
       .from("courses")
       .select(
-        `
-          id,
-          title,
-          slug,
-          short_description,
-          level,
-          duration_minutes
-        `
+        "id, title, slug, short_description, level, duration_minutes"
       )
-      .in("id", courseIds);
+      .in("id", courseIds),
 
-    courses = (courseData ?? []) as Course[];
+    supabase
+      .from("course_curriculum")
+      .select(
+        "course_id, lesson_id, lesson_slug, lesson_title, lesson_sort_order, is_published"
+      )
+      .in("course_id", courseIds)
+      .eq("is_published", true)
+      .order("lesson_sort_order", {
+        ascending: true,
+      }),
+
+    supabase
+      .from("lesson_progress")
+      .select(
+        "student_id, lesson_id, course_id, completed"
+      )
+      .eq("student_id", user.id)
+      .in("course_id", courseIds),
+
+    supabase
+      .from("assessment_attempts")
+      .select(
+        "id, course_id, assessment_type, score_percent, level, started_at, completed_at"
+      )
+      .eq("student_id", user.id)
+      .eq(
+        "assessment_type",
+        "course_assessment"
+      )
+      .in("course_id", courseIds)
+      .order("started_at", {
+        ascending: false,
+      }),
+  ]);
+
+  if (courseResult.error) {
+    throw new Error(courseResult.error.message);
   }
 
-  let curriculum: CurriculumLesson[] = [];
-
-  if (courseIds.length > 0) {
-    const { data: curriculumData } =
-      await supabase
-        .from("course_curriculum")
-        .select(
-          `
-            course_id,
-            lesson_slug,
-            lesson_title,
-            lesson_sort_order,
-            is_published
-          `
-        )
-        .in("course_id", courseIds)
-        .eq("is_published", true)
-        .order("lesson_sort_order", {
-          ascending: true,
-        });
-
-    curriculum =
-      (curriculumData ?? []) as CurriculumLesson[];
+  if (curriculumResult.error) {
+    throw new Error(curriculumResult.error.message);
   }
+
+  if (progressResult.error) {
+    throw new Error(progressResult.error.message);
+  }
+
+  if (assessmentResult.error) {
+    throw new Error(assessmentResult.error.message);
+  }
+
+  const courses =
+    (courseResult.data ?? []) as Course[];
+
+  const curriculum =
+    (curriculumResult.data ??
+      []) as CurriculumLesson[];
+
+  const lessonProgress =
+    (progressResult.data ??
+      []) as LessonProgress[];
+
+  const assessmentAttempts =
+    (assessmentResult.data ??
+      []) as AssessmentAttempt[];
 
   const courseMap = new Map(
     courses.map((course) => [
@@ -127,300 +205,372 @@ export default async function StudentCoursesPage() {
     ])
   );
 
-  const curriculumByCourse = new Map<
+  const lessonsByCourse = new Map<
     string,
     CurriculumLesson[]
   >();
 
   for (const lesson of curriculum) {
     const existing =
-      curriculumByCourse.get(
-        lesson.course_id
-      ) ?? [];
+      lessonsByCourse.get(lesson.course_id) ?? [];
 
     existing.push(lesson);
 
-    curriculumByCourse.set(
+    lessonsByCourse.set(
       lesson.course_id,
       existing
     );
   }
 
-  const summaries: CourseSummary[] =
-    enrollments
-      .map((enrollment) => {
-        const course = courseMap.get(
-          enrollment.course_id
-        );
+  const completedLessonIds = new Set(
+    lessonProgress
+      .filter((progress) => progress.completed)
+      .map((progress) => progress.lesson_id)
+  );
 
-        if (!course) {
-          return null;
-        }
+  const assessmentByCourse =
+    new Map<string, CourseAssessment>();
 
-        const lessons =
-          curriculumByCourse.get(
-            course.id
-          ) ?? [];
+  for (const attempt of assessmentAttempts) {
+    if (!attempt.course_id) {
+      continue;
+    }
 
-        const firstLesson =
-          lessons[0] ?? null;
+    if (
+      assessmentByCourse.has(
+        attempt.course_id
+      )
+    ) {
+      continue;
+    }
 
-        return {
-          ...course,
-          enrollment_status:
-            enrollment.enrollment_status,
-          payment_status:
-            enrollment.payment_status,
-          enrolled_at:
-            enrollment.created_at,
-          lesson_count:
-            lessons.length,
-          first_lesson_slug:
-            firstLesson?.lesson_slug ?? null,
-          first_lesson_title:
-            firstLesson?.lesson_title ?? null,
-        };
-      })
-      .filter(
-        (
-          course
-        ): course is CourseSummary =>
-          course !== null
+    assessmentByCourse.set(
+      attempt.course_id,
+      {
+        status: attempt.completed_at
+          ? "completed"
+          : "in_progress",
+        score_percent:
+          attempt.score_percent,
+      }
+    );
+  }
+
+  const courseRows = enrollments
+    .map((enrollment) => {
+      const course = courseMap.get(
+        enrollment.course_id
       );
 
-  const activeCourses = summaries.filter(
-    (course) =>
-      course.enrollment_status === "active"
-  );
+      if (!course) {
+        return null;
+      }
 
-  const completedCourses = summaries.filter(
-    (course) =>
-      course.enrollment_status === "completed"
-  );
+      const lessons =
+        lessonsByCourse.get(
+          course.id
+        ) ?? [];
 
-  const formatDuration = (
-    minutes: number | null
-  ) => {
-    if (!minutes || minutes <= 0) {
-      return "—";
-    }
+      const completedCount =
+        lessons.filter((lesson) =>
+          completedLessonIds.has(
+            lesson.lesson_id
+          )
+        ).length;
 
-    const hours = Math.floor(
-      minutes / 60
+      const totalLessons =
+        lessons.length;
+
+      const allLessonsCompleted =
+        totalLessons > 0 &&
+        completedCount === totalLessons;
+
+      const lessonPercent =
+        totalLessons > 0
+          ? Math.round(
+              (completedCount /
+                totalLessons) *
+                100
+            )
+          : Number(
+              enrollment.progress_percent ?? 0
+            );
+
+      const nextLesson =
+        lessons.find(
+          (lesson) =>
+            !completedLessonIds.has(
+              lesson.lesson_id
+            )
+        ) ?? null;
+
+      const assessment =
+        assessmentByCourse.get(
+          course.id
+        ) ?? {
+          status: "not_started" as const,
+          score_percent: null,
+        };
+
+      return {
+        enrollment,
+        course,
+        lessons,
+        completedCount,
+        totalLessons,
+        allLessonsCompleted,
+        lessonPercent: Math.min(
+          100,
+          Math.max(0, lessonPercent)
+        ),
+        nextLesson,
+        assessment,
+      };
+    })
+    .filter(
+      (
+        row
+      ): row is NonNullable<typeof row> =>
+        row !== null
     );
-    const remainingMinutes =
-      minutes % 60;
 
-    if (hours === 0) {
-      return `${remainingMinutes} min`;
-    }
-
-    if (remainingMinutes === 0) {
-      return `${hours} hr`;
-    }
-
-    return `${hours} hr ${remainingMinutes} min`;
-  };
-
-  const formatLevel = (
-    level: string | null
-  ) => {
-    if (!level) {
-      return "—";
-    }
-
-    return (
-      level.charAt(0).toUpperCase() +
-      level.slice(1)
+  const activeCourses =
+    courseRows.filter(
+      (row) =>
+        row.enrollment.enrollment_status ===
+        "active"
     );
-  };
+
+  const completedCourses =
+    courseRows.filter(
+      (row) =>
+        row.enrollment.enrollment_status ===
+        "completed" ||
+        row.allLessonsCompleted
+    );
 
   return (
     <main className="container">
       <section className="page-header">
-        <div>
-          <h1>My Courses</h1>
+        <h1>My Courses</h1>
 
-          <p>
-            Access your enrolled courses and
-            continue learning.
-          </p>
-        </div>
-
-        <div className="page-actions">
-          <Link
-            href="/courses"
-            className="button"
-          >
-            Browse Courses
-          </Link>
-
-          <Link
-            href="/student"
-            className="button secondary"
-          >
-            Dashboard
-          </Link>
-        </div>
+        <p>
+          Track your lessons, resume learning, and
+          monitor course assessments.
+        </p>
       </section>
 
       <section className="stats-grid">
-        <article className="stat-card">
-          <span>Courses</span>
+        <div className="card">
           <strong>
-            {summaries.length}
+            {courseRows.length}
           </strong>
-        </article>
 
-        <article className="stat-card">
-          <span>Active</span>
+          <span>Enrolled Courses</span>
+        </div>
+
+        <div className="card">
           <strong>
             {activeCourses.length}
           </strong>
-        </article>
 
-        <article className="stat-card">
-          <span>Completed</span>
+          <span>Active Learning</span>
+        </div>
+
+        <div className="card">
           <strong>
             {completedCourses.length}
           </strong>
-        </article>
+
+          <span>Completed</span>
+        </div>
       </section>
 
-      {summaries.length === 0 ? (
-        <section className="card empty-state">
-          <h2>No enrolled courses</h2>
+      <section className="stack">
+        {courseRows.map((row) => {
+          const {
+            course,
+            enrollment,
+            completedCount,
+            totalLessons,
+            allLessonsCompleted,
+            lessonPercent,
+            nextLesson,
+            assessment,
+          } = row;
 
-          <p>
-            You have not enrolled in any
-            courses yet.
-          </p>
+          const courseAssessmentLabel =
+            assessment.status ===
+            "completed"
+              ? "Completed"
+              : assessment.status ===
+                  "in_progress"
+                ? "In progress"
+                : "Not started";
 
-          <Link
-            href="/courses"
-            className="button"
-          >
-            Browse Courses
-          </Link>
-        </section>
-      ) : (
-        <section className="card">
-          <div className="section-heading">
-            <div>
-              <h2>Your Learning</h2>
+          const assessmentScore =
+            assessment.score_percent !== null
+              ? `${Math.round(
+                  Number(
+                    assessment.score_percent
+                  )
+                )}%`
+              : null;
 
-              <p>
-                Continue an active course or
-                review a completed course.
-              </p>
-            </div>
-          </div>
+          const primaryHref =
+            !allLessonsCompleted &&
+            nextLesson
+              ? `/learn/${course.slug}/${nextLesson.lesson_slug}`
+              : `/courses/${course.slug}`;
 
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Course</th>
-                  <th>Level</th>
-                  <th>Lessons</th>
-                  <th>Duration</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
+          const primaryLabel =
+            !allLessonsCompleted &&
+            nextLesson
+              ? "Continue Learning"
+              : "Review Course";
 
-              <tbody>
-                {summaries.map((course) => {
-                  const isCompleted =
-                    course.enrollment_status ===
-                    "completed";
+          const assessmentLabel =
+            assessment.status ===
+            "completed"
+              ? "View Assessment"
+              : assessment.status ===
+                  "in_progress"
+                ? "Continue Assessment"
+                : "Start Assessment";
 
-                  const lessonUrl =
-                    course.first_lesson_slug
-                      ? `/learn/${course.slug}/${course.first_lesson_slug}`
-                      : `/courses/${course.slug}`;
+          const assessmentHref =
+            `/student/assessment?course_id=${encodeURIComponent(
+              course.id
+            )}&course=${encodeURIComponent(
+              course.slug
+            )}`;
 
-                  return (
-                    <tr
-                      key={course.id}
-                    >
-                      <td>
-                        <strong>
-                          {course.title}
-                        </strong>
+          return (
+            <article
+              key={enrollment.id}
+              className="card"
+            >
+              <div className="course-card-header">
+                <div>
+                  <h2>{course.title}</h2>
 
-                        {course.short_description ? (
-                          <div className="muted">
-                            {
-                              course.short_description
-                            }
-                          </div>
-                        ) : null}
+                  {course.short_description ? (
+                    <p>
+                      {
+                        course.short_description
+                      }
+                    </p>
+                  ) : null}
+                </div>
 
-                        {course.first_lesson_title &&
-                        !isCompleted ? (
-                          <div className="muted">
-                            Next:
-                            {" "}
-                            {
-                              course.first_lesson_title
-                            }
-                          </div>
-                        ) : null}
-                      </td>
+                <span className="status-badge">
+                  {enrollment.enrollment_status}
+                </span>
+              </div>
 
-                      <td>
-                        {formatLevel(
-                          course.level
-                        )}
-                      </td>
+              <div className="course-meta">
+                {course.level ? (
+                  <span>
+                    Level: {course.level}
+                  </span>
+                ) : null}
 
-                      <td>
-                        {course.lesson_count}
-                      </td>
+                {course.duration_minutes ? (
+                  <span>
+                    Duration:{" "}
+                    {course.duration_minutes}{" "}
+                    min
+                  </span>
+                ) : null}
 
-                      <td>
-                        {formatDuration(
-                          course.duration_minutes
-                        )}
-                      </td>
+                <span>
+                  {completedCount} of{" "}
+                  {totalLessons} lessons
+                </span>
+              </div>
 
-                      <td>
-                        <span
-                          className={`status ${
-                            isCompleted
-                              ? "status-success"
-                              : "status-active"
-                          }`}
-                        >
-                          {isCompleted
-                            ? "Completed"
-                            : "Active"}
-                        </span>
-                      </td>
+              <div className="progress-section">
+                <div className="progress-header">
+                  <strong>
+                    Lesson Progress
+                  </strong>
 
-                      <td>
-                        <Link
-                          href={
-                            isCompleted
-                              ? `/courses/${course.slug}`
-                              : lessonUrl
-                          }
-                          className="button small"
-                        >
-                          {isCompleted
-                            ? "View Course"
-                            : "Continue Learning"}
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+                  <span>
+                    {lessonPercent}%
+                  </span>
+                </div>
+
+                <div
+                  className="progress-bar"
+                  aria-label={`Lesson progress: ${lessonPercent}%`}
+                >
+                  <div
+                    className="progress-fill"
+                    style={{
+                      width: `${lessonPercent}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="assessment-progress">
+                <div>
+                  <strong>
+                    Course Assessment
+                  </strong>
+
+                  <p>
+                    {courseAssessmentLabel}
+                    {assessmentScore
+                      ? ` · Score: ${assessmentScore}`
+                      : ""}
+                  </p>
+                </div>
+
+                <Link
+                  href={assessmentHref}
+                  className="button secondary"
+                >
+                  {assessmentLabel}
+                </Link>
+              </div>
+
+              <div className="course-card-actions">
+                <Link
+                  href={primaryHref}
+                  className="button primary"
+                >
+                  {primaryLabel}
+                </Link>
+
+                <Link
+                  href={`/courses/${course.slug}`}
+                  className="button secondary"
+                >
+                  Course Details
+                </Link>
+              </div>
+            </article>
+          );
+        })}
+      </section>
+
+      <section className="card">
+        <h2>Need another course?</h2>
+
+        <p>
+          Browse the RuffNeck Learn catalog to
+          continue building practical professional
+          skills.
+        </p>
+
+        <Link
+          href="/courses"
+          className="button secondary"
+        >
+          Browse Courses
+        </Link>
+      </section>
     </main>
   );
 }
