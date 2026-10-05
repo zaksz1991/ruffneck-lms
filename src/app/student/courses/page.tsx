@@ -19,6 +19,45 @@ type Course = {
   duration_minutes: number | null;
 };
 
+function formatDuration(minutes: number | null) {
+  if (!minutes || minutes <= 0) {
+    return "—";
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  if (hours > 0 && remainingMinutes > 0) {
+    return `${hours}h ${remainingMinutes}m`;
+  }
+
+  if (hours > 0) {
+    return `${hours}h`;
+  }
+
+  return `${remainingMinutes}m`;
+}
+
+function statusLabel(status: string) {
+  if (status === "completed") {
+    return "Completed";
+  }
+
+  if (status === "active") {
+    return "Active";
+  }
+
+  return status;
+}
+
+function statusClass(status: string) {
+  if (status === "completed") {
+    return "rn-payment-status rn-payment-status-successful";
+  }
+
+  return "rn-payment-status rn-payment-status-pending";
+}
+
 export default async function StudentCoursesPage() {
   const supabase = await createClient();
 
@@ -27,31 +66,25 @@ export default async function StudentCoursesPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect(
-      "/login?next=/student/courses"
-    );
+    redirect("/login?next=/student/courses");
   }
 
-  const { data: enrollmentData } =
-    await supabase
-      .from("enrollments")
-      .select(
-        `
-          id,
-          course_id,
-          enrollment_status,
-          payment_status,
-          enrolled_at
-        `
-      )
-      .eq("student_id", user.id)
-      .in("enrollment_status", [
-        "active",
-        "completed",
-      ])
-      .order("enrolled_at", {
-        ascending: false,
-      });
+  const { data: enrollmentData } = await supabase
+    .from("enrollments")
+    .select(
+      `
+        id,
+        course_id,
+        enrollment_status,
+        payment_status,
+        enrolled_at
+      `
+    )
+    .eq("student_id", user.id)
+    .in("enrollment_status", ["active", "completed"])
+    .order("enrolled_at", {
+      ascending: false,
+    });
 
   const enrollments =
     (enrollmentData ?? []) as Enrollment[];
@@ -67,20 +100,19 @@ export default async function StudentCoursesPage() {
   let courses: Course[] = [];
 
   if (courseIds.length > 0) {
-    const { data: courseData } =
-      await supabase
-        .from("courses")
-        .select(
-          `
-            id,
-            title,
-            slug,
-            short_description,
-            level,
-            duration_minutes
-          `
-        )
-        .in("id", courseIds);
+    const { data: courseData } = await supabase
+      .from("courses")
+      .select(
+        `
+          id,
+          title,
+          slug,
+          short_description,
+          level,
+          duration_minutes
+        `
+      )
+      .in("id", courseIds);
 
     courses =
       (courseData ?? []) as Course[];
@@ -100,12 +132,19 @@ export default async function StudentCoursesPage() {
         "completed"
     ).length;
 
+  const activeCount =
+    enrollments.filter(
+      (enrollment) =>
+        enrollment.enrollment_status ===
+        "active"
+    ).length;
+
   return (
     <main className="admin-page">
       <div className="admin-page-header">
         <div>
           <p className="eyebrow">
-            RuffNeck Learn
+            Student Account
           </p>
 
           <h1>
@@ -113,8 +152,8 @@ export default async function StudentCoursesPage() {
           </h1>
 
           <p>
-            Access the courses you are enrolled
-            in.
+            Access the courses you are enrolled in
+            and continue your learning.
           </p>
         </div>
 
@@ -137,7 +176,7 @@ export default async function StudentCoursesPage() {
 
       <section className="admin-stats">
         <div className="admin-stat">
-          <span>Courses</span>
+          <span>Total Courses</span>
           <strong>
             {enrollments.length}
           </strong>
@@ -146,11 +185,7 @@ export default async function StudentCoursesPage() {
         <div className="admin-stat">
           <span>Active</span>
           <strong>
-            {enrollments.filter(
-              (enrollment) =>
-                enrollment.enrollment_status ===
-                "active"
-            ).length}
+            {activeCount}
           </strong>
         </div>
 
@@ -162,17 +197,29 @@ export default async function StudentCoursesPage() {
         </div>
       </section>
 
-      {enrollments.length === 0 ? (
-        <section className="admin-card">
-          <div className="admin-empty">
+      <section className="admin-card">
+        <div className="admin-card-header">
+          <div>
             <h2>
-              No enrolled courses
+              Enrolled Courses
             </h2>
 
             <p>
-              Your enrolled courses will appear
-              here after you register or complete
-              a course payment.
+              Select a course to view its curriculum
+              and continue learning.
+            </p>
+          </div>
+        </div>
+
+        {enrollments.length === 0 ? (
+          <div className="admin-empty">
+            <h3>
+              You have no enrolled courses
+            </h3>
+
+            <p>
+              Browse the RuffNeck Learn catalogue
+              and enroll in a course to begin.
             </p>
 
             <Link
@@ -182,21 +229,7 @@ export default async function StudentCoursesPage() {
               Browse Courses
             </Link>
           </div>
-        </section>
-      ) : (
-        <section className="admin-card">
-          <div className="admin-card-header">
-            <div>
-              <h2>
-                Enrolled Courses
-              </h2>
-
-              <p>
-                Your available learning content.
-              </p>
-            </div>
-          </div>
-
+        ) : (
           <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>
@@ -219,58 +252,67 @@ export default async function StudentCoursesPage() {
                       );
 
                     if (!course) {
-                      return null;
+                      return (
+                        <tr
+                          key={enrollment.id}
+                        >
+                          <td
+                            colSpan={6}
+                          >
+                            Course information is
+                            currently unavailable.
+                          </td>
+                        </tr>
+                      );
                     }
-
-                    const completed =
-                      enrollment.enrollment_status ===
-                      "completed";
 
                     return (
                       <tr
                         key={enrollment.id}
                       >
                         <td>
-                          <strong>
-                            {course.title}
-                          </strong>
+                          <div>
+                            <strong>
+                              {course.title}
+                            </strong>
 
-                          {course.short_description ? (
-                            <div>
-                              <small>
+                            {course.short_description ? (
+                              <p
+                                style={{
+                                  margin:
+                                    "4px 0 0",
+                                  maxWidth:
+                                    "420px",
+                                }}
+                              >
                                 {
                                   course.short_description
                                 }
-                              </small>
-                            </div>
-                          ) : null}
+                              </p>
+                            ) : null}
+                          </div>
                         </td>
 
                         <td>
-                          {course.level ||
+                          {course.level ??
                             "—"}
                         </td>
 
                         <td>
-                          {course.duration_minutes
-                            ? `${Math.round(
-                                course.duration_minutes /
-                                  60
-                              )} hrs`
-                            : "—"}
+                          {formatDuration(
+                            course.duration_minutes
+                          )}
                         </td>
 
                         <td>
                           <span
-                            className={
-                              completed
-                                ? "rn-payment-status rn-payment-status-successful"
-                                : "rn-payment-status rn-payment-status-pending"
-                            }
+                            className={statusClass(
+                              enrollment.enrollment_status
+                            )}
                           >
-                            {completed
-                              ? "Completed"
-                              : "Active"}
+                            {statusLabel(
+                              enrollment.enrollment_status
+                            )}
                           </span>
                         </td>
 
@@ -278,16 +320,23 @@ export default async function StudentCoursesPage() {
                           {new Date(
                             enrollment.enrolled_at
                           ).toLocaleDateString(
-                            "en-NG"
+                            "en-NG",
+                            {
+                              dateStyle:
+                                "medium",
+                            }
                           )}
                         </td>
 
                         <td>
                           <Link
                             href={`/courses/${course.slug}`}
-                            className="btn btn-secondary"
+                            className="btn btn-primary"
                           >
-                            Open Course
+                            {enrollment.enrollment_status ===
+                            "completed"
+                              ? "View Course"
+                              : "Continue Learning"}
                           </Link>
                         </td>
                       </tr>
@@ -297,8 +346,8 @@ export default async function StudentCoursesPage() {
               </tbody>
             </table>
           </div>
-        </section>
-      )}
+        )}
+      </section>
     </main>
   );
 }
