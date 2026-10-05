@@ -63,15 +63,6 @@ export default async function CertificatePage({
     );
   }
 
-  /*
-   * --------------------------------------------------------------
-   * CERTIFICATE
-   * --------------------------------------------------------------
-   *
-   * The student ID is part of the query so a learner cannot view
-   * another learner's private certificate through this route.
-   */
-
   const {
     data: certificateData,
     error: certificateError,
@@ -121,6 +112,11 @@ export default async function CertificatePage({
     notFound();
   }
 
+  const verificationUrl =
+    `/verify/${encodeURIComponent(
+      certificate.certificate_number
+    )}`;
+
   return (
     <main className="rn-certificate-view-page">
       <div className="container">
@@ -132,9 +128,24 @@ export default async function CertificatePage({
             ← My Certificates
           </Link>
 
-          {!certificate.is_revoked ? (
-            <CertificatePrintButton />
-          ) : null}
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            <Link
+              href={verificationUrl}
+              className="rn-button rn-button-secondary"
+            >
+              Verify Certificate
+            </Link>
+
+            {!certificate.is_revoked ? (
+              <CertificatePrintButton />
+            ) : null}
+          </div>
         </div>
 
         <article
@@ -173,7 +184,8 @@ export default async function CertificatePage({
             </h1>
 
             <p className="rn-certificate-presented">
-              This certificate is presented to
+              This certificate is presented
+              to
             </p>
 
             <h2>
@@ -181,8 +193,8 @@ export default async function CertificatePage({
             </h2>
 
             <p className="rn-certificate-completion-text">
-              for successfully completing the
-              RuffNeck Learn course
+              for successfully completing
+              the RuffNeck Learn course
             </p>
 
             <h3>
