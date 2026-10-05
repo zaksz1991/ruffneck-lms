@@ -6,7 +6,11 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-type Role = "student" | "instructor" | "admin" | null;
+type Role =
+  | "student"
+  | "instructor"
+  | "admin"
+  | null;
 
 export function Header() {
   const pathname = usePathname();
@@ -62,6 +66,7 @@ export function Header() {
   }, [pathname]);
 
   const isAuthenticated = role !== null;
+
   const canAccessAdmin =
     role === "admin" ||
     role === "instructor";
@@ -135,7 +140,7 @@ export function Header() {
 
             {loading ? null : isAuthenticated ? (
               <>
-                <Link href="/student">
+                <Link href="/student/courses">
                   My learning
                 </Link>
 
