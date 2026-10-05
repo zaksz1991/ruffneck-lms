@@ -47,6 +47,55 @@ type DraftBody = {
   status?: unknown;
 };
 
+const REDACTED = "[REDACTED]";
+
+const SENSITIVE_FIELD_NAMES = new Set([
+  "account",
+  "account_number",
+  "account_no",
+  "account_name",
+  "acct",
+  "acct_number",
+  "acct_no",
+  "acct_name",
+  "bvn",
+  "nin",
+  "iban",
+  "card_number",
+  "card_no",
+  "transaction_id",
+  "transaction_reference",
+  "transaction_ref",
+  "transaction_number",
+  "transaction_no",
+  "payment_id",
+  "payment_reference",
+  "payment_ref",
+  "payment_number",
+  "payment_no",
+  "reference_number",
+  "reference_no",
+  "beneficiary_account",
+  "beneficiary_name",
+  "sender_account",
+  "sender_name",
+  "recipient_account",
+  "recipient_name",
+  "phone",
+  "phone_number",
+  "mobile",
+  "mobile_number",
+  "email",
+  "email_address",
+]);
+
+const RAW_SOURCE_FIELD_NAMES = new Set([
+  "extracted_text",
+  "raw_text",
+  "ocr_text",
+  "source_text",
+]);
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -59,6 +108,149 @@ function cleanText(value: unknown, maxLength: number): string | null {
   if (!cleaned) return null;
 
   return cleaned.slice(0, maxLength);
+}
+
+function normalizeFieldName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_")
+    .replace(/[^a-z0-9_]/g, "");
+}
+
+/**
+ * Removes common personal and financial identifiers from free text.
+ *
+ * The redactor deliberately does not remove ordinary dates, amounts,
+ * lesson terminology, or general educational content.
+ */
+function redactSensitiveText(value: string): string {
+  let result = value;
+
+  // Email addresses.
+  result = result.replace(
+    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
+    REDACTED
+  );
+
+  // Nigerian mobile numbers in local and international format.
+  result = result.replace(
+    /\b(?:\+234|234|0)(?:70|71|80|81|90|91)\d{8}\b/g,
+    REDACTED
+  );
+
+  // BVN and NIN when their labels are present.
+  result = result.replace(
+    /\b(?:bvn|nin)\s*[:#-]?\s*\d{11}\b/gi,
+    (match) => {
+      const label = match.match(/^(bvn|nin)/i)?.[1] ?? "ID";
+      return `${label}: ${REDACTED}`;
+    }
+  );
+
+  // Bank account numbers when a bank-account label is present.
+  result = result.replace(
+    /\b(?:account|acct)(?:\s+(?:number|no\.?|name))?\s*[:#-]\s*[A-Z0-9]{6,20}\b/gi,
+    (match) => {
+      const label = match.split(/[:#-]/)[0].trim();
+      return `${label}: ${REDACTED}`;
+    }
+  );
+
+  // Card numbers when a card label is present.
+  result = result.replace(
+    /\b(?:card)(?:\s+(?:number|no\.?))?\s*[:#-]?\s*(?:\d[ -]?){13,19}\b/gi,
+    (match) => {
+      const labelMatch = match.match(/^card(?:\s+(?:number|no\.?))?/i);
+      const label = labelMatch?.[0] ?? "Card";
+      return `${label}: ${REDACTED}`;
+    }
+  );
+
+  // Transaction/payment/reference identifiers when explicitly labelled.
+  result = result.replace(
+    /\b(?:(?:transaction|payment|transfer)(?:\s+(?:id|reference|ref|number|no\.?))?|reference(?:\s+(?:number|no\.?))?)\s*[:#-]\s*[A-Z0-9-]{8,}\b/gi,
+    (match) => {
+      const separatorIndex = Math.max(
+        match.lastIndexOf(":"),
+        match.lastIndexOf("#"),
+        match.lastIndexOf("-")
+      );
+
+      if (separatorIndex === -1) {
+        return REDACTED;
+      }
+
+      return `${match.slice(0, separatorIndex).trim()}: ${REDACTED}`;
+    }
+  );
+
+  // IBAN-style values.
+  result = result.replace(
+    /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/gi,
+    REDACTED
+  );
+
+  return result;
+}
+
+/**
+ * Recursively redacts sensitive values inside the learning pack.
+ *
+ * Raw OCR/source text is not retained after generation because it can
+ * contain identifiers that are not needed for the reusable LMS material.
+ */
+function sanitizeValue(
+  value: unknown,
+  fieldName = ""
+): unknown {
+  if (typeof value === "string") {
+    const normalizedFieldName = normalizeFieldName(fieldName);
+
+    if (RAW_SOURCE_FIELD_NAMES.has(normalizedFieldName)) {
+      return "[Source text omitted after generation for privacy.]";
+    }
+
+    if (SENSITIVE_FIELD_NAMES.has(normalizedFieldName)) {
+      return REDACTED;
+    }
+
+    return redactSensitiveText(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeValue(item, fieldName));
+  }
+
+  if (isObject(value)) {
+    const result: Record<string, unknown> = {};
+
+    for (const [key, item] of Object.entries(value)) {
+      result[key] = sanitizeValue(item, key);
+    }
+
+    return result;
+  }
+
+  return value;
+}
+
+function normalizeLearningPack(
+  value: unknown
+): Record<string, unknown> | null {
+  if (!isObject(value)) return null;
+
+  const sanitized = sanitizeValue(value);
+
+  if (!isObject(sanitized)) return null;
+
+  const title = cleanText(sanitized.title, 300);
+
+  if (!title) return null;
+
+  sanitized.title = title;
+
+  return sanitized;
 }
 
 function normalizeOutputType(value: unknown): OutputType | null {
@@ -103,18 +295,6 @@ function normalizeStatus(value: unknown): DraftStatus | null {
   }
 
   return null;
-}
-
-function normalizeLearningPack(
-  value: unknown
-): Record<string, unknown> | null {
-  if (!isObject(value)) return null;
-
-  const title = cleanText(value.title, 300);
-
-  if (!title) return null;
-
-  return value;
 }
 
 async function getAuthenticatedUser() {
@@ -177,7 +357,12 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      draft: data,
+      draft: {
+        ...data,
+        learning_pack:
+          normalizeLearningPack(data.learning_pack) ??
+          data.learning_pack,
+      },
     });
   }
 
@@ -208,6 +393,9 @@ export async function GET(request: Request) {
  * POST /api/student/scan/drafts
  *
  * Creates a new draft.
+ *
+ * Privacy protection:
+ * learning_pack is sanitized before it reaches Supabase.
  */
 export async function POST(request: Request) {
   const { supabase, user } = await getAuthenticatedUser();
@@ -265,14 +453,29 @@ export async function POST(request: Request) {
   }
 
   const focusInstruction =
-    cleanText(body.focusInstruction, 1500) ??
-    cleanText(body.focus, 1500);
+    body.focusInstruction !== undefined
+      ? cleanText(
+          redactSensitiveText(
+            typeof body.focusInstruction === "string"
+              ? body.focusInstruction
+              : ""
+          ),
+          1500
+        )
+      : body.focus !== undefined
+        ? cleanText(
+            redactSensitiveText(
+              typeof body.focus === "string" ? body.focus : ""
+            ),
+            1500
+          )
+        : null;
 
   const { data, error } = await supabase
     .from("ai_learning_drafts")
     .insert({
       student_id: user.id,
-      title,
+      title: redactSensitiveText(title),
       output_type: outputType,
       language_code: languageCode,
       audience,
@@ -306,7 +509,11 @@ export async function POST(request: Request) {
 /**
  * PATCH /api/student/scan/drafts
  *
- * Updates an existing draft.
+ * Updates an existing editable draft.
+ *
+ * Privacy protection:
+ * The supplied learning pack is sanitized.
+ * When no learning pack is supplied, the existing one is sanitized again.
  */
 export async function PATCH(request: Request) {
   const { supabase, user } = await getAuthenticatedUser();
@@ -341,7 +548,7 @@ export async function PATCH(request: Request) {
   const { data: existingDraft, error: existingError } =
     await supabase
       .from("ai_learning_drafts")
-      .select("id, status")
+      .select("id, status, learning_pack")
       .eq("id", id)
       .eq("student_id", user.id)
       .maybeSingle();
@@ -385,7 +592,12 @@ export async function PATCH(request: Request) {
   const updates: Record<string, unknown> = {};
 
   if (body.title !== undefined) {
-    const title = cleanText(body.title, 300);
+    const title = cleanText(
+      redactSensitiveText(
+        typeof body.title === "string" ? body.title : ""
+      ),
+      300
+    );
 
     if (!title) {
       return NextResponse.json(
@@ -450,9 +662,20 @@ export async function PATCH(request: Request) {
     body.focusInstruction !== undefined ||
     body.focus !== undefined
   ) {
-    updates.focus_instruction =
-      cleanText(body.focusInstruction, 1500) ??
-      cleanText(body.focus, 1500);
+    const rawFocus =
+      body.focusInstruction !== undefined
+        ? body.focusInstruction
+        : body.focus;
+
+    const sanitizedFocus =
+      typeof rawFocus === "string"
+        ? redactSensitiveText(rawFocus)
+        : "";
+
+    updates.focus_instruction = cleanText(
+      sanitizedFocus,
+      1500
+    );
   }
 
   if (
@@ -471,6 +694,14 @@ export async function PATCH(request: Request) {
     }
 
     updates.learning_pack = learningPack;
+  } else {
+    const existingLearningPack = normalizeLearningPack(
+      existingDraft.learning_pack
+    );
+
+    if (existingLearningPack) {
+      updates.learning_pack = existingLearningPack;
+    }
   }
 
   if (body.status !== undefined) {
@@ -540,9 +771,13 @@ export async function PATCH(request: Request) {
 }
 
 /**
- * POST /api/student/scan/drafts/submit
+ * PUT /api/student/scan/drafts
  *
- * Submits a student's draft for instructor/admin review.
+ * Legacy/backwards-compatible submission handler.
+ *
+ * The learning pack is sanitized again immediately before submission.
+ *
+ * The dedicated /submit route remains the preferred submission endpoint.
  */
 export async function PUT(request: Request) {
   const { supabase, user } = await getAuthenticatedUser();
@@ -613,14 +848,21 @@ export async function PUT(request: Request) {
     );
   }
 
-  if (!isObject(draft.learning_pack)) {
+  const learningPack = normalizeLearningPack(
+    draft.learning_pack
+  );
+
+  if (!learningPack) {
     return NextResponse.json(
       { error: "The learning pack is invalid." },
       { status: 400 }
     );
   }
 
-  const title = cleanText(draft.title, 300);
+  const title = cleanText(
+    redactSensitiveText(draft.title),
+    300
+  );
 
   if (!title) {
     return NextResponse.json(
@@ -632,6 +874,8 @@ export async function PUT(request: Request) {
   const { data, error } = await supabase
     .from("ai_learning_drafts")
     .update({
+      title,
+      learning_pack: learningPack,
       status: "submitted",
     })
     .eq("id", id)
