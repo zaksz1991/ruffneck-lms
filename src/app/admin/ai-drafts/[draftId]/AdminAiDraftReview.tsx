@@ -3,22 +3,57 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type ReviewAction = "approve" | "revision_required";
+type DraftStatus =
+  | "draft"
+  | "edited"
+  | "submitted"
+  | "revision_required"
+  | "approved"
+  | "converted";
+
+type Section = {
+  heading: string;
+  content: string;
+  examples?: string[];
+};
+
+type Flashcard = {
+  front: string;
+  back: string;
+};
+
+type StudyPlanItem = {
+  title?: string;
+  name?: string;
+  step?: string;
+  heading?: string;
+  description?: string;
+  content?: string;
+  details?: string;
+  action?: string;
+  instruction?: string;
+  what_to_do?: string;
+  task?: string;
+  summary?: string;
+  duration_minutes?: number;
+  duration?: number;
+};
 
 type LearningPack = {
-  title?: unknown;
-  summary?: unknown;
-  source_summary?: unknown;
-  extracted_text?: unknown;
-  sections?: unknown;
-  objectives?: unknown;
-  key_concepts?: unknown;
-  prerequisites?: unknown;
-  study_plan?: unknown;
-  flashcards?: unknown;
-  practical_activity?: unknown;
-  assessment?: unknown;
-  source_warning?: unknown;
+  overview?: string;
+  objectives?: string[];
+  learning_objectives?: string[];
+  key_concepts?: string[];
+  prerequisites?: string[];
+  sections?: Section[];
+  study_plan?: StudyPlanItem[];
+  flashcards?: Flashcard[];
+  practical_activity?: string;
+  assessment_questions?: string[];
+  source_warnings?: string[];
+  source_summary?: string;
+  estimated_duration?: string;
+  extracted_text?: string;
 };
 
 type Draft = {
@@ -29,325 +64,521 @@ type Draft = {
   language_code: string;
   audience: string;
   focus_instruction: string | null;
-  learning_pack: LearningPack | null;
-  status:
-    | "draft"
-    | "edited"
-    | "submitted"
-    | "revision_required"
-    | "approved"
-    | "converted";
+  learning_pack: LearningPack;
+  status: DraftStatus;
   source_uploaded_at: string | null;
   created_at: string;
   updated_at: string;
   review_note: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;
+  converted_course_id: string | null;
+  converted_at: string | null;
 };
 
 type Props = {
   draft: Draft;
-  reviewerRole: "admin" | "instructor";
 };
-
-type Section = {
-  heading?: unknown;
-  content?: unknown;
-};
-
-type Concept = {
-  term?: unknown;
-  definition?: unknown;
-};
-
-type StudyPlanItem = {
-  step?: unknown;
-  title?: unknown;
-  description?: unknown;
-};
-
-type Flashcard = {
-  question?: unknown;
-  answer?: unknown;
-};
-
-type AssessmentQuestion = {
-  question?: unknown;
-  options?: unknown;
-  answer?: unknown;
-  explanation?: unknown;
-};
-
-const OUTPUT_LABELS: Record<string, string> = {
-  lesson: "Lesson",
-  study_guide: "Study Guide",
-  lesson_plan: "Lesson Plan",
-  revision_notes: "Revision Notes",
-  quiz: "Quiz",
-  flashcards: "Flashcards",
-};
-
-const LANGUAGE_LABELS: Record<string, string> = {
-  en: "English",
-  ha: "Hausa",
-  yo: "Yoruba",
-  ig: "Igbo",
-  sw: "Swahili",
-};
-
-const AUDIENCE_LABELS: Record<string, string> = {
-  general: "General",
-  office: "Office",
-  business: "Business",
-  education: "Education",
-  personal: "Personal",
-};
-
-function asString(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
-}
 
 function formatDateTime(value: string | null): string {
-  if (!value) {
-    return "Not available";
+  if (!value) return "—";
+
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      dateStyle: "long",
+      timeStyle: "short",
+      timeZone: "Africa/Lagos",
+    }).format(new Date(value));
+  } catch {
+    return value;
   }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Not available";
-  }
-
-  return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "long",
-    timeStyle: "short",
-    timeZone: "Africa/Lagos",
-  }).format(date);
 }
 
-function labelFor(
-  labels: Record<string, string>,
-  value: string,
+function asArray<T>(value: T[] | undefined | null): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function getLearningPathTitle(
+  item: StudyPlanItem,
+  index: number
 ): string {
-  return labels[value] ?? value;
+  return (
+    item.title?.trim() ||
+    item.name?.trim() ||
+    item.step?.trim() ||
+    item.heading?.trim() ||
+    `Learning Step ${index + 1}`
+  );
+}
+
+function getLearningPathDescription(
+  item: StudyPlanItem
+): string {
+  return (
+    item.description?.trim() ||
+    item.content?.trim() ||
+    item.details?.trim() ||
+    item.action?.trim() ||
+    item.instruction?.trim() ||
+    item.what_to_do?.trim() ||
+    item.task?.trim() ||
+    item.summary?.trim() ||
+    "No additional learning instruction was provided."
+  );
 }
 
 export default function AdminAiDraftReview({
-  draft,
-  reviewerRole,
+  draft: initialDraft,
 }: Props) {
   const router = useRouter();
 
-  const [reviewNote, setReviewNote] = useState(draft.review_note ?? "");
+  const [draft, setDraft] = useState(initialDraft);
+  const [reviewNote, setReviewNote] = useState(
+    initialDraft.review_note ?? ""
+  );
+
   const [busy, setBusy] = useState(false);
+  const [convertBusy, setConvertBusy] = useState(false);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+  const [success, setSuccess] = useState("");
 
   const pack = draft.learning_pack ?? {};
 
-  const sections = useMemo(
-    () => asArray<Section>(pack.sections),
-    [pack.sections],
+  const objectives = asArray(
+    pack.objectives ?? pack.learning_objectives
   );
 
-  const objectives = useMemo(
-    () => asArray<unknown>(pack.objectives),
-    [pack.objectives],
+  const concepts = asArray(pack.key_concepts);
+  const prerequisites = asArray(pack.prerequisites);
+  const sections = asArray(pack.sections);
+  const learningPath = asArray(pack.study_plan);
+  const flashcards = asArray(pack.flashcards);
+  const assessmentQuestions = asArray(
+    pack.assessment_questions
   );
-
-  const concepts = useMemo(
-    () => asArray<Concept>(pack.key_concepts),
-    [pack.key_concepts],
-  );
-
-  const prerequisites = useMemo(
-    () => asArray<unknown>(pack.prerequisites),
-    [pack.prerequisites],
-  );
-
-  const studyPlan = useMemo(
-    () => asArray<StudyPlanItem>(pack.study_plan),
-    [pack.study_plan],
-  );
-
-  const flashcards = useMemo(
-    () => asArray<Flashcard>(pack.flashcards),
-    [pack.flashcards],
-  );
-
-  const assessment = useMemo(
-    () => asArray<AssessmentQuestion>(pack.assessment),
-    [pack.assessment],
-  );
+  const sourceWarnings = asArray(pack.source_warnings);
 
   const isSubmitted = draft.status === "submitted";
+  const isApproved = draft.status === "approved";
+  const isConverted = draft.status === "converted";
 
-  async function submitReview(action: ReviewAction) {
-    if (!isSubmitted || busy) {
-      return;
+  const statusLabel = useMemo(() => {
+    switch (draft.status) {
+      case "draft":
+        return "Draft";
+      case "edited":
+        return "Edited";
+      case "submitted":
+        return "Submitted for review";
+      case "revision_required":
+        return "Revision required";
+      case "approved":
+        return "Approved";
+      case "converted":
+        return "Converted to LMS";
+      default:
+        return draft.status;
     }
+  }, [draft.status]);
 
-    if (action === "revision_required" && !reviewNote.trim()) {
-      setError("Add a review note before requesting a revision.");
-      return;
-    }
-
+  async function review(action: "approve" | "revision_required") {
     setBusy(true);
     setError("");
-    setMessage("");
+    setSuccess("");
+
+    if (action === "revision_required" && !reviewNote.trim()) {
+      setError("A review note is required when requesting revision.");
+      setBusy(false);
+      return;
+    }
 
     try {
-      const response = await fetch("/api/admin/ai-drafts/review", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: draft.id,
-          action,
-          reviewNote: reviewNote.trim(),
-        }),
-      });
+      const response = await fetch(
+        "/api/admin/ai-drafts/review",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id: draft.id,
+            action,
+            reviewNote: reviewNote.trim(),
+          }),
+        }
+      );
 
-      const data = (await response.json()) as {
-        error?: string;
-        message?: string;
-      };
+      const data = await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.error ?? "Unable to update the draft review.",
+          data?.error || "The review action could not be completed."
         );
       }
 
-      setMessage(
-        data.message ??
-          (action === "approve"
-            ? "AI draft approved."
-            : "AI draft returned for revision."),
-      );
+      if (data?.draft) {
+        setDraft((current) => ({
+          ...current,
+          ...data.draft,
+        }));
+      } else {
+        setDraft((current) => ({
+          ...current,
+          status:
+            action === "approve"
+              ? "approved"
+              : "revision_required",
+          review_note: reviewNote.trim() || null,
+        }));
+      }
 
-      router.refresh();
+      setSuccess(
+        action === "approve"
+          ? "AI draft approved. It can now be converted into an LMS course."
+          : "Revision requested. The student can now update the draft."
+      );
     } catch (reviewError) {
       setError(
         reviewError instanceof Error
           ? reviewError.message
-          : "Unable to update the draft review.",
+          : "The review action failed."
       );
     } finally {
       setBusy(false);
     }
   }
 
-  return (
-    <div className="rn-stack">
-      <section className="rn-card">
-        <div className="rn-card-header">
-          <div>
-            <p className="eyebrow">Submitted learning material</p>
-            <h2>{draft.title}</h2>
-          </div>
+  async function convertToLms() {
+    if (!isApproved) {
+      setError(
+        "Only an approved AI draft can be converted to an LMS course."
+      );
+      return;
+    }
 
-          <span className="rn-badge">
-            {draft.status === "submitted"
-              ? "Submitted for review"
-              : draft.status.replaceAll("_", " ")}
-          </span>
+    const confirmed = window.confirm(
+      "Convert this approved AI draft into an unpublished LMS course?"
+    );
+
+    if (!confirmed) return;
+
+    setConvertBusy(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch(
+        "/api/admin/ai-drafts/convert",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id: draft.id,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            "The AI draft could not be converted into an LMS course."
+        );
+      }
+
+      const result = data?.result;
+
+      const courseId =
+        result?.course_id ||
+        data?.draft?.converted_course_id ||
+        draft.converted_course_id;
+
+      const convertedAt =
+        result?.converted_at ||
+        data?.draft?.converted_at ||
+        new Date().toISOString();
+
+      setDraft((current) => ({
+        ...current,
+        status: "converted",
+        converted_course_id: courseId ?? null,
+        converted_at: convertedAt,
+        updated_at: convertedAt,
+      }));
+
+      setSuccess(
+        "AI draft converted successfully. The new LMS course is unpublished and ready for review."
+      );
+    } catch (conversionError) {
+      setError(
+        conversionError instanceof Error
+          ? conversionError.message
+          : "The conversion failed."
+      );
+    } finally {
+      setConvertBusy(false);
+    }
+  }
+
+  return (
+    <main className="container rn-dashboard-shell">
+      <div className="rn-page-header">
+        <div>
+          <p className="rn-eyebrow">AI Draft Review</p>
+
+          <h1>{draft.title}</h1>
+
+          <p className="rn-muted">
+            Review AI-generated learning material before it
+            enters the RuffNeck Learn course catalogue.
+          </p>
         </div>
 
-        <div className="rn-meta-grid">
+        <div className="rn-actions">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => router.push("/admin/ai-drafts")}
+          >
+            Back to AI Drafts
+          </button>
+
+          {isConverted && draft.converted_course_id ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() =>
+                router.push(
+                  `/admin/lms?course=${draft.converted_course_id}`
+                )
+              }
+            >
+              Open LMS Course
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <section className="card">
+        <div className="card-header">
           <div>
-            <span className="muted">Output</span>
-            <strong>
-              {labelFor(OUTPUT_LABELS, draft.output_type)}
-            </strong>
+            <span className="badge">{statusLabel}</span>
+            <h2>Draft information</h2>
+          </div>
+        </div>
+
+        <div className="grid-2">
+          <div>
+            <strong>Output type</strong>
+            <p>{draft.output_type}</p>
           </div>
 
           <div>
-            <span className="muted">Language</span>
-            <strong>
-              {labelFor(LANGUAGE_LABELS, draft.language_code)}
-            </strong>
+            <strong>Language</strong>
+            <p>{draft.language_code}</p>
           </div>
 
           <div>
-            <span className="muted">Audience</span>
-            <strong>
-              {labelFor(AUDIENCE_LABELS, draft.audience)}
-            </strong>
+            <strong>Audience</strong>
+            <p>{draft.audience}</p>
           </div>
 
           <div>
-            <span className="muted">Source uploaded</span>
-            <strong>
-              {formatDateTime(
-                draft.source_uploaded_at ?? draft.created_at,
-              )}
-            </strong>
+            <strong>Source uploaded</strong>
+            <p>{formatDateTime(draft.source_uploaded_at)}</p>
           </div>
 
           <div>
-            <span className="muted">Draft created</span>
-            <strong>{formatDateTime(draft.created_at)}</strong>
+            <strong>Draft created</strong>
+            <p>{formatDateTime(draft.created_at)}</p>
           </div>
 
           <div>
-            <span className="muted">Last updated</span>
-            <strong>{formatDateTime(draft.updated_at)}</strong>
+            <strong>Last updated</strong>
+            <p>{formatDateTime(draft.updated_at)}</p>
           </div>
 
           {draft.reviewed_at ? (
             <div>
-              <span className="muted">Reviewed</span>
-              <strong>{formatDateTime(draft.reviewed_at)}</strong>
+              <strong>Reviewed</strong>
+              <p>{formatDateTime(draft.reviewed_at)}</p>
+            </div>
+          ) : null}
+
+          {draft.converted_at ? (
+            <div>
+              <strong>Converted</strong>
+              <p>{formatDateTime(draft.converted_at)}</p>
             </div>
           ) : null}
         </div>
       </section>
 
-      {draft.focus_instruction ? (
-        <section className="rn-card">
-          <p className="eyebrow">Additional instruction</p>
-          <p>{draft.focus_instruction}</p>
+      {error ? (
+        <section className="card">
+          <p role="alert">{error}</p>
         </section>
       ) : null}
 
-      {pack.summary ? (
-        <section className="rn-card">
-          <p className="eyebrow">Summary</p>
-          <p>{asString(pack.summary)}</p>
+      {success ? (
+        <section className="card">
+          <p role="status">{success}</p>
         </section>
       ) : null}
 
-      {pack.source_summary ? (
-        <section className="rn-card">
-          <p className="eyebrow">Source summary</p>
-          <p>{asString(pack.source_summary)}</p>
+      {isConverted && draft.converted_course_id ? (
+        <section className="card">
+          <div className="card-header">
+            <div>
+              <span className="badge">LMS Course Created</span>
+              <h2>Converted course</h2>
+            </div>
+          </div>
+
+          <p>
+            This approved AI draft has already been converted into
+            an LMS course.
+          </p>
+
+          <div className="grid-2">
+            <div>
+              <strong>Course ID</strong>
+              <p>{draft.converted_course_id}</p>
+            </div>
+
+            <div>
+              <strong>Converted at</strong>
+              <p>{formatDateTime(draft.converted_at)}</p>
+            </div>
+          </div>
+
+          <div className="rn-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() =>
+                router.push(
+                  `/admin/lms?course=${draft.converted_course_id}`
+                )
+              }
+            >
+              Open LMS Course
+            </button>
+          </div>
         </section>
       ) : null}
 
-      {pack.extracted_text ? (
-        <section className="rn-card">
-          <p className="eyebrow">Extracted source text</p>
-          <p className="muted">
-            Source text is not displayed in the review interface after
-            generation for privacy protection.
+      {isApproved ? (
+        <section className="card">
+          <div className="card-header">
+            <div>
+              <span className="badge">Approved</span>
+              <h2>Convert to LMS</h2>
+            </div>
+          </div>
+
+          <p>
+            This AI draft has passed review. Convert the approved
+            learning material into an unpublished LMS course.
+          </p>
+
+          <div className="rn-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={convertToLms}
+              disabled={convertBusy}
+            >
+              {convertBusy
+                ? "Converting..."
+                : "Convert to LMS"}
+            </button>
+          </div>
+
+          <p className="rn-muted">
+            The generated learning path becomes the primary course
+            sequence. The new course remains unpublished until an
+            administrator or instructor reviews it.
           </p>
         </section>
       ) : null}
 
+      <section className="card">
+        <div className="card-header">
+          <div>
+            <span className="badge">Generated Learning Path</span>
+            <h2>Primary learning sequence</h2>
+          </div>
+        </div>
+
+        <p className="rn-muted">
+          This is the primary sequence that will be used when the
+          approved draft is converted into an LMS course.
+        </p>
+
+        {learningPath.length > 0 ? (
+          <div className="stack">
+            {learningPath.map((item, index) => (
+              <article
+                key={`${draft.id}-path-${index}`}
+                className="card"
+              >
+                <p className="rn-eyebrow">
+                  Learning step {index + 1}
+                </p>
+
+                <h3>
+                  {getLearningPathTitle(item, index)}
+                </h3>
+
+                <p>
+                  {getLearningPathDescription(item)}
+                </p>
+
+                {item.duration_minutes ||
+                item.duration ? (
+                  <p className="rn-muted">
+                    Estimated duration:{" "}
+                    {item.duration_minutes ??
+                      item.duration}{" "}
+                    minutes
+                  </p>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p>No generated learning path was provided.</p>
+        )}
+      </section>
+
+      <section className="card">
+        <div className="card-header">
+          <div>
+            <span className="badge">
+              Supporting learning material
+            </span>
+            <h2>Overview</h2>
+          </div>
+        </div>
+
+        <p>
+          {pack.overview ||
+            "No overview was provided for this learning material."}
+        </p>
+      </section>
+
       {objectives.length > 0 ? (
-        <section className="rn-card">
-          <p className="eyebrow">Learning objectives</p>
+        <section className="card">
+          <h2>Learning objectives</h2>
 
           <ul>
             {objectives.map((objective, index) => (
-              <li key={`objective-${index}`}>
-                {asString(objective)}
+              <li key={`${draft.id}-objective-${index}`}>
+                {objective}
               </li>
             ))}
           </ul>
@@ -355,13 +586,13 @@ export default function AdminAiDraftReview({
       ) : null}
 
       {prerequisites.length > 0 ? (
-        <section className="rn-card">
-          <p className="eyebrow">Prerequisites</p>
+        <section className="card">
+          <h2>Prerequisites</h2>
 
           <ul>
             {prerequisites.map((item, index) => (
-              <li key={`prerequisite-${index}`}>
-                {asString(item)}
+              <li key={`${draft.id}-prerequisite-${index}`}>
+                {item}
               </li>
             ))}
           </ul>
@@ -369,58 +600,51 @@ export default function AdminAiDraftReview({
       ) : null}
 
       {concepts.length > 0 ? (
-        <section className="rn-card">
-          <p className="eyebrow">Key concepts</p>
+        <section className="card">
+          <h2>Key concepts</h2>
 
-          <div className="rn-stack">
+          <ul>
             {concepts.map((concept, index) => (
-              <div
-                key={`concept-${index}`}
-                className="rn-card rn-card-compact"
-              >
-                <h3>{asString(concept.term)}</h3>
-                <p>{asString(concept.definition)}</p>
-              </div>
+              <li key={`${draft.id}-concept-${index}`}>
+                {concept}
+              </li>
             ))}
-          </div>
+          </ul>
         </section>
       ) : null}
 
       {sections.length > 0 ? (
-        <section className="rn-card">
-          <p className="eyebrow">Learning content</p>
+        <section className="card">
+          <h2>Generated lesson material</h2>
 
-          <div className="rn-stack">
+          <div className="stack">
             {sections.map((section, index) => (
               <article
-                key={`section-${index}`}
-                className="rn-card rn-card-compact"
+                key={`${draft.id}-section-${index}`}
+                className="card"
               >
-                <h3>{asString(section.heading)}</h3>
-                <p>{asString(section.content)}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
+                <h3>{section.heading}</h3>
 
-      {studyPlan.length > 0 ? (
-        <section className="rn-card">
-          <p className="eyebrow">Study plan</p>
+                <p>{section.content}</p>
 
-          <div className="rn-stack">
-            {studyPlan.map((item, index) => (
-              <article
-                key={`study-${index}`}
-                className="rn-card rn-card-compact"
-              >
-                <p className="eyebrow">
-                  Step {asString(item.step) || String(index + 1)}
-                </p>
+                {section.examples &&
+                section.examples.length > 0 ? (
+                  <>
+                    <h4>Examples</h4>
 
-                <h3>{asString(item.title)}</h3>
-
-                <p>{asString(item.description)}</p>
+                    <ul>
+                      {section.examples.map(
+                        (example, exampleIndex) => (
+                          <li
+                            key={`${draft.id}-example-${index}-${exampleIndex}`}
+                          >
+                            {example}
+                          </li>
+                        )
+                      )}
+                    </ul>
+                  </>
+                ) : null}
               </article>
             ))}
           </div>
@@ -428,17 +652,17 @@ export default function AdminAiDraftReview({
       ) : null}
 
       {flashcards.length > 0 ? (
-        <section className="rn-card">
-          <p className="eyebrow">Flashcards</p>
+        <section className="card">
+          <h2>Flashcards</h2>
 
-          <div className="rn-stack">
-            {flashcards.map((card, index) => (
+          <div className="stack">
+            {flashcards.map((flashcard, index) => (
               <article
-                key={`flashcard-${index}`}
-                className="rn-card rn-card-compact"
+                key={`${draft.id}-flashcard-${index}`}
+                className="card"
               >
-                <h3>{asString(card.question)}</h3>
-                <p>{asString(card.answer)}</p>
+                <h3>{flashcard.front}</h3>
+                <p>{flashcard.back}</p>
               </article>
             ))}
           </div>
@@ -446,146 +670,105 @@ export default function AdminAiDraftReview({
       ) : null}
 
       {pack.practical_activity ? (
-        <section className="rn-card">
-          <p className="eyebrow">Practical activity</p>
-          <p>{asString(pack.practical_activity)}</p>
+        <section className="card">
+          <h2>Practical activity</h2>
+          <p>{pack.practical_activity}</p>
         </section>
       ) : null}
 
-      {assessment.length > 0 ? (
-        <section className="rn-card">
-          <p className="eyebrow">Assessment</p>
+      {assessmentQuestions.length > 0 ? (
+        <section className="card">
+          <h2>Assessment questions</h2>
 
-          <div className="rn-stack">
-            {assessment.map((question, index) => {
-              const options = asArray<unknown>(question.options);
+          <ol>
+            {assessmentQuestions.map((question, index) => (
+              <li key={`${draft.id}-question-${index}`}>
+                {question}
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
 
-              return (
-                <article
-                  key={`assessment-${index}`}
-                  className="rn-card rn-card-compact"
-                >
-                  <h3>
-                    {index + 1}. {asString(question.question)}
-                  </h3>
+      {sourceWarnings.length > 0 ? (
+        <section className="card">
+          <h2>Source warnings</h2>
 
-                  {options.length > 0 ? (
-                    <ul>
-                      {options.map((option, optionIndex) => (
-                        <li key={`option-${optionIndex}`}>
-                          {asString(option)}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
+          <ul>
+            {sourceWarnings.map((warning, index) => (
+              <li key={`${draft.id}-warning-${index}`}>
+                {warning}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
-                  {question.answer ? (
-                    <p>
-                      <strong>Answer:</strong>{" "}
-                      {asString(question.answer)}
-                    </p>
-                  ) : null}
+      <section className="card">
+        <h2>Privacy protection</h2>
 
-                  {question.explanation ? (
-                    <p>
-                      <strong>Explanation:</strong>{" "}
-                      {asString(question.explanation)}
-                    </p>
-                  ) : null}
-                </article>
-              );
-            })}
+        <p>
+          Original extracted source text is not displayed here.
+          Privacy screening removes sensitive source information
+          before learning material is stored and reviewed.
+        </p>
+      </section>
+
+      {isSubmitted ? (
+        <section className="card">
+          <div className="card-header">
+            <div>
+              <span className="badge">
+                Awaiting decision
+              </span>
+              <h2>Reviewer decision</h2>
+            </div>
           </div>
-        </section>
-      ) : null}
 
-      {pack.source_warning ? (
-        <section className="rn-card">
-          <p className="eyebrow">Privacy / source warning</p>
-          <p>{asString(pack.source_warning)}</p>
+          <label htmlFor="review-note">
+            Review note
+          </label>
+
+          <textarea
+            id="review-note"
+            value={reviewNote}
+            onChange={(event) =>
+              setReviewNote(event.target.value)
+            }
+            rows={5}
+            placeholder="Add feedback for the student..."
+          />
+
+          <div className="rn-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => review("revision_required")}
+              disabled={busy}
+            >
+              {busy
+                ? "Processing..."
+                : "Request revision"}
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => review("approve")}
+              disabled={busy}
+            >
+              {busy ? "Processing..." : "Approve draft"}
+            </button>
+          </div>
         </section>
       ) : null}
 
       {draft.review_note ? (
-        <section className="rn-card">
-          <p className="eyebrow">Previous review note</p>
+        <section className="card">
+          <h2>Reviewer note</h2>
           <p>{draft.review_note}</p>
         </section>
       ) : null}
-
-      <section className="rn-card">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Reviewer decision</p>
-            <h2>Review this learning material</h2>
-          </div>
-        </div>
-
-        {isSubmitted ? (
-          <>
-            <label htmlFor="review-note">
-              Review note
-            </label>
-
-            <textarea
-              id="review-note"
-              value={reviewNote}
-              onChange={(event) =>
-                setReviewNote(event.target.value)
-              }
-              placeholder="Add feedback for the student. A note is required when requesting a revision."
-              rows={7}
-              maxLength={5000}
-              disabled={busy}
-            />
-
-            <p className="muted">
-              {reviewNote.length}/5000 characters
-            </p>
-
-            {error ? (
-              <div className="rn-alert rn-alert-error">
-                {error}
-              </div>
-            ) : null}
-
-            {message ? (
-              <div className="rn-alert rn-alert-success">
-                {message}
-              </div>
-            ) : null}
-
-            <div className="rn-button-row">
-              <button
-                type="button"
-                className="rn-button rn-button-primary"
-                onClick={() => submitReview("approve")}
-                disabled={busy}
-              >
-                {busy ? "Processing..." : "Approve draft"}
-              </button>
-
-              <button
-                type="button"
-                className="rn-button rn-button-secondary"
-                onClick={() => submitReview("revision_required")}
-                disabled={busy}
-              >
-                Request revision
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className="rn-alert rn-alert-info">
-            This draft has already been reviewed. It cannot be reviewed
-            again from this screen.
-          </div>
-        )}
-
-        <p className="muted">
-          Reviewer role: {reviewerRole}
-        </p>
-      </section>
-    </div>
+    </main>
   );
 }
