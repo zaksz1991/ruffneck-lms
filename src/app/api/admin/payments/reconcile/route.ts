@@ -1,4 +1,3 @@
-```tsx
 import { NextResponse } from "next/server";
 import {
   verifyFlutterwaveByReference,
@@ -53,7 +52,6 @@ async function getAuthorizedUser() {
 
   if (userError || !user) {
     return {
-      supabase,
       user: null,
       profile: null,
     };
@@ -70,25 +68,22 @@ async function getAuthorizedUser() {
 
   if (
     !profile ||
-    (profile.role !== "admin" && profile.role !== "instructor")
+    (profile.role !== "admin" &&
+      profile.role !== "instructor")
   ) {
     return {
-      supabase,
       user,
       profile: null,
     };
   }
 
   return {
-    supabase,
     user,
     profile,
   };
 }
 
-async function verifyPayment(
-  payment: PaymentRecord,
-) {
+async function verifyPayment(payment: PaymentRecord) {
   if (payment.flutterwave_transaction_id) {
     return verifyFlutterwaveTransaction(
       payment.flutterwave_transaction_id,
@@ -120,18 +115,20 @@ async function createOrActivateEnrollment(
     existingData as unknown as EnrollmentRecord | null;
 
   if (existingEnrollment) {
-    const { data: updatedData, error: updateError } =
-      await admin
-        .from("enrollments")
-        .update({
-          enrollment_status: "active",
-          payment_status: "paid",
-        })
-        .eq("id", existingEnrollment.id)
-        .select(
-          "id, enrollment_status, payment_status, progress_percent, enrolled_at",
-        )
-        .single();
+    const {
+      data: updatedData,
+      error: updateError,
+    } = await admin
+      .from("enrollments")
+      .update({
+        enrollment_status: "active",
+        payment_status: "paid",
+      })
+      .eq("id", existingEnrollment.id)
+      .select(
+        "id, enrollment_status, payment_status, progress_percent, enrolled_at",
+      )
+      .single();
 
     if (updateError) {
       throw new Error(updateError.message);
@@ -140,20 +137,22 @@ async function createOrActivateEnrollment(
     return updatedData as unknown as EnrollmentRecord;
   }
 
-  const { data: createdData, error: createError } =
-    await admin
-      .from("enrollments")
-      .insert({
-        student_id: payment.student_id,
-        course_id: payment.course_id,
-        enrollment_status: "active",
-        payment_status: "paid",
-        progress_percent: 0,
-      })
-      .select(
-        "id, enrollment_status, payment_status, progress_percent, enrolled_at",
-      )
-      .single();
+  const {
+    data: createdData,
+    error: createError,
+  } = await admin
+    .from("enrollments")
+    .insert({
+      student_id: payment.student_id,
+      course_id: payment.course_id,
+      enrollment_status: "active",
+      payment_status: "paid",
+      progress_percent: 0,
+    })
+    .select(
+      "id, enrollment_status, payment_status, progress_percent, enrolled_at",
+    )
+    .single();
 
   if (createError) {
     throw new Error(createError.message);
@@ -171,7 +170,10 @@ export async function POST(request: Request) {
     }
 
     if (!profile) {
-      return jsonError("Admin or instructor access required.", 403);
+      return jsonError(
+        "Admin or instructor access required.",
+        403,
+      );
     }
 
     let body: unknown;
@@ -186,7 +188,8 @@ export async function POST(request: Request) {
       typeof body === "object" &&
       body !== null &&
       "payment_id" in body &&
-      typeof (body as { payment_id?: unknown }).payment_id === "string"
+      typeof (body as { payment_id?: unknown }).payment_id ===
+        "string"
         ? (body as { payment_id: string }).payment_id.trim()
         : "";
 
@@ -196,14 +199,16 @@ export async function POST(request: Request) {
 
     const admin = createAdminClient();
 
-    const { data: paymentData, error: paymentError } =
-      await admin
-        .from("course_payments")
-        .select(
-          "id, student_id, course_id, course_slug, tx_ref, flutterwave_transaction_id, amount, currency, status",
-        )
-        .eq("id", paymentId)
-        .maybeSingle();
+    const {
+      data: paymentData,
+      error: paymentError,
+    } = await admin
+      .from("course_payments")
+      .select(
+        "id, student_id, course_id, course_slug, tx_ref, flutterwave_transaction_id, amount, currency, status",
+      )
+      .eq("id", paymentId)
+      .maybeSingle();
 
     if (paymentError) {
       return jsonError(paymentError.message, 500);
@@ -216,15 +221,15 @@ export async function POST(request: Request) {
       return jsonError("Payment record not found.", 404);
     }
 
-    if (
-      profile.role === "instructor"
-    ) {
-      const { data: courseData, error: courseError } =
-        await admin
-          .from("courses")
-          .select("id, instructor_id")
-          .eq("id", payment.course_id)
-          .maybeSingle();
+    if (profile.role === "instructor") {
+      const {
+        data: courseData,
+        error: courseError,
+      } = await admin
+        .from("courses")
+        .select("id, instructor_id")
+        .eq("id", payment.course_id)
+        .maybeSingle();
 
       if (courseError) {
         return jsonError(courseError.message, 500);
@@ -245,10 +250,11 @@ export async function POST(request: Request) {
     }
 
     if (payment.status === "successful") {
-      const enrollment = await createOrActivateEnrollment(
-        admin,
-        payment,
-      );
+      const enrollment =
+        await createOrActivateEnrollment(
+          admin,
+          payment,
+        );
 
       return NextResponse.json({
         success: true,
@@ -349,30 +355,37 @@ export async function POST(request: Request) {
     }
 
     const enrollment =
-      await createOrActivateEnrollment(admin, payment);
+      await createOrActivateEnrollment(
+        admin,
+        payment,
+      );
 
     const transactionId = Number(
-      verification.id ?? payment.flutterwave_transaction_id ?? 0,
+      verification.id ??
+        payment.flutterwave_transaction_id ??
+        0,
     );
 
-    const { data: updatedPaymentData, error: updateError } =
-      await admin
-        .from("course_payments")
-        .update({
-          status: "successful",
-          flutterwave_transaction_id:
-            Number.isFinite(transactionId) &&
-            transactionId > 0
-              ? transactionId
-              : payment.flutterwave_transaction_id,
-          updated_at: new Date().toISOString(),
-          verified_at: new Date().toISOString(),
-        })
-        .eq("id", payment.id)
-        .select(
-          "id, student_id, course_id, course_slug, tx_ref, flutterwave_transaction_id, amount, currency, status",
-        )
-        .single();
+    const {
+      data: updatedPaymentData,
+      error: updateError,
+    } = await admin
+      .from("course_payments")
+      .update({
+        status: "successful",
+        flutterwave_transaction_id:
+          Number.isFinite(transactionId) &&
+          transactionId > 0
+            ? transactionId
+            : payment.flutterwave_transaction_id,
+        updated_at: new Date().toISOString(),
+        verified_at: new Date().toISOString(),
+      })
+      .eq("id", payment.id)
+      .select(
+        "id, student_id, course_id, course_slug, tx_ref, flutterwave_transaction_id, amount, currency, status",
+      )
+      .single();
 
     if (updateError) {
       return jsonError(updateError.message, 500);
@@ -404,4 +417,3 @@ export async function POST(request: Request) {
     );
   }
 }
-```
