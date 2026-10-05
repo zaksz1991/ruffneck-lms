@@ -1,9 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import AdminLmsEditor, {
-  type Course,
-} from "./AdminLmsEditor";
+import AdminLmsEditor from "./AdminLmsEditor";
 
 type AdminLmsPageProps = {
   searchParams: Promise<{
@@ -44,6 +42,42 @@ type StudentLookup = {
 type CourseLookup = {
   id: string;
   title: string;
+};
+
+/*
+ * Keep the server-side course shape local to this page.
+ * It intentionally matches the Course shape consumed by
+ * AdminLmsEditor without importing that type.
+ */
+type AdminCourse = {
+  id: string;
+  title: string;
+  slug: string;
+  short_description: string | null;
+  description: string | null;
+  thumbnail_url: string | null;
+  intro_video_url: string | null;
+  category: string | null;
+  level:
+    | "beginner"
+    | "intermediate"
+    | "advanced";
+  price_ngn: number;
+  currency: string;
+  is_free: boolean;
+  status:
+    | "draft"
+    | "published"
+    | "archived";
+  instructor_id: string | null;
+  duration_minutes: number;
+  learning_outcomes: string[] | null;
+  target_audience: string | null;
+  seo_title: string | null;
+  seo_description: string | null;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export default async function AdminLmsPage({
@@ -100,13 +134,6 @@ export default async function AdminLmsPage({
       ? requestedView
       : "courses";
 
-  /*
-   * Admins can manage all courses.
-   * Instructors can manage only courses assigned to them.
-   *
-   * The same ownership boundary used by the hardened
-   * project-review API is applied here.
-   */
   let coursesQuery = supabase
     .from("courses")
     .select("*")
@@ -137,24 +164,13 @@ export default async function AdminLmsPage({
     );
   }
 
-  /*
-   * AdminLmsEditor owns the canonical Course type.
-   * The explicit unknown bridge protects this server
-   * component from Supabase's inferred response type
-   * while preserving the editor's full Course shape.
-   */
   const courses =
-    (courseData ?? []) as unknown as Course[];
+    (courseData ?? []) as unknown as AdminCourse[];
 
   const courseIds = courses.map(
     (course) => course.id
   );
 
-  /*
-   * Student and enrollment counts remain global
-   * only for admins. Instructors receive counts
-   * scoped to their assigned courses.
-   */
   const studentCountResult =
     await supabase
       .from("profiles")
@@ -192,10 +208,6 @@ export default async function AdminLmsPage({
     enrollCount = result.count ?? 0;
   }
 
-  /*
-   * Only published projects belonging to courses
-   * the current user can manage are counted.
-   */
   let projectCount = 0;
   let pendingProjectCount = 0;
 
