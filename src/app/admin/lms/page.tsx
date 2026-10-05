@@ -546,6 +546,13 @@ export default async function AdminLmsPage({
                 ? ` (${pendingProjectCount})`
                 : ""}
             </Link>
+
+            <Link
+              href="/admin/certificates"
+              className="btn btn-primary"
+            >
+              Certificates
+            </Link>
           </div>
         </div>
 
