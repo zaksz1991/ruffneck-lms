@@ -17,9 +17,7 @@ export async function POST(request: Request) {
 
     if (!user) {
       return NextResponse.json(
-        {
-          error: "You must be logged in to enroll.",
-        },
+        { error: "You must be logged in to enroll." },
         { status: 401 }
       );
     }
@@ -38,7 +36,8 @@ export async function POST(request: Request) {
     ) {
       return NextResponse.json(
         {
-          error: "Your account is not permitted to enroll.",
+          error:
+            "Your account is not permitted to enroll.",
         },
         { status: 403 }
       );
@@ -55,7 +54,8 @@ export async function POST(request: Request) {
     if (!courseId && !courseSlug) {
       return NextResponse.json(
         {
-          error: "Course ID or course slug is required.",
+          error:
+            "Course ID or course slug is required.",
         },
         { status: 400 }
       );
@@ -366,11 +366,12 @@ export async function POST(request: Request) {
         studentId: user.id,
       });
 
-    if (
-      !flutterwavePayment.payment_url
-    ) {
+    const checkoutUrl =
+      flutterwavePayment.link;
+
+    if (!checkoutUrl) {
       console.error(
-        "Flutterwave response did not contain payment_url:",
+        "Flutterwave response did not contain a checkout link:",
         flutterwavePayment
       );
 
@@ -392,17 +393,12 @@ export async function POST(request: Request) {
         student_id: user.id,
         course_id: course.id,
         course_slug: course.slug,
-        tx_ref:
-          flutterwavePayment.tx_ref ||
-          txRef,
-        flutterwave_transaction_id:
-          flutterwavePayment.transaction_id ??
-          null,
+        tx_ref: txRef,
+        flutterwave_transaction_id: null,
         amount,
         currency,
         status: "initiated",
-        checkout_url:
-          flutterwavePayment.payment_url,
+        checkout_url: checkoutUrl,
       })
       .select(
         `
