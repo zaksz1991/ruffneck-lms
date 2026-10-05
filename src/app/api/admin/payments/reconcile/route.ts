@@ -38,6 +38,15 @@ type EnrollmentRecord = {
   enrolled_at: string;
 };
 
+type FlutterwaveVerification = {
+  id: number;
+  txRef: string;
+  amount: number;
+  currency: string;
+  status: string;
+  flwRef: string | null;
+};
+
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
 }
@@ -83,14 +92,18 @@ async function getAuthorizedUser() {
   };
 }
 
-async function verifyPayment(payment: PaymentRecord) {
+async function verifyPayment(
+  payment: PaymentRecord,
+): Promise<FlutterwaveVerification> {
   if (payment.flutterwave_transaction_id) {
     return verifyFlutterwaveTransaction(
       String(payment.flutterwave_transaction_id),
-    );
+    ) as Promise<FlutterwaveVerification>;
   }
 
-  return verifyFlutterwaveByReference(payment.tx_ref);
+  return verifyFlutterwaveByReference(
+    payment.tx_ref,
+  ) as Promise<FlutterwaveVerification>;
 }
 
 async function createOrActivateEnrollment(
@@ -273,7 +286,7 @@ export async function POST(request: Request) {
       );
     }
 
-    let verification;
+    let verification: FlutterwaveVerification;
 
     try {
       verification = await verifyPayment(payment);
@@ -298,7 +311,7 @@ export async function POST(request: Request) {
       String(verification.status ?? "").toLowerCase();
 
     const verifiedTxRef =
-      String(verification.tx_ref ?? "").trim();
+      String(verification.txRef ?? "").trim();
 
     const verifiedCurrency =
       String(verification.currency ?? "")
