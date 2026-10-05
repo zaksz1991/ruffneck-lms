@@ -47,7 +47,10 @@ type AssessmentAttempt = {
 };
 
 type CourseAssessment = {
-  status: "not_started" | "in_progress" | "completed";
+  status:
+    | "not_started"
+    | "in_progress"
+    | "completed";
   score_percent: number | null;
 };
 
@@ -69,7 +72,10 @@ export default async function StudentCoursesPage() {
         "id, course_id, enrollment_status, payment_status, progress_percent, created_at"
       )
       .eq("student_id", user.id)
-      .in("enrollment_status", ["active", "completed"])
+      .in("enrollment_status", [
+        "active",
+        "completed",
+      ])
       .order("created_at", {
         ascending: false,
       });
@@ -86,6 +92,7 @@ export default async function StudentCoursesPage() {
       <main className="container">
         <section className="page-header">
           <h1>My Courses</h1>
+
           <p>
             Your enrolled courses and learning progress
             will appear here.
@@ -172,15 +179,21 @@ export default async function StudentCoursesPage() {
   }
 
   if (curriculumResult.error) {
-    throw new Error(curriculumResult.error.message);
+    throw new Error(
+      curriculumResult.error.message
+    );
   }
 
   if (progressResult.error) {
-    throw new Error(progressResult.error.message);
+    throw new Error(
+      progressResult.error.message
+    );
   }
 
   if (assessmentResult.error) {
-    throw new Error(assessmentResult.error.message);
+    throw new Error(
+      assessmentResult.error.message
+    );
   }
 
   const courses =
@@ -212,7 +225,9 @@ export default async function StudentCoursesPage() {
 
   for (const lesson of curriculum) {
     const existing =
-      lessonsByCourse.get(lesson.course_id) ?? [];
+      lessonsByCourse.get(
+        lesson.course_id
+      ) ?? [];
 
     existing.push(lesson);
 
@@ -224,8 +239,12 @@ export default async function StudentCoursesPage() {
 
   const completedLessonIds = new Set(
     lessonProgress
-      .filter((progress) => progress.completed)
-      .map((progress) => progress.lesson_id)
+      .filter(
+        (progress) => progress.completed
+      )
+      .map(
+        (progress) => progress.lesson_id
+      )
   );
 
   const assessmentByCourse =
@@ -293,7 +312,8 @@ export default async function StudentCoursesPage() {
                 100
             )
           : Number(
-              enrollment.progress_percent ?? 0
+              enrollment.progress_percent ??
+                0
             );
 
       const nextLesson =
@@ -345,7 +365,7 @@ export default async function StudentCoursesPage() {
     courseRows.filter(
       (row) =>
         row.enrollment.enrollment_status ===
-        "completed" ||
+          "completed" ||
         row.allLessonsCompleted
     );
 
@@ -409,7 +429,8 @@ export default async function StudentCoursesPage() {
                 : "Not started";
 
           const assessmentScore =
-            assessment.score_percent !== null
+            assessment.score_percent !==
+            null
               ? `${Math.round(
                   Number(
                     assessment.score_percent
@@ -439,9 +460,7 @@ export default async function StudentCoursesPage() {
                 : "Start Assessment";
 
           const assessmentHref =
-            `/student/assessment?course_id=${encodeURIComponent(
-              course.id
-            )}&course=${encodeURIComponent(
+            `/student/assessment?course=${encodeURIComponent(
               course.slug
             )}`;
 
@@ -464,7 +483,9 @@ export default async function StudentCoursesPage() {
                 </div>
 
                 <span className="status-badge">
-                  {enrollment.enrollment_status}
+                  {
+                    enrollment.enrollment_status
+                  }
                 </span>
               </div>
 
@@ -478,7 +499,9 @@ export default async function StudentCoursesPage() {
                 {course.duration_minutes ? (
                   <span>
                     Duration:{" "}
-                    {course.duration_minutes}{" "}
+                    {
+                      course.duration_minutes
+                    }{" "}
                     min
                   </span>
                 ) : null}
@@ -520,7 +543,10 @@ export default async function StudentCoursesPage() {
                   </strong>
 
                   <p>
-                    {courseAssessmentLabel}
+                    {
+                      courseAssessmentLabel
+                    }
+
                     {assessmentScore
                       ? ` · Score: ${assessmentScore}`
                       : ""}
@@ -560,8 +586,8 @@ export default async function StudentCoursesPage() {
 
         <p>
           Browse the RuffNeck Learn catalog to
-          continue building practical professional
-          skills.
+          continue building practical
+          professional skills.
         </p>
 
         <Link
