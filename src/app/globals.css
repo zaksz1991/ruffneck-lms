@@ -14560,3 +14560,148 @@ main form .rn-button {
     font-size: 0.86rem !important;
   }
 }
+
+ /* =========================================================
+    SITE-WIDE DESKTOP CONTENT WIDTH
+    Reduce excessive left/right margins across RuffNeck Learn.
+    Mobile widths remain controlled by existing responsive CSS.
+    ========================================================= */
+
+@media (min-width: 901px) {
+  /* Main shared container */
+  .container {
+    width: min(1280px, calc(100% - 48px)) !important;
+    max-width: 1280px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  /* Parent brand strip */
+  .rn-parent-brand-inner {
+    width: min(1280px, calc(100% - 48px)) !important;
+    max-width: 1280px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  /* Main header */
+  .site-header .inner {
+    width: min(1280px, calc(100% - 48px)) !important;
+    max-width: 1280px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  /* Course detail */
+  .rn-course-experience {
+    width: min(1280px, calc(100% - 48px)) !important;
+    max-width: 1280px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  /* Founder section */
+  .rn-founder-card {
+    width: min(1280px, calc(100% - 48px)) !important;
+    max-width: 1280px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  /* Dashboard and Admin shared areas */
+  .dashboard-header,
+  .dashboard-section,
+  .rn-dashboard-section,
+  .rn-admin-heading,
+  .rn-admin-stats,
+  .rn-admin-list-panel {
+    max-width: 1280px !important;
+  }
+
+  /* Projects */
+  .rn-projects-page,
+  .rn-admin-projects-page,
+  .rn-project-workspace {
+    width: min(1280px, calc(100% - 48px)) !important;
+    max-width: 1280px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  /* Certificates */
+  .rn-certificates-page > .container,
+  .rn-certificate-view-page > .container {
+    width: min(1280px, calc(100% - 48px)) !important;
+    max-width: 1280px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  .rn-certificate .container {
+    width: min(1280px, calc(100% - 48px)) !important;
+    max-width: 1280px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  /* Learning / lesson pages */
+  .rn-learning-shell .container {
+    width: min(1280px, calc(100% - 48px)) !important;
+    max-width: 1280px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  /* Scan & Learn */
+  .rn-scan-shell {
+    width: min(1280px, calc(100% - 48px)) !important;
+    max-width: 1280px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  /* Footer */
+  .footer .container {
+    width: min(1280px, calc(100% - 48px)) !important;
+    max-width: 1280px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+}
+
+/* =========================================================
+   TABLET / MOBILE
+   Preserve compact viewport margins.
+   ========================================================= */
+
+@media (max-width: 900px) {
+  .container {
+    width: calc(100% - 28px) !important;
+    max-width: none !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .container {
+    width: calc(100% - 24px) !important;
+    max-width: none !important;
+  }
+
+  .rn-parent-brand-inner,
+  .site-header .inner,
+  .rn-course-experience,
+  .rn-founder-card,
+  .rn-projects-page,
+  .rn-admin-projects-page,
+  .rn-project-workspace,
+  .rn-scan-shell,
+  .footer .container {
+    max-width: none !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .container {
+    width: calc(100% - 16px) !important;
+  }
+}
