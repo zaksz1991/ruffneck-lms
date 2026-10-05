@@ -24,6 +24,8 @@ const STATUSES = [
   "draft",
   "edited",
   "submitted",
+  "revision_required",
+  "approved",
   "converted",
 ] as const;
 
@@ -98,7 +100,7 @@ const RAW_SOURCE_FIELD_NAMES = new Set([
 ]);
 
 function isObject(
-  value: unknown
+  value: unknown,
 ): value is Record<string, unknown> {
   return (
     typeof value === "object" &&
@@ -109,7 +111,7 @@ function isObject(
 
 function cleanText(
   value: unknown,
-  maxLength: number
+  maxLength: number,
 ): string | null {
   if (typeof value !== "string") {
     return null;
@@ -125,7 +127,7 @@ function cleanText(
 }
 
 function normalizeFieldName(
-  value: string
+  value: string,
 ): string {
   return value
     .trim()
@@ -134,14 +136,8 @@ function normalizeFieldName(
     .replace(/[^a-z0-9_]/g, "");
 }
 
-/**
- * Returns a valid ISO timestamp supplied by the client.
- *
- * The timestamp is only used as metadata for when the student
- * captured/selected the source. It does not contain image data.
- */
 function normalizeTimestamp(
-  value: unknown
+  value: unknown,
 ): string | null {
   if (
     typeof value !== "string" ||
@@ -150,9 +146,7 @@ function normalizeTimestamp(
     return null;
   }
 
-  const date = new Date(
-    value.trim()
-  );
+  const date = new Date(value.trim());
 
   if (Number.isNaN(date.getTime())) {
     return null;
@@ -161,30 +155,21 @@ function normalizeTimestamp(
   return date.toISOString();
 }
 
-/**
- * Removes common personal and financial identifiers from free text.
- *
- * The redactor deliberately does not remove ordinary dates, amounts,
- * lesson terminology, or general educational content.
- */
 function redactSensitiveText(
-  value: string
+  value: string,
 ): string {
   let result = value;
 
-  // Email addresses.
   result = result.replace(
     /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
-    REDACTED
+    REDACTED,
   );
 
-  // Nigerian mobile numbers in local and international format.
   result = result.replace(
     /\b(?:\+234|234|0)(?:70|71|80|81|90|91)\d{8}\b/g,
-    REDACTED
+    REDACTED,
   );
 
-  // BVN and NIN when their labels are present.
   result = result.replace(
     /\b(?:bvn|nin)\s*[:#-]?\s*\d{11}\b/gi,
     (match) => {
@@ -193,10 +178,9 @@ function redactSensitiveText(
         "ID";
 
       return `${label}: ${REDACTED}`;
-    }
+    },
   );
 
-  // Bank account numbers when a bank-account label is present.
   result = result.replace(
     /\b(?:account|acct)(?:\s+(?:number|no\.?|name))?\s*[:#-]\s*[A-Z0-9]{6,20}\b/gi,
     (match) => {
@@ -204,35 +188,31 @@ function redactSensitiveText(
         match.split(/[:#-]/)[0].trim();
 
       return `${label}: ${REDACTED}`;
-    }
+    },
   );
 
-  // Card numbers when a card label is present.
   result = result.replace(
     /\b(?:card)(?:\s+(?:number|no\.?))?\s*[:#-]?\s*(?:\d[ -]?){13,19}\b/gi,
     (match) => {
-      const labelMatch =
-        match.match(
-          /^card(?:\s+(?:number|no\.?))?/i
-        );
+      const labelMatch = match.match(
+        /^card(?:\s+(?:number|no\.?))?/i,
+      );
 
       const label =
         labelMatch?.[0] ?? "Card";
 
       return `${label}: ${REDACTED}`;
-    }
+    },
   );
 
-  // Transaction/payment/reference identifiers when explicitly labelled.
   result = result.replace(
     /\b(?:(?:transaction|payment|transfer)(?:\s+(?:id|reference|ref|number|no\.?))?|reference(?:\s+(?:number|no\.?))?)\s*[:#-]\s*[A-Z0-9-]{8,}\b/gi,
     (match) => {
-      const separatorIndex =
-        Math.max(
-          match.lastIndexOf(":"),
-          match.lastIndexOf("#"),
-          match.lastIndexOf("-")
-        );
+      const separatorIndex = Math.max(
+        match.lastIndexOf(":"),
+        match.lastIndexOf("#"),
+        match.lastIndexOf("-"),
+      );
 
       if (separatorIndex === -1) {
         return REDACTED;
@@ -241,27 +221,20 @@ function redactSensitiveText(
       return `${match
         .slice(0, separatorIndex)
         .trim()}: ${REDACTED}`;
-    }
+    },
   );
 
-  // IBAN-style values.
   result = result.replace(
     /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/gi,
-    REDACTED
+    REDACTED,
   );
 
   return result;
 }
 
-/**
- * Recursively redacts sensitive values inside the learning pack.
- *
- * Raw OCR/source text is not retained after generation because it can
- * contain identifiers that are not needed for the reusable LMS material.
- */
 function sanitizeValue(
   value: unknown,
-  fieldName = ""
+  fieldName = "",
 ): unknown {
   if (typeof value === "string") {
     const normalizedFieldName =
@@ -269,7 +242,7 @@ function sanitizeValue(
 
     if (
       RAW_SOURCE_FIELD_NAMES.has(
-        normalizedFieldName
+        normalizedFieldName,
       )
     ) {
       return "[Source text omitted after generation for privacy.]";
@@ -277,7 +250,7 @@ function sanitizeValue(
 
     if (
       SENSITIVE_FIELD_NAMES.has(
-        normalizedFieldName
+        normalizedFieldName,
       )
     ) {
       return REDACTED;
@@ -287,31 +260,16 @@ function sanitizeValue(
   }
 
   if (Array.isArray(value)) {
-    return value.map(
-      (item) =>
-        sanitizeValue(
-          item,
-          fieldName
-        )
+    return value.map((item) =>
+      sanitizeValue(item, fieldName),
     );
   }
 
   if (isObject(value)) {
-    const result: Record<
-      string,
-      unknown
-    > = {};
+    const result: Record<string, unknown> = {};
 
-    for (
-      const [key, item] of Object.entries(
-        value
-      )
-    ) {
-      result[key] =
-        sanitizeValue(
-          item,
-          key
-        );
+    for (const [key, item] of Object.entries(value)) {
+      result[key] = sanitizeValue(item, key);
     }
 
     return result;
@@ -321,27 +279,22 @@ function sanitizeValue(
 }
 
 function normalizeLearningPack(
-  value: unknown
-): Record<
-  string,
-  unknown
-> | null {
+  value: unknown,
+): Record<string, unknown> | null {
   if (!isObject(value)) {
     return null;
   }
 
-  const sanitized =
-    sanitizeValue(value);
+  const sanitized = sanitizeValue(value);
 
   if (!isObject(sanitized)) {
     return null;
   }
 
-  const title =
-    cleanText(
-      sanitized.title,
-      300
-    );
+  const title = cleanText(
+    sanitized.title,
+    300,
+  );
 
   if (!title) {
     return null;
@@ -353,12 +306,12 @@ function normalizeLearningPack(
 }
 
 function normalizeOutputType(
-  value: unknown
+  value: unknown,
 ): OutputType | null {
   if (
     typeof value === "string" &&
     OUTPUT_TYPES.includes(
-      value as OutputType
+      value as OutputType,
     )
   ) {
     return value as OutputType;
@@ -368,12 +321,12 @@ function normalizeOutputType(
 }
 
 function normalizeLanguageCode(
-  value: unknown
+  value: unknown,
 ): LanguageCode | null {
   if (
     typeof value === "string" &&
     LANGUAGES.includes(
-      value as LanguageCode
+      value as LanguageCode,
     )
   ) {
     return value as LanguageCode;
@@ -383,12 +336,12 @@ function normalizeLanguageCode(
 }
 
 function normalizeAudience(
-  value: unknown
+  value: unknown,
 ): Audience | null {
   if (
     typeof value === "string" &&
     AUDIENCES.includes(
-      value as Audience
+      value as Audience,
     )
   ) {
     return value as Audience;
@@ -398,12 +351,12 @@ function normalizeAudience(
 }
 
 function normalizeStatus(
-  value: unknown
+  value: unknown,
 ): DraftStatus | null {
   if (
     typeof value === "string" &&
     STATUSES.includes(
-      value as DraftStatus
+      value as DraftStatus,
     )
   ) {
     return value as DraftStatus;
@@ -413,13 +366,11 @@ function normalizeStatus(
 }
 
 async function getAuthenticatedUser() {
-  const supabase =
-    await createClient();
+  const supabase = await createClient();
 
   const {
     data: { user },
-  } =
-    await supabase.auth.getUser();
+  } = await supabase.auth.getUser();
 
   return {
     supabase,
@@ -427,101 +378,83 @@ async function getAuthenticatedUser() {
   };
 }
 
-/**
- * GET /api/student/scan/drafts
- *
- * Without ?id=...
- * Returns the authenticated student's drafts.
- *
- * With ?id=...
- * Returns one draft belonging to the authenticated student.
- */
 export async function GET(
-  request: Request
+  request: Request,
 ) {
-  const {
-    supabase,
-    user,
-  } =
+  const { supabase, user } =
     await getAuthenticatedUser();
 
   if (!user) {
     return NextResponse.json(
       {
-        error:
-          "Authentication required.",
+        error: "Authentication required.",
       },
-      {
-        status: 401,
-      }
+      { status: 401 },
     );
   }
 
-  const url =
-    new URL(request.url);
-
-  const id =
-    url.searchParams.get("id");
+  const url = new URL(request.url);
+  const id = url.searchParams.get("id");
 
   if (id) {
     const {
       data,
       error,
-    } =
-      await supabase
-        .from(
-          "ai_learning_drafts"
-        )
-        .select(
-          "id, title, output_type, language_code, audience, focus_instruction, learning_pack, status, source_uploaded_at, created_at, updated_at"
-        )
-        .eq("id", id)
-        .eq(
-          "student_id",
-          user.id
-        )
-        .maybeSingle();
+    } = await supabase
+      .from("ai_learning_drafts")
+      .select(
+        `
+          id,
+          title,
+          output_type,
+          language_code,
+          audience,
+          focus_instruction,
+          learning_pack,
+          status,
+          source_uploaded_at,
+          created_at,
+          updated_at,
+          review_note,
+          reviewed_by,
+          reviewed_at
+        `,
+      )
+      .eq("id", id)
+      .eq("student_id", user.id)
+      .maybeSingle();
 
     if (error) {
       console.error(
         "AI draft fetch error:",
-        error
+        error,
       );
 
       return NextResponse.json(
         {
-          error:
-            "Unable to load the draft.",
+          error: "Unable to load the draft.",
         },
-        {
-          status: 500,
-        }
+        { status: 500 },
       );
     }
 
     if (!data) {
       return NextResponse.json(
         {
-          error:
-            "Draft not found.",
+          error: "Draft not found.",
         },
-        {
-          status: 404,
-        }
+        { status: 404 },
       );
     }
 
     return NextResponse.json({
       success: true,
-
       draft: {
         ...data,
-
         learning_pack:
           normalizeLearningPack(
-            data.learning_pack
-          ) ??
-          data.learning_pack,
+            data.learning_pack,
+          ) ?? data.learning_pack,
       },
     });
   }
@@ -529,39 +462,41 @@ export async function GET(
   const {
     data,
     error,
-  } =
-    await supabase
-      .from(
-        "ai_learning_drafts"
-      )
-      .select(
-        "id, title, output_type, language_code, audience, focus_instruction, status, source_uploaded_at, created_at, updated_at"
-      )
-      .eq(
-        "student_id",
-        user.id
-      )
-      .order(
-        "updated_at",
-        {
-          ascending: false,
-        }
-      );
+  } = await supabase
+    .from("ai_learning_drafts")
+    .select(
+      `
+        id,
+        title,
+        output_type,
+        language_code,
+        audience,
+        focus_instruction,
+        status,
+        source_uploaded_at,
+        created_at,
+        updated_at,
+        review_note,
+        reviewed_by,
+        reviewed_at
+      `,
+    )
+    .eq("student_id", user.id)
+    .order("updated_at", {
+      ascending: false,
+    });
 
   if (error) {
     console.error(
       "AI drafts list error:",
-      error
+      error,
     );
 
     return NextResponse.json(
       {
-        error:
-          "Unable to load your drafts.",
+        error: "Unable to load your drafts.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 },
     );
   }
 
@@ -571,35 +506,18 @@ export async function GET(
   });
 }
 
-/**
- * POST /api/student/scan/drafts
- *
- * Creates a new draft.
- *
- * sourceUploadedAt is the timestamp captured by the Scan & Learn
- * interface when the source page(s) were added.
- *
- * Privacy protection:
- * learning_pack is sanitized before it reaches Supabase.
- */
 export async function POST(
-  request: Request
+  request: Request,
 ) {
-  const {
-    supabase,
-    user,
-  } =
+  const { supabase, user } =
     await getAuthenticatedUser();
 
   if (!user) {
     return NextResponse.json(
       {
-        error:
-          "Authentication required.",
+        error: "Authentication required.",
       },
-      {
-        status: 401,
-      }
+      { status: 401 },
     );
   }
 
@@ -611,45 +529,41 @@ export async function POST(
   } catch {
     return NextResponse.json(
       {
-        error:
-          "Invalid JSON request body.",
+        error: "Invalid JSON request body.",
       },
-      {
-        status: 400,
-      }
+      { status: 400 },
     );
   }
 
   const outputType =
     normalizeOutputType(
-      body.outputType
+      body.outputType,
     ) ??
     normalizeOutputType(
-      body.mode
+      body.mode,
     ) ??
     "lesson";
 
   const languageCode =
     normalizeLanguageCode(
-      body.languageCode
+      body.languageCode,
     ) ??
     normalizeLanguageCode(
-      body.language
+      body.language,
     ) ??
     "en";
 
   const audience =
     normalizeAudience(
-      body.audience
-    ) ??
-    "general";
+      body.audience,
+    ) ?? "general";
 
   const learningPack =
     normalizeLearningPack(
-      body.learningPack
+      body.learningPack,
     ) ??
     normalizeLearningPack(
-      body.pack
+      body.pack,
     );
 
   if (!learningPack) {
@@ -658,31 +572,23 @@ export async function POST(
         error:
           "A valid learning pack is required.",
       },
-      {
-        status: 400,
-      }
+      { status: 400 },
     );
   }
 
   const title =
-    cleanText(
-      body.title,
-      300
-    ) ??
+    cleanText(body.title, 300) ??
     cleanText(
       learningPack.title,
-      300
+      300,
     );
 
   if (!title) {
     return NextResponse.json(
       {
-        error:
-          "A draft title is required.",
+        error: "A draft title is required.",
       },
-      {
-        status: 400,
-      }
+      { status: 400 },
     );
   }
 
@@ -694,56 +600,40 @@ export async function POST(
             typeof body.focusInstruction ===
               "string"
               ? body.focusInstruction
-              : ""
+              : "",
           ),
-          1500
+          1500,
         )
-      : body.focus !==
-          undefined
+      : body.focus !== undefined
         ? cleanText(
             redactSensitiveText(
               typeof body.focus ===
                 "string"
                 ? body.focus
-                : ""
+                : "",
             ),
-            1500
+            1500,
           )
         : null;
 
   const sourceUploadedAt =
     normalizeTimestamp(
-      body.sourceUploadedAt
+      body.sourceUploadedAt,
     );
 
   const insertPayload: Record<
     string,
     unknown
   > = {
-    student_id:
-      user.id,
-
-    title:
-      redactSensitiveText(
-        title
-      ),
-
-    output_type:
-      outputType,
-
-    language_code:
-      languageCode,
-
+    student_id: user.id,
+    title: redactSensitiveText(title),
+    output_type: outputType,
+    language_code: languageCode,
     audience,
-
     focus_instruction:
       focusInstruction,
-
-    learning_pack:
-      learningPack,
-
-    status:
-      "draft",
+    learning_pack: learningPack,
+    status: "draft",
   };
 
   if (sourceUploadedAt) {
@@ -754,33 +644,40 @@ export async function POST(
   const {
     data,
     error,
-  } =
-    await supabase
-      .from(
-        "ai_learning_drafts"
-      )
-      .insert(
-        insertPayload
-      )
-      .select(
-        "id, title, output_type, language_code, audience, focus_instruction, learning_pack, status, source_uploaded_at, created_at, updated_at"
-      )
-      .single();
+  } = await supabase
+    .from("ai_learning_drafts")
+    .insert(insertPayload)
+    .select(
+      `
+        id,
+        title,
+        output_type,
+        language_code,
+        audience,
+        focus_instruction,
+        learning_pack,
+        status,
+        source_uploaded_at,
+        created_at,
+        updated_at,
+        review_note,
+        reviewed_by,
+        reviewed_at
+      `,
+    )
+    .single();
 
   if (error) {
     console.error(
       "AI draft creation error:",
-      error
+      error,
     );
 
     return NextResponse.json(
       {
-        error:
-          "Unable to save the draft.",
+        error: "Unable to save the draft.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 },
     );
   }
 
@@ -789,39 +686,22 @@ export async function POST(
       success: true,
       draft: data,
     },
-    {
-      status: 201,
-    }
+    { status: 201 },
   );
 }
 
-/**
- * PATCH /api/student/scan/drafts
- *
- * Updates an existing editable draft.
- *
- * Privacy protection:
- * The supplied learning pack is sanitized.
- * When no learning pack is supplied, the existing one is sanitized again.
- */
 export async function PATCH(
-  request: Request
+  request: Request,
 ) {
-  const {
-    supabase,
-    user,
-  } =
+  const { supabase, user } =
     await getAuthenticatedUser();
 
   if (!user) {
     return NextResponse.json(
       {
-        error:
-          "Authentication required.",
+        error: "Authentication required.",
       },
-      {
-        status: 401,
-      }
+      { status: 401 },
     );
   }
 
@@ -833,58 +713,50 @@ export async function PATCH(
   } catch {
     return NextResponse.json(
       {
-        error:
-          "Invalid JSON request body.",
+        error: "Invalid JSON request body.",
       },
-      {
-        status: 400,
-      }
+      { status: 400 },
     );
   }
 
-  const id =
-    cleanText(
-      body.id,
-      100
-    );
+  const id = cleanText(
+    body.id,
+    100,
+  );
 
   if (!id) {
     return NextResponse.json(
       {
-        error:
-          "Draft ID is required.",
+        error: "Draft ID is required.",
       },
-      {
-        status: 400,
-      }
+      { status: 400 },
     );
   }
 
   const {
     data: existingDraft,
     error: existingError,
-  } =
-    await supabase
-      .from(
-        "ai_learning_drafts"
-      )
-      .select(
-        "id, status, learning_pack, source_uploaded_at"
-      )
-      .eq(
-        "id",
-        id
-      )
-      .eq(
-        "student_id",
-        user.id
-      )
-      .maybeSingle();
+  } = await supabase
+    .from("ai_learning_drafts")
+    .select(
+      `
+        id,
+        status,
+        learning_pack,
+        source_uploaded_at,
+        review_note,
+        reviewed_by,
+        reviewed_at
+      `,
+    )
+    .eq("id", id)
+    .eq("student_id", user.id)
+    .maybeSingle();
 
   if (existingError) {
     console.error(
       "AI draft lookup error:",
-      existingError
+      existingError,
     );
 
     return NextResponse.json(
@@ -892,21 +764,16 @@ export async function PATCH(
         error:
           "Unable to verify the draft.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 },
     );
   }
 
   if (!existingDraft) {
     return NextResponse.json(
       {
-        error:
-          "Draft not found.",
+        error: "Draft not found.",
       },
-      {
-        status: 404,
-      }
+      { status: 404 },
     );
   }
 
@@ -919,9 +786,20 @@ export async function PATCH(
         error:
           "This draft has already been submitted for LMS review and can no longer be edited.",
       },
+      { status: 409 },
+    );
+  }
+
+  if (
+    existingDraft.status ===
+    "approved"
+  ) {
+    return NextResponse.json(
       {
-        status: 409,
-      }
+        error:
+          "This draft has already been approved and can no longer be edited.",
+      },
+      { status: 409 },
     );
   }
 
@@ -934,9 +812,7 @@ export async function PATCH(
         error:
           "This draft has already been converted and can no longer be edited.",
       },
-      {
-        status: 409,
-      }
+      { status: 409 },
     );
   }
 
@@ -945,20 +821,16 @@ export async function PATCH(
     unknown
   > = {};
 
-  if (
-    body.title !==
-    undefined
-  ) {
-    const title =
-      cleanText(
-        redactSensitiveText(
-          typeof body.title ===
-            "string"
-            ? body.title
-            : ""
-        ),
-        300
-      );
+  if (body.title !== undefined) {
+    const title = cleanText(
+      redactSensitiveText(
+        typeof body.title ===
+          "string"
+          ? body.title
+          : "",
+      ),
+      300,
+    );
 
     if (!title) {
       return NextResponse.json(
@@ -966,28 +838,24 @@ export async function PATCH(
           error:
             "Draft title cannot be empty.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 },
       );
     }
 
-    updates.title =
-      title;
+    updates.title = title;
   }
 
   if (
     body.outputType !==
       undefined ||
-    body.mode !==
-      undefined
+    body.mode !== undefined
   ) {
     const outputType =
       normalizeOutputType(
-        body.outputType
+        body.outputType,
       ) ??
       normalizeOutputType(
-        body.mode
+        body.mode,
       );
 
     if (!outputType) {
@@ -996,9 +864,7 @@ export async function PATCH(
           error:
             "Invalid output type.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 },
       );
     }
 
@@ -1009,26 +875,22 @@ export async function PATCH(
   if (
     body.languageCode !==
       undefined ||
-    body.language !==
-      undefined
+    body.language !== undefined
   ) {
     const languageCode =
       normalizeLanguageCode(
-        body.languageCode
+        body.languageCode,
       ) ??
       normalizeLanguageCode(
-        body.language
+        body.language,
       );
 
     if (!languageCode) {
       return NextResponse.json(
         {
-          error:
-            "Invalid language.",
+          error: "Invalid language.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 },
       );
     }
 
@@ -1036,36 +898,28 @@ export async function PATCH(
       languageCode;
   }
 
-  if (
-    body.audience !==
-    undefined
-  ) {
+  if (body.audience !== undefined) {
     const audience =
       normalizeAudience(
-        body.audience
+        body.audience,
       );
 
     if (!audience) {
       return NextResponse.json(
         {
-          error:
-            "Invalid audience.",
+          error: "Invalid audience.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 },
       );
     }
 
-    updates.audience =
-      audience;
+    updates.audience = audience;
   }
 
   if (
     body.focusInstruction !==
       undefined ||
-    body.focus !==
-      undefined
+    body.focus !== undefined
   ) {
     const rawFocus =
       body.focusInstruction !==
@@ -1074,17 +928,16 @@ export async function PATCH(
         : body.focus;
 
     const sanitizedFocus =
-      typeof rawFocus ===
-        "string"
+      typeof rawFocus === "string"
         ? redactSensitiveText(
-            rawFocus
+            rawFocus,
           )
         : "";
 
     updates.focus_instruction =
       cleanText(
         sanitizedFocus,
-        1500
+        1500,
       );
   }
 
@@ -1094,20 +947,16 @@ export async function PATCH(
   ) {
     const sourceUploadedAt =
       normalizeTimestamp(
-        body.sourceUploadedAt
+        body.sourceUploadedAt,
       );
 
-    if (
-      !sourceUploadedAt
-    ) {
+    if (!sourceUploadedAt) {
       return NextResponse.json(
         {
           error:
             "Invalid source upload timestamp.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 },
       );
     }
 
@@ -1118,15 +967,14 @@ export async function PATCH(
   if (
     body.learningPack !==
       undefined ||
-    body.pack !==
-      undefined
+    body.pack !== undefined
   ) {
     const learningPack =
       normalizeLearningPack(
-        body.learningPack
+        body.learningPack,
       ) ??
       normalizeLearningPack(
-        body.pack
+        body.pack,
       );
 
     if (!learningPack) {
@@ -1135,9 +983,7 @@ export async function PATCH(
           error:
             "Invalid learning pack.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 },
       );
     }
 
@@ -1146,24 +992,19 @@ export async function PATCH(
   } else {
     const existingLearningPack =
       normalizeLearningPack(
-        existingDraft.learning_pack
+        existingDraft.learning_pack,
       );
 
-    if (
-      existingLearningPack
-    ) {
+    if (existingLearningPack) {
       updates.learning_pack =
         existingLearningPack;
     }
   }
 
-  if (
-    body.status !==
-    undefined
-  ) {
+  if (body.status !== undefined) {
     const status =
       normalizeStatus(
-        body.status
+        body.status,
       );
 
     if (!status) {
@@ -1172,35 +1013,42 @@ export async function PATCH(
           error:
             "Invalid draft status.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 },
       );
     }
 
     if (
-      status ===
-      "submitted"
+      status === "submitted" ||
+      status === "approved" ||
+      status === "converted"
     ) {
       return NextResponse.json(
         {
           error:
-            "Use the submission action to submit a draft for LMS review.",
+            "Use the appropriate workflow action to submit, approve, or convert a draft.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 },
       );
     }
 
-    updates.status =
-      status;
+    if (
+      status !== "draft" &&
+      status !== "edited"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Students can only save drafts as draft or edited.",
+        },
+        { status: 400 },
+      );
+    }
+
+    updates.status = status;
   }
 
   if (
-    Object.keys(
-      updates
-    ).length ===
+    Object.keys(updates).length ===
     0
   ) {
     return NextResponse.json(
@@ -1208,48 +1056,56 @@ export async function PATCH(
         error:
           "No changes were provided.",
       },
-      {
-        status: 400,
-      }
+      { status: 400 },
     );
   }
 
-  if (
-    updates.status ===
-    undefined
-  ) {
-    updates.status =
-      "edited";
+  if (updates.status === undefined) {
+    updates.status = "edited";
   }
 
+  /*
+   * A revision_required draft becomes edited when the student saves
+   * changes. The review note is intentionally NOT changed here.
+   * This preserves the reviewer's feedback until the next review.
+   */
   const {
     data,
     error,
-  } =
-    await supabase
-      .from(
-        "ai_learning_drafts"
-      )
-      .update(
-        updates
-      )
-      .eq(
-        "id",
-        id
-      )
-      .eq(
-        "student_id",
-        user.id
-      )
-      .select(
-        "id, title, output_type, language_code, audience, focus_instruction, learning_pack, status, source_uploaded_at, created_at, updated_at"
-      )
-      .maybeSingle();
+  } = await supabase
+    .from("ai_learning_drafts")
+    .update(updates)
+    .eq("id", id)
+    .eq("student_id", user.id)
+    .in("status", [
+      "draft",
+      "edited",
+      "revision_required",
+    ])
+    .select(
+      `
+        id,
+        title,
+        output_type,
+        language_code,
+        audience,
+        focus_instruction,
+        learning_pack,
+        status,
+        source_uploaded_at,
+        created_at,
+        updated_at,
+        review_note,
+        reviewed_by,
+        reviewed_at
+      `,
+    )
+    .maybeSingle();
 
   if (error) {
     console.error(
       "AI draft update error:",
-      error
+      error,
     );
 
     return NextResponse.json(
@@ -1257,9 +1113,7 @@ export async function PATCH(
         error:
           "Unable to update the draft.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 },
     );
   }
 
@@ -1267,11 +1121,9 @@ export async function PATCH(
     return NextResponse.json(
       {
         error:
-          "Draft not found.",
+          "The draft could not be updated because its status changed. Refresh and try again.",
       },
-      {
-        status: 404,
-      }
+      { status: 409 },
     );
   }
 
@@ -1282,36 +1134,27 @@ export async function PATCH(
 }
 
 /**
- * PUT /api/student/scan/drafts
- *
  * Legacy/backwards-compatible submission handler.
  *
- * The learning pack is sanitized again immediately before submission.
+ * The preferred submission endpoint is:
+ * POST /api/student/scan/drafts/submit
  */
 export async function PUT(
-  request: Request
+  request: Request,
 ) {
-  const {
-    supabase,
-    user,
-  } =
+  const { supabase, user } =
     await getAuthenticatedUser();
 
   if (!user) {
     return NextResponse.json(
       {
-        error:
-          "Authentication required.",
+        error: "Authentication required.",
       },
-      {
-        status: 401,
-      }
+      { status: 401 },
     );
   }
 
-  let body: {
-    id?: unknown;
-  };
+  let body: { id?: unknown };
 
   try {
     body =
@@ -1324,55 +1167,52 @@ export async function PUT(
         error:
           "Invalid JSON request body.",
       },
-      {
-        status: 400,
-      }
+      { status: 400 },
     );
   }
 
-  const id =
-    cleanText(
-      body.id,
-      100
-    );
+  const id = cleanText(
+    body.id,
+    100,
+  );
 
   if (!id) {
     return NextResponse.json(
       {
-        error:
-          "Draft ID is required.",
+        error: "Draft ID is required.",
       },
-      {
-        status: 400,
-      }
+      { status: 400 },
     );
   }
 
   const {
     data: draft,
     error: draftError,
-  } =
-    await supabase
-      .from(
-        "ai_learning_drafts"
-      )
-      .select(
-        "id, title, status, learning_pack, output_type, language_code, audience, source_uploaded_at"
-      )
-      .eq(
-        "id",
-        id
-      )
-      .eq(
-        "student_id",
-        user.id
-      )
-      .maybeSingle();
+  } = await supabase
+    .from("ai_learning_drafts")
+    .select(
+      `
+        id,
+        title,
+        status,
+        learning_pack,
+        output_type,
+        language_code,
+        audience,
+        source_uploaded_at,
+        review_note,
+        reviewed_by,
+        reviewed_at
+      `,
+    )
+    .eq("id", id)
+    .eq("student_id", user.id)
+    .maybeSingle();
 
   if (draftError) {
     console.error(
       "AI draft submission lookup error:",
-      draftError
+      draftError,
     );
 
     return NextResponse.json(
@@ -1380,57 +1220,73 @@ export async function PUT(
         error:
           "Unable to verify the draft.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 },
     );
   }
 
   if (!draft) {
     return NextResponse.json(
       {
-        error:
-          "Draft not found.",
+        error: "Draft not found.",
       },
-      {
-        status: 404,
-      }
+      { status: 404 },
     );
   }
 
   if (
-    draft.status ===
-    "submitted"
+    draft.status === "submitted"
   ) {
     return NextResponse.json(
       {
         error:
           "This draft has already been submitted for review.",
       },
-      {
-        status: 409,
-      }
+      { status: 409 },
     );
   }
 
   if (
-    draft.status ===
-    "converted"
+    draft.status === "approved"
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "This draft has already been approved and cannot be resubmitted.",
+      },
+      { status: 409 },
+    );
+  }
+
+  if (
+    draft.status === "converted"
   ) {
     return NextResponse.json(
       {
         error:
           "This draft has already been converted.",
       },
+      { status: 409 },
+    );
+  }
+
+  if (
+    draft.status !== "draft" &&
+    draft.status !== "edited" &&
+    draft.status !== "revision_required"
+  ) {
+    return NextResponse.json(
       {
-        status: 409,
-      }
+        error:
+          "This draft is not currently eligible for submission.",
+        status: draft.status,
+      },
+      { status: 409 },
     );
   }
 
   const learningPack =
     normalizeLearningPack(
-      draft.learning_pack
+      draft.learning_pack,
     );
 
   if (!learningPack) {
@@ -1439,19 +1295,16 @@ export async function PUT(
         error:
           "The learning pack is invalid.",
       },
-      {
-        status: 400,
-      }
+      { status: 400 },
     );
   }
 
-  const title =
-    cleanText(
-      redactSensitiveText(
-        draft.title
-      ),
-      300
-    );
+  const title = cleanText(
+    redactSensitiveText(
+      draft.title,
+    ),
+    300,
+  );
 
   if (!title) {
     return NextResponse.json(
@@ -1459,44 +1312,52 @@ export async function PUT(
         error:
           "A valid draft title is required.",
       },
-      {
-        status: 400,
-      }
+      { status: 400 },
     );
   }
 
   const {
     data,
     error,
-  } =
-    await supabase
-      .from(
-        "ai_learning_drafts"
-      )
-      .update({
+  } = await supabase
+    .from("ai_learning_drafts")
+    .update({
+      title,
+      learning_pack:
+        learningPack,
+      status: "submitted",
+      updated_at:
+        new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("student_id", user.id)
+    .in("status", [
+      "draft",
+      "edited",
+      "revision_required",
+    ])
+    .select(
+      `
+        id,
         title,
-        learning_pack:
-          learningPack,
-        status:
-          "submitted",
-      })
-      .eq(
-        "id",
-        id
-      )
-      .eq(
-        "student_id",
-        user.id
-      )
-      .select(
-        "id, title, output_type, language_code, audience, status, source_uploaded_at, updated_at"
-      )
-      .single();
+        output_type,
+        language_code,
+        audience,
+        status,
+        source_uploaded_at,
+        created_at,
+        updated_at,
+        review_note,
+        reviewed_by,
+        reviewed_at
+      `,
+    )
+    .maybeSingle();
 
   if (error) {
     console.error(
       "AI draft submission error:",
-      error
+      error,
     );
 
     return NextResponse.json(
@@ -1504,91 +1365,71 @@ export async function PUT(
         error:
           "Unable to submit the draft for review.",
       },
+      { status: 500 },
+    );
+  }
+
+  if (!data) {
+    return NextResponse.json(
       {
-        status: 500,
-      }
+        error:
+          "The draft was already submitted or its status changed. Refresh and try again.",
+      },
+      { status: 409 },
     );
   }
 
   return NextResponse.json({
     success: true,
-
     message:
       "Draft submitted for LMS review.",
-
     draft: data,
   });
 }
 
-/**
- * DELETE /api/student/scan/drafts?id=...
- */
 export async function DELETE(
-  request: Request
+  request: Request,
 ) {
-  const {
-    supabase,
-    user,
-  } =
+  const { supabase, user } =
     await getAuthenticatedUser();
 
   if (!user) {
     return NextResponse.json(
       {
-        error:
-          "Authentication required.",
+        error: "Authentication required.",
       },
-      {
-        status: 401,
-      }
+      { status: 401 },
     );
   }
 
-  const url =
-    new URL(request.url);
-
-  const id =
-    url.searchParams.get(
-      "id"
-    );
+  const url = new URL(request.url);
+  const id = url.searchParams.get("id");
 
   if (!id) {
     return NextResponse.json(
       {
-        error:
-          "Draft ID is required.",
+        error: "Draft ID is required.",
       },
-      {
-        status: 400,
-      }
+      { status: 400 },
     );
   }
 
   const {
     data: existingDraft,
     error: existingError,
-  } =
-    await supabase
-      .from(
-        "ai_learning_drafts"
-      )
-      .select(
-        "id, status"
-      )
-      .eq(
-        "id",
-        id
-      )
-      .eq(
-        "student_id",
-        user.id
-      )
-      .maybeSingle();
+  } = await supabase
+    .from("ai_learning_drafts")
+    .select(
+      "id, status",
+    )
+    .eq("id", id)
+    .eq("student_id", user.id)
+    .maybeSingle();
 
   if (existingError) {
     console.error(
       "AI draft deletion lookup error:",
-      existingError
+      existingError,
     );
 
     return NextResponse.json(
@@ -1596,21 +1437,16 @@ export async function DELETE(
         error:
           "Unable to verify the draft.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 },
     );
   }
 
   if (!existingDraft) {
     return NextResponse.json(
       {
-        error:
-          "Draft not found.",
+        error: "Draft not found.",
       },
-      {
-        status: 404,
-      }
+      { status: 404 },
     );
   }
 
@@ -1623,9 +1459,20 @@ export async function DELETE(
         error:
           "This draft has already been submitted for LMS review and cannot be deleted.",
       },
+      { status: 409 },
+    );
+  }
+
+  if (
+    existingDraft.status ===
+    "approved"
+  ) {
+    return NextResponse.json(
       {
-        status: 409,
-      }
+        error:
+          "This draft has already been approved and cannot be deleted.",
+      },
+      { status: 409 },
     );
   }
 
@@ -1638,38 +1485,30 @@ export async function DELETE(
         error:
           "This draft has already been converted and cannot be deleted.",
       },
-      {
-        status: 409,
-      }
+      { status: 409 },
     );
   }
 
   const {
     data,
     error,
-  } =
-    await supabase
-      .from(
-        "ai_learning_drafts"
-      )
-      .delete()
-      .eq(
-        "id",
-        id
-      )
-      .eq(
-        "student_id",
-        user.id
-      )
-      .select(
-        "id"
-      )
-      .maybeSingle();
+  } = await supabase
+    .from("ai_learning_drafts")
+    .delete()
+    .eq("id", id)
+    .eq("student_id", user.id)
+    .in("status", [
+      "draft",
+      "edited",
+      "revision_required",
+    ])
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     console.error(
       "AI draft deletion error:",
-      error
+      error,
     );
 
     return NextResponse.json(
@@ -1677,9 +1516,7 @@ export async function DELETE(
         error:
           "Unable to delete the draft.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 },
     );
   }
 
@@ -1687,17 +1524,14 @@ export async function DELETE(
     return NextResponse.json(
       {
         error:
-          "Draft not found.",
+          "The draft could not be deleted because its status changed. Refresh and try again.",
       },
-      {
-        status: 404,
-      }
+      { status: 409 },
     );
   }
 
   return NextResponse.json({
     success: true,
-    deletedId:
-      data.id,
+    deletedId: data.id,
   });
 }
