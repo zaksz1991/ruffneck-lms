@@ -14830,3 +14830,134 @@ main form .rn-button {
     padding: 24px !important;
   }
 }
+
+/* =========================================================
+   RUFFNECK HEADER BRAND — FINAL POLISH
+   ========================================================= */
+
+.site-header .brand {
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+.site-header .brand-link {
+  display: flex !important;
+  align-items: center !important;
+  flex-shrink: 0 !important;
+}
+
+.site-header .brand-logo {
+  object-fit: contain !important;
+  object-position: center !important;
+}
+
+.site-header .brand-name strong {
+  font-family:
+    Georgia,
+    "Times New Roman",
+    serif !important;
+  font-weight: 800 !important;
+  font-style: normal !important;
+  letter-spacing: -0.045em !important;
+  color: #0b1e3a !important;
+  text-shadow: none !important;
+}
+
+.site-header .brand-name span {
+  font-family:
+    Inter,
+    Arial,
+    sans-serif !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  color: #526173 !important;
+}
+
+.site-header .brand-name:hover strong {
+  color: #00b4d8 !important;
+}
+
+.site-header .nav a {
+  font-family:
+    Inter,
+    Arial,
+    sans-serif !important;
+}
+
+.site-header .nav a:hover {
+  color: #00b4d8 !important;
+}
+
+/* =========================================================
+   PARENT BRAND HEADER — FINAL TYPOGRAPHY
+   ========================================================= */
+
+.rn-parent-brand {
+  background: #0b1e3a !important;
+  color: #ffffff !important;
+}
+
+.rn-parent-brand-inner {
+  align-items: center !important;
+}
+
+.rn-parent-brand-link {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+  color: #ffffff !important;
+}
+
+.rn-parent-brand-link strong {
+  font-family:
+    Inter,
+    Arial,
+    sans-serif !important;
+  font-size: 0.78rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.12em !important;
+  line-height: 1.2 !important;
+  color: #ffffff !important;
+}
+
+.rn-parent-brand-link span {
+  font-family:
+    Inter,
+    Arial,
+    sans-serif !important;
+  font-size: 0.68rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.01em !important;
+  line-height: 1.4 !important;
+  color: #b9d8e5 !important;
+}
+
+.rn-parent-brand-visit {
+  font-family:
+    Inter,
+    Arial,
+    sans-serif !important;
+  font-size: 0.7rem !important;
+  font-weight: 700 !important;
+  color: #00b4d8 !important;
+  text-decoration: none !important;
+}
+
+.rn-parent-brand-visit:hover {
+  color: #fbbf24 !important;
+}
+
+@media (max-width: 720px) {
+  .rn-parent-brand-link strong {
+    font-size: 0.68rem !important;
+    letter-spacing: 0.09em !important;
+  }
+
+  .rn-parent-brand-link span {
+    font-size: 0.61rem !important;
+  }
+
+  .rn-parent-brand-visit {
+    display: none !important;
+  }
+}
