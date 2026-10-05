@@ -38,20 +38,20 @@ type LessonProgress = {
 
 type AssessmentAttempt = {
   id: string;
-  course_id: string | null;
-  assessment_type: string;
-  score_percent: number | null;
-  level: string | null;
-  started_at: string;
+  course_id: string;
+  score: number | null;
+  total_points: number | null;
+  earned_points: number | null;
+  total_questions: number | null;
+  time_spent_seconds: number | null;
   completed_at: string | null;
 };
 
 type CourseAssessment = {
-  status:
-    | "not_started"
-    | "in_progress"
-    | "completed";
-  score_percent: number | null;
+  status: "not_started" | "completed";
+  score: number | null;
+  total_questions: number | null;
+  completed_at: string | null;
 };
 
 export default async function StudentCoursesPage() {
@@ -65,20 +65,22 @@ export default async function StudentCoursesPage() {
     redirect("/login?next=/student/courses");
   }
 
-  const { data: enrollmentData, error: enrollmentError } =
-    await supabase
-      .from("enrollments")
-      .select(
-        "id, course_id, enrollment_status, payment_status, progress_percent, created_at"
-      )
-      .eq("student_id", user.id)
-      .in("enrollment_status", [
-        "active",
-        "completed",
-      ])
-      .order("created_at", {
-        ascending: false,
-      });
+  const {
+    data: enrollmentData,
+    error: enrollmentError,
+  } = await supabase
+    .from("enrollments")
+    .select(
+      "id, course_id, enrollment_status, payment_status, progress_percent, created_at"
+    )
+    .eq("student_id", user.id)
+    .in("enrollment_status", [
+      "active",
+      "completed",
+    ])
+    .order("created_at", {
+      ascending: false,
+    });
 
   if (enrollmentError) {
     throw new Error(enrollmentError.message);
@@ -161,15 +163,12 @@ export default async function StudentCoursesPage() {
     supabase
       .from("assessment_attempts")
       .select(
-        "id, course_id, assessment_type, score_percent, level, started_at, completed_at"
+        "id, course_id, score, total_points, earned_points, total_questions, time_spent_seconds, completed_at"
       )
       .eq("student_id", user.id)
-      .eq(
-        "assessment_type",
-        "course_assessment"
-      )
       .in("course_id", courseIds)
-      .order("started_at", {
+      .not("completed_at", "is", null)
+      .order("completed_at", {
         ascending: false,
       }),
   ]);
@@ -247,14 +246,15 @@ export default async function StudentCoursesPage() {
       )
   );
 
+  /*
+   * assessment_attempts contains completed submissions.
+   * Because the query is ordered newest first, the first
+   * attempt encountered for a course is the latest one.
+   */
   const assessmentByCourse =
     new Map<string, CourseAssessment>();
 
   for (const attempt of assessmentAttempts) {
-    if (!attempt.course_id) {
-      continue;
-    }
-
     if (
       assessmentByCourse.has(
         attempt.course_id
@@ -266,11 +266,18 @@ export default async function StudentCoursesPage() {
     assessmentByCourse.set(
       attempt.course_id,
       {
-        status: attempt.completed_at
-          ? "completed"
-          : "in_progress",
-        score_percent:
-          attempt.score_percent,
+        status: "completed",
+        score:
+          typeof attempt.score === "number"
+            ? attempt.score
+            : null,
+        total_questions:
+          typeof attempt.total_questions ===
+          "number"
+            ? attempt.total_questions
+            : null,
+        completed_at:
+          attempt.completed_at,
       }
     );
   }
@@ -329,7 +336,9 @@ export default async function StudentCoursesPage() {
           course.id
         ) ?? {
           status: "not_started" as const,
-          score_percent: null,
+          score: null,
+          total_questions: null,
+          completed_at: null,
         };
 
       return {
@@ -423,17 +432,13 @@ export default async function StudentCoursesPage() {
             assessment.status ===
             "completed"
               ? "Completed"
-              : assessment.status ===
-                  "in_progress"
-                ? "In progress"
-                : "Not started";
+              : "Not started";
 
           const assessmentScore =
-            assessment.score_percent !==
-            null
+            assessment.score !== null
               ? `${Math.round(
                   Number(
-                    assessment.score_percent
+                    assessment.score
                   )
                 )}%`
               : null;
@@ -453,11 +458,8 @@ export default async function StudentCoursesPage() {
           const assessmentLabel =
             assessment.status ===
             "completed"
-              ? "View Assessment"
-              : assessment.status ===
-                  "in_progress"
-                ? "Continue Assessment"
-                : "Start Assessment";
+              ? "Retake Assessment"
+              : "Start Assessment";
 
           const assessmentHref =
             `/student/assessment?course=${encodeURIComponent(
@@ -548,7 +550,7 @@ export default async function StudentCoursesPage() {
                     }
 
                     {assessmentScore
-                      ? ` · Score: ${assessmentScore}`
+                      ? ` · Latest score: ${assessmentScore}`
                       : ""}
                   </p>
                 </div>
