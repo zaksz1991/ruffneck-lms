@@ -379,8 +379,7 @@ export default function AdminLmsEditor({
     return (
       instructors.find(
         (instructor) =>
-          instructor.id ===
-          selectedCourse.instructor_id
+          instructor.id === selectedCourse.instructor_id
       ) ?? null
     );
   }, [selectedCourse, instructors]);
@@ -447,9 +446,7 @@ export default function AdminLmsEditor({
       error: instructorError,
     } = await supabase
       .from("profiles")
-      .select(
-        "id, email, full_name"
-      )
+      .select("id, email, full_name")
       .eq("role", "instructor")
       .order("full_name", {
         ascending: true,
@@ -465,9 +462,7 @@ export default function AdminLmsEditor({
     );
   }
 
-  async function loadCurriculum(
-    courseId: string
-  ) {
+  async function loadCurriculum(courseId: string) {
     setLoadingCurriculum(true);
     setError("");
 
@@ -533,9 +528,7 @@ export default function AdminLmsEditor({
     setLoadingCurriculum(false);
   }
 
-  async function loadResources(
-    lessonId: string
-  ) {
+  async function loadResources(lessonId: string) {
     setLoadingResources(true);
     setError("");
 
@@ -585,9 +578,7 @@ export default function AdminLmsEditor({
     setCoursePreview(false);
   }
 
-  function beginEditCourse(
-    course: Course
-  ) {
+  function beginEditCourse(course: Course) {
     clearMessages();
 
     if (
@@ -631,23 +622,18 @@ export default function AdminLmsEditor({
       ).trim();
 
     if (!title) {
-      setError(
-        "Course title is required."
-      );
+      setError("Course title is required.");
       return;
     }
 
     if (!slug) {
-      setError(
-        "Course slug is required."
-      );
+      setError("Course slug is required.");
       return;
     }
 
     const introVideoUrl =
       String(
-        courseForm.intro_video_url ??
-          ""
+        courseForm.intro_video_url ?? ""
       ).trim();
 
     const introUrlError =
@@ -668,14 +654,11 @@ export default function AdminLmsEditor({
 
     const numericDuration =
       Number(
-        courseForm.duration_minutes ??
-          0
+        courseForm.duration_minutes ?? 0
       );
 
     if (
-      !Number.isFinite(
-        numericPrice
-      ) ||
+      !Number.isFinite(numericPrice) ||
       numericPrice < 0
     ) {
       setError(
@@ -685,9 +668,7 @@ export default function AdminLmsEditor({
     }
 
     if (
-      !Number.isFinite(
-        numericDuration
-      ) ||
+      !Number.isFinite(numericDuration) ||
       numericDuration < 0
     ) {
       setError(
@@ -703,8 +684,7 @@ export default function AdminLmsEditor({
 
     const instructorId =
       role === "admin"
-        ? courseForm.instructor_id ||
-          null
+        ? courseForm.instructor_id || null
         : userId;
 
     const payload = {
@@ -712,8 +692,7 @@ export default function AdminLmsEditor({
       slug,
       short_description:
         String(
-          courseForm.short_description ??
-            ""
+          courseForm.short_description ?? ""
         ).trim() || null,
       description:
         String(
@@ -727,13 +706,11 @@ export default function AdminLmsEditor({
           courseForm.category ?? ""
         ).trim() || null,
       level:
-        courseForm.level ??
-        "beginner",
+        courseForm.level ?? "beginner",
       price_ngn: numericPrice,
       currency:
         String(
-          courseForm.currency ??
-            "NGN"
+          courseForm.currency ?? "NGN"
         ).trim() || "NGN",
       status,
       instructor_id: instructorId,
@@ -751,8 +728,7 @@ export default function AdminLmsEditor({
           : [],
       target_audience:
         String(
-          courseForm.target_audience ??
-            ""
+          courseForm.target_audience ?? ""
         ).trim() || null,
       seo_title:
         String(
@@ -760,8 +736,7 @@ export default function AdminLmsEditor({
         ).trim() || null,
       seo_description:
         String(
-          courseForm.seo_description ??
-            ""
+          courseForm.seo_description ?? ""
         ).trim() || null,
       published_at:
         status === "published"
@@ -785,9 +760,7 @@ export default function AdminLmsEditor({
         .single();
 
       if (updateError) {
-        setError(
-          updateError.message
-        );
+        setError(updateError.message);
         setSaving(false);
         return;
       }
@@ -797,16 +770,13 @@ export default function AdminLmsEditor({
 
       setCourses((current) =>
         current.map((course) =>
-          course.id ===
-          selectedCourseId
+          course.id === selectedCourseId
             ? updatedCourse
             : course
         )
       );
 
-      setCourseForm(
-        updatedCourse
-      );
+      setCourseForm(updatedCourse);
 
       setMessage(
         "Course updated successfully."
@@ -822,9 +792,7 @@ export default function AdminLmsEditor({
         .single();
 
       if (insertError) {
-        setError(
-          insertError.message
-        );
+        setError(insertError.message);
         setSaving(false);
         return;
       }
@@ -837,14 +805,8 @@ export default function AdminLmsEditor({
         ...current,
       ]);
 
-      setSelectedCourseId(
-        newCourse.id
-      );
-
-      setCourseForm(
-        newCourse
-      );
-
+      setSelectedCourseId(newCourse.id);
+      setCourseForm(newCourse);
       setEditingCourse(true);
 
       setMessage(
@@ -855,9 +817,7 @@ export default function AdminLmsEditor({
     setSaving(false);
   }
 
-  async function deleteCourse(
-    courseId: string
-  ) {
+  async function deleteCourse(courseId: string) {
     if (role !== "admin") {
       setError(
         "Only admins can delete courses."
@@ -884,9 +844,7 @@ export default function AdminLmsEditor({
       .eq("id", courseId);
 
     if (deleteError) {
-      setError(
-        deleteError.message
-      );
+      setError(deleteError.message);
       setSaving(false);
       return;
     }
@@ -900,8 +858,7 @@ export default function AdminLmsEditor({
     setCourses(remaining);
 
     if (
-      selectedCourseId ===
-      courseId
+      selectedCourseId === courseId
     ) {
       const nextCourse =
         remaining[0];
@@ -911,8 +868,7 @@ export default function AdminLmsEditor({
       );
 
       setCourseForm(
-        nextCourse ??
-          emptyCourse
+        nextCourse ?? emptyCourse
       );
 
       setSections([]);
@@ -922,10 +878,7 @@ export default function AdminLmsEditor({
       setEditingCourse(false);
     }
 
-    setMessage(
-      "Course deleted."
-    );
-
+    setMessage("Course deleted.");
     setSaving(false);
   }
 
@@ -966,9 +919,7 @@ export default function AdminLmsEditor({
         .single();
 
       if (updateError) {
-        setError(
-          updateError.message
-        );
+        setError(updateError.message);
         setSaving(false);
         return;
       }
@@ -978,16 +929,13 @@ export default function AdminLmsEditor({
 
       setSections((current) =>
         current.map((section) =>
-          section.id ===
-          editingSectionId
+          section.id === editingSectionId
             ? updatedSection
             : section
         )
       );
 
-      setMessage(
-        "Section renamed."
-      );
+      setMessage("Section renamed.");
     } else {
       const nextOrder =
         sections.length > 0
@@ -1015,9 +963,7 @@ export default function AdminLmsEditor({
         .single();
 
       if (insertError) {
-        setError(
-          insertError.message
-        );
+        setError(insertError.message);
         setSaving(false);
         return;
       }
@@ -1036,9 +982,7 @@ export default function AdminLmsEditor({
         )
       );
 
-      setMessage(
-        "Section created."
-      );
+      setMessage("Section created.");
     }
 
     setSectionTitle("");
@@ -1046,16 +990,10 @@ export default function AdminLmsEditor({
     setSaving(false);
   }
 
-  function editSection(
-    section: Section
-  ) {
+  function editSection(section: Section) {
     clearMessages();
-    setSectionTitle(
-      section.title
-    );
-    setEditingSectionId(
-      section.id
-    );
+    setSectionTitle(section.title);
+    setEditingSectionId(section.id);
   }
 
   function cancelSectionEdit() {
@@ -1063,9 +1001,7 @@ export default function AdminLmsEditor({
     setEditingSectionId(null);
   }
 
-  async function deleteSection(
-    section: Section
-  ) {
+  async function deleteSection(section: Section) {
     if (
       !window.confirm(
         `Delete "${section.title}" and all lessons inside it?`
@@ -1085,9 +1021,7 @@ export default function AdminLmsEditor({
       .eq("id", section.id);
 
     if (deleteError) {
-      setError(
-        deleteError.message
-      );
+      setError(deleteError.message);
       setSaving(false);
       return;
     }
@@ -1102,33 +1036,27 @@ export default function AdminLmsEditor({
     const removedLessons =
       lessons.filter(
         (lesson) =>
-          lesson.section_id ===
-          section.id
+          lesson.section_id === section.id
       );
 
     setLessons((current) =>
       current.filter(
         (lesson) =>
-          lesson.section_id !==
-          section.id
+          lesson.section_id !== section.id
       )
     );
 
     if (
       removedLessons.some(
         (lesson) =>
-          lesson.id ===
-          selectedLessonId
+          lesson.id === selectedLessonId
       )
     ) {
       setSelectedLessonId("");
       setResources([]);
     }
 
-    setMessage(
-      "Section deleted."
-    );
-
+    setMessage("Section deleted.");
     setSaving(false);
   }
 
@@ -1139,8 +1067,7 @@ export default function AdminLmsEditor({
     const ordered =
       [...sections].sort(
         (a, b) =>
-          a.sort_order -
-          b.sort_order
+          a.sort_order - b.sort_order
       );
 
     const index =
@@ -1158,8 +1085,7 @@ export default function AdminLmsEditor({
 
     if (
       targetIndex < 0 ||
-      targetIndex >=
-        ordered.length
+      targetIndex >= ordered.length
     ) {
       return;
     }
@@ -1187,9 +1113,7 @@ export default function AdminLmsEditor({
       .eq("id", section.id);
 
     if (firstError) {
-      setError(
-        firstError.message
-      );
+      setError(firstError.message);
       setSaving(false);
       return;
     }
@@ -1205,9 +1129,7 @@ export default function AdminLmsEditor({
       .eq("id", target.id);
 
     if (secondError) {
-      setError(
-        secondError.message
-      );
+      setError(secondError.message);
       setSaving(false);
       return;
     }
@@ -1215,9 +1137,7 @@ export default function AdminLmsEditor({
     setSections((current) =>
       current
         .map((item) => {
-          if (
-            item.id === section.id
-          ) {
+          if (item.id === section.id) {
             return {
               ...item,
               sort_order:
@@ -1225,9 +1145,7 @@ export default function AdminLmsEditor({
             };
           }
 
-          if (
-            item.id === target.id
-          ) {
+          if (item.id === target.id) {
             return {
               ...item,
               sort_order:
@@ -1244,21 +1162,14 @@ export default function AdminLmsEditor({
         )
     );
 
-    setMessage(
-      "Section order updated."
-    );
-
+    setMessage("Section order updated.");
     setSaving(false);
   }
 
-  function beginCreateLesson(
-    sectionId: string
-  ) {
+  function beginCreateLesson(sectionId: string) {
     clearMessages();
 
-    setLessonSectionId(
-      sectionId
-    );
+    setLessonSectionId(sectionId);
 
     setLessonForm({
       ...emptyLesson,
@@ -1271,9 +1182,7 @@ export default function AdminLmsEditor({
     setContentPreview(false);
   }
 
-  function beginEditLesson(
-    lesson: Lesson
-  ) {
+  function beginEditLesson(lesson: Lesson) {
     clearMessages();
 
     setLessonSectionId(
@@ -1281,23 +1190,15 @@ export default function AdminLmsEditor({
     );
 
     setLessonForm(lesson);
-    setEditingLessonId(
-      lesson.id
-    );
-
-    setSelectedLessonId(
-      lesson.id
-    );
-
+    setEditingLessonId(lesson.id);
+    setSelectedLessonId(lesson.id);
     setLessonPreview(false);
     setContentPreview(false);
   }
 
   function cancelLessonEdit() {
     setLessonSectionId("");
-    setLessonForm(
-      emptyLesson
-    );
+    setLessonForm(emptyLesson);
     setEditingLessonId(null);
     setLessonPreview(false);
     setContentPreview(false);
@@ -1324,14 +1225,12 @@ export default function AdminLmsEditor({
     const sectionId =
       lessonSectionId ||
       String(
-        lessonForm.section_id ??
-          ""
+        lessonForm.section_id ?? ""
       );
 
     const videoUrl =
       String(
-        lessonForm.video_url ??
-          ""
+        lessonForm.video_url ?? ""
       ).trim();
 
     if (!title) {
@@ -1380,20 +1279,16 @@ export default function AdminLmsEditor({
 
     const durationMinutes =
       Number(
-        lessonForm.duration_minutes ??
-          0
+        lessonForm.duration_minutes ?? 0
       );
 
     const durationSeconds =
       Number(
-        lessonForm.duration_seconds ??
-          0
+        lessonForm.duration_seconds ?? 0
       );
 
     if (
-      !Number.isFinite(
-        durationMinutes
-      ) ||
+      !Number.isFinite(durationMinutes) ||
       durationMinutes < 0
     ) {
       setError(
@@ -1403,9 +1298,7 @@ export default function AdminLmsEditor({
     }
 
     if (
-      !Number.isFinite(
-        durationSeconds
-      ) ||
+      !Number.isFinite(durationSeconds) ||
       durationSeconds < 0
     ) {
       setError(
@@ -1419,8 +1312,7 @@ export default function AdminLmsEditor({
 
     const contentHtml =
       String(
-        lessonForm.content_html ??
-          ""
+        lessonForm.content_html ?? ""
       ).trim();
 
     if (editingLessonId) {
@@ -1439,13 +1331,9 @@ export default function AdminLmsEditor({
           video_url:
             videoUrl || null,
           duration_minutes:
-            Math.floor(
-              durationMinutes
-            ),
+            Math.floor(durationMinutes),
           duration_seconds:
-            Math.floor(
-              durationSeconds
-            ),
+            Math.floor(durationSeconds),
           is_preview:
             Boolean(
               lessonForm.is_preview
@@ -1457,17 +1345,12 @@ export default function AdminLmsEditor({
           updated_at:
             new Date().toISOString(),
         })
-        .eq(
-          "id",
-          editingLessonId
-        )
+        .eq("id", editingLessonId)
         .select("*")
         .single();
 
       if (updateError) {
-        setError(
-          updateError.message
-        );
+        setError(updateError.message);
         setSaving(false);
         return;
       }
@@ -1478,8 +1361,7 @@ export default function AdminLmsEditor({
       setLessons((current) =>
         current
           .map((lesson) =>
-            lesson.id ===
-            editingLessonId
+            lesson.id === editingLessonId
               ? updatedLesson
               : lesson
           )
@@ -1494,19 +1376,14 @@ export default function AdminLmsEditor({
         updatedLesson.id
       );
 
-      setLessonForm(
-        updatedLesson
-      );
+      setLessonForm(updatedLesson);
 
-      setMessage(
-        "Lesson updated."
-      );
+      setMessage("Lesson updated.");
     } else {
       const sectionLessons =
         lessons.filter(
           (lesson) =>
-            lesson.section_id ===
-            sectionId
+            lesson.section_id === sectionId
         );
 
       const nextOrder =
@@ -1536,13 +1413,9 @@ export default function AdminLmsEditor({
           video_url:
             videoUrl || null,
           duration_minutes:
-            Math.floor(
-              durationMinutes
-            ),
+            Math.floor(durationMinutes),
           duration_seconds:
-            Math.floor(
-              durationSeconds
-            ),
+            Math.floor(durationSeconds),
           sort_order:
             nextOrder,
           is_preview:
@@ -1558,9 +1431,7 @@ export default function AdminLmsEditor({
         .single();
 
       if (insertError) {
-        setError(
-          insertError.message
-        );
+        setError(insertError.message);
         setSaving(false);
         return;
       }
@@ -1583,13 +1454,9 @@ export default function AdminLmsEditor({
         newLesson.id
       );
 
-      setLessonForm(
-        newLesson
-      );
+      setLessonForm(newLesson);
 
-      setMessage(
-        "Lesson created."
-      );
+      setMessage("Lesson created.");
     }
 
     setLessonSectionId("");
@@ -1597,9 +1464,7 @@ export default function AdminLmsEditor({
     setSaving(false);
   }
 
-  async function deleteLesson(
-    lesson: Lesson
-  ) {
+  async function deleteLesson(lesson: Lesson) {
     if (
       !window.confirm(
         `Delete "${lesson.title}"?`
@@ -1619,9 +1484,7 @@ export default function AdminLmsEditor({
       .eq("id", lesson.id);
 
     if (deleteError) {
-      setError(
-        deleteError.message
-      );
+      setError(deleteError.message);
       setSaving(false);
       return;
     }
@@ -1634,17 +1497,13 @@ export default function AdminLmsEditor({
     );
 
     if (
-      selectedLessonId ===
-      lesson.id
+      selectedLessonId === lesson.id
     ) {
       setSelectedLessonId("");
       setResources([]);
     }
 
-    setMessage(
-      "Lesson deleted."
-    );
-
+    setMessage("Lesson deleted.");
     setSaving(false);
   }
 
@@ -1687,9 +1546,7 @@ export default function AdminLmsEditor({
     }
 
     const target =
-      sectionLessons[
-        targetIndex
-      ];
+      sectionLessons[targetIndex];
 
     clearMessages();
     setSaving(true);
@@ -1708,15 +1565,10 @@ export default function AdminLmsEditor({
         sort_order:
           secondOrder,
       })
-      .eq(
-        "id",
-        lesson.id
-      );
+      .eq("id", lesson.id);
 
     if (firstError) {
-      setError(
-        firstError.message
-      );
+      setError(firstError.message);
       setSaving(false);
       return;
     }
@@ -1729,15 +1581,10 @@ export default function AdminLmsEditor({
         sort_order:
           firstOrder,
       })
-      .eq(
-        "id",
-        target.id
-      );
+      .eq("id", target.id);
 
     if (secondError) {
-      setError(
-        secondError.message
-      );
+      setError(secondError.message);
       setSaving(false);
       return;
     }
@@ -1745,9 +1592,7 @@ export default function AdminLmsEditor({
     setLessons((current) =>
       current
         .map((item) => {
-          if (
-            item.id === lesson.id
-          ) {
+          if (item.id === lesson.id) {
             return {
               ...item,
               sort_order:
@@ -1755,9 +1600,7 @@ export default function AdminLmsEditor({
             };
           }
 
-          if (
-            item.id === target.id
-          ) {
+          if (item.id === target.id) {
             return {
               ...item,
               sort_order:
@@ -1774,10 +1617,7 @@ export default function AdminLmsEditor({
         )
     );
 
-    setMessage(
-      "Lesson order updated."
-    );
-
+    setMessage("Lesson order updated.");
     setSaving(false);
   }
 
@@ -1795,8 +1635,7 @@ export default function AdminLmsEditor({
     if (
       !sections.some(
         (section) =>
-          section.id ===
-          targetSectionId
+          section.id === targetSectionId
       )
     ) {
       setError(
@@ -1843,9 +1682,7 @@ export default function AdminLmsEditor({
       .single();
 
     if (updateError) {
-      setError(
-        updateError.message
-      );
+      setError(updateError.message);
       setSaving(false);
       return;
     }
@@ -1867,23 +1704,14 @@ export default function AdminLmsEditor({
         )
     );
 
-    setMessage(
-      "Lesson moved."
-    );
-
+    setMessage("Lesson moved.");
     setSaving(false);
   }
 
-  function beginCreateResource(
-    lessonId: string
-  ) {
+  function beginCreateResource(lessonId: string) {
     clearMessages();
-    setSelectedLessonId(
-      lessonId
-    );
-    setResourceForm(
-      emptyResource
-    );
+    setSelectedLessonId(lessonId);
+    setResourceForm(emptyResource);
     setEditingResourceId(null);
   }
 
@@ -1891,21 +1719,13 @@ export default function AdminLmsEditor({
     resource: LessonResource
   ) {
     clearMessages();
-    setSelectedLessonId(
-      resource.lesson_id
-    );
-    setResourceForm(
-      resource
-    );
-    setEditingResourceId(
-      resource.id
-    );
+    setSelectedLessonId(resource.lesson_id);
+    setResourceForm(resource);
+    setEditingResourceId(resource.id);
   }
 
   function cancelResourceEdit() {
-    setResourceForm(
-      emptyResource
-    );
+    setResourceForm(emptyResource);
     setEditingResourceId(null);
   }
 
@@ -1920,8 +1740,7 @@ export default function AdminLmsEditor({
     if (
       !lessons.some(
         (lesson) =>
-          lesson.id ===
-          selectedLessonId
+          lesson.id === selectedLessonId
       )
     ) {
       setError(
@@ -1932,8 +1751,7 @@ export default function AdminLmsEditor({
 
     const title =
       String(
-        resourceForm.title ??
-          ""
+        resourceForm.title ?? ""
       ).trim();
 
     const url =
@@ -1942,8 +1760,7 @@ export default function AdminLmsEditor({
       ).trim();
 
     const resourceType =
-      resourceForm.resource_type ??
-      "link";
+      resourceForm.resource_type ?? "link";
 
     if (!title) {
       setError(
@@ -1985,17 +1802,12 @@ export default function AdminLmsEditor({
             resourceType,
           url,
         })
-        .eq(
-          "id",
-          editingResourceId
-        )
+        .eq("id", editingResourceId)
         .select("*")
         .single();
 
       if (updateError) {
-        setError(
-          updateError.message
-        );
+        setError(updateError.message);
         setSaving(false);
         return;
       }
@@ -2006,8 +1818,7 @@ export default function AdminLmsEditor({
       setResources((current) =>
         current
           .map((resource) =>
-            resource.id ===
-            editingResourceId
+            resource.id === editingResourceId
               ? updatedResource
               : resource
           )
@@ -2018,9 +1829,7 @@ export default function AdminLmsEditor({
           )
       );
 
-      setMessage(
-        "Resource updated."
-      );
+      setMessage("Resource updated.");
     } else {
       const nextOrder =
         resources.length > 0
@@ -2051,9 +1860,7 @@ export default function AdminLmsEditor({
         .single();
 
       if (insertError) {
-        setError(
-          insertError.message
-        );
+        setError(insertError.message);
         setSaving(false);
         return;
       }
@@ -2072,14 +1879,10 @@ export default function AdminLmsEditor({
         )
       );
 
-      setMessage(
-        "Resource added."
-      );
+      setMessage("Resource added.");
     }
 
-    setResourceForm(
-      emptyResource
-    );
+    setResourceForm(emptyResource);
     setEditingResourceId(null);
     setSaving(false);
   }
@@ -2106,9 +1909,7 @@ export default function AdminLmsEditor({
       .eq("id", resource.id);
 
     if (deleteError) {
-      setError(
-        deleteError.message
-      );
+      setError(deleteError.message);
       setSaving(false);
       return;
     }
@@ -2120,10 +1921,7 @@ export default function AdminLmsEditor({
       )
     );
 
-    setMessage(
-      "Resource deleted."
-    );
-
+    setMessage("Resource deleted.");
     setSaving(false);
   }
 
@@ -2153,8 +1951,7 @@ export default function AdminLmsEditor({
 
     if (
       targetIndex < 0 ||
-      targetIndex >=
-        ordered.length
+      targetIndex >= ordered.length
     ) {
       return;
     }
@@ -2179,15 +1976,10 @@ export default function AdminLmsEditor({
         sort_order:
           secondOrder,
       })
-      .eq(
-        "id",
-        resource.id
-      );
+      .eq("id", resource.id);
 
     if (firstError) {
-      setError(
-        firstError.message
-      );
+      setError(firstError.message);
       setSaving(false);
       return;
     }
@@ -2200,15 +1992,10 @@ export default function AdminLmsEditor({
         sort_order:
           firstOrder,
       })
-      .eq(
-        "id",
-        target.id
-      );
+      .eq("id", target.id);
 
     if (secondError) {
-      setError(
-        secondError.message
-      );
+      setError(secondError.message);
       setSaving(false);
       return;
     }
@@ -2216,9 +2003,7 @@ export default function AdminLmsEditor({
     setResources((current) =>
       current
         .map((item) => {
-          if (
-            item.id === resource.id
-          ) {
+          if (item.id === resource.id) {
             return {
               ...item,
               sort_order:
@@ -2226,9 +2011,7 @@ export default function AdminLmsEditor({
             };
           }
 
-          if (
-            item.id === target.id
-          ) {
+          if (item.id === target.id) {
             return {
               ...item,
               sort_order:
@@ -2245,10 +2028,7 @@ export default function AdminLmsEditor({
         )
     );
 
-    setMessage(
-      "Resource order updated."
-    );
-
+    setMessage("Resource order updated.");
     setSaving(false);
   }
 
@@ -2336,7 +2116,8 @@ export default function AdminLmsEditor({
               "4px solid #16a34a",
             background:
               "#f0fdf4",
-            color: "#166534",
+            color:
+              "#166534",
           }}
           role="status"
         >
@@ -2354,7 +2135,8 @@ export default function AdminLmsEditor({
               "4px solid #dc2626",
             background:
               "#fef2f2",
-            color: "#991b1b",
+            color:
+              "#991b1b",
           }}
           role="alert"
         >
@@ -2372,14 +2154,17 @@ export default function AdminLmsEditor({
           display: "flex",
           justifyContent:
             "space-between",
-          alignItems: "end",
+          alignItems:
+            "end",
           gap: 16,
-          flexWrap: "wrap",
+          flexWrap:
+            "wrap",
         }}
       >
         <div
           style={{
-            flex: "1 1 320px",
+            flex:
+              "1 1 320px",
           }}
         >
           <label style={styles.label}>
@@ -2395,15 +2180,9 @@ export default function AdminLmsEditor({
               setSelectedCourseId(
                 event.target.value
               );
-              setEditingCourse(
-                false
-              );
-              setCoursePreview(
-                false
-              );
-              setSelectedLessonId(
-                ""
-              );
+              setEditingCourse(false);
+              setCoursePreview(false);
+              setSelectedLessonId("");
               setResources([]);
             }}
             style={{
@@ -2451,7 +2230,8 @@ export default function AdminLmsEditor({
               gap: 16,
               alignItems:
                 "center",
-              flexWrap: "wrap",
+              flexWrap:
+                "wrap",
               marginBottom: 20,
             }}
           >
@@ -2496,24 +2276,18 @@ export default function AdminLmsEditor({
 
           <div style={styles.grid}>
             <div style={styles.field}>
-              <label
-                style={styles.label}
-              >
+              <label style={styles.label}>
                 Title
               </label>
 
               <input
                 value={String(
-                  courseForm.title ??
-                    ""
+                  courseForm.title ?? ""
                 )}
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   updateCourseField(
                     "title",
-                    event.target
-                      .value
+                    event.target.value
                   )
                 }
                 onBlur={() => {
@@ -2531,70 +2305,50 @@ export default function AdminLmsEditor({
                     );
                   }
                 }}
-                style={
-                  styles.input
-                }
+                style={styles.input}
               />
             </div>
 
             <div style={styles.field}>
-              <label
-                style={styles.label}
-              >
+              <label style={styles.label}>
                 Slug
               </label>
 
               <input
                 value={String(
-                  courseForm.slug ??
-                    ""
+                  courseForm.slug ?? ""
                 )}
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   updateCourseField(
                     "slug",
-                    event.target
-                      .value
+                    event.target.value
                   )
                 }
-                style={
-                  styles.input
-                }
+                style={styles.input}
               />
             </div>
 
             <div style={styles.field}>
-              <label
-                style={styles.label}
-              >
+              <label style={styles.label}>
                 Category
               </label>
 
               <input
                 value={String(
-                  courseForm.category ??
-                    ""
+                  courseForm.category ?? ""
                 )}
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   updateCourseField(
                     "category",
-                    event.target
-                      .value
+                    event.target.value
                   )
                 }
-                style={
-                  styles.input
-                }
+                style={styles.input}
               />
             </div>
 
             <div style={styles.field}>
-              <label
-                style={styles.label}
-              >
+              <label style={styles.label}>
                 Level
               </label>
 
@@ -2603,18 +2357,14 @@ export default function AdminLmsEditor({
                   courseForm.level ??
                   "beginner"
                 }
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   updateCourseField(
                     "level",
                     event.target
                       .value as Course["level"]
                   )
                 }
-                style={
-                  styles.select
-                }
+                style={styles.select}
               >
                 <option value="beginner">
                   Beginner
@@ -2631,9 +2381,7 @@ export default function AdminLmsEditor({
             </div>
 
             <div style={styles.field}>
-              <label
-                style={styles.label}
-              >
+              <label style={styles.label}>
                 Price (NGN)
               </label>
 
@@ -2641,30 +2389,22 @@ export default function AdminLmsEditor({
                 type="number"
                 min="0"
                 value={Number(
-                  courseForm.price_ngn ??
-                    0
+                  courseForm.price_ngn ?? 0
                 )}
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   updateCourseField(
                     "price_ngn",
                     Number(
-                      event.target
-                        .value
+                      event.target.value
                     )
                   )
                 }
-                style={
-                  styles.input
-                }
+                style={styles.input}
               />
             </div>
 
             <div style={styles.field}>
-              <label
-                style={styles.label}
-              >
+              <label style={styles.label}>
                 Status
               </label>
 
@@ -2673,18 +2413,14 @@ export default function AdminLmsEditor({
                   courseForm.status ??
                   "draft"
                 }
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   updateCourseField(
                     "status",
                     event.target
                       .value as Course["status"]
                   )
                 }
-                style={
-                  styles.select
-                }
+                style={styles.select}
               >
                 <option value="draft">
                   Draft
@@ -2702,9 +2438,7 @@ export default function AdminLmsEditor({
 
             {role === "admin" && (
               <div style={styles.field}>
-                <label
-                  style={styles.label}
-                >
+                <label style={styles.label}>
                   Instructor
                 </label>
 
@@ -2713,28 +2447,21 @@ export default function AdminLmsEditor({
                     courseForm.instructor_id ??
                     ""
                   }
-                  onChange={(
-                    event
-                  ) =>
+                  onChange={(event) =>
                     updateCourseField(
                       "instructor_id",
-                      event.target
-                        .value ||
+                      event.target.value ||
                         null
                     )
                   }
-                  style={
-                    styles.select
-                  }
+                  style={styles.select}
                 >
                   <option value="">
                     No instructor assigned
                   </option>
 
                   {instructors.map(
-                    (
-                      instructor
-                    ) => (
+                    (instructor) => (
                       <option
                         key={
                           instructor.id
@@ -2754,9 +2481,7 @@ export default function AdminLmsEditor({
             )}
 
             <div style={styles.field}>
-              <label
-                style={styles.label}
-              >
+              <label style={styles.label}>
                 Duration (minutes)
               </label>
 
@@ -2767,20 +2492,15 @@ export default function AdminLmsEditor({
                   courseForm.duration_minutes ??
                     0
                 )}
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   updateCourseField(
                     "duration_minutes",
                     Number(
-                      event.target
-                        .value
+                      event.target.value
                     )
                   )
                 }
-                style={
-                  styles.input
-                }
+                style={styles.input}
               />
             </div>
           </div>
@@ -2791,9 +2511,7 @@ export default function AdminLmsEditor({
               marginTop: 18,
             }}
           >
-            <label
-              style={styles.label}
-            >
+            <label style={styles.label}>
               Short description
             </label>
 
@@ -2805,14 +2523,11 @@ export default function AdminLmsEditor({
               onChange={(event) =>
                 updateCourseField(
                   "short_description",
-                  event.target
-                    .value
+                  event.target.value
                 )
               }
               rows={3}
-              style={
-                styles.textarea
-              }
+              style={styles.textarea}
             />
           </div>
 
@@ -2822,28 +2537,22 @@ export default function AdminLmsEditor({
               marginTop: 18,
             }}
           >
-            <label
-              style={styles.label}
-            >
+            <label style={styles.label}>
               Description
             </label>
 
             <textarea
               value={String(
-                courseForm.description ??
-                  ""
+                courseForm.description ?? ""
               )}
               onChange={(event) =>
                 updateCourseField(
                   "description",
-                  event.target
-                    .value
+                  event.target.value
                 )
               }
               rows={7}
-              style={
-                styles.textarea
-              }
+              style={styles.textarea}
             />
           </div>
 
@@ -2877,9 +2586,7 @@ export default function AdminLmsEditor({
               marginTop: 18,
             }}
           >
-            <label
-              style={styles.label}
-            >
+            <label style={styles.label}>
               Introduction video URL
             </label>
 
@@ -2892,14 +2599,11 @@ export default function AdminLmsEditor({
               onChange={(event) =>
                 updateCourseField(
                   "intro_video_url",
-                  event.target
-                    .value
+                  event.target.value
                 )
               }
               placeholder="https://..."
-              style={
-                styles.input
-              }
+              style={styles.input}
             />
           </div>
 
@@ -2909,11 +2613,8 @@ export default function AdminLmsEditor({
               marginTop: 18,
             }}
           >
-            <label
-              style={styles.label}
-            >
-              Learning outcomes —
-              one per line
+            <label style={styles.label}>
+              Learning outcomes — one per line
             </label>
 
             <textarea
@@ -2933,9 +2634,7 @@ export default function AdminLmsEditor({
                 )
               }
               rows={5}
-              style={
-                styles.textarea
-              }
+              style={styles.textarea}
             />
           </div>
 
@@ -2945,9 +2644,7 @@ export default function AdminLmsEditor({
               marginTop: 18,
             }}
           >
-            <label
-              style={styles.label}
-            >
+            <label style={styles.label}>
               Target audience
             </label>
 
@@ -2959,14 +2656,11 @@ export default function AdminLmsEditor({
               onChange={(event) =>
                 updateCourseField(
                   "target_audience",
-                  event.target
-                    .value
+                  event.target.value
                 )
               }
               rows={3}
-              style={
-                styles.textarea
-              }
+              style={styles.textarea}
             />
           </div>
 
@@ -2977,36 +2671,26 @@ export default function AdminLmsEditor({
             }}
           >
             <div style={styles.field}>
-              <label
-                style={styles.label}
-              >
+              <label style={styles.label}>
                 SEO title
               </label>
 
               <input
                 value={String(
-                  courseForm.seo_title ??
-                    ""
+                  courseForm.seo_title ?? ""
                 )}
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   updateCourseField(
                     "seo_title",
-                    event.target
-                      .value
+                    event.target.value
                   )
                 }
-                style={
-                  styles.input
-                }
+                style={styles.input}
               />
             </div>
 
             <div style={styles.field}>
-              <label
-                style={styles.label}
-              >
+              <label style={styles.label}>
                 SEO description
               </label>
 
@@ -3015,18 +2699,13 @@ export default function AdminLmsEditor({
                   courseForm.seo_description ??
                     ""
                 )}
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   updateCourseField(
                     "seo_description",
-                    event.target
-                      .value
+                    event.target.value
                   )
                 }
-                style={
-                  styles.input
-                }
+                style={styles.input}
               />
             </div>
           </div>
@@ -3042,9 +2721,7 @@ export default function AdminLmsEditor({
           >
             <button
               type="button"
-              onClick={
-                saveCourse
-              }
+              onClick={saveCourse}
               disabled={saving}
               style={styles.button}
             >
@@ -3087,9 +2764,7 @@ export default function AdminLmsEditor({
                 }}
               >
                 <div
-                  style={
-                    styles.actionRow
-                  }
+                  style={styles.actionRow}
                 >
                   {renderStatusBadge(
                     statusLabel(
@@ -3122,16 +2797,12 @@ export default function AdminLmsEditor({
                 </h2>
 
                 <div
-                  style={
-                    styles.muted
-                  }
+                  style={styles.muted}
                 >
                   {selectedCourse.category ||
                     "Uncategorized"}{" "}
                   ·{" "}
-                  {
-                    selectedCourse.level
-                  }
+                  {selectedCourse.level}
                 </div>
 
                 <div
@@ -3170,8 +2841,7 @@ export default function AdminLmsEditor({
                   </span>
                 </div>
 
-                {role ===
-                  "admin" && (
+                {role === "admin" && (
                   <div
                     style={{
                       ...styles.muted,
@@ -3204,9 +2874,7 @@ export default function AdminLmsEditor({
                     )
                   }
                   disabled={saving}
-                  style={
-                    styles.button
-                  }
+                  style={styles.button}
                 >
                   {coursePreview
                     ? "Close Preview"
@@ -3221,34 +2889,55 @@ export default function AdminLmsEditor({
                     )
                   }
                   disabled={saving}
-                  style={
-                    styles.button
-                  }
+                  style={styles.button}
                 >
                   Edit
                 </button>
 
-                <a
-                  href={`/courses/${selectedCourse.slug}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{
-                    textDecoration:
-                      "none",
-                  }}
-                >
-                  <button
-                    type="button"
-                    style={
-                      styles.button
-                    }
+                {selectedCourse.status ===
+                  "published" ? (
+                  <a
+                    href={`/courses/${selectedCourse.slug}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      textDecoration:
+                        "none",
+                    }}
                   >
-                    Public View
-                  </button>
-                </a>
+                    <button
+                      type="button"
+                      style={styles.button}
+                    >
+                      Public View
+                    </button>
+                  </a>
+                ) : (
+                  <span
+                    style={{
+                      ...styles.muted,
+                      display:
+                        "inline-flex",
+                      alignItems:
+                        "center",
+                      minHeight: 38,
+                      padding:
+                        "7px 10px",
+                      border:
+                        "1px solid #e2e8f0",
+                      borderRadius: 9,
+                      background:
+                        "#f8fafc",
+                    }}
+                  >
+                    {selectedCourse.status ===
+                    "draft"
+                      ? "Draft — publish to view publicly"
+                      : "Archived — not publicly available"}
+                  </span>
+                )}
 
-                {role ===
-                  "admin" && (
+                {role === "admin" && (
                   <button
                     type="button"
                     onClick={() =>
@@ -3257,9 +2946,7 @@ export default function AdminLmsEditor({
                       )
                     }
                     disabled={saving}
-                    style={
-                      styles.button
-                    }
+                    style={styles.button}
                   >
                     Delete
                   </button>
@@ -3281,21 +2968,19 @@ export default function AdminLmsEditor({
             <div
               style={{
                 padding: "14px 18px",
-                background:
-                  "#0f172a",
+                background: "#0f172a",
                 color: "#fff",
                 display: "flex",
                 justifyContent:
                   "space-between",
                 gap: 12,
-                flexWrap:
-                  "wrap",
-                margin: "-20px -20px 20px",
+                flexWrap: "wrap",
+                margin:
+                  "-20px -20px 20px",
               }}
             >
               <strong>
-                Admin Course
-                Preview
+                Admin Course Preview
               </strong>
 
               <span
@@ -3304,8 +2989,7 @@ export default function AdminLmsEditor({
                   fontSize: 12,
                 }}
               >
-                Text-first
-                preview.
+                Text-first preview.
               </span>
             </div>
 
@@ -3315,9 +2999,7 @@ export default function AdminLmsEditor({
               }}
             >
               <div
-                style={
-                  styles.actionRow
-                }
+                style={styles.actionRow}
               >
                 {renderStatusBadge(
                   statusLabel(
@@ -3345,19 +3027,15 @@ export default function AdminLmsEditor({
                     "14px 0 8px",
                 }}
               >
-                {
-                  selectedCourse.title
-                }
+                {selectedCourse.title}
               </h1>
 
               {selectedCourse.short_description && (
                 <p
                   style={{
-                    color:
-                      "#475569",
+                    color: "#475569",
                     fontSize: 16,
-                    lineHeight:
-                      1.7,
+                    lineHeight: 1.7,
                   }}
                 >
                   {
@@ -3372,10 +3050,8 @@ export default function AdminLmsEditor({
                     marginTop: 22,
                     whiteSpace:
                       "pre-wrap",
-                    lineHeight:
-                      1.7,
-                    color:
-                      "#334155",
+                    lineHeight: 1.7,
+                    color: "#334155",
                   }}
                 >
                   {
@@ -3387,22 +3063,19 @@ export default function AdminLmsEditor({
               {selectedCourse.learning_outcomes &&
                 selectedCourse
                   .learning_outcomes
-                  .length >
-                  0 && (
+                  .length > 0 && (
                   <div
                     style={{
                       marginTop: 26,
                     }}
                   >
                     <h3>
-                      Learning
-                      outcomes
+                      Learning outcomes
                     </h3>
 
                     <ul
                       style={{
-                        lineHeight:
-                          1.8,
+                        lineHeight: 1.8,
                       }}
                     >
                       {selectedCourse.learning_outcomes.map(
@@ -3413,9 +3086,7 @@ export default function AdminLmsEditor({
                           <li
                             key={`${outcome}-${index}`}
                           >
-                            {
-                              outcome
-                            }
+                            {outcome}
                           </li>
                         )
                       )}
@@ -3430,16 +3101,14 @@ export default function AdminLmsEditor({
                   }}
                 >
                   <h3>
-                    Target
-                    audience
+                    Target audience
                   </h3>
 
                   <p
                     style={{
                       whiteSpace:
                         "pre-wrap",
-                      lineHeight:
-                        1.7,
+                      lineHeight: 1.7,
                     }}
                   >
                     {
@@ -3456,8 +3125,7 @@ export default function AdminLmsEditor({
                   }}
                 >
                   <h3>
-                    Introduction
-                    video
+                    Introduction video
                   </h3>
 
                   <a
@@ -3479,8 +3147,7 @@ export default function AdminLmsEditor({
                 }}
               >
                 <h3>
-                  Course
-                  curriculum
+                  Course curriculum
                 </h3>
 
                 {sections.length ===
@@ -3490,14 +3157,12 @@ export default function AdminLmsEditor({
                       styles.muted
                     }
                   >
-                    No curriculum
-                    yet.
+                    No curriculum yet.
                   </p>
                 ) : (
                   <div
                     style={{
-                      display:
-                        "grid",
+                      display: "grid",
                       gap: 12,
                     }}
                   >
@@ -3521,9 +3186,7 @@ export default function AdminLmsEditor({
                             }
                           >
                             <strong>
-                              {index +
-                                1}
-                              .{" "}
+                              {index + 1}.{" "}
                               {
                                 section.title
                               }
@@ -3564,8 +3227,7 @@ export default function AdminLmsEditor({
                                   >
                                     <span>
                                       {lessonIndex +
-                                        1}
-                                      .{" "}
+                                        1}.{" "}
                                       {
                                         lesson.title
                                       }
@@ -3601,15 +3263,13 @@ export default function AdminLmsEditor({
         <div style={styles.panel}>
           <div
             style={{
-              display:
-                "flex",
+              display: "flex",
               justifyContent:
                 "space-between",
               gap: 16,
               alignItems:
                 "center",
-              flexWrap:
-                "wrap",
+              flexWrap: "wrap",
               marginBottom: 18,
             }}
           >
@@ -3628,19 +3288,13 @@ export default function AdminLmsEditor({
                   marginTop: 5,
                 }}
               >
-                Build and
-                organize
-                sections,
-                lessons and
+                Build and organize
+                sections, lessons and
                 resources.
               </div>
             </div>
 
-            <span
-              style={
-                styles.muted
-              }
-            >
+            <span style={styles.muted}>
               {sections.length}{" "}
               section
               {sections.length ===
@@ -3669,8 +3323,7 @@ export default function AdminLmsEditor({
                   ...styles.muted,
                 }}
               >
-                Loading
-                curriculum...
+                Loading curriculum...
               </p>
             </div>
           ) : (
@@ -3678,13 +3331,10 @@ export default function AdminLmsEditor({
               <div
                 style={{
                   ...styles.panelSoft,
-                  display:
-                    "flex",
+                  display: "flex",
                   gap: 10,
-                  alignItems:
-                    "end",
-                  flexWrap:
-                    "wrap",
+                  alignItems: "end",
+                  flexWrap: "wrap",
                   marginBottom: 18,
                 }}
               >
@@ -3713,9 +3363,7 @@ export default function AdminLmsEditor({
                         ? "Section name"
                         : "New section title"
                     }
-                    onChange={(
-                      event
-                    ) =>
+                    onChange={(event) =>
                       setSectionTitle(
                         event.target
                           .value
@@ -3733,9 +3381,7 @@ export default function AdminLmsEditor({
                   onClick={
                     saveSection
                   }
-                  disabled={
-                    saving
-                  }
+                  disabled={saving}
                   style={
                     styles.button
                   }
@@ -3751,9 +3397,7 @@ export default function AdminLmsEditor({
                     onClick={
                       cancelSectionEdit
                     }
-                    disabled={
-                      saving
-                    }
+                    disabled={saving}
                     style={
                       styles.button
                     }
@@ -3781,8 +3425,7 @@ export default function AdminLmsEditor({
                       style={{
                         border:
                           "1px solid #dbe3ed",
-                        borderRadius:
-                          12,
+                        borderRadius: 12,
                         marginBottom:
                           14,
                         overflow:
@@ -3809,8 +3452,7 @@ export default function AdminLmsEditor({
                         <div>
                           <strong>
                             {sectionIndex +
-                              1}
-                            .{" "}
+                              1}.{" "}
                             {
                               section.title
                             }
@@ -4003,8 +3645,7 @@ export default function AdminLmsEditor({
                                   >
                                     <strong>
                                       {lessonIndex +
-                                        1}
-                                      .{" "}
+                                        1}.{" "}
                                       {
                                         lesson.title
                                       }
@@ -4466,8 +4107,7 @@ export default function AdminLmsEditor({
                                               <div>
                                                 <strong>
                                                   {resourceIndex +
-                                                    1}
-                                                  .{" "}
+                                                    1}.{" "}
                                                   {
                                                     resource.title
                                                   }
@@ -4790,8 +4430,7 @@ export default function AdminLmsEditor({
                 }
               )}
 
-              {sections.length ===
-                0 && (
+              {sections.length === 0 && (
                 <div
                   style={
                     styles.panelSoft
@@ -4804,8 +4443,8 @@ export default function AdminLmsEditor({
                     }}
                   >
                     No sections yet.
-                    Add the first
-                    section above.
+                    Add the first section
+                    above.
                   </p>
                 </div>
               )}
@@ -4819,15 +4458,13 @@ export default function AdminLmsEditor({
         <div style={styles.panel}>
           <div
             style={{
-              display:
-                "flex",
+              display: "flex",
               justifyContent:
                 "space-between",
               gap: 16,
               alignItems:
                 "center",
-              flexWrap:
-                "wrap",
+              flexWrap: "wrap",
               marginBottom: 18,
             }}
           >
@@ -4877,9 +4514,7 @@ export default function AdminLmsEditor({
 
           <div style={styles.grid}>
             <div style={styles.field}>
-              <label
-                style={styles.label}
-              >
+              <label style={styles.label}>
                 Section
               </label>
 
@@ -4887,17 +4522,12 @@ export default function AdminLmsEditor({
                 value={
                   lessonSectionId
                 }
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   setLessonSectionId(
-                    event.target
-                      .value
+                    event.target.value
                   )
                 }
-                style={
-                  styles.select
-                }
+                style={styles.select}
               >
                 <option value="">
                   Select section
@@ -4923,21 +4553,17 @@ export default function AdminLmsEditor({
             </div>
 
             <div style={styles.field}>
-              <label
-                style={styles.label}
-              >
+              <label style={styles.label}>
                 Title
               </label>
 
               <input
                 value={String(
-                  lessonForm.title ??
-                    ""
+                  lessonForm.title ?? ""
                 )}
                 onChange={(event) => {
                   const title =
-                    event.target
-                      .value;
+                    event.target.value;
 
                   updateLessonField(
                     "title",
@@ -4949,80 +4575,57 @@ export default function AdminLmsEditor({
                   ) {
                     updateLessonField(
                       "slug",
-                      slugify(
-                        title
-                      )
+                      slugify(title)
                     );
                   }
                 }}
-                style={
-                  styles.input
-                }
+                style={styles.input}
               />
             </div>
 
             <div style={styles.field}>
-              <label
-                style={styles.label}
-              >
+              <label style={styles.label}>
                 Slug
               </label>
 
               <input
                 value={String(
-                  lessonForm.slug ??
-                    ""
+                  lessonForm.slug ?? ""
                 )}
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   updateLessonField(
                     "slug",
-                    event.target
-                      .value
+                    event.target.value
                   )
                 }
-                style={
-                  styles.input
-                }
+                style={styles.input}
               />
             </div>
 
             <div style={styles.field}>
-              <label
-                style={styles.label}
-              >
+              <label style={styles.label}>
                 Video URL
               </label>
 
               <input
                 type="url"
                 value={String(
-                  lessonForm.video_url ??
-                    ""
+                  lessonForm.video_url ?? ""
                 )}
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   updateLessonField(
                     "video_url",
-                    event.target
-                      .value
+                    event.target.value
                   )
                 }
                 placeholder="https://..."
-                style={
-                  styles.input
-                }
+                style={styles.input}
               />
             </div>
 
             <div style={styles.field}>
-              <label
-                style={styles.label}
-              >
-                Duration
-                (minutes)
+              <label style={styles.label}>
+                Duration (minutes)
               </label>
 
               <input
@@ -5032,29 +4635,21 @@ export default function AdminLmsEditor({
                   lessonForm.duration_minutes ??
                     0
                 )}
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   updateLessonField(
                     "duration_minutes",
                     Number(
-                      event.target
-                        .value
+                      event.target.value
                     )
                   )
                 }
-                style={
-                  styles.input
-                }
+                style={styles.input}
               />
             </div>
 
             <div style={styles.field}>
-              <label
-                style={styles.label}
-              >
-                Duration
-                (seconds)
+              <label style={styles.label}>
+                Duration (seconds)
               </label>
 
               <input
@@ -5064,20 +4659,15 @@ export default function AdminLmsEditor({
                   lessonForm.duration_seconds ??
                     0
                 )}
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   updateLessonField(
                     "duration_seconds",
                     Number(
-                      event.target
-                        .value
+                      event.target.value
                     )
                   )
                 }
-                style={
-                  styles.input
-                }
+                style={styles.input}
               />
             </div>
           </div>
@@ -5090,22 +4680,17 @@ export default function AdminLmsEditor({
           >
             <div
               style={{
-                display:
-                  "flex",
+                display: "flex",
                 justifyContent:
                   "space-between",
                 gap: 12,
                 alignItems:
                   "center",
-                flexWrap:
-                  "wrap",
+                flexWrap: "wrap",
               }}
             >
-              <label
-                style={styles.label}
-              >
-                Lesson HTML
-                content
+              <label style={styles.label}>
+                Lesson HTML content
               </label>
 
               <button
@@ -5116,9 +4701,7 @@ export default function AdminLmsEditor({
                       !value
                   )
                 }
-                style={
-                  styles.button
-                }
+                style={styles.button}
               >
                 {contentPreview
                   ? "Edit HTML"
@@ -5148,13 +4731,10 @@ export default function AdminLmsEditor({
                   lessonForm.content_html ??
                     ""
                 )}
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   updateLessonField(
                     "content_html",
-                    event.target
-                      .value
+                    event.target.value
                   )
                 }
                 rows={16}
@@ -5174,13 +4754,11 @@ export default function AdminLmsEditor({
                 margin: 0,
               }}
             >
-              HTML is stored as
-              lesson content. The
-              editor preview displays
-              the source as text to
-              avoid executing stored
-              markup inside the admin
-              interface.
+              HTML is stored as lesson
+              content. The editor preview
+              displays the source as text to
+              avoid executing stored markup
+              inside the admin interface.
             </p>
           </div>
 
@@ -5215,8 +4793,7 @@ export default function AdminLmsEditor({
 
           <div
             style={{
-              display:
-                "grid",
+              display: "grid",
               gridTemplateColumns:
                 "repeat(auto-fit, minmax(220px, 1fr))",
               gap: 12,
@@ -5226,10 +4803,8 @@ export default function AdminLmsEditor({
             <label
               style={{
                 ...styles.panelSoft,
-                cursor:
-                  "pointer",
-                display:
-                  "flex",
+                cursor: "pointer",
+                display: "flex",
                 gap: 10,
                 alignItems:
                   "flex-start",
@@ -5240,13 +4815,10 @@ export default function AdminLmsEditor({
                 checked={Boolean(
                   lessonForm.is_preview
                 )}
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   updateLessonField(
                     "is_preview",
-                    event.target
-                      .checked
+                    event.target.checked
                   )
                 }
                 style={{
@@ -5262,16 +4834,14 @@ export default function AdminLmsEditor({
                 <span
                   style={{
                     ...styles.muted,
-                    display:
-                      "block",
+                    display: "block",
                     marginTop: 3,
                   }}
                 >
-                  Allow the lesson
-                  to be accessible
-                  as a public preview
-                  when the course is
-                  published.
+                  Allow the lesson to
+                  be accessible as a
+                  public preview when the
+                  course is published.
                 </span>
               </span>
             </label>
@@ -5279,10 +4849,8 @@ export default function AdminLmsEditor({
             <label
               style={{
                 ...styles.panelSoft,
-                cursor:
-                  "pointer",
-                display:
-                  "flex",
+                cursor: "pointer",
+                display: "flex",
                 gap: 10,
                 alignItems:
                   "flex-start",
@@ -5293,13 +4861,10 @@ export default function AdminLmsEditor({
                 checked={Boolean(
                   lessonForm.is_published
                 )}
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   updateLessonField(
                     "is_published",
-                    event.target
-                      .checked
+                    event.target.checked
                   )
                 }
                 style={{
@@ -5315,14 +4880,12 @@ export default function AdminLmsEditor({
                 <span
                   style={{
                     ...styles.muted,
-                    display:
-                      "block",
+                    display: "block",
                     marginTop: 3,
                   }}
                 >
-                  Include this lesson
-                  in the published
-                  curriculum.
+                  Include this lesson in
+                  the published curriculum.
                 </span>
               </span>
             </label>
@@ -5339,13 +4902,9 @@ export default function AdminLmsEditor({
           >
             <button
               type="button"
-              onClick={
-                saveLesson
-              }
+              onClick={saveLesson}
               disabled={saving}
-              style={
-                styles.button
-              }
+              style={styles.button}
             >
               {saving
                 ? "Saving..."
@@ -5358,9 +4917,7 @@ export default function AdminLmsEditor({
                 cancelLessonEdit
               }
               disabled={saving}
-              style={
-                styles.button
-              }
+              style={styles.button}
             >
               Cancel
             </button>
@@ -5374,13 +4931,11 @@ export default function AdminLmsEditor({
           <div style={styles.panel}>
             <div
               style={{
-                display:
-                  "flex",
+                display: "flex",
                 justifyContent:
                   "space-between",
                 gap: 16,
-                flexWrap:
-                  "wrap",
+                flexWrap: "wrap",
                 alignItems:
                   "center",
               }}
@@ -5410,8 +4965,7 @@ export default function AdminLmsEditor({
 
                 <strong
                   style={{
-                    display:
-                      "block",
+                    display: "block",
                     marginTop: 8,
                     fontSize: 16,
                   }}
