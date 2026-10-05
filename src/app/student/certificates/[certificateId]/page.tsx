@@ -28,6 +28,23 @@ function formatDate(value: string) {
   }).format(date);
 }
 
+function buildVerificationUrl(certificateNumber: string) {
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "https://ruffneck-lms.vercel.app";
+
+  return `${baseUrl.replace(/\/$/, "")}/verify/${encodeURIComponent(
+    certificateNumber
+  )}`;
+}
+
+function buildQrCodeUrl(verificationUrl: string) {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(
+    verificationUrl
+  )}`;
+}
+
 export default async function CertificatePage({
   params,
 }: {
@@ -96,6 +113,12 @@ export default async function CertificatePage({
   const verificationUrl = `/verify/${encodeURIComponent(
     certificate.certificate_number
   )}`;
+
+  const fullVerificationUrl = buildVerificationUrl(
+    certificate.certificate_number
+  );
+
+  const qrCodeUrl = buildQrCodeUrl(fullVerificationUrl);
 
   return (
     <main className="rn-certificate-view-page">
@@ -203,6 +226,81 @@ export default async function CertificatePage({
                 </strong>
               </div>
             </div>
+
+            {!certificate.is_revoked ? (
+              <>
+                <div className="rn-certificate-divider" />
+
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 20,
+                    flexWrap: "wrap",
+                    marginTop: 20,
+                    padding: 16,
+                    border: "1px solid rgba(11, 30, 58, 0.12)",
+                    borderRadius: 10,
+                    background: "#f8fafc",
+                  }}
+                >
+                  <div
+                    style={{
+                      flex: "0 0 auto",
+                      textAlign: "center",
+                    }}
+                  >
+                    <img
+                      src={qrCodeUrl}
+                      alt={`QR code for verifying certificate ${certificate.certificate_number}`}
+                      width={150}
+                      height={150}
+                      style={{
+                        display: "block",
+                        width: 150,
+                        height: 150,
+                        background: "#ffffff",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    />
+                  </div>
+
+                  <div
+                    style={{
+                      flex: "1 1 280px",
+                      minWidth: 220,
+                    }}
+                  >
+                    <span className="rn-eyebrow">
+                      DIGITAL VERIFICATION
+                    </span>
+
+                    <h4
+                      style={{
+                        margin: "6px 0 8px",
+                        fontSize: 17,
+                        color: "#0b1e3a",
+                      }}
+                    >
+                      Scan to verify this certificate
+                    </h4>
+
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: 13,
+                        lineHeight: 1.5,
+                        color: "#475569",
+                      }}
+                    >
+                      Scan this QR code to open the official RuffNeck Learn
+                      verification record.
+                    </p>
+                  </div>
+                </div>
+              </>
+            ) : null}
 
             {certificate.is_revoked &&
             certificate.revoked_reason ? (

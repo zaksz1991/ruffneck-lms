@@ -52,9 +52,72 @@ export async function generateMetadata({
 }) {
   const { certificateNumber } = await params;
 
+  const normalizedCertificateNumber =
+    decodeURIComponent(certificateNumber).trim();
+
+  if (!normalizedCertificateNumber) {
+    return {
+      title: "Certificate Verification | RuffNeck Learn",
+      description: "Verify a RuffNeck Learn certificate.",
+    };
+  }
+
+  const admin = createAdminClient();
+
+  const { data: certificate } = await admin
+    .from("course_certificates")
+    .select(
+      [
+        "certificate_number",
+        "holder_name",
+        "course_title",
+        "is_revoked",
+      ].join(", ")
+    )
+    .eq("certificate_number", normalizedCertificateNumber)
+    .maybeSingle();
+
+  if (!certificate) {
+    return {
+      title: `Certificate ${normalizedCertificateNumber} | RuffNeck Learn`,
+      description: "Verify a RuffNeck Learn certificate.",
+      openGraph: {
+        title: `Certificate ${normalizedCertificateNumber} | RuffNeck Learn`,
+        description: "Verify a RuffNeck Learn certificate.",
+        type: "website",
+        siteName: "RuffNeck Learn",
+      },
+      twitter: {
+        card: "summary",
+        title: `Certificate ${normalizedCertificateNumber} | RuffNeck Learn`,
+        description: "Verify a RuffNeck Learn certificate.",
+      },
+    };
+  }
+
+  const status = certificate.is_revoked ? "Revoked" : "Verified";
+
+  const title = `${certificate.holder_name} — ${certificate.course_title}`;
+
+  const description =
+    `${status} RuffNeck Learn certificate ` +
+    `${certificate.certificate_number}. ` +
+    "Official certificate verification by RuffNeck Entertainment.";
+
   return {
-    title: `Certificate ${certificateNumber} | RuffNeck Learn`,
-    description: "Verify a RuffNeck Learn certificate.",
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      siteName: "RuffNeck Learn",
+    },
+    twitter: {
+      card: "summary",
+      title,
+      description,
+    },
   };
 }
 
@@ -232,7 +295,9 @@ export default async function VerifyCertificatePage({
               <div>
                 <span>Certificate Number</span>
 
-                <strong>{certificate.certificate_number}</strong>
+                <strong>
+                  {certificate.certificate_number}
+                </strong>
               </div>
 
               <div>
