@@ -16,6 +16,8 @@ type EnrollButtonProps = {
 type EnrollmentResponse = {
   success?: boolean;
   already_enrolled?: boolean;
+  payment_required?: boolean;
+  payment_url?: string;
   error?: string;
   enrollment?: {
     id: string;
@@ -29,7 +31,7 @@ export default function EnrollButton({
   firstLessonSlug,
   courseTitle,
   className,
-  label = "Enroll Free",
+  label = "Enroll / Pay",
 }: EnrollButtonProps) {
   const router =
     useRouter();
@@ -89,6 +91,26 @@ export default function EnrollButton({
         );
       }
 
+      /*
+       * Paid course:
+       * send the student to Flutterwave's
+       * hosted checkout page.
+       */
+      if (
+        data.payment_required &&
+        data.payment_url
+      ) {
+        window.location.assign(
+          data.payment_url
+        );
+
+        return;
+      }
+
+      /*
+       * Free or already-enrolled course:
+       * continue into the first available lesson.
+       */
       if (
         firstLessonSlug
       ) {
@@ -121,7 +143,7 @@ export default function EnrollButton({
         disabled={loading}
       >
         {loading
-          ? "Enrolling…"
+          ? "Processing..."
           : label}
       </button>
 
