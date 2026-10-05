@@ -14340,3 +14340,71 @@ main form .rn-button {
     position: static !important;
   }
 }
+
+/* =========================================================
+   MOBILE HEADER — KEEP ADMIN ACCESSIBLE
+   ========================================================= */
+
+@media (max-width: 720px) {
+  .site-header .nav {
+    width: 100% !important;
+    max-width: none !important;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    overflow: visible !important;
+  }
+
+  .site-header .nav > a,
+  .site-header .nav > form {
+    display: inline-flex !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+
+  .site-header .nav > a[href="/admin/lms"] {
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: static !important;
+    flex: 0 0 auto !important;
+  }
+
+  .site-header .nav > a[href="/admin/lms"] {
+    min-height: 40px !important;
+    padding: 8px 12px !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    white-space: nowrap !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .site-header .nav > a[href="/admin/lms"] {
+    min-height: 38px !important;
+    padding: 7px 10px !important;
+    font-size: 0.86rem !important;
+  }
+}
+
+/* =========================================================
+   ADMIN LMS — WIDER DESKTOP WORKSPACE
+   ========================================================= */
+
+@media (min-width: 1101px) {
+  .container.rn-dashboard-shell,
+  .rn-admin-shell,
+  .rn-admin-page {
+    width: min(1400px, calc(100% - 48px)) !important;
+    max-width: 1400px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
+}

@@ -1,28 +1,100 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
-const RUFFNECK_ENTERTAINMENT_URL =
-  "https://ruffneck-entertainment.vercel.app/";
+type UserRole =
+  | "admin"
+  | "instructor"
+  | "student";
 
-export async function Header() {
-  const supabase = await createClient();
+export default function Header() {
+  const pathname = usePathname();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [isAuthenticated, setIsAuthenticated] =
+    useState(false);
+  const [role, setRole] =
+    useState<UserRole | null>(null);
+  const [authReady, setAuthReady] =
+    useState(false);
 
-  let role: string | null = null;
+  const isActive = (path: string) => {
+    if (path === "/") {
+      return pathname === "/";
+    }
 
-  if (user) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
+    return pathname.startsWith(path);
+  };
 
-    role = data?.role ?? null;
-  }
+  const canAccessAdmin =
+    role === "admin" ||
+    role === "instructor";
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    let mounted = true;
+
+    async function loadAuthState() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!mounted) {
+        return;
+      }
+
+      if (!user) {
+        setIsAuthenticated(false);
+        setRole(null);
+        setAuthReady(true);
+        return;
+      }
+
+      setIsAuthenticated(true);
+
+      const { data: profile } =
+        await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+
+      if (!mounted) {
+        return;
+      }
+
+      const nextRole =
+        profile?.role === "admin" ||
+        profile?.role === "instructor" ||
+        profile?.role === "student"
+          ? (profile.role as UserRole)
+          : null;
+
+      setRole(nextRole);
+      setAuthReady(true);
+    }
+
+    void loadAuthState();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      () => {
+        window.setTimeout(() => {
+          void loadAuthState();
+        }, 0);
+      }
+    );
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   return (
     <>
@@ -34,14 +106,13 @@ export async function Header() {
             </span>
 
             <span className="rn-parent-description">
-              Practical AI & digital systems for Nigerian professionals
+              Practical AI &amp; digital systems for
+              Nigerian professionals
             </span>
           </div>
 
           <a
-            href={RUFFNECK_ENTERTAINMENT_URL}
-            target="_blank"
-            rel="noopener noreferrer"
+            href="https://ruffneck-entertainment.vercel.app/"
             className="rn-parent-link"
           >
             Visit RuffNeck Entertainment →
@@ -59,10 +130,10 @@ export async function Header() {
             <Image
               src="/brand/ruffneck-logo.png"
               alt="RuffNeck Entertainment"
-              width={180}
-              height={60}
-              priority
+              width={140}
+              height={70}
               className="brand-logo"
+              priority
             />
 
             <span className="brand-copy">
@@ -73,69 +144,143 @@ export async function Header() {
 
           <nav
             className="nav"
-            aria-label="Primary navigation"
+            aria-label="Main navigation"
           >
-            <Link href="/courses">
+            <Link
+              href="/courses"
+              className={
+                isActive("/courses")
+                  ? "active"
+                  : ""
+              }
+            >
               Courses
             </Link>
 
-            {user ? (
+            {authReady && isAuthenticated ? (
               <>
-                <Link href="/student/dashboard">
+                <Link
+                  href="/student/dashboard"
+                  className={
+                    isActive(
+                      "/student/dashboard"
+                    )
+                      ? "active"
+                      : ""
+                  }
+                >
                   My learning
                 </Link>
 
-                <Link href="/student/scan">
-                  Scan & Learn
+                <Link
+                  href="/student/scan"
+                  className={
+                    isActive("/student/scan")
+                      ? "active"
+                      : ""
+                  }
+                >
+                  Scan &amp; Learn
                 </Link>
 
-                <Link href="/student/ai-drafts">
+                <Link
+                  href="/student/ai-drafts"
+                  className={
+                    isActive(
+                      "/student/ai-drafts"
+                    )
+                      ? "active"
+                      : ""
+                  }
+                >
                   My AI Drafts
                 </Link>
 
-                {(
-                  role === "admin" ||
-                  role === "instructor"
-                ) && (
-                  <Link href="/admin/lms">
+                {canAccessAdmin ? (
+                  <Link
+                    href="/admin/lms"
+                    className={
+                      isActive("/admin")
+                        ? "active"
+                        : ""
+                    }
+                    aria-label="Admin"
+                  >
                     Admin
                   </Link>
-                )}
+                ) : null}
 
                 <form
-                  action="/auth/signout"
+                  action="/api/auth/logout"
                   method="post"
-                  style={{ margin: 0 }}
+                  className="rn-signout-form"
                 >
                   <button
                     type="submit"
-                    className="btn btn-ghost"
-                    style={{
-                      padding: "7px 12px",
-                    }}
+                    className="nav-button rn-nav-button"
                   >
                     Sign out
                   </button>
                 </form>
               </>
-            ) : (
+            ) : authReady ? (
               <>
-                <Link href="/login">
+                <Link
+                  href="/login"
+                  className={
+                    isActive("/login")
+                      ? "active"
+                      : ""
+                  }
+                >
                   Log in
                 </Link>
 
                 <Link
-                  href="/signup"
-                  className="btn btn-primary"
-                  style={{
-                    padding: "7px 12px",
-                  }}
+                  href="/register"
+                  className="rn-signup-button"
                 >
                   Sign up
                 </Link>
               </>
-            )}
+            ) : null}
           </nav>
+        </div>
+
+        <div className="rn-header-learning-banner">
+          <Link
+            href="/courses"
+            aria-label="Explore RuffNeck Learn courses"
+          >
+            <Image
+              src="/brand/ruffneck-learn-banner.png"
+              alt="RuffNeck Learn — Learn, Build, Grow"
+              width={1600}
+              height={360}
+              className="rn-header-learning-banner-image"
+              priority
+            />
+
+            <div className="rn-header-banner-overlay">
+              <div>
+                <span className="rn-header-banner-kicker">
+                  RUFFNECK LEARN
+                </span>
+
+                <strong>
+                  Practical AI &amp; Digital Skills
+                </strong>
+
+                <span>
+                  Learn • Build • Grow
+                </span>
+              </div>
+
+              <span className="rn-header-banner-cta">
+                Explore courses →
+              </span>
+            </div>
+          </Link>
         </div>
       </header>
     </>
