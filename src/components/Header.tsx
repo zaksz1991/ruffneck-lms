@@ -89,6 +89,10 @@ export async function Header() {
                   Scan & Learn
                 </Link>
 
+                <Link href="/student/ai-drafts">
+                  My AI Drafts
+                </Link>
+
                 {(
                   role === "admin" ||
                   role === "instructor"
