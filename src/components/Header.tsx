@@ -11,7 +11,7 @@ type UserRole =
   | "instructor"
   | "student";
 
-export default function Header() {
+export function Header() {
   const pathname = usePathname();
 
   const [isAuthenticated, setIsAuthenticated] =
@@ -82,13 +82,11 @@ export default function Header() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(
-      () => {
-        window.setTimeout(() => {
-          void loadAuthState();
-        }, 0);
-      }
-    );
+    } = supabase.auth.onAuthStateChange(() => {
+      window.setTimeout(() => {
+        void loadAuthState();
+      }, 0);
+    });
 
     return () => {
       mounted = false;
@@ -286,3 +284,5 @@ export default function Header() {
     </>
   );
 }
+
+export default Header;
