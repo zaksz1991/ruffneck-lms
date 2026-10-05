@@ -25,7 +25,10 @@ type Course = {
   short_description: string | null;
   description: string | null;
   category: string | null;
-  level: "beginner" | "intermediate" | "advanced";
+  level:
+    | "beginner"
+    | "intermediate"
+    | "advanced";
   price_ngn: number;
   is_free: boolean;
   duration_minutes: number | null;
@@ -47,16 +50,29 @@ type SectionGroup = {
   lessons: CurriculumRow[];
 };
 
+type PaymentState =
+  | "success"
+  | "failed"
+  | "pending"
+  | null;
+
 function formatLevel(level: string) {
-  return level.charAt(0).toUpperCase() + level.slice(1);
+  return (
+    level.charAt(0).toUpperCase() +
+    level.slice(1)
+  );
 }
 
-function formatDuration(minutes: number) {
+function formatDuration(
+  minutes: number
+) {
   if (minutes < 60) {
     return `${minutes} min`;
   }
 
-  const hours = Math.floor(minutes / 60);
+  const hours = Math.floor(
+    minutes / 60
+  );
   const remaining = minutes % 60;
 
   return remaining === 0
@@ -64,79 +80,138 @@ function formatDuration(minutes: number) {
     : `${hours} hr ${remaining} min`;
 }
 
-function formatHours(minutes: number) {
+function formatHours(
+  minutes: number
+) {
   if (minutes < 60) {
-    return `${Math.max(1, Math.round(minutes))} min`;
+    return `${Math.max(
+      1,
+      Math.round(minutes)
+    )} min`;
   }
 
-  return `${Math.round((minutes / 60) * 10) / 10} hours`;
+  return `${Math.round(
+    (minutes / 60) * 10
+  ) / 10} hours`;
 }
 
-function getCourseFocus(slug: string) {
+function getCourseFocus(
+  slug: string
+) {
   switch (slug) {
     case "ai-literacy":
       return {
-        eyebrow: "PRACTICAL AI FOUNDATIONS",
+        eyebrow:
+          "PRACTICAL AI FOUNDATIONS",
         title:
           "Build confident, responsible AI skills for real workplace tasks.",
       };
 
     case "advanced-ai-productivity":
       return {
-        eyebrow: "ADVANCED AI SYSTEMS",
+        eyebrow:
+          "ADVANCED AI SYSTEMS",
         title:
           "Design advanced AI workflows, automation systems and intelligent business processes.",
       };
 
     case "data-analysis-excel-power-bi":
       return {
-        eyebrow: "BUSINESS DATA & BI",
+        eyebrow:
+          "BUSINESS DATA & BI",
         title:
           "Turn operational data into analysis, dashboards and decision-ready business intelligence.",
       };
 
     case "digital-marketing-ai-content":
       return {
-        eyebrow: "DIGITAL MARKETING",
+        eyebrow:
+          "DIGITAL MARKETING",
         title:
           "Build practical marketing systems that connect content, customers, leads and measurable business outcomes.",
       };
 
     case "effective-teacher":
       return {
-        eyebrow: "TEACHER PROFESSIONAL DEVELOPMENT",
+        eyebrow:
+          "TEACHER PROFESSIONAL DEVELOPMENT",
         title:
           "Plan better lessons, teach with clarity, manage learning environments and measure learner progress.",
       };
 
     default:
       return {
-        eyebrow: "RUFFNECK LEARN COURSE",
-        title: "Build practical professional skills.",
+        eyebrow:
+          "RUFFNECK LEARN COURSE",
+        title:
+          "Build practical professional skills.",
       };
+  }
+}
+
+function getPaymentMessage(
+  payment: PaymentState,
+  courseTitle: string
+) {
+  switch (payment) {
+    case "success":
+      return {
+        type: "success" as const,
+        title:
+          "Payment successful",
+        message:
+          `Your payment for "${courseTitle}" was verified successfully. Your enrollment is now active.`,
+      };
+
+    case "pending":
+      return {
+        type: "pending" as const,
+        title:
+          "Payment processing",
+        message:
+          "Your payment is still being processed. Course access will be activated after the transaction is verified.",
+      };
+
+    case "failed":
+      return {
+        type: "failed" as const,
+        title:
+          "Payment was not completed",
+        message:
+          "The payment was cancelled, failed, or could not be verified. No paid-course access was granted.",
+      };
+
+    default:
+      return null;
   }
 }
 
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ slug: string }>;
+  params: Promise<{
+    slug: string;
+  }>;
 }) {
-  const { slug } = await params;
+  const { slug } =
+    await params;
 
-  const supabase = await createClient();
+  const supabase =
+    await createClient();
 
-  const { data: course } = await supabase
-    .from("courses")
-    .select(
-      "title, short_description, seo_title, seo_description"
-    )
-    .eq("slug", slug)
-    .maybeSingle();
+  const { data: course } =
+    await supabase
+      .from("courses")
+      .select(
+        "title, short_description, seo_title, seo_description"
+      )
+      .eq("slug", slug)
+      .maybeSingle();
 
   if (!course) {
     return {
-      title: "Course | RuffNeck Learn",
+      title:
+        "Course | RuffNeck Learn",
     };
   }
 
@@ -153,12 +228,38 @@ export async function generateMetadata({
 
 export default async function CourseDetailPage({
   params,
+  searchParams,
 }: {
-  params: Promise<{ slug: string }>;
+  params: Promise<{
+    slug: string;
+  }>;
+  searchParams: Promise<{
+    payment?: string;
+  }>;
 }) {
-  const { slug } = await params;
+  const { slug } =
+    await params;
 
-  const supabase = await createClient();
+  const query =
+    await searchParams;
+
+  const paymentValue =
+    query.payment
+      ?.trim()
+      .toLowerCase() || "";
+
+  const payment: PaymentState =
+    paymentValue ===
+      "success" ||
+    paymentValue ===
+      "failed" ||
+    paymentValue ===
+      "pending"
+      ? paymentValue
+      : null;
+
+  const supabase =
+    await createClient();
 
   const {
     data: { user },
@@ -196,7 +297,8 @@ export default async function CourseDetailPage({
     );
   }
 
-  const course = courseData as Course | null;
+  const course =
+    courseData as Course | null;
 
   if (!course) {
     notFound();
@@ -223,8 +325,14 @@ export default async function CourseDetailPage({
         "is_published",
       ].join(", ")
     )
-    .eq("course_id", course.id)
-    .eq("is_published", true)
+    .eq(
+      "course_id",
+      course.id
+    )
+    .eq(
+      "is_published",
+      true
+    )
     .order("section_sort")
     .order("lesson_sort");
 
@@ -236,55 +344,85 @@ export default async function CourseDetailPage({
   }
 
   const curriculumRows =
-    (curriculumData as CurriculumRow[] | null) || [];
+    (curriculumData as CurriculumRow[] | null) ||
+    [];
 
-  const { data: enrollmentData } = user
-    ? await supabase
-        .from("enrollments")
-        .select(
-          "id, progress_percent, enrollment_status, payment_status"
-        )
-        .eq("student_id", user.id)
-        .eq("course_id", course.id)
-        .maybeSingle()
-    : { data: null };
+  const { data: enrollmentData } =
+    user
+      ? await supabase
+          .from("enrollments")
+          .select(
+            "id, progress_percent, enrollment_status, payment_status"
+          )
+          .eq(
+            "student_id",
+            user.id
+          )
+          .eq(
+            "course_id",
+            course.id
+          )
+          .maybeSingle()
+      : {
+          data: null,
+        };
 
   const enrollment =
     enrollmentData as Enrollment | null;
 
-  const { data: completedProgressData } = user
+  const {
+    data: completedProgressData,
+  } = user
     ? await supabase
         .from("lesson_progress")
-        .select("lesson_id")
-        .eq("student_id", user.id)
-        .eq("course_id", course.id)
-        .eq("completed", true)
-    : { data: [] };
+        .select(
+          "lesson_id"
+        )
+        .eq(
+          "student_id",
+          user.id
+        )
+        .eq(
+          "course_id",
+          course.id
+        )
+        .eq(
+          "completed",
+          true
+        )
+    : {
+        data: [],
+      };
 
   const completedLessonRows =
     (completedProgressData as {
       lesson_id: string;
     }[] | null) || [];
 
-  /*
-   * Only lessons that belong to the current published
-   * curriculum are allowed to count toward course progress.
-   */
-  const publishedLessonIds = new Set(
-    curriculumRows.map(
-      (row) => row.lesson_id
-    )
-  );
-
-  const completedLessonIds = new Set(
-    completedLessonRows
-      .map((row) => row.lesson_id)
-      .filter((lessonId) =>
-        publishedLessonIds.has(lessonId)
+  const publishedLessonIds =
+    new Set(
+      curriculumRows.map(
+        (row) =>
+          row.lesson_id
       )
-  );
+    );
 
-  const totalLessons = curriculumRows.length;
+  const completedLessonIds =
+    new Set(
+      completedLessonRows
+        .map(
+          (row) =>
+            row.lesson_id
+        )
+        .filter((lessonId) =>
+          publishedLessonIds.has(
+            lessonId
+          )
+        )
+    );
+
+  const totalLessons =
+    curriculumRows.length;
 
   const totalCompleted =
     completedLessonIds.size;
@@ -294,14 +432,17 @@ export default async function CourseDetailPage({
       ? Math.min(
           100,
           Math.round(
-            (totalCompleted / totalLessons) * 100
+            (totalCompleted /
+              totalLessons) *
+              100
           )
         )
       : 0;
 
   const courseCompleted =
     totalLessons > 0 &&
-    totalCompleted >= totalLessons;
+    totalCompleted >=
+      totalLessons;
 
   const nextIncompleteLesson =
     curriculumRows.find(
@@ -315,63 +456,101 @@ export default async function CourseDetailPage({
     curriculumRows[0] || null;
 
   const continueLesson =
-    nextIncompleteLesson || firstLesson;
+    nextIncompleteLesson ||
+    firstLesson;
 
   const calculatedMinutes =
     curriculumRows.reduce(
-      (total, lesson) =>
-        total + (lesson.duration_minutes || 0),
+      (
+        total,
+        lesson
+      ) =>
+        total +
+        (lesson.duration_minutes ||
+          0),
       0
     );
 
   const totalMinutes =
     calculatedMinutes > 0
       ? calculatedMinutes
-      : course.duration_minutes || 0;
+      : course.duration_minutes ||
+        0;
 
-  const sectionsMap = new Map<
-    string,
-    SectionGroup
-  >();
+  const sectionsMap =
+    new Map<
+      string,
+      SectionGroup
+    >();
 
-  for (const lesson of curriculumRows) {
-    const existing = sectionsMap.get(
-      lesson.section_id
-    );
+  for (
+    const lesson of curriculumRows
+  ) {
+    const existing =
+      sectionsMap.get(
+        lesson.section_id
+      );
 
     if (existing) {
-      existing.lessons.push(lesson);
+      existing.lessons.push(
+        lesson
+      );
     } else {
-      sectionsMap.set(lesson.section_id, {
-        id: lesson.section_id,
-        title: lesson.section_title,
-        sortOrder: lesson.section_sort,
-        lessons: [lesson],
-      });
+      sectionsMap.set(
+        lesson.section_id,
+        {
+          id:
+            lesson.section_id,
+          title:
+            lesson.section_title,
+          sortOrder:
+            lesson.section_sort,
+          lessons: [
+            lesson,
+          ],
+        }
+      );
     }
   }
 
-  const sections = Array.from(
-    sectionsMap.values()
-  ).sort(
-    (a, b) => a.sortOrder - b.sortOrder
-  );
+  const sections =
+    Array.from(
+      sectionsMap.values()
+    ).sort(
+      (a, b) =>
+        a.sortOrder -
+        b.sortOrder
+    );
 
-  const previewCount = curriculumRows.filter(
-    (lesson) => lesson.is_preview
-  ).length;
+  const previewCount =
+    curriculumRows.filter(
+      (lesson) =>
+        lesson.is_preview
+    ).length;
 
   const outcomes =
-    course.learning_outcomes?.filter(Boolean) || [];
+    course.learning_outcomes?.filter(
+      Boolean
+    ) || [];
 
-  const focus = getCourseFocus(course.slug);
+  const focus =
+    getCourseFocus(
+      course.slug
+    );
 
-  const continueHref = continueLesson
-    ? `/learn/${course.slug}/${continueLesson.lesson_slug}`
-    : `/courses/${course.slug}`;
+  const continueHref =
+    continueLesson
+      ? `/learn/${course.slug}/${continueLesson.lesson_slug}`
+      : `/courses/${course.slug}`;
 
   const assessmentHref =
     `/courses/${course.slug}/assessment`;
+
+  const paymentMessage =
+    getPaymentMessage(
+      payment,
+      course.title
+    );
 
   return (
     <main className="rn-course-experience">
@@ -383,6 +562,95 @@ export default async function CourseDetailPage({
           ← All courses
         </Link>
 
+        {paymentMessage ? (
+          <section
+            className={`rn-payment-result rn-payment-result-${paymentMessage.type}`}
+            style={{
+              marginBottom: 18,
+              padding:
+                "16px 18px",
+              borderRadius: 12,
+              border:
+                "1px solid #dbe3ed",
+            }}
+          >
+            <strong
+              style={{
+                display:
+                  "block",
+                marginBottom: 5,
+              }}
+            >
+              {
+                paymentMessage.title
+              }
+            </strong>
+
+            <p
+              style={{
+                margin: 0,
+              }}
+            >
+              {
+                paymentMessage.message
+              }
+            </p>
+
+            {payment ===
+              "failed" &&
+            !enrollment &&
+            !course.is_free ? (
+              <div
+                style={{
+                  marginTop: 12,
+                }}
+              >
+                <EnrollButton
+                  courseId={
+                    course.id
+                  }
+                  courseSlug={
+                    course.slug
+                  }
+                  firstLessonSlug={
+                    firstLesson?.lesson_slug ||
+                    null
+                  }
+                  courseTitle={
+                    course.title
+                  }
+                  className="rn-button rn-button-primary"
+                  label="Try Payment Again"
+                />
+              </div>
+            ) : null}
+
+            {payment ===
+              "success" &&
+            enrollment &&
+            continueLesson ? (
+              <div
+                style={{
+                  marginTop: 12,
+                }}
+              >
+                <Link
+                  href={
+                    courseCompleted
+                      ? assessmentHref
+                      : continueHref
+                  }
+                  className="rn-button rn-button-primary"
+                >
+                  {courseCompleted
+                    ? "Take Final Assessment"
+                    : "Start Learning"}
+                </Link>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
         <section className="rn-course-hero">
           <div className="rn-course-hero-copy">
             <span className="rn-eyebrow">
@@ -391,11 +659,15 @@ export default async function CourseDetailPage({
 
             <div className="rn-course-meta-row">
               <span>
-                {formatLevel(course.level)}
+                {formatLevel(
+                  course.level
+                )}
               </span>
 
               {course.category ? (
-                <span>{course.category}</span>
+                <span>
+                  {course.category}
+                </span>
               ) : null}
 
               <span>
@@ -405,9 +677,13 @@ export default async function CourseDetailPage({
               </span>
             </div>
 
-            <h1>{course.title}</h1>
+            <h1>
+              {course.title}
+            </h1>
 
-            <h2>{focus.title}</h2>
+            <h2>
+              {focus.title}
+            </h2>
 
             <p className="rn-course-lead">
               {course.short_description ||
@@ -418,62 +694,97 @@ export default async function CourseDetailPage({
               <div
                 className="rn-course-description"
                 dangerouslySetInnerHTML={{
-                  __html: course.description,
+                  __html:
+                    course.description,
                 }}
               />
             ) : null}
 
             <div className="rn-course-stat-grid">
               <div>
-                <strong>{sections.length}</strong>
-                <span>Modules</span>
-              </div>
-
-              <div>
-                <strong>{totalLessons}</strong>
-                <span>Lessons</span>
+                <strong>
+                  {sections.length}
+                </strong>
+                <span>
+                  Modules
+                </span>
               </div>
 
               <div>
                 <strong>
-                  {formatHours(totalMinutes)}
+                  {totalLessons}
                 </strong>
-                <span>Estimated learning</span>
+                <span>
+                  Lessons
+                </span>
               </div>
 
               <div>
-                <strong>{previewCount}</strong>
-                <span>Preview lessons</span>
+                <strong>
+                  {formatHours(
+                    totalMinutes
+                  )}
+                </strong>
+                <span>
+                  Estimated learning
+                </span>
+              </div>
+
+              <div>
+                <strong>
+                  {previewCount}
+                </strong>
+                <span>
+                  Preview lessons
+                </span>
               </div>
             </div>
 
             <div className="rn-course-hero-actions">
-              {enrollment && courseCompleted ? (
+              {enrollment &&
+              courseCompleted ? (
                 <Link
-                  href={assessmentHref}
+                  href={
+                    assessmentHref
+                  }
                   className="rn-button rn-button-primary"
                 >
                   Take Final Assessment
                 </Link>
-              ) : enrollment && continueLesson ? (
+              ) : enrollment &&
+                continueLesson ? (
                 <Link
-                  href={continueHref}
+                  href={
+                    continueHref
+                  }
                   className="rn-button rn-button-primary"
                 >
-                  {progressPercent > 0
+                  {progressPercent >
+                  0
                     ? "Continue Course"
                     : "Start Course"}
                 </Link>
-              ) : user && course.is_free ? (
+              ) : user ? (
                 <EnrollButton
-                  courseId={course.id}
-                  courseSlug={course.slug}
-                  firstLessonSlug={
-                    firstLesson?.lesson_slug || null
+                  courseId={
+                    course.id
                   }
-                  courseTitle={course.title}
+                  courseSlug={
+                    course.slug
+                  }
+                  firstLessonSlug={
+                    firstLesson?.lesson_slug ||
+                    null
+                  }
+                  courseTitle={
+                    course.title
+                  }
                   className="rn-button rn-button-primary"
-                  label="Enroll Free"
+                  label={
+                    course.is_free
+                      ? "Enroll Free"
+                      : `Pay ₦${course.price_ngn.toLocaleString()} with Flutterwave`
+                  }
                 />
               ) : (
                 <Link
@@ -495,10 +806,15 @@ export default async function CourseDetailPage({
             {enrollment ? (
               <div className="rn-course-progress-box">
                 <div className="rn-course-progress-header">
-                  <span>Your progress</span>
+                  <span>
+                    Your progress
+                  </span>
 
                   <strong>
-                    {progressPercent}%
+                    {
+                      progressPercent
+                    }
+                    %
                   </strong>
                 </div>
 
@@ -511,14 +827,24 @@ export default async function CourseDetailPage({
                 </div>
 
                 <small>
-                  {totalCompleted} of{" "}
-                  {totalLessons} lessons completed
+                  {
+                    totalCompleted
+                  }{" "}
+                  of{" "}
+                  {
+                    totalLessons
+                  }{" "}
+                  lessons
+                  completed
                 </small>
 
                 {courseCompleted ? (
                   <p className="rn-course-completion-note">
-                    All published lessons are complete.
-                    Your final assessment is ready.
+                    All published
+                    lessons are
+                    complete. Your
+                    final assessment
+                    is ready.
                   </p>
                 ) : null}
               </div>
@@ -532,34 +858,51 @@ export default async function CourseDetailPage({
               LEARNING OUTCOMES
             </span>
 
-            <h2>What you will be able to do</h2>
+            <h2>
+              What you will be
+              able to do
+            </h2>
 
             <p>
-              The course is structured around practical
-              professional outcomes, not theory alone.
+              The course is
+              structured around
+              practical professional
+              outcomes, not theory
+              alone.
             </p>
           </div>
 
-          {outcomes.length > 0 ? (
+          {outcomes.length >
+          0 ? (
             <div className="rn-outcomes-grid">
-              {outcomes.map((outcome) => (
-                <article
-                  key={outcome}
-                  className="rn-outcome-card"
-                >
-                  <span className="rn-outcome-number">
-                    ✓
-                  </span>
+              {outcomes.map(
+                (
+                  outcome
+                ) => (
+                  <article
+                    key={
+                      outcome
+                    }
+                    className="rn-outcome-card"
+                  >
+                    <span className="rn-outcome-number">
+                      ✓
+                    </span>
 
-                  <p>{outcome}</p>
-                </article>
-              ))}
+                    <p>
+                      {outcome}
+                    </p>
+                  </article>
+                )
+              )}
             </div>
           ) : (
             <div className="rn-course-info-panel">
               <p>
-                Build practical skills through
-                structured lessons, exercises and
+                Build practical
+                skills through
+                structured lessons,
+                exercises and
                 applied projects.
               </p>
             </div>
@@ -572,58 +915,89 @@ export default async function CourseDetailPage({
               PRACTICAL LEARNING
             </span>
 
-            <h2>Built around application</h2>
+            <h2>
+              Built around
+              application
+            </h2>
 
             <p>
-              RuffNeck Learn courses combine structured
-              instruction with realistic work situations
-              and applied projects.
+              RuffNeck Learn courses
+              combine structured
+              instruction with
+              realistic work
+              situations and
+              applied projects.
             </p>
           </div>
 
           <div className="rn-practical-grid">
             <article className="rn-practical-card">
-              <span>01</span>
+              <span>
+                01
+              </span>
 
-              <h3>Real-world scenarios</h3>
+              <h3>
+                Real-world scenarios
+              </h3>
 
               <p>
-                Apply concepts to realistic workplace,
-                business, education and operational
+                Apply concepts to
+                realistic workplace,
+                business, education
+                and operational
                 situations.
               </p>
             </article>
 
             <article className="rn-practical-card">
-              <span>02</span>
+              <span>
+                02
+              </span>
 
-              <h3>Case studies</h3>
+              <h3>
+                Case studies
+              </h3>
 
               <p>
-                Analyse practical problems, identify
-                risks and develop structured solutions.
+                Analyse practical
+                problems, identify
+                risks and develop
+                structured solutions.
               </p>
             </article>
 
             <article className="rn-practical-card">
-              <span>03</span>
+              <span>
+                03
+              </span>
 
-              <h3>Samples & exercises</h3>
+              <h3>
+                Samples &amp;
+                exercises
+              </h3>
 
               <p>
-                Work with examples, templates,
-                checklists and guided practical tasks.
+                Work with examples,
+                templates, checklists
+                and guided practical
+                tasks.
               </p>
             </article>
 
             <article className="rn-practical-card">
-              <span>04</span>
+              <span>
+                04
+              </span>
 
-              <h3>Capstone projects</h3>
+              <h3>
+                Capstone projects
+              </h3>
 
               <p>
-                Finish with an applied project that
-                demonstrates what you can actually do.
+                Finish with an applied
+                project that
+                demonstrates what you
+                can actually do.
               </p>
             </article>
           </div>
@@ -635,127 +1009,164 @@ export default async function CourseDetailPage({
               CURRICULUM
             </span>
 
-            <h2>Course modules and lessons</h2>
+            <h2>
+              Course modules and
+              lessons
+            </h2>
 
             <p>
-              {sections.length} modules ·{" "}
-              {totalLessons} lessons ·{" "}
-              {formatHours(totalMinutes)} estimated
-              learning
+              {sections.length}{" "}
+              modules ·{" "}
+              {totalLessons}{" "}
+              lessons ·{" "}
+              {formatHours(
+                totalMinutes
+              )}{" "}
+              estimated learning
             </p>
           </div>
 
           <div className="rn-curriculum-list">
-            {sections.map((section, index) => (
-              <details
-                key={section.id}
-                className="rn-curriculum-module"
-                open={index === 0}
-              >
-                <summary>
-                  <div className="rn-curriculum-summary-main">
-                    <span className="rn-module-number">
-                      {String(index + 1).padStart(
-                        2,
-                        "0"
-                      )}
-                    </span>
+            {sections.map(
+              (
+                section,
+                index
+              ) => (
+                <details
+                  key={
+                    section.id
+                  }
+                  className="rn-curriculum-module"
+                  open={
+                    index === 0
+                  }
+                >
+                  <summary>
+                    <div className="rn-curriculum-summary-main">
+                      <span className="rn-module-number">
+                        {String(
+                          index +
+                            1
+                        ).padStart(
+                          2,
+                          "0"
+                        )}
+                      </span>
 
-                    <div>
-                      <h3>{section.title}</h3>
+                      <div>
+                        <h3>
+                          {
+                            section.title
+                          }
+                        </h3>
 
-                      <p>
-                        {section.lessons.length}{" "}
-                        {section.lessons.length === 1
-                          ? "lesson"
-                          : "lessons"}
-                      </p>
+                        <p>
+                          {
+                            section.lessons.length
+                          }{" "}
+                          {section
+                            .lessons
+                            .length ===
+                          1
+                            ? "lesson"
+                            : "lessons"}
+                        </p>
+                      </div>
                     </div>
-                  </div>
 
-                  <span className="rn-curriculum-chevron">
-                    +
-                  </span>
-                </summary>
+                    <span className="rn-curriculum-chevron">
+                      +
+                    </span>
+                  </summary>
 
-                <div className="rn-curriculum-lessons">
-                  {section.lessons.map(
-                    (lesson, lessonIndex) => {
-                      const completed =
-                        completedLessonIds.has(
-                          lesson.lesson_id
-                        );
+                  <div className="rn-curriculum-lessons">
+                    {section.lessons.map(
+                      (
+                        lesson,
+                        lessonIndex
+                      ) => {
+                        const completed =
+                          completedLessonIds.has(
+                            lesson.lesson_id
+                          );
 
-                      return (
-                        <div
-                          key={lesson.lesson_id}
-                          className={`rn-curriculum-lesson ${
-                            completed
-                              ? "is-completed"
-                              : ""
-                          }`}
-                        >
-                          <div className="rn-lesson-index">
-                            {completed
-                              ? "✓"
-                              : String(
-                                  lessonIndex + 1
-                                ).padStart(
-                                  2,
-                                  "0"
-                                )}
-                          </div>
+                        return (
+                          <div
+                            key={
+                              lesson.lesson_id
+                            }
+                            className={`rn-curriculum-lesson ${
+                              completed
+                                ? "is-completed"
+                                : ""
+                            }`}
+                          >
+                            <div className="rn-lesson-index">
+                              {completed
+                                ? "✓"
+                                : String(
+                                    lessonIndex +
+                                      1
+                                  ).padStart(
+                                    2,
+                                    "0"
+                                  )}
+                            </div>
 
-                          <div className="rn-lesson-main">
+                            <div className="rn-lesson-main">
+                              <Link
+                                href={`/learn/${course.slug}/${lesson.lesson_slug}`}
+                                className="rn-lesson-title"
+                              >
+                                {
+                                  lesson.lesson_title
+                                }
+                              </Link>
+
+                              <div className="rn-lesson-meta">
+                                {lesson.is_preview ? (
+                                  <span>
+                                    Preview
+                                  </span>
+                                ) : null}
+
+                                {lesson.duration_minutes ||
+                                lesson.duration_seconds ? (
+                                  <span>
+                                    {lesson.duration_minutes
+                                      ? formatDuration(
+                                          lesson.duration_minutes
+                                        )
+                                      : `${Math.ceil(
+                                          (lesson.duration_seconds ||
+                                            0) /
+                                            60
+                                        )} min`}
+                                  </span>
+                                ) : null}
+
+                                {completed ? (
+                                  <span>
+                                    Completed
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+
                             <Link
                               href={`/learn/${course.slug}/${lesson.lesson_slug}`}
-                              className="rn-lesson-title"
+                              className="rn-lesson-open"
                             >
-                              {lesson.lesson_title}
+                              View
                             </Link>
-
-                            <div className="rn-lesson-meta">
-                              {lesson.is_preview ? (
-                                <span>
-                                  Preview
-                                </span>
-                              ) : null}
-
-                              {lesson.duration_minutes ||
-                              lesson.duration_seconds ? (
-                                <span>
-                                  {lesson.duration_minutes
-                                    ? formatDuration(
-                                        lesson.duration_minutes
-                                      )
-                                    : `${Math.ceil(
-                                        (lesson.duration_seconds ||
-                                          0) / 60
-                                      )} min`}
-                                </span>
-                              ) : null}
-
-                              {completed ? (
-                                <span>
-                                  Completed
-                                </span>
-                              ) : null}
-                            </div>
                           </div>
-
-                          <Link
-                            href={`/learn/${course.slug}/${lesson.lesson_slug}`}
-                            className="rn-lesson-open"
-                          >
-                            View
-                          </Link>
-                        </div>
-                      );
-                    }
-                  )}
-                </div>
-              </details>
-            ))}
+                        );
+                      }
+                    )}
+                  </div>
+                </details>
+              )
+            )}
           </div>
         </section>
 
@@ -765,7 +1176,9 @@ export default async function CourseDetailPage({
               WHO IT IS FOR
             </span>
 
-            <h2>Target audience</h2>
+            <h2>
+              Target audience
+            </h2>
 
             <p>
               {course.target_audience ||
@@ -778,19 +1191,33 @@ export default async function CourseDetailPage({
               COURSE FORMAT
             </span>
 
-            <h2>Self-paced learning</h2>
+            <h2>
+              Self-paced learning
+            </h2>
 
             <p>
-              Work through the modules at your own
-              pace, practise the concepts and return to
-              completed lessons whenever you need them.
+              Work through the
+              modules at your own
+              pace, practise the
+              concepts and return to
+              completed lessons
+              whenever you need
+              them.
             </p>
 
             <div className="rn-course-format-list">
-              <span>✓ Structured modules</span>
-              <span>✓ Practical exercises</span>
-              <span>✓ Applied projects</span>
-              <span>✓ Progress tracking</span>
+              <span>
+                ✓ Structured modules
+              </span>
+              <span>
+                ✓ Practical exercises
+              </span>
+              <span>
+                ✓ Applied projects
+              </span>
+              <span>
+                ✓ Progress tracking
+              </span>
             </div>
           </article>
         </section>
@@ -818,30 +1245,46 @@ export default async function CourseDetailPage({
             </div>
 
             <div>
-              {enrollment && courseCompleted ? (
+              {enrollment &&
+              courseCompleted ? (
                 <Link
-                  href={assessmentHref}
+                  href={
+                    assessmentHref
+                  }
                   className="rn-button rn-button-primary"
                 >
                   Take Final Assessment
                 </Link>
               ) : enrollment ? (
                 <Link
-                  href={continueHref}
+                  href={
+                    continueHref
+                  }
                   className="rn-button rn-button-primary"
                 >
                   Continue Learning
                 </Link>
-              ) : user && course.is_free ? (
+              ) : user ? (
                 <EnrollButton
-                  courseId={course.id}
-                  courseSlug={course.slug}
-                  firstLessonSlug={
-                    firstLesson?.lesson_slug || null
+                  courseId={
+                    course.id
                   }
-                  courseTitle={course.title}
+                  courseSlug={
+                    course.slug
+                  }
+                  firstLessonSlug={
+                    firstLesson?.lesson_slug ||
+                    null
+                  }
+                  courseTitle={
+                    course.title
+                  }
                   className="rn-button rn-button-primary"
-                  label="Enroll Free"
+                  label={
+                    course.is_free
+                      ? "Enroll Free"
+                      : `Pay ₦${course.price_ngn.toLocaleString()} with Flutterwave`
+                  }
                 />
               ) : (
                 <Link
