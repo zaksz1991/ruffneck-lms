@@ -4,9 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 type CertificateIssueResponse = {
+  error?: string;
   certificateId?: string;
   certificateNumber?: string;
-  error?: string;
+  alreadyIssued?: boolean;
 };
 
 export default function CertificateIssueButton({
@@ -16,29 +17,16 @@ export default function CertificateIssueButton({
 }) {
   const router = useRouter();
 
-  const [loading, setLoading] =
-    useState(false);
-
-  const [error, setError] =
-    useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   async function issueCertificate() {
     if (loading) {
       return;
     }
 
-    const trimmedCourseId =
-      courseId.trim();
-
-    if (!trimmedCourseId) {
-      setError(
-        "A valid course is required."
-      );
-      return;
-    }
-
     setLoading(true);
-    setError(null);
+    setError("");
 
     try {
       const response = await fetch(
@@ -46,54 +34,47 @@ export default function CertificateIssueButton({
         {
           method: "POST",
           headers: {
-            "Content-Type":
-              "application/json",
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            courseId:
-              trimmedCourseId,
+            courseId,
           }),
         }
       );
 
-      let result: CertificateIssueResponse =
-        {};
-
-      try {
-        result =
-          (await response.json()) as CertificateIssueResponse;
-      } catch {
-        throw new Error(
-          "The certificate service returned an invalid response."
-        );
-      }
+      const data =
+        (await response.json()) as CertificateIssueResponse;
 
       if (!response.ok) {
-        throw new Error(
-          result.error ||
-            "Unable to issue certificate."
+        setError(
+          data.error ||
+            "Unable to issue the certificate."
         );
+        return;
       }
 
-      if (
-        !result.certificateId
-      ) {
-        throw new Error(
-          "Certificate was created without a certificate ID."
+      if (!data.certificateId) {
+        setError(
+          "Certificate was processed, but no certificate ID was returned."
         );
+        return;
       }
 
       router.push(
-        `/student/certificates/${result.certificateId}`
+        `/student/certificates/${encodeURIComponent(
+          data.certificateId
+        )}`
       );
-      router.refresh();
-    } catch (issueError) {
-      setError(
-        issueError instanceof Error
-          ? issueError.message
-          : "Unable to issue certificate."
+    } catch (requestError) {
+      console.error(
+        "Certificate issuance request failed:",
+        requestError
       );
 
+      setError(
+        "Unable to connect to the certificate service. Please try again."
+      );
+    } finally {
       setLoading(false);
     }
   }
@@ -102,20 +83,30 @@ export default function CertificateIssueButton({
     <div>
       <button
         type="button"
-        className="rn-button rn-button-primary"
         onClick={issueCertificate}
         disabled={loading}
-        aria-busy={loading}
+        className="rn-button rn-button-primary"
+        style={{
+          minWidth: 190,
+          justifyContent: "center",
+          opacity: loading ? 0.7 : 1,
+          cursor: loading ? "wait" : "pointer",
+        }}
       >
         {loading
-          ? "Issuing…"
-          : "Generate Certificate"}
+          ? "Verifying Eligibility..."
+          : "Claim Certificate"}
       </button>
 
       {error ? (
         <p
-          className="rn-enroll-error"
           role="alert"
+          style={{
+            marginTop: 12,
+            color: "#b91c1c",
+            fontSize: 14,
+            lineHeight: 1.5,
+          }}
         >
           {error}
         </p>
