@@ -1,23 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import ReconcilePaymentButton from "./ReconcilePaymentButton";
 
-type Profile = {
-  role:
-    | "admin"
-    | "instructor"
-    | "student";
-  email: string | null;
-};
-
-type PaymentRecord = {
+type Payment = {
   id: string;
   student_id: string;
   course_id: string;
   course_slug: string;
   tx_ref: string;
-  flutterwave_transaction_id:
-    number | null;
+  flutterwave_transaction_id: number | null;
   amount: number;
   currency: string;
   status:
@@ -32,16 +25,33 @@ type PaymentRecord = {
   verified_at: string | null;
 };
 
-type StudentLookup = {
+type Profile = {
   id: string;
   full_name: string | null;
   email: string | null;
 };
 
-type CourseLookup = {
+type Course = {
   id: string;
   title: string;
+  slug: string;
+  instructor_id: string | null;
 };
+
+function formatMoney(
+  amount: number,
+  currency: string
+) {
+  return new Intl.NumberFormat(
+    "en-NG",
+    {
+      style: "currency",
+      currency:
+        currency || "NGN",
+      maximumFractionDigits: 0,
+    }
+  ).format(amount);
+}
 
 function formatDate(
   value: string | null
@@ -50,81 +60,38 @@ function formatDate(
     return "—";
   }
 
-  return new Date(
-    value
-  ).toLocaleString(
+  return new Intl.DateTimeFormat(
     "en-NG",
     {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
+      dateStyle: "medium",
+      timeStyle: "short",
     }
-  );
-}
-
-function formatAmount(
-  amount: number,
-  currency: string
-) {
-  try {
-    return new Intl.NumberFormat(
-      "en-NG",
-      {
-        style: "currency",
-        currency:
-          currency || "NGN",
-        maximumFractionDigits: 0,
-      }
-    ).format(amount);
-  } catch {
-    return `₦${amount.toLocaleString(
-      "en-NG"
-    )}`;
-  }
+  ).format(new Date(value));
 }
 
 function statusLabel(
-  status: PaymentRecord["status"]
+  status: Payment["status"]
 ) {
   switch (status) {
     case "successful":
       return "Successful";
-
     case "pending":
       return "Pending";
-
+    case "initiated":
+      return "Initiated";
     case "failed":
       return "Failed";
-
     case "cancelled":
       return "Cancelled";
-
     default:
-      return "Initiated";
+      return status;
   }
 }
 
 function statusClass(
-  status: PaymentRecord["status"]
+  status: Payment["status"]
 ) {
-  switch (status) {
-    case "successful":
-      return "rn-payment-status-success";
-
-    case "pending":
-      return "rn-payment-status-pending";
-
-    case "failed":
-      return "rn-payment-status-failed";
-
-    case "cancelled":
-      return "rn-payment-status-cancelled";
-
-    default:
-      return "rn-payment-status-initiated";
-  }
+  return `rn-payment-status rn-payment-status-${status}`;
 }
 
 export default async function AdminPaymentsPage() {
@@ -132,7 +99,9 @@ export default async function AdminPaymentsPage() {
     await createClient();
 
   const {
-    data: { user },
+    data: {
+      user,
+    },
   } =
     await supabase.auth.getUser();
 
@@ -143,150 +112,149 @@ export default async function AdminPaymentsPage() {
   }
 
   const {
-    data: profileData,
+    data: profile,
     error: profileError,
   } =
     await supabase
       .from("profiles")
-      .select("role, email")
+      .select("id, role")
       .eq(
         "id",
         user.id
       )
-      .maybeSingle();
-
-  if (profileError) {
-    throw new Error(
-      "Unable to verify admin access."
-    );
-  }
-
-  const profile =
-    profileData as Profile | null;
+      .single();
 
   if (
-    !profile ||
-    (profile.role !==
-      "admin" &&
-      profile.role !==
-        "instructor")
+    profileError ||
+    !profile
   ) {
-    redirect(
-      "/student/dashboard"
-    );
+    redirect("/");
   }
 
-  let assignedCourseIds:
-    | string[]
-    | null = null;
+  const role =
+    profile.role as string;
 
   if (
-    profile.role ===
-    "instructor"
+    role !== "admin" &&
+    role !== "instructor"
+  ) {
+    redirect("/");
+  }
+
+  const admin =
+    createAdminClient();
+
+  let paymentQuery = admin
+    .from("course_payments")
+    .select(
+      [
+        "id",
+        "student_id",
+        "course_id",
+        "course_slug",
+        "tx_ref",
+        "flutterwave_transaction_id",
+        "amount",
+        "currency",
+        "status",
+        "checkout_url",
+        "created_at",
+        "updated_at",
+        "verified_at",
+      ].join(", ")
+    )
+    .order(
+      "created_at",
+      {
+        ascending: false,
+      }
+    );
+
+  if (
+    role === "instructor"
   ) {
     const {
-      data: instructorCourses,
+      data: assignedCourses,
       error:
-        instructorCoursesError,
-    } =
-      await supabase
-        .from("courses")
-        .select("id")
-        .eq(
-          "instructor_id",
-          user.id
-        );
+        assignedCoursesError,
+    } = await admin
+      .from("courses")
+      .select(
+        "id, title, slug, instructor_id"
+      )
+      .eq(
+        "instructor_id",
+        user.id
+      );
 
     if (
-      instructorCoursesError
+      assignedCoursesError
     ) {
       throw new Error(
-        "Unable to load instructor courses."
+        assignedCoursesError.message
       );
     }
 
-    assignedCourseIds =
-      (instructorCourses ??
-        []).map(
-        (course) =>
-          course.id
+    const courseIds =
+      (assignedCourses ?? [])
+        .map(
+          (course) =>
+            course.id
+        );
+
+    if (
+      courseIds.length ===
+      0
+    ) {
+      return (
+        <main className="container admin-page">
+          <div className="admin-page-header">
+            <div>
+              <p className="eyebrow">
+                Payments
+              </p>
+              <h1>
+                Course Payments
+              </h1>
+              <p>
+                No courses are currently assigned to you.
+              </p>
+            </div>
+
+            <div className="admin-page-actions">
+              <Link
+                href="/admin/lms"
+                className="btn btn-secondary"
+              >
+                LMS Admin
+              </Link>
+            </div>
+          </div>
+        </main>
       );
-
-    if (
-      assignedCourseIds.length ===
-      0
-    ) {
-      assignedCourseIds = [];
     }
-  }
 
-  let paymentsQuery =
-    supabase
-      .from("course_payments")
-      .select(
-        [
-          "id",
-          "student_id",
-          "course_id",
-          "course_slug",
-          "tx_ref",
-          "flutterwave_transaction_id",
-          "amount",
-          "currency",
-          "status",
-          "checkout_url",
-          "created_at",
-          "updated_at",
-          "verified_at",
-        ].join(", ")
-      )
-      .order("created_at", {
-        ascending: false,
-      });
-
-  if (
-    profile.role ===
-      "instructor" &&
-    assignedCourseIds
-  ) {
-    if (
-      assignedCourseIds.length ===
-      0
-    ) {
-      paymentsQuery =
-        paymentsQuery.eq(
-          "course_id",
-          "00000000-0000-0000-0000-000000000000"
-        );
-    } else {
-      paymentsQuery =
-        paymentsQuery.in(
-          "course_id",
-          assignedCourseIds
-        );
-    }
+    paymentQuery =
+      paymentQuery.in(
+        "course_id",
+        courseIds
+      );
   }
 
   const {
     data: paymentData,
-    error: paymentError,
-  } =
-    await paymentsQuery;
+    error: paymentsError,
+  } = await paymentQuery;
 
-  if (paymentError) {
-    console.error(
-      "Admin payment lookup failed:",
-      paymentError
-    );
-
+  if (paymentsError) {
     throw new Error(
-      "Unable to load payment records."
+      paymentsError.message
     );
   }
 
   const payments =
     (paymentData ??
-      []) as unknown as PaymentRecord[];
+      []) as Payment[];
 
   const studentIds = [
     ...new Set(
@@ -306,12 +274,12 @@ export default async function AdminPaymentsPage() {
     ),
   ];
 
-  const {
-    data: studentsData,
-    error: studentsError,
-  } =
-    studentIds.length > 0
-      ? await supabase
+  const [
+    profilesResult,
+    coursesResult,
+  ] = await Promise.all([
+    studentIds.length
+      ? admin
           .from("profiles")
           .select(
             "id, full_name, email"
@@ -320,61 +288,63 @@ export default async function AdminPaymentsPage() {
             "id",
             studentIds
           )
-      : {
+      : Promise.resolve({
           data: [],
           error: null,
-        };
-
-  if (studentsError) {
-    throw new Error(
-      "Unable to load payment students."
-    );
-  }
-
-  const {
-    data: coursesData,
-    error: coursesError,
-  } =
-    courseIds.length > 0
-      ? await supabase
+        }),
+    courseIds.length
+      ? admin
           .from("courses")
           .select(
-            "id, title"
+            "id, title, slug, instructor_id"
           )
           .in(
             "id",
             courseIds
           )
-      : {
+      : Promise.resolve({
           data: [],
           error: null,
-        };
+        }),
+  ]);
 
-  if (coursesError) {
+  if (
+    profilesResult.error
+  ) {
     throw new Error(
-      "Unable to load payment courses."
+      profilesResult.error.message
     );
   }
 
-  const studentMap =
+  if (
+    coursesResult.error
+  ) {
+    throw new Error(
+      coursesResult.error.message
+    );
+  }
+
+  const profiles =
+    (profilesResult.data ??
+      []) as Profile[];
+
+  const courses =
+    (coursesResult.data ??
+      []) as Course[];
+
+  const profileMap =
     new Map(
-      (
-        (studentsData ??
-          []) as unknown as StudentLookup[]
-      ).map(
-        (student) => [
-          student.id,
-          student,
+      profiles.map(
+        (profile) => [
+          profile.id,
+          profile,
         ]
       )
     );
 
   const courseMap =
     new Map(
-      (
-        (coursesData ??
-          []) as unknown as CourseLookup[]
-      ).map(
+      courses.map(
         (course) => [
           course.id,
           course,
@@ -409,343 +379,287 @@ export default async function AdminPaymentsPage() {
 
   const totalCollected =
     successfulPayments.reduce(
-      (
-        total,
-        payment
-      ) =>
-        total +
-        payment.amount,
+      (sum, payment) =>
+        sum + payment.amount,
       0
     );
 
   return (
-    <section className="section">
-      <div
-        className="container rn-dashboard-shell"
-      >
-        <div
-          className="rn-admin-heading"
-        >
-          <div>
-            <div className="rn-brand-kicker">
-              RuffNeck Learn
-            </div>
+    <main className="container admin-page">
+      <div className="admin-page-header">
+        <div>
+          <p className="eyebrow">
+            Administration
+          </p>
 
+          <h1>
+            Course Payments
+          </h1>
+
+          <p>
+            Monitor Flutterwave transactions,
+            reconcile pending payments, and
+            track paid-course access.
+          </p>
+        </div>
+
+        <div className="admin-page-actions">
+          <Link
+            href="/admin/lms"
+            className="btn btn-secondary"
+          >
+            LMS Admin
+          </Link>
+
+          <Link
+            href="/admin/ai-drafts"
+            className="btn btn-secondary"
+          >
+            AI Drafts
+          </Link>
+
+          <Link
+            href="/admin/assessments"
+            className="btn btn-secondary"
+          >
+            Assessments
+          </Link>
+
+          <Link
+            href="/admin/capstones"
+            className="btn btn-secondary"
+          >
+            Capstones
+          </Link>
+        </div>
+      </div>
+
+      <section className="admin-stats">
+        <article className="admin-stat-card">
+          <span>
+            Collected
+          </span>
+          <strong>
+            {formatMoney(
+              totalCollected,
+              "NGN"
+            )}
+          </strong>
+        </article>
+
+        <article className="admin-stat-card">
+          <span>
+            Successful
+          </span>
+          <strong>
+            {
+              successfulPayments.length
+            }
+          </strong>
+        </article>
+
+        <article className="admin-stat-card">
+          <span>
+            Pending
+          </span>
+          <strong>
+            {
+              pendingPayments.length
+            }
+          </strong>
+        </article>
+
+        <article className="admin-stat-card">
+          <span>
+            Failed / Cancelled
+          </span>
+          <strong>
+            {
+              failedPayments.length
+            }
+          </strong>
+        </article>
+      </section>
+
+      <section className="admin-card">
+        <div className="admin-card-header">
+          <div>
             <h2>
-              Payment Management
+              Transactions
             </h2>
 
-            <p className="muted">
-              Flutterwave course
-              payments and enrollment
-              transactions.
+            <p>
+              {payments.length} payment
+              {payments.length === 1
+                ? ""
+                : "s"} recorded.
             </p>
           </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              flexWrap: "wrap",
-            }}
-          >
-            <Link
-              href="/admin/lms"
-              className="btn btn-ghost"
-            >
-              LMS Admin
-            </Link>
-
-            <Link
-              href="/admin/ai-drafts"
-              className="btn btn-ghost"
-            >
-              AI Drafts
-            </Link>
-
-            <Link
-              href="/admin/assessments"
-              className="btn btn-ghost"
-            >
-              Assessments
-            </Link>
-
-            <Link
-              href="/admin/projects"
-              className="btn btn-ghost"
-            >
-              Capstones
-            </Link>
-          </div>
         </div>
 
-        <div className="rn-admin-stats">
-          <div className="rn-admin-stat">
-            <span className="rn-admin-stat-icon">
-              ₦
-            </span>
-
-            <span>
-              <span className="muted">
-                Collected
-              </span>
-
-              <strong>
-                ₦
-                {totalCollected.toLocaleString(
-                  "en-NG"
-                )}
-              </strong>
-            </span>
+        {payments.length ===
+        0 ? (
+          <div className="admin-empty-state">
+            <h3>
+              No payments yet
+            </h3>
+            <p>
+              Flutterwave course transactions
+              will appear here after students
+              begin purchasing paid courses.
+            </p>
           </div>
+        ) : (
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>
+                    Student
+                  </th>
+                  <th>
+                    Course
+                  </th>
+                  <th>
+                    Amount
+                  </th>
+                  <th>
+                    Reference
+                  </th>
+                  <th>
+                    Flutterwave ID
+                  </th>
+                  <th>
+                    Status
+                  </th>
+                  <th>
+                    Created
+                  </th>
+                  <th>
+                    Verified
+                  </th>
+                  <th>
+                    Action
+                  </th>
+                </tr>
+              </thead>
 
-          <div className="rn-admin-stat">
-            <span className="rn-admin-stat-icon">
-              ✓
-            </span>
-
-            <span>
-              <span className="muted">
-                Successful
-              </span>
-
-              <strong>
-                {
-                  successfulPayments.length
-                }
-              </strong>
-            </span>
-          </div>
-
-          <div className="rn-admin-stat">
-            <span className="rn-admin-stat-icon">
-              …
-            </span>
-
-            <span>
-              <span className="muted">
-                Pending
-              </span>
-
-              <strong>
-                {
-                  pendingPayments.length
-                }
-              </strong>
-            </span>
-          </div>
-
-          <div className="rn-admin-stat">
-            <span className="rn-admin-stat-icon">
-              !
-            </span>
-
-            <span>
-              <span className="muted">
-                Failed / Cancelled
-              </span>
-
-              <strong>
-                {
-                  failedPayments.length
-                }
-              </strong>
-            </span>
-          </div>
-        </div>
-
-        <section className="rn-admin-list-panel">
-          <div className="rn-admin-list-header">
-            <div>
-              <div className="rn-brand-kicker">
-                Transactions
-              </div>
-
-              <h3>
-                Flutterwave Payments
-              </h3>
-
-              <p className="muted">
-                {payments.length} payment
-                {payments.length ===
-                1
-                  ? ""
-                  : "s"}{" "}
-                recorded.
-              </p>
-            </div>
-          </div>
-
-          {payments.length ===
-          0 ? (
-            <div className="rn-empty-state">
-              <div className="rn-empty-icon">
-                ₦
-              </div>
-
-              <strong>
-                No payments yet
-              </strong>
-
-              <p>
-                Course payment
-                transactions will
-                appear here after
-                students begin
-                purchasing paid
-                courses.
-              </p>
-            </div>
-          ) : (
-            <div className="rn-table-wrap">
-              <table className="rn-admin-table">
-                <thead>
-                  <tr>
-                    <th>
-                      Student
-                    </th>
-                    <th>
-                      Course
-                    </th>
-                    <th>
-                      Amount
-                    </th>
-                    <th>
-                      Flutterwave
-                    </th>
-                    <th>
-                      Status
-                    </th>
-                    <th>
-                      Created
-                    </th>
-                    <th>
-                      Verified
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {payments.map(
-                    (payment) => {
-                      const student =
-                        studentMap.get(
-                          payment.student_id
-                        );
-
-                      const course =
-                        courseMap.get(
-                          payment.course_id
-                        );
-
-                      return (
-                        <tr
-                          key={
-                            payment.id
-                          }
-                        >
-                          <td>
-                            <strong>
-                              {student?.full_name ||
-                                "Unnamed student"}
-                            </strong>
-
-                            {student?.email ? (
-                              <span className="rn-table-subtext">
-                                {
-                                  student.email
-                                }
-                              </span>
-                            ) : null}
-                          </td>
-
-                          <td>
-                            <strong>
-                              {course?.title ||
-                                payment.course_slug}
-                            </strong>
-
-                            <span className="rn-table-subtext">
-                              {
-                                payment.course_slug
-                              }
-                            </span>
-                          </td>
-
-                          <td>
-                            <strong>
-                              {formatAmount(
-                                payment.amount,
-                                payment.currency
-                              )}
-                            </strong>
-                          </td>
-
-                          <td>
-                            <span className="rn-table-subtext">
-                              tx_ref
-                            </span>
-
-                            <code
-                              style={{
-                                display:
-                                  "block",
-                                marginTop:
-                                  3,
-                                fontSize:
-                                  "0.72rem",
-                                wordBreak:
-                                  "break-all",
-                              }}
-                            >
-                              {
-                                payment.tx_ref
-                              }
-                            </code>
-
-                            {payment.flutterwave_transaction_id ? (
-                              <span className="rn-table-subtext">
-                                ID:{" "}
-                                {
-                                  payment.flutterwave_transaction_id
-                                }
-                              </span>
-                            ) : null}
-                          </td>
-
-                          <td>
-                            <span
-                              className={`rn-payment-status ${statusClass(
-                                payment.status
-                              )}`}
-                            >
-                              {statusLabel(
-                                payment.status
-                              )}
-                            </span>
-                          </td>
-
-                          <td>
-                            {formatDate(
-                              payment.created_at
-                            )}
-                          </td>
-
-                          <td>
-                            {formatDate(
-                              payment.verified_at
-                            )}
-                          </td>
-                        </tr>
+              <tbody>
+                {payments.map(
+                  (payment) => {
+                    const student =
+                      profileMap.get(
+                        payment.student_id
                       );
-                    }
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      </div>
-    </section>
+
+                    const course =
+                      courseMap.get(
+                        payment.course_id
+                      );
+
+                    return (
+                      <tr
+                        key={
+                          payment.id
+                        }
+                      >
+                        <td>
+                          <strong>
+                            {student?.full_name ||
+                              "Student"}
+                          </strong>
+
+                          {student?.email ? (
+                            <small>
+                              {
+                                student.email
+                              }
+                            </small>
+                          ) : null}
+                        </td>
+
+                        <td>
+                          <strong>
+                            {course?.title ||
+                              payment.course_slug}
+                          </strong>
+
+                          <small>
+                            {
+                              payment.course_slug
+                            }
+                          </small>
+                        </td>
+
+                        <td>
+                          {formatMoney(
+                            payment.amount,
+                            payment.currency
+                          )}
+                        </td>
+
+                        <td>
+                          <code>
+                            {
+                              payment.tx_ref
+                            }
+                          </code>
+                        </td>
+
+                        <td>
+                          {payment.flutterwave_transaction_id ??
+                            "—"}
+                        </td>
+
+                        <td>
+                          <span
+                            className={statusClass(
+                              payment.status
+                            )}
+                          >
+                            {statusLabel(
+                              payment.status
+                            )}
+                          </span>
+                        </td>
+
+                        <td>
+                          {formatDate(
+                            payment.created_at
+                          )}
+                        </td>
+
+                        <td>
+                          {formatDate(
+                            payment.verified_at
+                          )}
+                        </td>
+
+                        <td>
+                          {payment.status ===
+                              "pending" ||
+                          payment.status ===
+                              "initiated" ? (
+                            <ReconcilePaymentButton
+                              paymentId={
+                                payment.id
+                              }
+                            />
+                          ) : (
+                            <span className="admin-muted">
+                              —
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  }
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </main>
   );
 }
