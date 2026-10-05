@@ -27,6 +27,18 @@ type Course = {
   title: string;
 };
 
+function formatDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return new Intl.DateTimeFormat("en-NG", {
+    dateStyle: "long",
+  }).format(date);
+}
+
 export default async function StudentCertificatesPage() {
   const supabase = await createClient();
 
@@ -35,16 +47,8 @@ export default async function StudentCertificatesPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect(
-      "/login?next=/student/certificates"
-    );
+    redirect("/login?next=/student/certificates");
   }
-
-  /*
-   * --------------------------------------------------------------
-   * ISSUED CERTIFICATES
-   * --------------------------------------------------------------
-   */
 
   const {
     data: certificateData,
@@ -63,16 +67,10 @@ export default async function StudentCertificatesPage() {
         "capstone_score",
       ].join(", ")
     )
-    .eq(
-      "student_id",
-      user.id
-    )
-    .order(
-      "issued_at",
-      {
-        ascending: false,
-      }
-    );
+    .eq("student_id", user.id)
+    .order("issued_at", {
+      ascending: false,
+    });
 
   if (certificateError) {
     console.error(
@@ -82,40 +80,16 @@ export default async function StudentCertificatesPage() {
   }
 
   const certificates =
-    (certificateData ??
-      []) as unknown as Certificate[];
-
-  /*
-   * --------------------------------------------------------------
-   * COMPLETED ENROLLMENTS
-   * --------------------------------------------------------------
-   *
-   * A completed enrollment is only a certificate candidate.
-   * The certificate issuance API independently verifies:
-   *
-   * 1. Published course
-   * 2. All published lessons completed
-   * 3. Assessment passed at 70%
-   * 4. Published capstone exists
-   * 5. Capstone approved
-   */
+    (certificateData ?? []) as unknown as Certificate[];
 
   const {
     data: enrollmentData,
     error: enrollmentError,
   } = await supabase
     .from("enrollments")
-    .select(
-      "course_id, enrollment_status"
-    )
-    .eq(
-      "student_id",
-      user.id
-    )
-    .eq(
-      "enrollment_status",
-      "completed"
-    );
+    .select("course_id, enrollment_status")
+    .eq("student_id", user.id)
+    .eq("enrollment_status", "completed");
 
   if (enrollmentError) {
     console.error(
@@ -125,40 +99,24 @@ export default async function StudentCertificatesPage() {
   }
 
   const completedEnrollments =
-    (enrollmentData ??
-      []) as unknown as Enrollment[];
+    (enrollmentData ?? []) as unknown as Enrollment[];
 
   const completedCourseIds =
     completedEnrollments.map(
       (item) => item.course_id
     );
 
-  /*
-   * --------------------------------------------------------------
-   * CLAIMABLE CERTIFICATE CANDIDATES
-   * --------------------------------------------------------------
-   */
-
-  const certificateCourseIds =
-    new Set(
-      certificates.map(
-        (item) => item.course_id
-      )
-    );
+  const certificateCourseIds = new Set(
+    certificates.map(
+      (item) => item.course_id
+    )
+  );
 
   const claimableCourseIds =
     completedCourseIds.filter(
       (courseId) =>
-        !certificateCourseIds.has(
-          courseId
-        )
+        !certificateCourseIds.has(courseId)
     );
-
-  /*
-   * --------------------------------------------------------------
-   * COURSE DETAILS
-   * --------------------------------------------------------------
-   */
 
   const {
     data: claimableCourseData,
@@ -167,17 +125,9 @@ export default async function StudentCertificatesPage() {
     claimableCourseIds.length > 0
       ? await supabase
           .from("courses")
-          .select(
-            "id, title"
-          )
-          .eq(
-            "status",
-            "published"
-          )
-          .in(
-            "id",
-            claimableCourseIds
-          )
+          .select("id, title")
+          .eq("status", "published")
+          .in("id", claimableCourseIds)
       : {
           data: [],
           error: null,
@@ -210,13 +160,11 @@ export default async function StudentCertificatesPage() {
               CREDENTIALS
             </span>
 
-            <h1>
-              My Certificates
-            </h1>
+            <h1>My Certificates</h1>
 
             <p>
-              View and access your RuffNeck Learn
-              course certificates.
+              View, print and publicly verify your
+              RuffNeck Learn course certificates.
             </p>
           </div>
         </div>
@@ -241,33 +189,28 @@ export default async function StudentCertificatesPage() {
             </div>
 
             <div className="rn-certificate-claim-grid">
-              {claimableCourses.map(
-                (course) => (
-                  <article
-                    key={course.id}
-                    className="rn-certificate-claim-card"
-                  >
-                    <span>
-                      COURSE COMPLETED
-                    </span>
+              {claimableCourses.map((course) => (
+                <article
+                  key={course.id}
+                  className="rn-certificate-claim-card"
+                >
+                  <span>
+                    COURSE COMPLETED
+                  </span>
 
-                    <h3>
-                      {course.title}
-                    </h3>
+                  <h3>{course.title}</h3>
 
-                    <p>
-                      Requires completed lessons,
-                      a passing assessment of at
-                      least 70%, and an approved
-                      capstone.
-                    </p>
+                  <p>
+                    Requires completed lessons, a
+                    passing assessment of at least
+                    70%, and an approved capstone.
+                  </p>
 
-                    <CertificateIssueButton
-                      courseId={course.id}
-                    />
-                  </article>
-                )
-              )}
+                  <CertificateIssueButton
+                    courseId={course.id}
+                  />
+                </article>
+              ))}
             </div>
           </section>
         ) : null}
@@ -278,23 +221,19 @@ export default async function StudentCertificatesPage() {
               CERTIFICATES
             </span>
 
-            <h2>
-              Issued credentials
-            </h2>
+            <h2>Issued credentials</h2>
           </div>
 
           {certificates.length === 0 ? (
             <article className="rn-project-empty">
-              <h2>
-                No certificates yet
-              </h2>
+              <h2>No certificates yet</h2>
 
               <p>
                 Complete a RuffNeck Learn course,
                 pass its assessment with at least
                 70%, and receive approval for its
-                published capstone to become eligible
-                for a certificate.
+                published capstone to become
+                eligible for a certificate.
               </p>
 
               <Link
@@ -306,8 +245,13 @@ export default async function StudentCertificatesPage() {
             </article>
           ) : (
             <div className="rn-certificate-grid">
-              {certificates.map(
-                (certificate) => (
+              {certificates.map((certificate) => {
+                const verificationUrl =
+                  `/verify/${encodeURIComponent(
+                    certificate.certificate_number
+                  )}`;
+
+                return (
                   <article
                     key={certificate.id}
                     className="rn-certificate-card"
@@ -326,6 +270,13 @@ export default async function StudentCertificatesPage() {
 
                     <div className="rn-certificate-card-meta">
                       <span>
+                        Issued:{" "}
+                        {formatDate(
+                          certificate.issued_at
+                        )}
+                      </span>
+
+                      <span>
                         Assessment:{" "}
                         {certificate.assessment_score ??
                           "—"}
@@ -341,20 +292,48 @@ export default async function StudentCertificatesPage() {
                     </div>
 
                     {certificate.is_revoked ? (
-                      <div className="rn-project-status status-revision_required">
-                        Revoked
-                      </div>
+                      <>
+                        <div className="rn-project-status status-revision_required">
+                          Revoked
+                        </div>
+
+                        <Link
+                          href={verificationUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rn-button rn-button-secondary"
+                        >
+                          View Verification
+                        </Link>
+                      </>
                     ) : (
-                      <Link
-                        href={`/student/certificates/${certificate.id}`}
-                        className="rn-button rn-button-primary"
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 10,
+                          flexWrap: "wrap",
+                        }}
                       >
-                        View Certificate
-                      </Link>
+                        <Link
+                          href={`/student/certificates/${certificate.id}`}
+                          className="rn-button rn-button-primary"
+                        >
+                          View Certificate
+                        </Link>
+
+                        <Link
+                          href={verificationUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rn-button rn-button-secondary"
+                        >
+                          Verify
+                        </Link>
+                      </div>
                     )}
                   </article>
-                )
-              )}
+                );
+              })}
             </div>
           )}
         </section>
