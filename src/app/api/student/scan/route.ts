@@ -433,16 +433,6 @@ function normalizeFieldName(value: string) {
 /**
  * Removes sensitive values from free text while preserving
  * useful educational terminology.
- *
- * Example:
- *   "Account Number: 4005245577"
- * becomes:
- *   "Account Number"
- *
- * The previous implementation returned:
- *   "Account Number: [REDACTED]"
- *
- * That was technically safe but produced awkward learning content.
  */
 function redactSensitiveText(value: string) {
   let result = value;
@@ -505,6 +495,19 @@ function redactSensitiveText(value: string) {
   result = result.replace(
     /\b((?:beneficiary|sender|recipient|customer)\s+account(?:\s+(?:number|no\.?))?)\s*[:#-]\s*[A-Z0-9]{6,20}\b/gi,
     (_match, label: string) => label.trim()
+  );
+
+  // Common monetary values following explicit financial labels.
+  // Preserve the field name while removing the exact value.
+  result = result.replace(
+    /\b((?:transaction|payment|transfer)\s+amount|amount|balance|account\s+balance|payment\s+value)\s*[:#-]\s*(?:₦|NGN|N)?\s?[\d,]+(?:\.\d{1,2})?\b/gi,
+    (_match, label: string) => label.trim()
+  );
+
+  // Numeric currency values beginning with ₦ or NGN.
+  result = result.replace(
+    /\b(?:₦|NGN)\s?[\d,]+(?:\.\d{1,2})?\b/gi,
+    REDACTED
   );
 
   // IBAN.
@@ -587,8 +590,24 @@ function redactSensitiveText(value: string) {
       "recipient name"
     );
 
+  /*
+   * Repair a common incomplete definition pattern
+   * that Gemini may occasionally produce.
+   */
+  result = result.replace(
+    /\bwhere the beneficiary['’]s account\.?$/i,
+    "where the beneficiary's account is held."
+  );
+
+  result = result.replace(
+    /\bwhere the customer['’]s account\.?$/i,
+    "where the customer's account is held."
+  );
+
   // Avoid accidental doubled whitespace after redaction.
-  result = result.replace(/[ \t]{2,}/g, " ").trim();
+  result = result
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
 
   return result;
 }
@@ -600,15 +619,27 @@ function redactSensitiveText(value: string) {
  * Explicit sensitive object fields are replaced.
  * Free-text values are cleaned with redactSensitiveText().
  */
-function sanitizeValue(value: unknown, fieldName = ""): unknown {
+function sanitizeValue(
+  value: unknown,
+  fieldName = ""
+): unknown {
   if (typeof value === "string") {
-    const normalizedFieldName = normalizeFieldName(fieldName);
+    const normalizedFieldName =
+      normalizeFieldName(fieldName);
 
-    if (RAW_SOURCE_FIELD_NAMES.has(normalizedFieldName)) {
+    if (
+      RAW_SOURCE_FIELD_NAMES.has(
+        normalizedFieldName
+      )
+    ) {
       return "";
     }
 
-    if (SENSITIVE_FIELD_NAMES.has(normalizedFieldName)) {
+    if (
+      SENSITIVE_FIELD_NAMES.has(
+        normalizedFieldName
+      )
+    ) {
       return REDACTED;
     }
 
@@ -616,16 +647,31 @@ function sanitizeValue(value: unknown, fieldName = ""): unknown {
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) => sanitizeValue(item, fieldName));
+    return value.map((item) =>
+      sanitizeValue(
+        item,
+        fieldName
+      )
+    );
   }
 
-  if (typeof value === "object" && value !== null) {
-    const source = value as Record<string, unknown>;
+  if (
+    typeof value === "object" &&
+    value !== null
+  ) {
+    const source =
+      value as Record<string, unknown>;
 
-    const result: Record<string, unknown> = {};
+    const result: Record<string, unknown> =
+      {};
 
-    for (const [key, item] of Object.entries(source)) {
-      result[key] = sanitizeValue(item, key);
+    for (
+      const [key, item] of Object.entries(source)
+    ) {
+      result[key] = sanitizeValue(
+        item,
+        key
+      );
     }
 
     return result;
@@ -634,7 +680,9 @@ function sanitizeValue(value: unknown, fieldName = ""): unknown {
   return value;
 }
 
-function sanitizeLearningPack(value: unknown) {
+function sanitizeLearningPack(
+  value: unknown
+) {
   if (
     !value ||
     typeof value !== "object" ||
@@ -643,7 +691,8 @@ function sanitizeLearningPack(value: unknown) {
     return null;
   }
 
-  const sanitized = sanitizeValue(value);
+  const sanitized =
+    sanitizeValue(value);
 
   if (
     !sanitized ||
@@ -653,10 +702,15 @@ function sanitizeLearningPack(value: unknown) {
     return null;
   }
 
-  return sanitized as Record<string, unknown>;
+  return sanitized as Record<
+    string,
+    unknown
+  >;
 }
 
-function normalizeLearningPack(value: unknown) {
+function normalizeLearningPack(
+  value: unknown
+) {
   if (
     !value ||
     typeof value !== "object" ||
@@ -665,190 +719,321 @@ function normalizeLearningPack(value: unknown) {
     return null;
   }
 
-  const source = value as Record<string, unknown>;
+  const source =
+    value as Record<string, unknown>;
 
-  const rawConcepts = Array.isArray(source.key_concepts)
-    ? source.key_concepts
-    : [];
-
-  const keyConcepts = rawConcepts
-    .filter(
-      (
-        item
-      ): item is Record<string, unknown> =>
-        !!item &&
-        typeof item === "object" &&
-        !Array.isArray(item)
+  const rawConcepts =
+    Array.isArray(
+      source.key_concepts
     )
-    .map((item) => ({
-      term:
-        typeof item.term === "string"
-          ? redactSensitiveText(item.term.trim())
-          : "",
+      ? source.key_concepts
+      : [];
 
-      explanation:
-        typeof item.explanation === "string"
-          ? redactSensitiveText(item.explanation.trim())
-          : "",
-    }))
-    .filter((item) => item.term && item.explanation);
+  const keyConcepts =
+    rawConcepts
+      .filter(
+        (
+          item
+        ): item is Record<
+          string,
+          unknown
+        > =>
+          !!item &&
+          typeof item ===
+            "object" &&
+          !Array.isArray(item)
+      )
+      .map((item) => ({
+        term:
+          typeof item.term ===
+          "string"
+            ? redactSensitiveText(
+                item.term.trim()
+              )
+            : "",
 
-  const rawSections = Array.isArray(source.sections)
-    ? source.sections
-    : [];
+        explanation:
+          typeof item.explanation ===
+          "string"
+            ? redactSensitiveText(
+                item.explanation.trim()
+              )
+            : "",
+      }))
+      .filter(
+        (item) =>
+          item.term &&
+          item.explanation
+      );
 
-  const sections = rawSections
-    .filter(
-      (
-        item
-      ): item is Record<string, unknown> =>
-        !!item &&
-        typeof item === "object" &&
-        !Array.isArray(item)
+  const rawSections =
+    Array.isArray(
+      source.sections
     )
-    .map((item) => ({
-      heading:
-        typeof item.heading === "string"
-          ? redactSensitiveText(item.heading.trim())
-          : "",
+      ? source.sections
+      : [];
 
-      content:
-        typeof item.content === "string"
-          ? redactSensitiveText(item.content.trim())
-          : "",
+  const sections =
+    rawSections
+      .filter(
+        (
+          item
+        ): item is Record<
+          string,
+          unknown
+        > =>
+          !!item &&
+          typeof item ===
+            "object" &&
+          !Array.isArray(item)
+      )
+      .map((item) => ({
+        heading:
+          typeof item.heading ===
+          "string"
+            ? redactSensitiveText(
+                item.heading.trim()
+              )
+            : "",
 
-      examples: normalizeStringArray(item.examples).map(
-        redactSensitiveText
-      ),
-    }))
-    .filter((item) => item.heading || item.content);
+        content:
+          typeof item.content ===
+          "string"
+            ? redactSensitiveText(
+                item.content.trim()
+              )
+            : "",
 
-  const rawPractical = source.practical_activity;
+        examples:
+          normalizeStringArray(
+            item.examples
+          ).map(
+            redactSensitiveText
+          ),
+      }))
+      .filter(
+        (item) =>
+          item.heading ||
+          item.content
+      );
+
+  const rawPractical =
+    source.practical_activity;
 
   const practical =
     rawPractical &&
-    typeof rawPractical === "object" &&
-    !Array.isArray(rawPractical)
-      ? (rawPractical as Record<string, unknown>)
+    typeof rawPractical ===
+      "object" &&
+    !Array.isArray(
+      rawPractical
+    )
+      ? (rawPractical as Record<
+          string,
+          unknown
+        >)
       : {};
 
-  const rawQuestions = Array.isArray(source.assessment_questions)
-    ? source.assessment_questions
-    : [];
-
-  const assessmentQuestions = rawQuestions
-    .filter(
-      (
-        item
-      ): item is Record<string, unknown> =>
-        !!item &&
-        typeof item === "object" &&
-        !Array.isArray(item)
+  const rawQuestions =
+    Array.isArray(
+      source.assessment_questions
     )
-    .map((item) => ({
-      question:
-        typeof item.question === "string"
-          ? redactSensitiveText(item.question.trim())
-          : "",
+      ? source.assessment_questions
+      : [];
 
-      options: normalizeStringArray(item.options).map(
-        redactSensitiveText
-      ),
+  const assessmentQuestions =
+    rawQuestions
+      .filter(
+        (
+          item
+        ): item is Record<
+          string,
+          unknown
+        > =>
+          !!item &&
+          typeof item ===
+            "object" &&
+          !Array.isArray(item)
+      )
+      .map((item) => ({
+        question:
+          typeof item.question ===
+          "string"
+            ? redactSensitiveText(
+                item.question.trim()
+              )
+            : "",
 
-      correct_answer:
-        typeof item.correct_answer === "string"
-          ? redactSensitiveText(item.correct_answer.trim())
-          : "",
+        options:
+          normalizeStringArray(
+            item.options
+          ).map(
+            redactSensitiveText
+          ),
 
-      explanation:
-        typeof item.explanation === "string"
-          ? redactSensitiveText(item.explanation.trim())
-          : "",
-    }))
-    .filter((item) => item.question);
+        correct_answer:
+          typeof item.correct_answer ===
+          "string"
+            ? redactSensitiveText(
+                item.correct_answer.trim()
+              )
+            : "",
 
-  const rawStudyPlan = Array.isArray(source.study_plan)
-    ? source.study_plan
-    : [];
+        explanation:
+          typeof item.explanation ===
+          "string"
+            ? redactSensitiveText(
+                item.explanation.trim()
+              )
+            : "",
+      }))
+      .filter(
+        (item) =>
+          item.question
+      );
 
-  const studyPlan = rawStudyPlan
-    .filter(
-      (
-        item
-      ): item is Record<string, unknown> =>
-        !!item &&
-        typeof item === "object" &&
-        !Array.isArray(item)
+  const rawStudyPlan =
+    Array.isArray(
+      source.study_plan
     )
-    .map((item) => ({
-      step:
-        typeof item.step === "number" &&
-        Number.isFinite(item.step)
-          ? Math.max(1, Math.round(item.step))
-          : 1,
+      ? source.study_plan
+      : [];
 
-      action:
-        typeof item.action === "string"
-          ? redactSensitiveText(item.action.trim())
-          : "",
-    }))
-    .filter((item) => item.action);
+  const studyPlan =
+    rawStudyPlan
+      .filter(
+        (
+          item
+        ): item is Record<
+          string,
+          unknown
+        > =>
+          !!item &&
+          typeof item ===
+            "object" &&
+          !Array.isArray(item)
+      )
+      .map((item) => ({
+        step:
+          typeof item.step ===
+            "number" &&
+          Number.isFinite(
+            item.step
+          )
+            ? Math.max(
+                1,
+                Math.round(
+                  item.step
+                )
+              )
+            : 1,
 
-  const rawFlashcards = Array.isArray(source.flashcards)
-    ? source.flashcards
-    : [];
+        action:
+          typeof item.action ===
+          "string"
+            ? redactSensitiveText(
+                item.action.trim()
+              )
+            : "",
+      }))
+      .filter(
+        (item) =>
+          item.action
+      );
 
-  const flashcards = rawFlashcards
-    .filter(
-      (
-        item
-      ): item is Record<string, unknown> =>
-        !!item &&
-        typeof item === "object" &&
-        !Array.isArray(item)
+  const rawFlashcards =
+    Array.isArray(
+      source.flashcards
     )
-    .map((item) => ({
-      front:
-        typeof item.front === "string"
-          ? redactSensitiveText(item.front.trim())
-          : "",
+      ? source.flashcards
+      : [];
 
-      back:
-        typeof item.back === "string"
-          ? redactSensitiveText(item.back.trim())
-          : "",
-    }))
-    .filter((item) => item.front && item.back);
+  const flashcards =
+    rawFlashcards
+      .filter(
+        (
+          item
+        ): item is Record<
+          string,
+          unknown
+        > =>
+          !!item &&
+          typeof item ===
+            "object" &&
+          !Array.isArray(item)
+      )
+      .map((item) => ({
+        front:
+          typeof item.front ===
+          "string"
+            ? redactSensitiveText(
+                item.front.trim()
+              )
+            : "",
+
+        back:
+          typeof item.back ===
+          "string"
+            ? redactSensitiveText(
+                item.back.trim()
+              )
+            : "",
+      }))
+      .filter(
+        (item) =>
+          item.front &&
+          item.back
+      );
 
   const duration =
-    typeof source.estimated_duration_minutes === "number" &&
-    Number.isFinite(source.estimated_duration_minutes)
+    typeof source
+      .estimated_duration_minutes ===
+      "number" &&
+    Number.isFinite(
+      source.estimated_duration_minutes
+    )
       ? Math.max(
           1,
-          Math.round(source.estimated_duration_minutes)
+          Math.round(
+            source.estimated_duration_minutes
+          )
         )
       : 30;
 
-  const warnings = normalizeStringArray(
-    source.source_warnings
-  ).map(redactSensitiveText);
+  const warnings =
+    normalizeStringArray(
+      source.source_warnings
+    ).map(
+      redactSensitiveText
+    );
 
   const privacyWarning =
     "Potential personal or financial identifiers were screened and redacted before this learning material was returned.";
 
-  if (!warnings.includes(privacyWarning)) {
-    warnings.push(privacyWarning);
+  if (
+    !warnings.includes(
+      privacyWarning
+    )
+  ) {
+    warnings.push(
+      privacyWarning
+    );
   }
 
   return {
     title:
-      typeof source.title === "string"
-        ? redactSensitiveText(source.title.trim())
+      typeof source.title ===
+      "string"
+        ? redactSensitiveText(
+            source.title.trim()
+          )
         : "Generated learning material",
 
     source_summary:
-      typeof source.source_summary === "string"
-        ? redactSensitiveText(source.source_summary.trim())
+      typeof source.source_summary ===
+      "string"
+        ? redactSensitiveText(
+            source.source_summary.trim()
+          )
         : "",
 
     /*
@@ -857,60 +1042,84 @@ function normalizeLearningPack(value: unknown) {
      */
     extracted_text: "",
 
-    learning_objectives: normalizeStringArray(
-      source.learning_objectives
-    ).map(redactSensitiveText),
+    learning_objectives:
+      normalizeStringArray(
+        source.learning_objectives
+      ).map(
+        redactSensitiveText
+      ),
 
-    prerequisites: normalizeStringArray(
-      source.prerequisites
-    ).map(redactSensitiveText),
+    prerequisites:
+      normalizeStringArray(
+        source.prerequisites
+      ).map(
+        redactSensitiveText
+      ),
 
-    key_concepts: keyConcepts,
+    key_concepts:
+      keyConcepts,
 
     sections,
 
     practical_activity: {
       title:
-        typeof practical.title === "string"
-          ? redactSensitiveText(practical.title.trim())
+        typeof practical.title ===
+        "string"
+          ? redactSensitiveText(
+              practical.title.trim()
+            )
           : "Practical application",
 
       instructions:
-        typeof practical.instructions === "string"
+        typeof practical.instructions ===
+        "string"
           ? redactSensitiveText(
               practical.instructions.trim()
             )
           : "",
 
       expected_output:
-        typeof practical.expected_output === "string"
+        typeof practical.expected_output ===
+        "string"
           ? redactSensitiveText(
               practical.expected_output.trim()
             )
           : "",
     },
 
-    assessment_questions: assessmentQuestions,
+    assessment_questions:
+      assessmentQuestions,
 
-    study_plan: studyPlan,
+    study_plan:
+      studyPlan,
 
     flashcards,
 
-    source_warnings: warnings,
+    source_warnings:
+      warnings,
 
-    estimated_duration_minutes: duration,
+    estimated_duration_minutes:
+      duration,
 
     difficulty:
-      typeof source.difficulty === "string"
-        ? redactSensitiveText(source.difficulty.trim())
+      typeof source.difficulty ===
+      "string"
+        ? redactSensitiveText(
+            source.difficulty.trim()
+          )
         : "Beginner",
   };
 }
 
-function extractGeminiText(response: GeminiResponse) {
+function extractGeminiText(
+  response: GeminiResponse
+) {
   return (
     response.candidates?.[0]?.content?.parts
-      ?.map((part) => part.text || "")
+      ?.map(
+        (part) =>
+          part.text || ""
+      )
       .join("")
       .trim() || ""
   );
@@ -924,15 +1133,23 @@ function getGeminiErrorMessage(
     return response.error.message;
   }
 
-  if (response.promptFeedback?.blockReason) {
+  if (
+    response.promptFeedback?.blockReason
+  ) {
     return `Gemini blocked the request: ${response.promptFeedback.blockReason}.`;
   }
 
-  if (response.candidates?.[0]?.finishReason) {
+  if (
+    response.candidates?.[0]
+      ?.finishReason
+  ) {
     return `Gemini stopped the response with reason: ${response.candidates[0].finishReason}.`;
   }
 
-  if (status === 401 || status === 403) {
+  if (
+    status === 401 ||
+    status === 403
+  ) {
     return "Gemini rejected the API key or project access.";
   }
 
@@ -951,18 +1168,23 @@ function getGeminiErrorMessage(
   return "Gemini could not process the scanned pages.";
 }
 
-export async function POST(request: Request) {
+export async function POST(
+  request: Request
+) {
   try {
-    const supabase = await createClient();
+    const supabase =
+      await createClient();
 
     const {
       data: { user },
-    } = await supabase.auth.getUser();
+    } =
+      await supabase.auth.getUser();
 
     if (!user) {
       return NextResponse.json(
         {
-          error: "Authentication required.",
+          error:
+            "Authentication required.",
         },
         {
           status: 401,
@@ -973,11 +1195,13 @@ export async function POST(request: Request) {
     let body: ScanRequestBody;
 
     try {
-      body = (await request.json()) as ScanRequestBody;
+      body =
+        (await request.json()) as ScanRequestBody;
     } catch {
       return NextResponse.json(
         {
-          error: "Invalid request body.",
+          error:
+            "Invalid request body.",
         },
         {
           status: 400,
@@ -985,39 +1209,54 @@ export async function POST(request: Request) {
       );
     }
 
-    const images = Array.isArray(body.images)
-      ? body.images.filter(
-          (item): item is string =>
-            typeof item === "string"
-        )
-      : [];
+    const images =
+      Array.isArray(body.images)
+        ? body.images.filter(
+            (
+              item
+            ): item is string =>
+              typeof item ===
+              "string"
+          )
+        : [];
 
-    const mode = OUTPUT_TYPES.includes(
-      body.mode as OutputType
-    )
-      ? (body.mode as OutputType)
-      : null;
+    const mode =
+      OUTPUT_TYPES.includes(
+        body.mode as OutputType
+      )
+        ? (body.mode as OutputType)
+        : null;
 
-    const language = LANGUAGES.includes(
-      body.language as LanguageCode
-    )
-      ? (body.language as LanguageCode)
-      : null;
+    const language =
+      LANGUAGES.includes(
+        body.language as LanguageCode
+      )
+        ? (body.language as LanguageCode)
+        : null;
 
-    const audience = AUDIENCES.includes(
-      body.audience as Audience
-    )
-      ? (body.audience as Audience)
-      : null;
+    const audience =
+      AUDIENCES.includes(
+        body.audience as Audience
+      )
+        ? (body.audience as Audience)
+        : null;
 
     const rawFocus =
-      typeof body.focus === "string"
+      typeof body.focus ===
+      "string"
         ? body.focus.trim()
         : "";
 
-    const focus = redactSensitiveText(rawFocus);
+    const focus =
+      redactSensitiveText(
+        rawFocus
+      );
 
-    if (!mode || !language || !audience) {
+    if (
+      !mode ||
+      !language ||
+      !audience
+    ) {
       return NextResponse.json(
         {
           error:
@@ -1032,7 +1271,8 @@ export async function POST(request: Request) {
     if (images.length === 0) {
       return NextResponse.json(
         {
-          error: "Add at least one scanned page.",
+          error:
+            "Add at least one scanned page.",
         },
         {
           status: 400,
@@ -1040,10 +1280,14 @@ export async function POST(request: Request) {
       );
     }
 
-    if (images.length > MAX_PAGES) {
+    if (
+      images.length >
+      MAX_PAGES
+    ) {
       return NextResponse.json(
         {
-          error: `You can process up to ${MAX_PAGES} pages at a time.`,
+          error:
+            `You can process up to ${MAX_PAGES} pages at a time.`,
         },
         {
           status: 400,
@@ -1051,7 +1295,10 @@ export async function POST(request: Request) {
       );
     }
 
-    if (focus.length > MAX_FOCUS_LENGTH) {
+    if (
+      focus.length >
+      MAX_FOCUS_LENGTH
+    ) {
       return NextResponse.json(
         {
           error:
@@ -1065,15 +1312,19 @@ export async function POST(request: Request) {
 
     let totalImageChars = 0;
 
-    const imageParts: {
-      inline_data: {
-        mime_type: string;
-        data: string;
-      };
-    }[] = [];
+    const imageParts:
+      {
+        inline_data: {
+          mime_type: string;
+          data: string;
+        };
+      }[] = [];
 
     for (const image of images) {
-      if (image.length > MAX_IMAGE_CHARS) {
+      if (
+        image.length >
+        MAX_IMAGE_CHARS
+      ) {
         return NextResponse.json(
           {
             error:
@@ -1085,7 +1336,11 @@ export async function POST(request: Request) {
         );
       }
 
-      if (!isAllowedDataUrl(image)) {
+      if (
+        !isAllowedDataUrl(
+          image
+        )
+      ) {
         return NextResponse.json(
           {
             error:
@@ -1097,7 +1352,10 @@ export async function POST(request: Request) {
         );
       }
 
-      const parsed = splitDataUrl(image);
+      const parsed =
+        splitDataUrl(
+          image
+        );
 
       if (!parsed) {
         return NextResponse.json(
@@ -1111,17 +1369,23 @@ export async function POST(request: Request) {
         );
       }
 
-      totalImageChars += image.length;
+      totalImageChars +=
+        image.length;
 
       imageParts.push({
         inline_data: {
-          mime_type: parsed.mimeType,
-          data: parsed.data,
+          mime_type:
+            parsed.mimeType,
+          data:
+            parsed.data,
         },
       });
     }
 
-    if (totalImageChars > MAX_TOTAL_IMAGE_CHARS) {
+    if (
+      totalImageChars >
+      MAX_TOTAL_IMAGE_CHARS
+    ) {
       return NextResponse.json(
         {
           error:
@@ -1133,7 +1397,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey =
+      process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
       return NextResponse.json(
@@ -1148,7 +1413,8 @@ export async function POST(request: Request) {
     }
 
     const model =
-      process.env.GEMINI_LMS_MODEL || DEFAULT_MODEL;
+      process.env.GEMINI_LMS_MODEL ||
+      DEFAULT_MODEL;
 
     const prompt = [
       "You are RuffNeck Learn's AI learning-content transformation engine.",
@@ -1189,13 +1455,17 @@ export async function POST(request: Request) {
 
       "Leave extracted_text empty because raw source text is not retained for reusable LMS content.",
 
-      `Create a ${outputName(mode)}.`,
+      `Create a ${outputName(
+        mode
+      )}.`,
 
       `Write the generated learning material in ${languageName(
         language
       )}.`,
 
-      `Make it suitable for ${audienceName(audience)}.`,
+      `Make it suitable for ${audienceName(
+        audience
+      )}.`,
 
       "Use Nigerian or broader African examples when they improve practical relevance, but do not present invented examples as source facts.",
 
@@ -1204,6 +1474,26 @@ export async function POST(request: Request) {
       "When the source is a receipt, bank statement, payment confirmation, invoice, transfer record or other financial document, teach the document type and its general fields rather than reproducing the specific transaction.",
 
       "Prefer generic educational phrasing such as 'a successful transfer', 'a monetary amount', 'a transaction date', 'a receiving institution' and 'a reference number' rather than copying source-specific values.",
+
+      "Do not state an exact monetary amount in the generated material merely because it is visible in the source.",
+
+      "Do not state an exact date or timestamp from the source merely because it is visible in the source.",
+
+      "Do not state private sender, recipient, beneficiary or customer names from the source.",
+
+      "Do not reproduce the source bank's private transaction identifiers.",
+
+      "For practical activities involving a personal or financial document, ask learners to identify field names, field types, statuses or anonymized placeholders rather than recording exact private values.",
+
+      "Never instruct a learner to copy an account number, exact transaction reference, exact payment identifier, private phone number, email address or other sensitive value into the learning material.",
+
+      "Every key-concept definition must be a complete, grammatically correct sentence or a short complete definition.",
+
+      "Do not produce incomplete phrases or sentence fragments in concept definitions.",
+
+      "Every section's content must be coherent and grammatically complete.",
+
+      "Every assessment question, answer and explanation must be complete and understandable without relying on the private source values.",
 
       "For a full lesson, include clear objectives, prerequisites, concepts, structured sections, examples, practical application, assessment, study path and revision support.",
 
@@ -1220,7 +1510,8 @@ export async function POST(request: Request) {
       "Return only the structured response required by the schema.",
 
       `Additional learner instruction: ${
-        focus || "None provided."
+        focus ||
+        "None provided."
       }`,
     ].join("\n");
 
@@ -1241,30 +1532,42 @@ export async function POST(request: Request) {
         model
       )}:generateContent`;
 
-    const geminiResponse = await fetch(endpoint, {
-      method: "POST",
+    const geminiResponse =
+      await fetch(
+        endpoint,
+        {
+          method: "POST",
 
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
+          headers: {
+            "Content-Type":
+              "application/json",
 
-      body: JSON.stringify({
-        contents,
+            "x-goog-api-key":
+              apiKey,
+          },
 
-        generationConfig: {
-          responseMimeType: "application/json",
+          body: JSON.stringify({
+            contents,
 
-          responseSchema: LEARNING_PACK_SCHEMA,
+            generationConfig: {
+              responseMimeType:
+                "application/json",
 
-          maxOutputTokens: 6000,
+              responseSchema:
+                LEARNING_PACK_SCHEMA,
 
-          mediaResolution: "MEDIA_RESOLUTION_HIGH",
-        },
-      }),
-    });
+              maxOutputTokens:
+                6000,
 
-    let providerData: GeminiResponse = {};
+              mediaResolution:
+                "MEDIA_RESOLUTION_HIGH",
+            },
+          }),
+        }
+      );
+
+    let providerData:
+      GeminiResponse = {};
 
     try {
       providerData =
@@ -1272,7 +1575,8 @@ export async function POST(request: Request) {
     } catch {
       return NextResponse.json(
         {
-          error: "Gemini returned an invalid response.",
+          error:
+            "Gemini returned an invalid response.",
         },
         {
           status: 502,
@@ -1280,12 +1584,18 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!geminiResponse.ok) {
+    if (
+      !geminiResponse.ok
+    ) {
       console.error(
         "Gemini Scan & Learn request failed:",
         {
-          status: geminiResponse.status,
-          error: providerData.error,
+          status:
+            geminiResponse.status,
+
+          error:
+            providerData.error,
+
           promptFeedback:
             providerData.promptFeedback,
         }
@@ -1293,12 +1603,14 @@ export async function POST(request: Request) {
 
       return NextResponse.json(
         {
-          error: getGeminiErrorMessage(
-            providerData,
-            geminiResponse.status
-          ),
+          error:
+            getGeminiErrorMessage(
+              providerData,
+              geminiResponse.status
+            ),
 
-          providerStatus: geminiResponse.status,
+          providerStatus:
+            geminiResponse.status,
         },
         {
           status: 502,
@@ -1307,7 +1619,9 @@ export async function POST(request: Request) {
     }
 
     const outputText =
-      extractGeminiText(providerData);
+      extractGeminiText(
+        providerData
+      );
 
     if (!outputText) {
       return NextResponse.json(
@@ -1321,14 +1635,21 @@ export async function POST(request: Request) {
       );
     }
 
-    let parsedOutput: unknown;
+    let parsedOutput:
+      unknown;
 
     try {
-      parsedOutput = JSON.parse(outputText);
+      parsedOutput =
+        JSON.parse(
+          outputText
+        );
     } catch {
       console.error(
         "Gemini returned non-JSON output:",
-        outputText.slice(0, 1000)
+        outputText.slice(
+          0,
+          1000
+        )
       );
 
       return NextResponse.json(
@@ -1347,7 +1668,9 @@ export async function POST(request: Request) {
      * sanitize Gemini output before returning it to the browser.
      */
     const sanitizedOutput =
-      sanitizeLearningPack(parsedOutput);
+      sanitizeLearningPack(
+        parsedOutput
+      );
 
     if (!sanitizedOutput) {
       return NextResponse.json(
@@ -1362,7 +1685,9 @@ export async function POST(request: Request) {
     }
 
     const pack =
-      normalizeLearningPack(sanitizedOutput);
+      normalizeLearningPack(
+        sanitizedOutput
+      );
 
     if (!pack) {
       return NextResponse.json(
@@ -1376,32 +1701,41 @@ export async function POST(request: Request) {
       );
     }
 
-    const activityInsert = await supabase
-      .from("learning_activity")
-      .insert({
-        student_id: user.id,
+    const activityInsert =
+      await supabase
+        .from(
+          "learning_activity"
+        )
+        .insert({
+          student_id:
+            user.id,
 
-        activity_type:
-          "ai_learning_pack_generated",
+          activity_type:
+            "ai_learning_pack_generated",
 
-        metadata: {
-          provider: "google_gemini",
+          metadata: {
+            provider:
+              "google_gemini",
 
-          model,
+            model,
 
-          mode,
+            mode,
 
-          language,
+            language,
 
-          audience,
+            audience,
 
-          page_count: images.length,
+            page_count:
+              images.length,
 
-          privacy_sanitized: true,
-        },
-      });
+            privacy_sanitized:
+              true,
+          },
+        });
 
-    if (activityInsert.error) {
+    if (
+      activityInsert.error
+    ) {
       console.warn(
         "Scan activity logging failed:",
         activityInsert.error
