@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 type Enrollment = {
   id: string;
   course_id: string;
-  status: string;
+  enrollment_status: string;
+  payment_status: string | null;
   enrolled_at: string;
 };
 
@@ -34,7 +35,9 @@ export default async function StudentDashboardPage() {
 
   const { data: enrollmentData } = await supabase
     .from("enrollments")
-    .select("id, course_id, status, enrolled_at")
+    .select(
+      "id, course_id, enrollment_status, payment_status, enrolled_at"
+    )
     .eq("student_id", user.id)
     .order("enrolled_at", {
       ascending: false,
@@ -59,7 +62,8 @@ export default async function StudentDashboardPage() {
       .select("id, title, slug")
       .in("id", courseIds);
 
-    courses = (courseData ?? []) as Course[];
+    courses =
+      (courseData ?? []) as Course[];
   }
 
   const courseMap = new Map(
@@ -72,14 +76,17 @@ export default async function StudentDashboardPage() {
   const activeEnrollments =
     enrollments.filter(
       (enrollment) =>
-        enrollment.status === "active" ||
-        enrollment.status === "completed"
+        enrollment.enrollment_status ===
+          "active" ||
+        enrollment.enrollment_status ===
+          "completed"
     );
 
   const completedCount =
     enrollments.filter(
       (enrollment) =>
-        enrollment.status === "completed"
+        enrollment.enrollment_status ===
+        "completed"
     ).length;
 
   return (
@@ -91,7 +98,7 @@ export default async function StudentDashboardPage() {
           </p>
 
           <h1>
-            My Learning
+            Learning Dashboard
           </h1>
 
           <p>
@@ -103,17 +110,17 @@ export default async function StudentDashboardPage() {
 
         <div className="admin-page-actions">
           <Link
-            href="/courses"
+            href="/student/courses"
             className="btn btn-primary"
           >
-            Browse Courses
+            My Courses
           </Link>
 
           <Link
-            href="/student/payments"
+            href="/courses"
             className="btn btn-secondary"
           >
-            Payment History
+            Browse Courses
           </Link>
         </div>
       </div>
@@ -145,24 +152,30 @@ export default async function StudentDashboardPage() {
         <div className="admin-card-header">
           <div>
             <h2>
-              My Courses
+              Continue Learning
             </h2>
 
             <p>
-              Courses you have enrolled in.
+              Open one of your enrolled courses.
             </p>
           </div>
+
+          <Link
+            href="/student/courses"
+            className="btn btn-secondary"
+          >
+            View All Courses
+          </Link>
         </div>
 
-        {enrollments.length === 0 ? (
+        {activeEnrollments.length === 0 ? (
           <div className="admin-empty">
             <h3>
-              No courses yet
+              No active courses
             </h3>
 
             <p>
-              Browse the course catalog and
-              enroll in a course to start learning.
+              Enroll in a course to start learning.
             </p>
 
             <Link
@@ -185,8 +198,9 @@ export default async function StudentDashboardPage() {
               </thead>
 
               <tbody>
-                {enrollments.map(
-                  (enrollment) => {
+                {activeEnrollments
+                  .slice(0, 5)
+                  .map((enrollment) => {
                     const course =
                       courseMap.get(
                         enrollment.course_id
@@ -196,8 +210,8 @@ export default async function StudentDashboardPage() {
                       return null;
                     }
 
-                    const isCompleted =
-                      enrollment.status ===
+                    const completed =
+                      enrollment.enrollment_status ===
                       "completed";
 
                     return (
@@ -213,12 +227,12 @@ export default async function StudentDashboardPage() {
                         <td>
                           <span
                             className={
-                              isCompleted
+                              completed
                                 ? "rn-payment-status rn-payment-status-successful"
                                 : "rn-payment-status rn-payment-status-pending"
                             }
                           >
-                            {isCompleted
+                            {completed
                               ? "Completed"
                               : "Active"}
                           </span>
@@ -237,13 +251,12 @@ export default async function StudentDashboardPage() {
                             href={`/courses/${course.slug}`}
                             className="btn btn-secondary"
                           >
-                            View Course
+                            Open Course
                           </Link>
                         </td>
                       </tr>
                     );
-                  }
-                )}
+                  })}
               </tbody>
             </table>
           </div>
@@ -254,12 +267,12 @@ export default async function StudentDashboardPage() {
         <div className="admin-card-header">
           <div>
             <h2>
-              Student Tools
+              Learning Tools
             </h2>
 
             <p>
-              Access the learning tools available
-              to your account.
+              Tools available from your student
+              account.
             </p>
           </div>
         </div>
