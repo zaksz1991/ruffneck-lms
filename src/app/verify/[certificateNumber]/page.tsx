@@ -26,6 +26,23 @@ function formatDate(value: string) {
   }).format(date);
 }
 
+function buildVerificationUrl(certificateNumber: string) {
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "https://ruffneck-lms.vercel.app";
+
+  return `${baseUrl.replace(/\/$/, "")}/verify/${encodeURIComponent(
+    certificateNumber
+  )}`;
+}
+
+function buildQrCodeUrl(verificationUrl: string) {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(
+    verificationUrl
+  )}`;
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -154,6 +171,12 @@ export default async function VerifyCertificatePage({
     );
   }
 
+  const verificationUrl = buildVerificationUrl(
+    certificate.certificate_number
+  );
+
+  const qrCodeUrl = buildQrCodeUrl(verificationUrl);
+
   return (
     <main className="rn-certificate-view-page">
       <div className="container">
@@ -273,6 +296,94 @@ export default async function VerifyCertificatePage({
                     <span>Verification</span>
 
                     <strong>Official Registry</strong>
+                  </div>
+                </div>
+
+                <div className="rn-certificate-divider" />
+
+                <div
+                  className="rn-certificate-verification"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 24,
+                    flexWrap: "wrap",
+                    marginTop: 24,
+                    padding: 20,
+                    border: "1px solid rgba(11, 30, 58, 0.12)",
+                    borderRadius: 12,
+                    background: "#f8fafc",
+                  }}
+                >
+                  <div
+                    style={{
+                      flex: "0 0 auto",
+                      width: 220,
+                      textAlign: "center",
+                    }}
+                  >
+                    <img
+                      src={qrCodeUrl}
+                      alt={`QR code for verifying certificate ${certificate.certificate_number}`}
+                      width={220}
+                      height={220}
+                      style={{
+                        display: "block",
+                        width: 220,
+                        height: 220,
+                        maxWidth: "100%",
+                        margin: "0 auto",
+                        background: "#ffffff",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    />
+                  </div>
+
+                  <div
+                    style={{
+                      flex: "1 1 280px",
+                      minWidth: 240,
+                    }}
+                  >
+                    <span className="rn-eyebrow">
+                      DIGITAL VERIFICATION
+                    </span>
+
+                    <h4
+                      style={{
+                        margin: "8px 0 10px",
+                        fontSize: 20,
+                        color: "#0b1e3a",
+                      }}
+                    >
+                      Scan to verify this certificate
+                    </h4>
+
+                    <p
+                      style={{
+                        margin: 0,
+                        lineHeight: 1.6,
+                        color: "#475569",
+                      }}
+                    >
+                      Scan the QR code with a phone camera to open the
+                      official RuffNeck Learn verification record for this
+                      certificate.
+                    </p>
+
+                    <p
+                      style={{
+                        marginTop: 12,
+                        marginBottom: 0,
+                        fontSize: 13,
+                        lineHeight: 1.5,
+                        color: "#64748b",
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      {verificationUrl}
+                    </p>
                   </div>
                 </div>
               </>
