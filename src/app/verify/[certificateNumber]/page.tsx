@@ -3,41 +3,31 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { notFound } from "next/navigation";
 
 type Certificate = {
-  id: string;
   certificate_number: string;
   holder_name: string;
   course_title: string;
-  issued_at: string;
-  assessment_score: number | null;
-  capstone_score: number | null;
   is_revoked: boolean;
-  revoked_reason: string | null;
 };
 
-function formatDate(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "—";
-  }
-
-  return new Intl.DateTimeFormat("en-NG", {
-    dateStyle: "long",
-  }).format(date);
-}
-
-function buildVerificationUrl(certificateNumber: string) {
+function buildVerificationUrl(
+  certificateNumber: string
+) {
   const baseUrl =
     process.env.NEXT_PUBLIC_SITE_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
     "https://ruffneck-lms.vercel.app";
 
-  return `${baseUrl.replace(/\/$/, "")}/verify/${encodeURIComponent(
+  return `${baseUrl.replace(
+    /\/$/,
+    ""
+  )}/verify/${encodeURIComponent(
     certificateNumber
   )}`;
 }
 
-function buildQrCodeUrl(verificationUrl: string) {
+function buildQrCodeUrl(
+  verificationUrl: string
+) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(
     verificationUrl
   )}`;
@@ -53,49 +43,59 @@ export async function generateMetadata({
   const { certificateNumber } = await params;
 
   const normalizedCertificateNumber =
-    decodeURIComponent(certificateNumber).trim();
+    decodeURIComponent(
+      certificateNumber
+    ).trim();
 
   if (!normalizedCertificateNumber) {
     return {
-      title: "Certificate Verification | RuffNeck Learn",
-      description: "Verify a RuffNeck Learn certificate.",
+      title:
+        "Certificate Verification | RuffNeck Learn",
+      description:
+        "Verify a RuffNeck Learn certificate.",
     };
   }
 
   const admin = createAdminClient();
 
-  const { data: certificate } = await admin
+  const { data } = await admin
     .from("course_certificates")
     .select(
-      [
-        "certificate_number",
-        "holder_name",
-        "course_title",
-        "is_revoked",
-      ].join(", ")
+      "certificate_number, holder_name, course_title, is_revoked"
     )
-    .eq("certificate_number", normalizedCertificateNumber)
+    .eq(
+      "certificate_number",
+      normalizedCertificateNumber
+    )
     .maybeSingle();
+
+  const certificate =
+    data as Certificate | null;
 
   if (!certificate) {
     return {
       title: `Certificate ${normalizedCertificateNumber} | RuffNeck Learn`,
-      description: "Verify a RuffNeck Learn certificate.",
+      description:
+        "Verify a RuffNeck Learn certificate.",
       openGraph: {
         title: `Certificate ${normalizedCertificateNumber} | RuffNeck Learn`,
-        description: "Verify a RuffNeck Learn certificate.",
+        description:
+          "Verify a RuffNeck Learn certificate.",
         type: "website",
         siteName: "RuffNeck Learn",
       },
       twitter: {
         card: "summary",
         title: `Certificate ${normalizedCertificateNumber} | RuffNeck Learn`,
-        description: "Verify a RuffNeck Learn certificate.",
+        description:
+          "Verify a RuffNeck Learn certificate.",
       },
     };
   }
 
-  const status = certificate.is_revoked ? "Revoked" : "Verified";
+  const status = certificate.is_revoked
+    ? "Revoked"
+    : "Verified";
 
   const title = `${certificate.holder_name} — ${certificate.course_title}`;
 
@@ -121,7 +121,7 @@ export async function generateMetadata({
   };
 }
 
-export default async function VerifyCertificatePage({
+export default async function CertificateVerificationPage({
   params,
 }: {
   params: Promise<{
@@ -131,7 +131,9 @@ export default async function VerifyCertificatePage({
   const { certificateNumber } = await params;
 
   const normalizedCertificateNumber =
-    decodeURIComponent(certificateNumber).trim();
+    decodeURIComponent(
+      certificateNumber
+    ).trim();
 
   if (!normalizedCertificateNumber) {
     notFound();
@@ -139,10 +141,7 @@ export default async function VerifyCertificatePage({
 
   const admin = createAdminClient();
 
-  const {
-    data: certificateData,
-    error: certificateError,
-  } = await admin
+  const { data, error } = await admin
     .from("course_certificates")
     .select(
       [
@@ -157,329 +156,461 @@ export default async function VerifyCertificatePage({
         "revoked_reason",
       ].join(", ")
     )
-    .eq("certificate_number", normalizedCertificateNumber)
+    .eq(
+      "certificate_number",
+      normalizedCertificateNumber
+    )
     .maybeSingle();
 
-  if (certificateError) {
+  if (error) {
     console.error(
-      "Public certificate verification failed:",
-      certificateError
+      "Certificate verification lookup failed:",
+      error
     );
 
-    return (
-      <main className="container">
-        <section className="rn-empty-state">
-          <span className="rn-eyebrow">
-            CERTIFICATE VERIFICATION
-          </span>
-
-          <h1>Verification unavailable</h1>
-
-          <p>
-            The certificate verification service could not complete this
-            request.
-          </p>
-
-          <Link
-            href="/"
-            className="rn-button rn-button-primary"
-          >
-            RuffNeck Learn
-          </Link>
-        </section>
-      </main>
+    throw new Error(
+      "Unable to verify certificate."
     );
   }
 
-  const certificate = certificateData as Certificate | null;
-
-  if (!certificate) {
-    return (
-      <main className="container">
-        <section className="rn-empty-state">
-          <span className="rn-eyebrow">
-            CERTIFICATE VERIFICATION
-          </span>
-
-          <h1>Certificate not found</h1>
-
-          <p>
-            No RuffNeck Learn certificate matches certificate number:
-          </p>
-
-          <strong>{normalizedCertificateNumber}</strong>
-
-          <div
-            className="rn-assessment-actions"
-            style={{
-              marginTop: 24,
-            }}
-          >
-            <Link
-              href="/"
-              className="rn-button rn-button-primary"
-            >
-              RuffNeck Learn
-            </Link>
-
-            <Link
-              href="/courses"
-              className="rn-button rn-button-secondary"
-            >
-              View Courses
-            </Link>
-          </div>
-        </section>
-      </main>
-    );
+  if (!data) {
+    notFound();
   }
 
-  const verificationUrl = buildVerificationUrl(
-    certificate.certificate_number
-  );
+  const certificate = data as {
+    id: string;
+    certificate_number: string;
+    holder_name: string;
+    course_title: string;
+    issued_at: string;
+    assessment_score: number | null;
+    capstone_score: number | null;
+    is_revoked: boolean;
+    revoked_reason: string | null;
+  };
 
-  const qrCodeUrl = buildQrCodeUrl(verificationUrl);
+  const verificationUrl =
+    buildVerificationUrl(
+      certificate.certificate_number
+    );
+
+  const qrCodeUrl =
+    buildQrCodeUrl(verificationUrl);
+
+  const issuedDate = new Date(
+    certificate.issued_at
+  ).toLocaleDateString("en-NG", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
   return (
-    <main className="rn-certificate-view-page">
-      <div className="container">
-        <section
-          className={`rn-certificate-document ${
-            certificate.is_revoked ? "is-revoked" : ""
-          }`}
+    <main
+      className="container"
+      style={{
+        paddingTop: 48,
+        paddingBottom: 64,
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 900,
+          margin: "0 auto",
+        }}
+      >
+        <div
+          style={{
+            textAlign: "center",
+            marginBottom: 32,
+          }}
         >
-          <div className="rn-certificate-border">
-            <div className="rn-certificate-brand">
-              <span aria-hidden="true">RN</span>
+          <div
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              letterSpacing: 2,
+              textTransform: "uppercase",
+              color: "var(--cyan)",
+              marginBottom: 10,
+            }}
+          >
+            RuffNeck Learn
+          </div>
 
-              <strong>RuffNeck Learn</strong>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: "clamp(30px, 5vw, 46px)",
+              lineHeight: 1.1,
+            }}
+          >
+            Certificate Verification
+          </h1>
+
+          <p
+            style={{
+              margin:
+                "14px auto 0",
+              maxWidth: 680,
+              lineHeight: 1.7,
+              color:
+                "var(--muted, #64748b)",
+            }}
+          >
+            This page provides official
+            verification for a RuffNeck Learn
+            professional learning certificate.
+          </p>
+        </div>
+
+        <section
+          style={{
+            border:
+              "1px solid var(--border)",
+            borderRadius: 16,
+            background:
+              "var(--surface, #ffffff)",
+            padding: "clamp(24px, 5vw, 48px)",
+            boxShadow:
+              "0 12px 35px rgba(11, 30, 58, 0.08)",
+          }}
+        >
+          <div
+            style={{
+              textAlign: "center",
+              borderBottom:
+                "1px solid var(--border)",
+              paddingBottom: 28,
+              marginBottom: 28,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 700,
+                letterSpacing: 2,
+                textTransform:
+                  "uppercase",
+                color:
+                  "var(--muted, #64748b)",
+                marginBottom: 12,
+              }}
+            >
+              Certificate holder
             </div>
 
-            {certificate.is_revoked ? (
-              <div
-                className="rn-certificate-revoked"
-                role="alert"
-              >
-                CERTIFICATE REVOKED
-              </div>
-            ) : (
-              <span className="rn-eyebrow">
-                VERIFIED CREDENTIAL
-              </span>
-            )}
+            <h2
+              style={{
+                margin: 0,
+                fontSize:
+                  "clamp(26px, 4vw, 40px)",
+                lineHeight: 1.2,
+              }}
+            >
+              {certificate.holder_name}
+            </h2>
 
-            <h1>Certificate Verification</h1>
-
-            {!certificate.is_revoked ? (
-              <p className="rn-certificate-presented">
-                This credential has been verified against the RuffNeck Learn
-                certificate record.
-              </p>
-            ) : (
-              <p className="rn-certificate-presented">
-                This certificate is no longer valid.
-              </p>
-            )}
-
-            <h2>{certificate.holder_name}</h2>
-
-            <p className="rn-certificate-completion-text">
-              Successfully completed the RuffNeck Learn course
+            <p
+              style={{
+                margin:
+                  "18px 0 0",
+                fontSize:
+                  "clamp(18px, 2.5vw, 24px)",
+                fontWeight: 600,
+                lineHeight: 1.4,
+              }}
+            >
+              {certificate.course_title}
             </p>
+          </div>
 
-            <h3>{certificate.course_title}</h3>
-
-            <div className="rn-certificate-divider" />
-
-            <div className="rn-certificate-details">
-              <div>
-                <span>Certificate Number</span>
-
-                <strong>
-                  {certificate.certificate_number}
-                </strong>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(180px, 1fr))",
+              gap: 16,
+              marginBottom: 28,
+            }}
+          >
+            <div
+              style={{
+                padding: 18,
+                border:
+                  "1px solid var(--border)",
+                borderRadius: 10,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  textTransform:
+                    "uppercase",
+                  letterSpacing: 1,
+                  color:
+                    "var(--muted, #64748b)",
+                  marginBottom: 7,
+                }}
+              >
+                Certificate number
               </div>
 
-              <div>
-                <span>Date Issued</span>
+              <strong
+                style={{
+                  wordBreak:
+                    "break-word",
+                }}
+              >
+                {certificate.certificate_number}
+              </strong>
+            </div>
 
-                <strong>
-                  {formatDate(certificate.issued_at)}
-                </strong>
+            <div
+              style={{
+                padding: 18,
+                border:
+                  "1px solid var(--border)",
+                borderRadius: 10,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  textTransform:
+                    "uppercase",
+                  letterSpacing: 1,
+                  color:
+                    "var(--muted, #64748b)",
+                  marginBottom: 7,
+                }}
+              >
+                Issued
               </div>
 
-              <div>
-                <span>Issuer</span>
+              <strong>
+                {issuedDate}
+              </strong>
+            </div>
 
-                <strong>RuffNeck Entertainment</strong>
+            <div
+              style={{
+                padding: 18,
+                border:
+                  "1px solid var(--border)",
+                borderRadius: 10,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  textTransform:
+                    "uppercase",
+                  letterSpacing: 1,
+                  color:
+                    "var(--muted, #64748b)",
+                  marginBottom: 7,
+                }}
+              >
+                Assessment
               </div>
 
-              <div>
-                <span>Status</span>
+              <strong>
+                {certificate.assessment_score ??
+                  "—"}
+                {certificate.assessment_score !==
+                null
+                  ? "%"
+                  : ""}
+              </strong>
+            </div>
 
-                <strong>
-                  {certificate.is_revoked ? "Revoked" : "Valid"}
-                </strong>
+            <div
+              style={{
+                padding: 18,
+                border:
+                  "1px solid var(--border)",
+                borderRadius: 10,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  textTransform:
+                    "uppercase",
+                  letterSpacing: 1,
+                  color:
+                    "var(--muted, #64748b)",
+                  marginBottom: 7,
+                }}
+              >
+                Capstone
+              </div>
+
+              <strong>
+                {certificate.capstone_score ??
+                  "—"}
+                {certificate.capstone_score !==
+                null
+                  ? "/100"
+                  : ""}
+              </strong>
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: 20,
+              borderRadius: 10,
+              border: certificate.is_revoked
+                ? "1px solid #fecaca"
+                : "1px solid #bbf7d0",
+              background:
+                certificate.is_revoked
+                  ? "#fef2f2"
+                  : "#f0fdf4",
+              marginBottom: 30,
+            }}
+          >
+            <strong
+              style={{
+                display: "block",
+                marginBottom: 7,
+              }}
+            >
+              {certificate.is_revoked
+                ? "Certificate revoked"
+                : "Certificate verified"}
+            </strong>
+
+            <p
+              style={{
+                margin: 0,
+                lineHeight: 1.6,
+              }}
+            >
+              {certificate.is_revoked
+                ? certificate.revoked_reason ||
+                  "This certificate is no longer valid."
+                : "This certificate is an official RuffNeck Learn credential issued by RuffNeck Entertainment."}
+            </p>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "minmax(0, 1fr) auto",
+              gap: 28,
+              alignItems: "center",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  letterSpacing: 1,
+                  textTransform:
+                    "uppercase",
+                  color:
+                    "var(--cyan)",
+                  marginBottom: 10,
+                }}
+              >
+                Official verification
+              </div>
+
+              <p
+                style={{
+                  margin: 0,
+                  lineHeight: 1.7,
+                  fontSize: 14,
+                }}
+              >
+                Scan the QR code or use the
+                verification address below to
+                confirm this certificate.
+              </p>
+
+              <div
+                style={{
+                  marginTop: 16,
+                  padding: 12,
+                  border:
+                    "1px solid var(--border)",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  wordBreak:
+                    "break-all",
+                }}
+              >
+                {verificationUrl}
               </div>
             </div>
 
-            {!certificate.is_revoked ? (
-              <>
-                <div className="rn-certificate-divider" />
-
-                <div
-                  className="rn-certificate-details"
-                  aria-label="Certificate performance"
-                >
-                  <div>
-                    <span>Assessment Score</span>
-
-                    <strong>
-                      {certificate.assessment_score !== null
-                        ? `${certificate.assessment_score}%`
-                        : "—"}
-                    </strong>
-                  </div>
-
-                  <div>
-                    <span>Capstone Score</span>
-
-                    <strong>
-                      {certificate.capstone_score !== null
-                        ? `${certificate.capstone_score}/100`
-                        : "—"}
-                    </strong>
-                  </div>
-
-                  <div>
-                    <span>Credential Type</span>
-
-                    <strong>Course Completion</strong>
-                  </div>
-
-                  <div>
-                    <span>Verification</span>
-
-                    <strong>Official Registry</strong>
-                  </div>
-                </div>
-
-                <div className="rn-certificate-divider" />
-
-                <div
-                  className="rn-certificate-verification"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 24,
-                    flexWrap: "wrap",
-                    marginTop: 24,
-                    padding: 20,
-                    border: "1px solid rgba(11, 30, 58, 0.12)",
-                    borderRadius: 12,
-                    background: "#f8fafc",
-                  }}
-                >
-                  <div
-                    style={{
-                      flex: "0 0 auto",
-                      width: 220,
-                      textAlign: "center",
-                    }}
-                  >
-                    <img
-                      src={qrCodeUrl}
-                      alt={`QR code for verifying certificate ${certificate.certificate_number}`}
-                      width={220}
-                      height={220}
-                      style={{
-                        display: "block",
-                        width: 220,
-                        height: 220,
-                        maxWidth: "100%",
-                        margin: "0 auto",
-                        background: "#ffffff",
-                        border: "1px solid #e5e7eb",
-                      }}
-                    />
-                  </div>
-
-                  <div
-                    style={{
-                      flex: "1 1 280px",
-                      minWidth: 240,
-                    }}
-                  >
-                    <span className="rn-eyebrow">
-                      DIGITAL VERIFICATION
-                    </span>
-
-                    <h4
-                      style={{
-                        margin: "8px 0 10px",
-                        fontSize: 20,
-                        color: "#0b1e3a",
-                      }}
-                    >
-                      Scan to verify this certificate
-                    </h4>
-
-                    <p
-                      style={{
-                        margin: 0,
-                        lineHeight: 1.6,
-                        color: "#475569",
-                      }}
-                    >
-                      Scan the QR code with a phone camera to open the
-                      official RuffNeck Learn verification record for this
-                      certificate.
-                    </p>
-
-                    <p
-                      style={{
-                        marginTop: 12,
-                        marginBottom: 0,
-                        fontSize: 13,
-                        lineHeight: 1.5,
-                        color: "#64748b",
-                        overflowWrap: "anywhere",
-                      }}
-                    >
-                      {verificationUrl}
-                    </p>
-                  </div>
-                </div>
-              </>
-            ) : null}
-
-            {certificate.is_revoked &&
-            certificate.revoked_reason ? (
-              <div className="rn-certificate-revoked-note">
-                {certificate.revoked_reason}
-              </div>
-            ) : null}
-
-            <div className="rn-certificate-footer">
-              <span>RuffNeck Entertainment</span>
-
-              <span>
-                Practical professional learning
-              </span>
+            <div
+              style={{
+                width: 220,
+                height: 220,
+                padding: 8,
+                border:
+                  "1px solid var(--border)",
+                borderRadius: 10,
+                background:
+                  "#ffffff",
+              }}
+            >
+              <img
+                src={qrCodeUrl}
+                alt={`QR code for verifying certificate ${certificate.certificate_number}`}
+                width={204}
+                height={204}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  height: "100%",
+                }}
+              />
             </div>
+          </div>
+
+          <div
+            style={{
+              marginTop: 32,
+              paddingTop: 22,
+              borderTop:
+                "1px solid var(--border)",
+              textAlign: "center",
+              fontSize: 13,
+              color:
+                "var(--muted, #64748b)",
+              lineHeight: 1.6,
+            }}
+          >
+            RuffNeck Learn · RuffNeck
+            Entertainment
           </div>
         </section>
 
         <div
-          className="rn-assessment-actions"
           style={{
-            marginTop: 24,
+            display: "flex",
+            justifyContent:
+              "center",
+            gap: 12,
+            flexWrap: "wrap",
+            marginTop: 28,
           }}
         >
           <Link
             href="/courses"
-            className="rn-button rn-button-secondary"
+            className="rn-button rn-button-primary"
           >
             Browse Courses
           </Link>
