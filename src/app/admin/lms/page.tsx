@@ -44,11 +44,6 @@ type CourseLookup = {
   title: string;
 };
 
-/*
- * Keep the server-side course shape local to this page.
- * It intentionally matches the Course shape consumed by
- * AdminLmsEditor without importing that type.
- */
 type AdminCourse = {
   id: string;
   title: string;
@@ -93,12 +88,14 @@ export default async function AdminLmsPage({
     redirect("/login?next=/admin/lms");
   }
 
-  const { data: profileData, error: profileError } =
-    await supabase
-      .from("profiles")
-      .select("role, full_name, email")
-      .eq("id", user.id)
-      .maybeSingle();
+  const {
+    data: profileData,
+    error: profileError,
+  } = await supabase
+    .from("profiles")
+    .select("role, full_name, email")
+    .eq("id", user.id)
+    .maybeSingle();
 
   if (profileError) {
     console.error(
@@ -465,6 +462,13 @@ export default async function AdminLmsPage({
               className="btn btn-primary"
             >
               AI Drafts
+            </Link>
+
+            <Link
+              href="/admin/assessments"
+              className="btn btn-primary"
+            >
+              Assessments
             </Link>
 
             <Link
