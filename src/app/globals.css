@@ -14408,3 +14408,155 @@ main form .rn-button {
     box-sizing: border-box !important;
   }
 }
+
+/* =========================================================
+   FINAL ADMIN + MOBILE HEADER LAYOUT
+   ========================================================= */
+
+/* ---------------------------------------------------------
+   ADMIN LMS — USE MORE DESKTOP WIDTH
+   --------------------------------------------------------- */
+
+@media (min-width: 1101px) {
+  .section:has(.rn-admin-heading) > .container {
+    width: min(1400px, calc(100% - 48px)) !important;
+    max-width: 1400px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  .section:has(.rn-admin-heading) {
+    width: 100% !important;
+  }
+}
+
+/* ---------------------------------------------------------
+   MOBILE MAIN NAV — LEFT ALIGNED + ADMIN VISIBLE
+   --------------------------------------------------------- */
+
+@media (max-width: 720px) {
+  .site-header .inner {
+    width: calc(100% - 24px) !important;
+    max-width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+    gap: 12px !important;
+  }
+
+  .site-header .brand {
+    width: auto !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+
+    margin-left: 0 !important;
+    margin-right: auto !important;
+  }
+
+  .site-header .brand-logo {
+    width: 100px !important;
+    height: auto !important;
+  }
+
+  .site-header .brand-copy {
+    min-width: 0 !important;
+    text-align: left !important;
+  }
+
+  .site-header .brand-copy strong,
+  .site-header .brand-copy span {
+    display: block !important;
+    text-align: left !important;
+  }
+
+  .site-header .nav {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+
+    gap: 8px !important;
+  }
+
+  .site-header .nav > a,
+  .site-header .nav > form {
+    width: auto !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    flex: 0 0 auto !important;
+    margin: 0 !important;
+  }
+
+  .site-header .nav > a,
+  .site-header .nav > form button {
+    width: auto !important;
+    min-width: 0 !important;
+    min-height: 40px !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+
+    box-sizing: border-box !important;
+    padding: 8px 12px !important;
+
+    text-align: left !important;
+    white-space: normal !important;
+  }
+
+  /* Authorized Admin users retain the Admin link on mobile. */
+  .site-header .nav > a[href="/admin/lms"] {
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: static !important;
+    flex: 0 0 auto !important;
+  }
+
+  .site-header .nav > form {
+    display: inline-flex !important;
+  }
+
+  .site-header .nav > form button {
+    display: inline-flex !important;
+  }
+}
+
+/* ---------------------------------------------------------
+   SMALL PHONES
+   --------------------------------------------------------- */
+
+@media (max-width: 420px) {
+  .site-header .inner {
+    width: calc(100% - 16px) !important;
+  }
+
+  .site-header .brand-logo {
+    width: 88px !important;
+  }
+
+  .site-header .nav {
+    gap: 6px !important;
+  }
+
+  .site-header .nav > a,
+  .site-header .nav > form button {
+    min-height: 38px !important;
+    padding: 7px 10px !important;
+    font-size: 0.86rem !important;
+  }
+}
