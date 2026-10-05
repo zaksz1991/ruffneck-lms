@@ -28,28 +28,28 @@ type Course = {
 
 function formatMoney(
   amount: number,
-  currency: string,
+  currency: string
 ) {
-  try {
-    return new Intl.NumberFormat("en-NG", {
-      style: "currency",
-      currency: currency || "NGN",
-      maximumFractionDigits: 0,
-    }).format(amount);
-  } catch {
-    return `${currency || "NGN"} ${amount.toLocaleString()}`;
-  }
+  return new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: currency || "NGN",
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-NG", {
+function formatDate(value: string | null) {
+  if (!value) {
+    return "—";
+  }
+
+  return new Date(value).toLocaleString("en-NG", {
     dateStyle: "medium",
     timeStyle: "short",
-  }).format(new Date(value));
+  });
 }
 
 function statusLabel(
-  status: Payment["status"],
+  status: Payment["status"]
 ) {
   switch (status) {
     case "successful":
@@ -57,7 +57,7 @@ function statusLabel(
     case "pending":
       return "Pending";
     case "initiated":
-      return "Payment started";
+      return "Payment Started";
     case "failed":
       return "Failed";
     case "cancelled":
@@ -68,9 +68,19 @@ function statusLabel(
 }
 
 function statusClass(
-  status: Payment["status"],
+  status: Payment["status"]
 ) {
-  return `rn-payment-status rn-payment-status-${status}`;
+  switch (status) {
+    case "successful":
+      return "rn-payment-status rn-payment-status-successful";
+
+    case "failed":
+    case "cancelled":
+      return "rn-payment-status rn-payment-status-failed";
+
+    default:
+      return "rn-payment-status rn-payment-status-pending";
+  }
 }
 
 export default async function StudentPaymentsPage() {
@@ -81,114 +91,98 @@ export default async function StudentPaymentsPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login?next=/student/payments");
+    redirect(
+      "/login?next=/student/payments"
+    );
   }
 
-  const {
-    data: paymentData,
-    error: paymentError,
-  } = await supabase
+  const { data: paymentData } = await supabase
     .from("course_payments")
     .select(
-      [
-        "id",
-        "course_id",
-        "course_slug",
-        "tx_ref",
-        "flutterwave_transaction_id",
-        "amount",
-        "currency",
-        "status",
-        "created_at",
-        "verified_at",
-      ].join(", "),
+      `
+        id,
+        course_id,
+        course_slug,
+        tx_ref,
+        flutterwave_transaction_id,
+        amount,
+        currency,
+        status,
+        created_at,
+        verified_at
+      `
     )
     .eq("student_id", user.id)
     .order("created_at", {
       ascending: false,
     });
 
-  if (paymentError) {
-    throw new Error(paymentError.message);
-  }
-
   const payments =
-    (paymentData ?? []) as unknown as Payment[];
+    (paymentData ?? []) as Payment[];
 
-  const courseIds = [
-    ...new Set(
+  const courseIds = Array.from(
+    new Set(
       payments.map(
-        (payment) => payment.course_id,
-      ),
-    ),
-  ];
+        (payment) => payment.course_id
+      )
+    )
+  );
 
-  const {
-    data: courseData,
-    error: courseError,
-  } =
-    courseIds.length > 0
-      ? await supabase
-          .from("courses")
-          .select("id, title, slug")
-          .in("id", courseIds)
-      : {
-          data: [],
-          error: null,
-        };
+  let courses: Course[] = [];
 
-  if (courseError) {
-    throw new Error(courseError.message);
+  if (courseIds.length > 0) {
+    const { data: courseData } =
+      await supabase
+        .from("courses")
+        .select("id, title, slug")
+        .in("id", courseIds);
+
+    courses =
+      (courseData ?? []) as Course[];
   }
-
-  const courses =
-    (courseData ?? []) as unknown as Course[];
 
   const courseMap = new Map(
     courses.map((course) => [
       course.id,
       course,
-    ]),
+    ])
   );
 
-  const successfulCount =
+  const successfulPayments =
     payments.filter(
       (payment) =>
-        payment.status === "successful",
-    ).length;
+        payment.status === "successful"
+    );
 
-  const pendingCount =
+  const pendingPayments =
     payments.filter(
       (payment) =>
         payment.status === "pending" ||
-        payment.status === "initiated",
-    ).length;
+        payment.status === "initiated"
+    );
 
-  const totalPaid = payments
-    .filter(
-      (payment) =>
-        payment.status === "successful",
-    )
-    .reduce(
+  const totalPaid =
+    successfulPayments.reduce(
       (total, payment) =>
-        total + Number(payment.amount || 0),
-      0,
+        total + Number(payment.amount),
+      0
     );
 
   return (
-    <main className="container admin-page">
+    <main className="admin-page">
       <div className="admin-page-header">
         <div>
           <p className="eyebrow">
-            MY ACCOUNT
+            Student Account
           </p>
 
-          <h1>Payment History</h1>
+          <h1>
+            Payment History
+          </h1>
 
           <p>
-            View your course purchases,
-            Flutterwave references, and payment
-            status.
+            View your RuffNeck Learn course
+            payments and transaction records.
           </p>
         </div>
 
@@ -210,61 +204,61 @@ export default async function StudentPaymentsPage() {
       </div>
 
       <section className="admin-stats">
-        <article className="admin-stat-card">
+        <div className="admin-stat">
           <span>Total Paid</span>
-
           <strong>
             {formatMoney(
               totalPaid,
-              "NGN",
+              "NGN"
             )}
           </strong>
-        </article>
+        </div>
 
-        <article className="admin-stat-card">
+        <div className="admin-stat">
           <span>Successful</span>
-
           <strong>
-            {successfulCount}
+            {successfulPayments.length}
           </strong>
-        </article>
+        </div>
 
-        <article className="admin-stat-card">
+        <div className="admin-stat">
           <span>Pending</span>
-
           <strong>
-            {pendingCount}
+            {pendingPayments.length}
           </strong>
-        </article>
+        </div>
 
-        <article className="admin-stat-card">
+        <div className="admin-stat">
           <span>Transactions</span>
-
           <strong>
             {payments.length}
           </strong>
-        </article>
+        </div>
       </section>
 
       <section className="admin-card">
         <div className="admin-card-header">
           <div>
-            <h2>Transactions</h2>
+            <h2>
+              Transactions
+            </h2>
 
             <p>
-              Your Flutterwave course payment
-              records.
+              Your complete payment history.
             </p>
           </div>
         </div>
 
         {payments.length === 0 ? (
-          <div className="admin-empty-state">
-            <h3>No payments yet</h3>
+          <div className="admin-empty">
+            <h3>
+              No payments yet
+            </h3>
 
             <p>
-              Your course purchases will appear
-              here after you make a payment.
+              Your course payment records will
+              appear here after you start a
+              transaction.
             </p>
 
             <Link
@@ -282,98 +276,74 @@ export default async function StudentPaymentsPage() {
                   <th>Course</th>
                   <th>Amount</th>
                   <th>Reference</th>
-                  <th>Flutterwave ID</th>
                   <th>Status</th>
-                  <th>Paid / Created</th>
+                  <th>Date</th>
                   <th>Action</th>
                 </tr>
               </thead>
 
               <tbody>
-                {payments.map((payment) => {
-                  const course =
-                    courseMap.get(
-                      payment.course_id,
-                    );
+                {payments.map(
+                  (payment) => {
+                    const course =
+                      courseMap.get(
+                        payment.course_id
+                      );
 
-                  return (
-                    <tr key={payment.id}>
-                      <td>
-                        <strong>
-                          {course?.title ||
-                            payment.course_slug}
-                        </strong>
+                    return (
+                      <tr
+                        key={payment.id}
+                      >
+                        <td>
+                          <strong>
+                            {course?.title ??
+                              payment.course_slug}
+                          </strong>
+                        </td>
 
-                        <small>
-                          {payment.course_slug}
-                        </small>
-                      </td>
-
-                      <td>
-                        {formatMoney(
-                          payment.amount,
-                          payment.currency,
-                        )}
-                      </td>
-
-                      <td>
-                        <code>
-                          {payment.tx_ref}
-                        </code>
-                      </td>
-
-                      <td>
-                        {payment.flutterwave_transaction_id ??
-                          "—"}
-                      </td>
-
-                      <td>
-                        <span
-                          className={statusClass(
-                            payment.status,
+                        <td>
+                          {formatMoney(
+                            payment.amount,
+                            payment.currency
                           )}
-                        >
-                          {statusLabel(
-                            payment.status,
-                          )}
-                        </span>
-                      </td>
+                        </td>
 
-                      <td>
-                        {formatDate(
-                          payment.verified_at ||
-                            payment.created_at,
-                        )}
-                      </td>
+                        <td>
+                          <code>
+                            {payment.tx_ref}
+                          </code>
+                        </td>
 
-                      <td>
-                        {payment.status ===
-                        "successful" ? (
-                          <Link
-                            href={`/courses/${payment.course_slug}`}
-                            className="btn btn-secondary"
+                        <td>
+                          <span
+                            className={statusClass(
+                              payment.status
+                            )}
                           >
-                            View Course
-                          </Link>
-                        ) : payment.status ===
-                            "pending" ||
-                          payment.status ===
-                            "initiated" ? (
-                          <span className="admin-muted">
-                            Awaiting confirmation
+                            {statusLabel(
+                              payment.status
+                            )}
                           </span>
-                        ) : (
+                        </td>
+
+                        <td>
+                          {formatDate(
+                            payment.created_at
+                          )}
+                        </td>
+
+                        <td>
                           <Link
-                            href={`/courses/${payment.course_slug}`}
+                            href={`/student/payments/${payment.id}`}
                             className="btn btn-secondary"
                           >
-                            View Course
+                            View Details
                           </Link>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                        </td>
+                      </tr>
+                    );
+                  }
+                )}
               </tbody>
             </table>
           </div>
