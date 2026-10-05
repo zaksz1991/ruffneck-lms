@@ -59,7 +59,10 @@ type LessonProgressRow = {
 };
 
 function formatLevel(level: string) {
-  return level.charAt(0).toUpperCase() + level.slice(1);
+  return (
+    level.charAt(0).toUpperCase() +
+    level.slice(1)
+  );
 }
 
 function formatDate(value: string | null) {
@@ -93,19 +96,23 @@ function getEnrollmentProgress(
     curriculumLessons
       .filter(
         (lesson) =>
-          lesson.course_id === enrollment.course_id
+          lesson.course_id ===
+          enrollment.course_id
       )
       .map((lesson) => lesson.lesson_id)
   );
 
-  const totalLessons = courseLessonIds.size;
+  const totalLessons =
+    courseLessonIds.size;
 
   if (totalLessons === 0) {
     return Math.min(
       100,
       Math.max(
         0,
-        Number(enrollment.progress_percent || 0)
+        Number(
+          enrollment.progress_percent || 0
+        )
       )
     );
   }
@@ -114,11 +121,16 @@ function getEnrollmentProgress(
     completedLessons
       .filter(
         (progress) =>
-          progress.course_id === enrollment.course_id &&
+          progress.course_id ===
+            enrollment.course_id &&
           progress.completed &&
-          courseLessonIds.has(progress.lesson_id)
+          courseLessonIds.has(
+            progress.lesson_id
+          )
       )
-      .map((progress) => progress.lesson_id)
+      .map(
+        (progress) => progress.lesson_id
+      )
   ).size;
 
   return Math.min(
@@ -126,7 +138,9 @@ function getEnrollmentProgress(
     Math.max(
       0,
       Math.round(
-        (completedCount / totalLessons) * 100
+        (completedCount /
+          totalLessons) *
+          100
       )
     )
   );
@@ -140,18 +154,26 @@ export default async function StudentDashboardPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login?next=/student/dashboard");
+    redirect(
+      "/login?next=/student/dashboard"
+    );
   }
 
-  const { data: profileData } = await supabase
-    .from("profiles")
-    .select("id, email, full_name, role")
-    .eq("id", user.id)
-    .maybeSingle();
+  const { data: profileData } =
+    await supabase
+      .from("profiles")
+      .select(
+        "id, email, full_name, role"
+      )
+      .eq("id", user.id)
+      .maybeSingle();
 
-  const profile = profileData as Profile | null;
+  const profile =
+    profileData as Profile | null;
 
-  const { data: enrollmentData } = await supabase
+  const {
+    data: enrollmentData,
+  } = await supabase
     .from("enrollments")
     .select(
       `
@@ -214,20 +236,20 @@ export default async function StudentDashboardPage() {
       (courseData || []) as Course[];
   }
 
-  const courseMap = new Map<string, Course>();
+  const courseMap = new Map<
+    string,
+    Course
+  >();
 
   enrolledCourses.forEach((course) => {
     courseMap.set(course.id, course);
   });
 
-  /*
-   * Keep only enrollments whose courses are currently
-   * published and therefore accessible through the
-   * learner-facing catalogue.
-   */
   const visibleEnrollments =
     enrollments.filter((enrollment) =>
-      courseMap.has(enrollment.course_id)
+      courseMap.has(
+        enrollment.course_id
+      )
     );
 
   const visibleCourseIds = [
@@ -239,15 +261,8 @@ export default async function StudentDashboardPage() {
     ),
   ];
 
-  /*
-   * Load the canonical published curriculum for the
-   * learner's visible courses.
-   *
-   * This allows the dashboard to calculate progress
-   * from actual lesson completion rather than relying
-   * only on a potentially stale enrollment percentage.
-   */
-  let curriculumLessons: CurriculumRow[] = [];
+  let curriculumLessons: CurriculumRow[] =
+    [];
 
   if (visibleCourseIds.length > 0) {
     const {
@@ -258,7 +273,10 @@ export default async function StudentDashboardPage() {
       .select(
         "lesson_id, course_id"
       )
-      .in("course_id", visibleCourseIds)
+      .in(
+        "course_id",
+        visibleCourseIds
+      )
       .eq("is_published", true);
 
     if (curriculumError) {
@@ -269,10 +287,12 @@ export default async function StudentDashboardPage() {
     }
 
     curriculumLessons =
-      (curriculumData || []) as CurriculumRow[];
+      (curriculumData ||
+        []) as CurriculumRow[];
   }
 
-  let completedLessons: LessonProgressRow[] = [];
+  let completedLessons: LessonProgressRow[] =
+    [];
 
   if (visibleCourseIds.length > 0) {
     const {
@@ -284,7 +304,10 @@ export default async function StudentDashboardPage() {
         "lesson_id, course_id, completed"
       )
       .eq("student_id", user.id)
-      .in("course_id", visibleCourseIds)
+      .in(
+        "course_id",
+        visibleCourseIds
+      )
       .eq("completed", true);
 
     if (progressError) {
@@ -295,7 +318,8 @@ export default async function StudentDashboardPage() {
     }
 
     completedLessons =
-      (progressData || []) as LessonProgressRow[];
+      (progressData ||
+        []) as LessonProgressRow[];
   }
 
   const enrollmentProgressMap =
@@ -336,7 +360,8 @@ export default async function StudentDashboardPage() {
       });
 
   const skillProfiles =
-    (skillProfileData || []) as SkillProfile[];
+    (skillProfileData ||
+      []) as SkillProfile[];
 
   const totalCourses =
     visibleEnrollments.length;
@@ -354,13 +379,17 @@ export default async function StudentDashboardPage() {
   const strengthCount =
     skillProfiles.filter(
       (skill) =>
-        Number(skill.confidence_score) >= 80
+        Number(
+          skill.confidence_score
+        ) >= 80
     ).length;
 
   const developmentCount =
     skillProfiles.filter(
       (skill) =>
-        Number(skill.confidence_score) < 50
+        Number(
+          skill.confidence_score
+        ) < 50
     ).length;
 
   const displayName =
@@ -375,10 +404,12 @@ export default async function StudentDashboardPage() {
             (total, skill) =>
               total +
               Number(
-                skill.confidence_score || 0
+                skill.confidence_score ||
+                  0
               ),
             0
-          ) / skillProfiles.length
+          ) /
+            skillProfiles.length
         )
       : 0;
 
@@ -518,12 +549,14 @@ export default async function StudentDashboardPage() {
             <div className="rn-profile-details">
               <p>
                 <strong>Email:</strong>{" "}
-                {profile?.email || user.email}
+                {profile?.email ||
+                  user.email}
               </p>
 
               <p>
                 <strong>Role:</strong>{" "}
-                {profile?.role || "student"}
+                {profile?.role ||
+                  "student"}
               </p>
 
               <p>
@@ -611,7 +644,8 @@ export default async function StudentDashboardPage() {
           </Link>
         </div>
 
-        {visibleEnrollments.length === 0 ? (
+        {visibleEnrollments.length ===
+        0 ? (
           <article className="rn-empty-state">
             <h3>No courses yet</h3>
 
@@ -662,7 +696,9 @@ export default async function StudentDashboardPage() {
 
                         {course.category ? (
                           <span>
-                            {course.category}
+                            {
+                              course.category
+                            }
                           </span>
                         ) : null}
 
@@ -766,7 +802,7 @@ export default async function StudentDashboardPage() {
           </Link>
 
           <Link
-            href="/courses"
+            href="/student/assessment"
             className="rn-dashboard-action"
           >
             <strong>
@@ -774,9 +810,10 @@ export default async function StudentDashboardPage() {
             </strong>
 
             <span>
-              Open an enrolled course to
-              access its assessment and
-              update your skill profile.
+              Open your enrolled course
+              assessments, measure your
+              knowledge and update your skill
+              profile.
             </span>
           </Link>
 
@@ -838,8 +875,8 @@ export default async function StudentDashboardPage() {
         <p>
           Last profile update:{" "}
           {formatDate(
-            skillProfiles[0]?.updated_at ||
-              null
+            skillProfiles[0]
+              ?.updated_at || null
           )}
         </p>
       </section>
