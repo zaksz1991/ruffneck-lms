@@ -5,9 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 type Enrollment = {
   id: string;
   course_id: string;
-  enrollment_status: string;
+  enrollment_status: string | null;
   payment_status: string | null;
-  enrolled_at: string;
+  created_at: string;
 };
 
 type Course = {
@@ -21,50 +21,20 @@ type Course = {
 
 type CurriculumLesson = {
   course_id: string;
-  lesson_slug: string | null;
-  lesson_title: string | null;
-  lesson_sort_order: number | null;
-  is_published: boolean | null;
+  lesson_slug: string;
+  lesson_title: string;
+  lesson_sort_order: number;
+  is_published: boolean;
 };
 
-function formatDuration(minutes: number | null) {
-  if (!minutes || minutes <= 0) {
-    return "—";
-  }
-
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-
-  if (hours > 0 && remainingMinutes > 0) {
-    return `${hours}h ${remainingMinutes}m`;
-  }
-
-  if (hours > 0) {
-    return `${hours}h`;
-  }
-
-  return `${remainingMinutes}m`;
-}
-
-function statusLabel(status: string) {
-  if (status === "completed") {
-    return "Completed";
-  }
-
-  if (status === "active") {
-    return "Active";
-  }
-
-  return status;
-}
-
-function statusClass(status: string) {
-  if (status === "completed") {
-    return "rn-payment-status rn-payment-status-successful";
-  }
-
-  return "rn-payment-status rn-payment-status-pending";
-}
+type CourseSummary = Course & {
+  enrollment_status: string | null;
+  payment_status: string | null;
+  enrolled_at: string;
+  lesson_count: number;
+  first_lesson_slug: string | null;
+  first_lesson_title: string | null;
+};
 
 export default async function StudentCoursesPage() {
   const supabase = await createClient();
@@ -77,26 +47,22 @@ export default async function StudentCoursesPage() {
     redirect("/login?next=/student/courses");
   }
 
-  const { data: enrollmentData } =
-    await supabase
-      .from("enrollments")
-      .select(
-        `
-          id,
-          course_id,
-          enrollment_status,
-          payment_status,
-          enrolled_at
-        `
-      )
-      .eq("student_id", user.id)
-      .in("enrollment_status", [
-        "active",
-        "completed",
-      ])
-      .order("enrolled_at", {
-        ascending: false,
-      });
+  const { data: enrollmentData } = await supabase
+    .from("enrollments")
+    .select(
+      `
+        id,
+        course_id,
+        enrollment_status,
+        payment_status,
+        created_at
+      `
+    )
+    .eq("student_id", user.id)
+    .in("enrollment_status", ["active", "completed"])
+    .order("created_at", {
+      ascending: false,
+    });
 
   const enrollments =
     (enrollmentData ?? []) as Enrollment[];
@@ -104,8 +70,7 @@ export default async function StudentCoursesPage() {
   const courseIds = Array.from(
     new Set(
       enrollments.map(
-        (enrollment) =>
-          enrollment.course_id
+        (enrollment) => enrollment.course_id
       )
     )
   );
@@ -113,40 +78,23 @@ export default async function StudentCoursesPage() {
   let courses: Course[] = [];
 
   if (courseIds.length > 0) {
-    const { data: courseData } =
-      await supabase
-        .from("courses")
-        .select(
-          `
-            id,
-            title,
-            slug,
-            short_description,
-            level,
-            duration_minutes
-          `
-        )
-        .in("id", courseIds);
+    const { data: courseData } = await supabase
+      .from("courses")
+      .select(
+        `
+          id,
+          title,
+          slug,
+          short_description,
+          level,
+          duration_minutes
+        `
+      )
+      .in("id", courseIds);
 
-    courses =
-      (courseData ?? []) as Course[];
+    courses = (courseData ?? []) as Course[];
   }
 
-  const courseMap = new Map(
-    courses.map((course) => [
-      course.id,
-      course,
-    ])
-  );
-
-  /*
-   * Load the published curriculum for the
-   * enrolled courses.
-   *
-   * course_curriculum is the existing safe
-   * curriculum view used by the public course
-   * and lesson flow.
-   */
   let curriculum: CurriculumLesson[] = [];
 
   if (courseIds.length > 0) {
@@ -169,265 +117,310 @@ export default async function StudentCoursesPage() {
         });
 
     curriculum =
-      (curriculumData ??
-        []) as CurriculumLesson[];
+      (curriculumData ?? []) as CurriculumLesson[];
   }
 
-  const firstLessonByCourse =
-    new Map<string, CurriculumLesson>();
+  const courseMap = new Map(
+    courses.map((course) => [
+      course.id,
+      course,
+    ])
+  );
+
+  const curriculumByCourse = new Map<
+    string,
+    CurriculumLesson[]
+  >();
 
   for (const lesson of curriculum) {
-    if (
-      !lesson.lesson_slug ||
-      firstLessonByCourse.has(
+    const existing =
+      curriculumByCourse.get(
         lesson.course_id
-      )
-    ) {
-      continue;
-    }
+      ) ?? [];
 
-    firstLessonByCourse.set(
+    existing.push(lesson);
+
+    curriculumByCourse.set(
       lesson.course_id,
-      lesson
+      existing
     );
   }
 
-  const completedCount =
-    enrollments.filter(
-      (enrollment) =>
-        enrollment.enrollment_status ===
-        "completed"
-    ).length;
+  const summaries: CourseSummary[] =
+    enrollments
+      .map((enrollment) => {
+        const course = courseMap.get(
+          enrollment.course_id
+        );
 
-  const activeCount =
-    enrollments.filter(
-      (enrollment) =>
-        enrollment.enrollment_status ===
-        "active"
-    ).length;
+        if (!course) {
+          return null;
+        }
+
+        const lessons =
+          curriculumByCourse.get(
+            course.id
+          ) ?? [];
+
+        const firstLesson =
+          lessons[0] ?? null;
+
+        return {
+          ...course,
+          enrollment_status:
+            enrollment.enrollment_status,
+          payment_status:
+            enrollment.payment_status,
+          enrolled_at:
+            enrollment.created_at,
+          lesson_count:
+            lessons.length,
+          first_lesson_slug:
+            firstLesson?.lesson_slug ?? null,
+          first_lesson_title:
+            firstLesson?.lesson_title ?? null,
+        };
+      })
+      .filter(
+        (
+          course
+        ): course is CourseSummary =>
+          course !== null
+      );
+
+  const activeCourses = summaries.filter(
+    (course) =>
+      course.enrollment_status === "active"
+  );
+
+  const completedCourses = summaries.filter(
+    (course) =>
+      course.enrollment_status === "completed"
+  );
+
+  const formatDuration = (
+    minutes: number | null
+  ) => {
+    if (!minutes || minutes <= 0) {
+      return "—";
+    }
+
+    const hours = Math.floor(
+      minutes / 60
+    );
+    const remainingMinutes =
+      minutes % 60;
+
+    if (hours === 0) {
+      return `${remainingMinutes} min`;
+    }
+
+    if (remainingMinutes === 0) {
+      return `${hours} hr`;
+    }
+
+    return `${hours} hr ${remainingMinutes} min`;
+  };
+
+  const formatLevel = (
+    level: string | null
+  ) => {
+    if (!level) {
+      return "—";
+    }
+
+    return (
+      level.charAt(0).toUpperCase() +
+      level.slice(1)
+    );
+  };
 
   return (
-    <main className="admin-page">
-      <div className="admin-page-header">
+    <main className="container">
+      <section className="page-header">
         <div>
-          <p className="eyebrow">
-            Student Account
-          </p>
-
           <h1>My Courses</h1>
 
           <p>
-            Access the courses you are enrolled
-            in and continue your learning.
+            Access your enrolled courses and
+            continue learning.
           </p>
         </div>
 
-        <div className="admin-page-actions">
-          <Link
-            href="/student"
-            className="btn btn-secondary"
-          >
-            Dashboard
-          </Link>
-
+        <div className="page-actions">
           <Link
             href="/courses"
-            className="btn btn-primary"
+            className="button"
           >
             Browse Courses
           </Link>
-        </div>
-      </div>
 
-      <section className="admin-stats">
-        <div className="admin-stat">
-          <span>Total Courses</span>
-          <strong>
-            {enrollments.length}
-          </strong>
-        </div>
-
-        <div className="admin-stat">
-          <span>Active</span>
-          <strong>{activeCount}</strong>
-        </div>
-
-        <div className="admin-stat">
-          <span>Completed</span>
-          <strong>
-            {completedCount}
-          </strong>
+          <Link
+            href="/student"
+            className="button secondary"
+          >
+            Dashboard
+          </Link>
         </div>
       </section>
 
-      <section className="admin-card">
-        <div className="admin-card-header">
-          <div>
-            <h2>Enrolled Courses</h2>
+      <section className="stats-grid">
+        <article className="stat-card">
+          <span>Courses</span>
+          <strong>
+            {summaries.length}
+          </strong>
+        </article>
 
-            <p>
-              Select a course to continue learning
-              or review its curriculum.
-            </p>
+        <article className="stat-card">
+          <span>Active</span>
+          <strong>
+            {activeCourses.length}
+          </strong>
+        </article>
+
+        <article className="stat-card">
+          <span>Completed</span>
+          <strong>
+            {completedCourses.length}
+          </strong>
+        </article>
+      </section>
+
+      {summaries.length === 0 ? (
+        <section className="card empty-state">
+          <h2>No enrolled courses</h2>
+
+          <p>
+            You have not enrolled in any
+            courses yet.
+          </p>
+
+          <Link
+            href="/courses"
+            className="button"
+          >
+            Browse Courses
+          </Link>
+        </section>
+      ) : (
+        <section className="card">
+          <div className="section-heading">
+            <div>
+              <h2>Your Learning</h2>
+
+              <p>
+                Continue an active course or
+                review a completed course.
+              </p>
+            </div>
           </div>
-        </div>
 
-        {enrollments.length === 0 ? (
-          <div className="admin-empty">
-            <h3>
-              You have no enrolled courses
-            </h3>
-
-            <p>
-              Browse the RuffNeck Learn catalogue
-              and enroll in a course to begin.
-            </p>
-
-            <Link
-              href="/courses"
-              className="btn btn-primary"
-            >
-              Browse Courses
-            </Link>
-          </div>
-        ) : (
-          <div className="admin-table-wrap">
-            <table className="admin-table">
+          <div className="table-wrap">
+            <table>
               <thead>
                 <tr>
                   <th>Course</th>
                   <th>Level</th>
+                  <th>Lessons</th>
                   <th>Duration</th>
                   <th>Status</th>
-                  <th>Enrolled</th>
                   <th>Action</th>
                 </tr>
               </thead>
 
               <tbody>
-                {enrollments.map(
-                  (enrollment) => {
-                    const course =
-                      courseMap.get(
-                        enrollment.course_id
-                      );
+                {summaries.map((course) => {
+                  const isCompleted =
+                    course.enrollment_status ===
+                    "completed";
 
-                    if (!course) {
-                      return (
-                        <tr
-                          key={enrollment.id}
-                        >
-                          <td colSpan={6}>
-                            Course information is
-                            currently unavailable.
-                          </td>
-                        </tr>
-                      );
-                    }
+                  const lessonUrl =
+                    course.first_lesson_slug
+                      ? `/learn/${course.slug}/${course.first_lesson_slug}`
+                      : `/courses/${course.slug}`;
 
-                    const firstLesson =
-                      firstLessonByCourse.get(
-                        enrollment.course_id
-                      );
+                  return (
+                    <tr
+                      key={course.id}
+                    >
+                      <td>
+                        <strong>
+                          {course.title}
+                        </strong>
 
-                    const isCompleted =
-                      enrollment.enrollment_status ===
-                      "completed";
-
-                    const continueHref =
-                      !isCompleted &&
-                      firstLesson?.lesson_slug
-                        ? `/learn/${course.slug}/${firstLesson.lesson_slug}`
-                        : `/courses/${course.slug}`;
-
-                    const actionLabel =
-                      isCompleted
-                        ? "View Course"
-                        : firstLesson?.lesson_slug
-                          ? "Continue Learning"
-                          : "View Course";
-
-                    return (
-                      <tr
-                        key={enrollment.id}
-                      >
-                        <td>
-                          <div>
-                            <strong>
-                              {course.title}
-                            </strong>
-
-                            {course.short_description ? (
-                              <p
-                                style={{
-                                  margin:
-                                    "4px 0 0",
-                                  maxWidth:
-                                    "420px",
-                                }}
-                              >
-                                {
-                                  course.short_description
-                                }
-                              </p>
-                            ) : null}
-                          </div>
-                        </td>
-
-                        <td>
-                          {course.level ??
-                            "—"}
-                        </td>
-
-                        <td>
-                          {formatDuration(
-                            course.duration_minutes
-                          )}
-                        </td>
-
-                        <td>
-                          <span
-                            className={statusClass(
-                              enrollment.enrollment_status
-                            )}
-                          >
-                            {statusLabel(
-                              enrollment.enrollment_status
-                            )}
-                          </span>
-                        </td>
-
-                        <td>
-                          {new Date(
-                            enrollment.enrolled_at
-                          ).toLocaleDateString(
-                            "en-NG",
+                        {course.short_description ? (
+                          <div className="muted">
                             {
-                              dateStyle:
-                                "medium",
+                              course.short_description
                             }
-                          )}
-                        </td>
+                          </div>
+                        ) : null}
 
-                        <td>
-                          <Link
-                            href={
-                              continueHref
+                        {course.first_lesson_title &&
+                        !isCompleted ? (
+                          <div className="muted">
+                            Next:
+                            {" "}
+                            {
+                              course.first_lesson_title
                             }
-                            className="btn btn-primary"
-                          >
-                            {actionLabel}
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  }
-                )}
+                          </div>
+                        ) : null}
+                      </td>
+
+                      <td>
+                        {formatLevel(
+                          course.level
+                        )}
+                      </td>
+
+                      <td>
+                        {course.lesson_count}
+                      </td>
+
+                      <td>
+                        {formatDuration(
+                          course.duration_minutes
+                        )}
+                      </td>
+
+                      <td>
+                        <span
+                          className={`status ${
+                            isCompleted
+                              ? "status-success"
+                              : "status-active"
+                          }`}
+                        >
+                          {isCompleted
+                            ? "Completed"
+                            : "Active"}
+                        </span>
+                      </td>
+
+                      <td>
+                        <Link
+                          href={
+                            isCompleted
+                              ? `/courses/${course.slug}`
+                              : lessonUrl
+                          }
+                          className="button small"
+                        >
+                          {isCompleted
+                            ? "View Course"
+                            : "Continue Learning"}
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        )}
-      </section>
+        </section>
+      )}
     </main>
   );
 }
