@@ -5,6 +5,7 @@ import { redactImagesBeforeGemini } from "@/lib/client/privacyRedaction";
 
 const MAX_PAGES = 5;
 const TARGET_DATA_URL_LENGTH = 480_000;
+const MAX_FOCUS_LENGTH = 1_500;
 
 const OUTPUT_TYPES = [
   ["lesson", "Full lesson"],
@@ -550,7 +551,9 @@ export default function ScanAndLearn() {
           "The scanned pages passed local privacy screening before AI processing."
         );
       }
-    } catch (generationError) {
+    } catch (
+      generationError
+    ) {
       setError(
         generationError instanceof Error
           ? generationError.message
@@ -655,7 +658,9 @@ export default function ScanAndLearn() {
       setSaveMessage(
         "Learning pack saved as a draft."
       );
-    } catch (draftError) {
+    } catch (
+      draftError
+    ) {
       setError(
         draftError instanceof Error
           ? draftError.message
@@ -1084,7 +1089,7 @@ export default function ScanAndLearn() {
                 />
 
                 <small>
-                  {focus.length} / 1,500
+                  {focus.length} / {MAX_FOCUS_LENGTH}
                 </small>
               </label>
             </div>
@@ -1094,16 +1099,12 @@ export default function ScanAndLearn() {
                 <strong>
                   Create:{" "}
                   {outputLabel(mode)} ·{" "}
-                  {languageLabel(
-                    language
-                  )}
+                  {languageLabel(language)}
                 </strong>
 
                 <span>
                   Audience:{" "}
-                  {audienceLabel(
-                    audience
-                  )}
+                  {audienceLabel(audience)}
                 </span>
               </div>
 
