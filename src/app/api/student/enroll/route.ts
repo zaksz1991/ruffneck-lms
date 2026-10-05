@@ -1,39 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createFlutterwavePayment } from "@/lib/flutterwave";
 
-type Course = {
-  id: string;
-  title: string;
-  slug: string;
-  price_ngn: number;
-  currency: string;
-  is_free: boolean;
-  status: string;
-};
+function makeTxRef() {
+  return `RNL-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+}
 
-type Profile = {
-  full_name: string | null;
-  email: string | null;
-  phone: string | null;
-};
-
-type Enrollment = {
-  id: string;
-  enrollment_status: string;
-  payment_status: string | null;
-};
-
-type ExistingPayment = {
-  id: string;
-  tx_ref: string;
-  status: string;
-  checkout_url: string | null;
-};
-
-export async function POST(
-  request: Request
-) {
+export async function POST(request: Request) {
   try {
     const supabase = await createClient();
 
@@ -44,61 +18,44 @@ export async function POST(
     if (!user) {
       return NextResponse.json(
         {
-          error: "Authentication required.",
+          error: "You must be logged in to enroll.",
         },
         { status: 401 }
       );
     }
 
-    const { data: profileData } =
-      await supabase
-        .from("profiles")
-        .select(
-          "full_name, email, phone, role"
-        )
-        .eq("id", user.id)
-        .maybeSingle();
-
-    const profile =
-      profileData as
-        | (Profile & {
-            role?: string;
-          })
-        | null;
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("full_name, email, phone, role")
+      .eq("id", user.id)
+      .maybeSingle();
 
     if (
       profile?.role &&
-      profile.role !== "student"
+      profile.role !== "student" &&
+      profile.role !== "admin" &&
+      profile.role !== "instructor"
     ) {
       return NextResponse.json(
         {
-          error:
-            "Only student accounts can enroll.",
+          error: "Your account is not permitted to enroll.",
         },
         { status: 403 }
       );
     }
 
     const body = (await request.json()) as {
-      course_id?: string;
-      course_slug?: string;
+      courseId?: string;
+      courseSlug?: string;
     };
 
-    const courseId =
-      typeof body.course_id === "string"
-        ? body.course_id.trim()
-        : "";
-
-    const courseSlug =
-      typeof body.course_slug === "string"
-        ? body.course_slug.trim()
-        : "";
+    const courseId = body.courseId?.trim();
+    const courseSlug = body.courseSlug?.trim();
 
     if (!courseId && !courseSlug) {
       return NextResponse.json(
         {
-          error:
-            "A course ID or course slug is required.",
+          error: "Course ID or course slug is required.",
         },
         { status: 400 }
       );
@@ -107,158 +64,177 @@ export async function POST(
     let courseQuery = supabase
       .from("courses")
       .select(
-        "id, title, slug, price_ngn, currency, is_free, status"
-      )
-      .eq("status", "published");
-
-    if (courseId) {
-      courseQuery = courseQuery.eq(
-        "id",
-        courseId
+        `
+          id,
+          title,
+          slug,
+          price_ngn,
+          currency,
+          is_free,
+          status
+        `
       );
-    } else {
-      courseQuery = courseQuery.eq(
-        "slug",
-        courseSlug
-      );
-    }
 
-    const { data: courseData, error: courseError } =
-      await courseQuery.maybeSingle();
+    const { data: course, error: courseError } =
+      courseId
+        ? await courseQuery.eq("id", courseId).maybeSingle()
+        : await courseQuery
+            .eq("slug", courseSlug as string)
+            .maybeSingle();
 
     if (courseError) {
       console.error(
-        "Course lookup failed:",
+        "Course lookup error:",
         courseError
       );
 
       return NextResponse.json(
         {
-          error:
-            "Unable to load the course.",
+          error: "Unable to load the course.",
         },
         { status: 500 }
       );
     }
 
-    if (!courseData) {
+    if (!course) {
       return NextResponse.json(
         {
-          error:
-            "Course not found or not available.",
+          error: "Course not found.",
         },
         { status: 404 }
       );
     }
 
-    const course =
-      courseData as Course;
-
-    /*
-     * First protection:
-     * Never create another payment if the
-     * student already has course access.
-     */
-    const { data: enrollmentData, error: enrollmentError } =
-      await supabase
-        .from("enrollments")
-        .select(
-          "id, enrollment_status, payment_status"
-        )
-        .eq("student_id", user.id)
-        .eq("course_id", course.id)
-        .in("enrollment_status", [
-          "active",
-          "completed",
-        ])
-        .maybeSingle();
-
-    if (enrollmentError) {
-      console.error(
-        "Enrollment lookup failed:",
-        enrollmentError
-      );
-
+    if (course.status !== "published") {
       return NextResponse.json(
         {
           error:
-            "Unable to verify existing enrollment.",
+            "This course is not currently available for enrollment.",
         },
-        { status: 500 }
+        { status: 400 }
       );
     }
 
-    const existingEnrollment =
-      enrollmentData as Enrollment | null;
+    const admin = createAdminClient();
+
+    const { data: existingEnrollment } =
+      await admin
+        .from("enrollments")
+        .select(
+          `
+            id,
+            enrollment_status,
+            payment_status
+          `
+        )
+        .eq("student_id", user.id)
+        .eq("course_id", course.id)
+        .maybeSingle();
 
     if (existingEnrollment) {
-      return NextResponse.json({
-        success: true,
-        already_enrolled: true,
-        payment_required: false,
-        enrollment_id:
-          existingEnrollment.id,
-        course_id: course.id,
-        course_slug: course.slug,
-        message:
-          "You are already enrolled in this course.",
-      });
+      const enrollmentStatus =
+        existingEnrollment.enrollment_status;
+
+      if (
+        enrollmentStatus === "active" ||
+        enrollmentStatus === "completed"
+      ) {
+        return NextResponse.json({
+          success: true,
+          alreadyEnrolled: true,
+          paymentRequired: false,
+          enrollmentId:
+            existingEnrollment.id,
+          courseSlug: course.slug,
+        });
+      }
     }
 
-    /*
-     * Free courses are enrolled immediately.
-     */
-    if (
-      course.is_free ||
-      Number(course.price_ngn) <= 0
-    ) {
+    const isFree =
+      Boolean(course.is_free) ||
+      Number(course.price_ngn ?? 0) <= 0;
+
+    if (isFree) {
+      if (existingEnrollment) {
+        const { error: updateError } =
+          await admin
+            .from("enrollments")
+            .update({
+              enrollment_status: "active",
+              payment_status: "free",
+            })
+            .eq("id", existingEnrollment.id);
+
+        if (updateError) {
+          console.error(
+            "Free enrollment update error:",
+            updateError
+          );
+
+          return NextResponse.json(
+            {
+              error:
+                "Unable to activate your enrollment.",
+            },
+            { status: 500 }
+          );
+        }
+
+        return NextResponse.json({
+          success: true,
+          alreadyEnrolled: false,
+          paymentRequired: false,
+          enrollmentId:
+            existingEnrollment.id,
+          courseSlug: course.slug,
+        });
+      }
+
       const { data: enrollment, error } =
-        await supabase
+        await admin
           .from("enrollments")
           .insert({
             student_id: user.id,
             course_id: course.id,
             enrollment_status: "active",
             payment_status: "free",
+            enrolled_at: new Date().toISOString(),
           })
-          .select(
-            "id, enrollment_status, payment_status"
-          )
+          .select("id")
           .single();
 
       if (error) {
-        /*
-         * A concurrent request may have created
-         * the enrollment after our initial lookup.
-         */
+        console.error(
+          "Free enrollment insert error:",
+          error
+        );
+
         if (error.code === "23505") {
-          const { data: existing } =
-            await supabase
+          const { data: duplicate } =
+            await admin
               .from("enrollments")
               .select(
-                "id, enrollment_status, payment_status"
+                "id, enrollment_status"
               )
               .eq("student_id", user.id)
               .eq("course_id", course.id)
               .maybeSingle();
 
-          return NextResponse.json({
-            success: true,
-            already_enrolled: true,
-            payment_required: false,
-            enrollment_id:
-              existing?.id ?? null,
-            course_id: course.id,
-            course_slug: course.slug,
-            message:
-              "You are already enrolled in this course.",
-          });
+          if (
+            duplicate?.enrollment_status ===
+              "active" ||
+            duplicate?.enrollment_status ===
+              "completed"
+          ) {
+            return NextResponse.json({
+              success: true,
+              alreadyEnrolled: true,
+              paymentRequired: false,
+              enrollmentId: duplicate.id,
+              courseSlug: course.slug,
+            });
+          }
         }
-
-        console.error(
-          "Free enrollment failed:",
-          error
-        );
 
         return NextResponse.json(
           {
@@ -271,26 +247,42 @@ export async function POST(
 
       return NextResponse.json({
         success: true,
-        already_enrolled: false,
-        payment_required: false,
-        enrollment_id: enrollment.id,
-        course_id: course.id,
-        course_slug: course.slug,
-        message:
-          "Enrollment completed successfully.",
+        alreadyEnrolled: false,
+        paymentRequired: false,
+        enrollmentId: enrollment.id,
+        courseSlug: course.slug,
       });
     }
 
-    /*
-     * Second protection:
-     * Reuse an existing unfinished payment instead
-     * of creating another Flutterwave transaction.
-     */
-    const { data: existingPaymentData } =
-      await supabase
+    const amount = Number(
+      course.price_ngn ?? 0
+    );
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return NextResponse.json(
+        {
+          error:
+            "This paid course has an invalid price.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const currency =
+      course.currency || "NGN";
+
+    const { data: existingPayment } =
+      await admin
         .from("course_payments")
         .select(
-          "id, tx_ref, status, checkout_url"
+          `
+            id,
+            tx_ref,
+            checkout_url,
+            status,
+            amount,
+            currency
+          `
         )
         .eq("student_id", user.id)
         .eq("course_id", course.id)
@@ -304,113 +296,128 @@ export async function POST(
         .limit(1)
         .maybeSingle();
 
-    const existingPayment =
-      existingPaymentData as ExistingPayment | null;
-
     if (
-      existingPayment?.checkout_url
+      existingPayment?.checkout_url &&
+      existingPayment.amount === amount &&
+      existingPayment.currency === currency
     ) {
       return NextResponse.json({
         success: true,
-        already_enrolled: false,
-        payment_required: true,
-        payment_id: existingPayment.id,
-        tx_ref: existingPayment.tx_ref,
+        alreadyEnrolled: false,
+        paymentRequired: true,
         payment_url:
           existingPayment.checkout_url,
-        amount: Number(course.price_ngn),
-        currency: course.currency || "NGN",
-        message:
-          "An existing payment is awaiting completion.",
+        tx_ref: existingPayment.tx_ref,
+        courseSlug: course.slug,
       });
     }
 
-    const amount =
-      Number(course.price_ngn);
+    const txRef = makeTxRef();
 
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return NextResponse.json(
-        {
-          error:
-            "This course has an invalid payment amount.",
-        },
-        { status: 400 }
-      );
-    }
+    const customerName =
+      profile?.full_name ||
+      user.user_metadata?.full_name ||
+      user.email ||
+      "RuffNeck Learn Student";
 
     const customerEmail =
-      user.email ||
       profile?.email ||
-      "";
+      user.email;
 
     if (!customerEmail) {
       return NextResponse.json(
         {
           error:
-            "A valid email address is required for payment.",
+            "A valid email address is required before payment.",
         },
         { status: 400 }
       );
     }
 
-    const payment =
+    const redirectUrl =
+      `${process.env.NEXT_PUBLIC_SITE_URL || "https://ruffneck-lms.vercel.app"}` +
+      `/api/payments/flutterwave/callback`;
+
+    const flutterwavePayment =
       await createFlutterwavePayment({
         amount,
-        currency:
-          course.currency || "NGN",
+        currency,
+        txRef,
+        redirectUrl,
         customer: {
           email: customerEmail,
-          name:
-            profile?.full_name ||
-            user.user_metadata?.full_name ||
-            "RuffNeck Learn Student",
+          name: customerName,
           phone_number:
             profile?.phone ||
             user.user_metadata?.phone ||
             undefined,
         },
-        txRefPrefix: "RNL",
-        meta: {
-          student_id: user.id,
-          course_id: course.id,
-          course_slug: course.slug,
-        },
+        courseId: course.id,
+        courseTitle: course.title,
+        studentId: user.id,
       });
 
-    const { data: paymentRecord, error: paymentError } =
-      await supabase
+    if (
+      !flutterwavePayment.payment_url
+    ) {
+      console.error(
+        "Flutterwave response did not contain payment_url:",
+        flutterwavePayment
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "Flutterwave did not return a checkout URL.",
+        },
+        { status: 502 }
+      );
+    }
+
+    const { data: payment, error: paymentError } =
+      await admin
         .from("course_payments")
         .insert({
           student_id: user.id,
           course_id: course.id,
           course_slug: course.slug,
-          tx_ref: payment.tx_ref,
+          tx_ref: flutterwavePayment.tx_ref || txRef,
           flutterwave_transaction_id:
-            payment.transaction_id ?? null,
+            flutterwavePayment.transaction_id ??
+            null,
           amount,
-          currency:
-            course.currency || "NGN",
+          currency,
           status: "initiated",
           checkout_url:
-            payment.payment_url,
+            flutterwavePayment.payment_url,
         })
         .select(
-          "id, tx_ref, status, checkout_url"
+          `
+            id,
+            tx_ref,
+            checkout_url,
+            status
+          `
         )
         .single();
 
     if (paymentError) {
-      /*
-       * If another request won the race and created
-       * the payment first, return that payment rather
-       * than creating another transaction.
-       */
+      console.error(
+        "Course payment insert error:",
+        paymentError
+      );
+
       if (paymentError.code === "23505") {
-        const { data: existing } =
-          await supabase
+        const { data: duplicatePayment } =
+          await admin
             .from("course_payments")
             .select(
-              "id, tx_ref, status, checkout_url"
+              `
+                id,
+                tx_ref,
+                checkout_url,
+                status
+              `
             )
             .eq("student_id", user.id)
             .eq("course_id", course.id)
@@ -424,28 +431,21 @@ export async function POST(
             .limit(1)
             .maybeSingle();
 
-        if (existing?.checkout_url) {
+        if (
+          duplicatePayment?.checkout_url
+        ) {
           return NextResponse.json({
             success: true,
-            already_enrolled: false,
-            payment_required: true,
-            payment_id: existing.id,
-            tx_ref: existing.tx_ref,
+            alreadyEnrolled: false,
+            paymentRequired: true,
             payment_url:
-              existing.checkout_url,
-            amount,
-            currency:
-              course.currency || "NGN",
-            message:
-              "An existing payment is awaiting completion.",
+              duplicatePayment.checkout_url,
+            tx_ref:
+              duplicatePayment.tx_ref,
+            courseSlug: course.slug,
           });
         }
       }
-
-      console.error(
-        "Payment record creation failed:",
-        paymentError
-      );
 
       return NextResponse.json(
         {
@@ -458,21 +458,16 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      already_enrolled: false,
-      payment_required: true,
-      payment_id: paymentRecord.id,
-      tx_ref: paymentRecord.tx_ref,
-      payment_url:
-        paymentRecord.checkout_url,
-      amount,
-      currency:
-        course.currency || "NGN",
-      message:
-        "Payment initialized successfully.",
+      alreadyEnrolled: false,
+      paymentRequired: true,
+      payment_url: payment.checkout_url,
+      tx_ref: payment.tx_ref,
+      paymentId: payment.id,
+      courseSlug: course.slug,
     });
   } catch (error) {
     console.error(
-      "Student enrollment/payment error:",
+      "Student enrollment error:",
       error
     );
 
