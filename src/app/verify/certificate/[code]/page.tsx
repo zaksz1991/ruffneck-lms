@@ -164,7 +164,7 @@ export default async function CertificateVerificationPage({
   }
 
   const verification =
-    verificationData as VerificationRecord;
+    verificationData as unknown as VerificationRecord;
 
   const {
     data: certificateData,
@@ -207,7 +207,7 @@ export default async function CertificateVerificationPage({
   }
 
   const certificate =
-    certificateData as Certificate;
+    certificateData as unknown as Certificate;
 
   const expired =
     Boolean(
@@ -236,7 +236,7 @@ export default async function CertificateVerificationPage({
     .maybeSingle();
 
   const profile =
-    (profileData as Profile | null) ??
+    (profileData as unknown as Profile | null) ??
     null;
 
   const publicName =
@@ -256,7 +256,7 @@ export default async function CertificateVerificationPage({
     );
 
   const skillProfiles =
-    (skillProfileData as SkillProfile[] | null) ??
+    (skillProfileData as unknown as SkillProfile[] | null) ??
     [];
 
   const skillIds = skillProfiles
@@ -276,7 +276,7 @@ export default async function CertificateVerificationPage({
       .in("id", skillIds);
 
     skills =
-      (skillsData as Skill[] | null) ??
+      (skillsData as unknown as Skill[] | null) ??
       [];
   }
 
@@ -295,10 +295,10 @@ export default async function CertificateVerificationPage({
             "verified" ||
           profile.verification_status ===
             "strong" ||
-          profile.confidence_score !==
+          (profile.confidence_score !==
             null &&
             profile.confidence_score >=
-              80,
+              80),
       )
       .map((profile) => ({
         ...profile,
@@ -340,7 +340,7 @@ export default async function CertificateVerificationPage({
     .limit(10);
 
   const evidenceRows =
-    (evidenceData as Array<{
+    (evidenceData as unknown as Array<{
       id: string;
       score: number | null;
       reviewed_at: string | null;
@@ -368,7 +368,7 @@ export default async function CertificateVerificationPage({
 
     const taskMap = new Map(
       (
-        tasksData as Array<{
+        tasksData as unknown as Array<{
           id: string;
           title: string;
           course_id: string | null;
