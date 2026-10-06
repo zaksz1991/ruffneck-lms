@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { notFound } from "next/navigation";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 type CertificateMetadata = {
   certificate_number: string;
@@ -83,22 +83,23 @@ export async function generateMetadata({
     data as unknown as CertificateMetadata | null;
 
   if (!certificate) {
+    const title = `Certificate ${normalizedCertificateNumber} | RuffNeck Learn`;
+    const description =
+      "Verify a RuffNeck Learn certificate.";
+
     return {
-      title: `Certificate ${normalizedCertificateNumber} | RuffNeck Learn`,
-      description:
-        "Verify a RuffNeck Learn certificate.",
+      title,
+      description,
       openGraph: {
-        title: `Certificate ${normalizedCertificateNumber} | RuffNeck Learn`,
-        description:
-          "Verify a RuffNeck Learn certificate.",
+        title,
+        description,
         type: "website",
         siteName: "RuffNeck Learn",
       },
       twitter: {
         card: "summary",
-        title: `Certificate ${normalizedCertificateNumber} | RuffNeck Learn`,
-        description:
-          "Verify a RuffNeck Learn certificate.",
+        title,
+        description,
       },
     };
   }
