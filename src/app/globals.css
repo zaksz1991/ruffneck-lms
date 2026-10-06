@@ -16970,3 +16970,40 @@ hr {
 .site-header .nav a:hover {
   color: #00b4d8 !important;
 }
+
+/* =========================================================
+   FORCE HEADER PARENT BRAND VISIBILITY
+   ========================================================= */
+
+.site-header .rn-parent-brand,
+.site-header .rn-parent-brand a,
+.site-header .rn-parent-brand strong,
+.site-header .rn-parent-brand span,
+.site-header [class*="parent-brand"],
+.site-header [class*="parent-brand"] a,
+.site-header [class*="parent-brand"] strong,
+.site-header [class*="parent-brand"] span {
+  font-family: Arial, Helvetica, sans-serif !important;
+  color: #0b1e3a !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  text-shadow: none !important;
+}
+
+.site-header .rn-parent-brand strong,
+.site-header [class*="parent-brand"] strong {
+  display: block !important;
+  color: #0b1e3a !important;
+  font-size: 0.86rem !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+}
+
+.site-header .rn-parent-brand span,
+.site-header [class*="parent-brand"] span {
+  display: block !important;
+  color: #475569 !important;
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  line-height: 1.35 !important;
+}
