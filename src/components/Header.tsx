@@ -123,7 +123,7 @@ export function Header() {
             </strong>
 
             <span>
-              Practical AI & digital systems
+              Practical AI &amp; digital systems
               for Nigerian professionals
             </span>
           </Link>
@@ -143,6 +143,7 @@ export function Header() {
             <Link
               href="/"
               className="brand-link"
+              aria-label="RuffNeck Learn"
             >
               <Image
                 src="/brand/ruffneck-logo.png"
@@ -163,7 +164,7 @@ export function Header() {
               </strong>
 
               <span>
-                Practical AI & digital systems
+                Practical AI &amp; digital systems
                 for Nigerian professionals
               </span>
             </Link>
@@ -184,7 +185,7 @@ export function Header() {
                 </Link>
 
                 <Link href="/student/scan">
-                  Scan & Learn
+                  Scan &amp; Learn
                 </Link>
 
                 <Link href="/student/practical-work">
@@ -212,7 +213,10 @@ export function Header() {
                 </Link>
 
                 {canAccessAdmin ? (
-                  <Link href="/admin/lms">
+                  <Link
+                    href="/admin/lms"
+                    className="rn-admin-link"
+                  >
                     Admin
                   </Link>
                 ) : null}
@@ -234,7 +238,10 @@ export function Header() {
                   Log in
                 </Link>
 
-                <Link href="/signup">
+                <Link
+                  href="/signup"
+                  className="rn-signup-link"
+                >
                   Sign up
                 </Link>
               </>
