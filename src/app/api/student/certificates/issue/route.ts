@@ -85,9 +85,7 @@ function getAssessmentPercentage(
   return 0;
 }
 
-export async function POST(
-  request: Request
-) {
+export async function POST(request: Request) {
   try {
     const supabase = await createClient();
 
@@ -135,7 +133,17 @@ export async function POST(
       );
     }
 
+    /*
+     * Use the service-role client for certificate
+     * verification and issuance.
+     */
     const admin = createAdminClient();
+
+    /*
+     * --------------------------------------------------------------
+     * COURSE
+     * --------------------------------------------------------------
+     */
 
     const {
       data: courseData,
@@ -164,7 +172,7 @@ export async function POST(
     }
 
     const course =
-      courseData as Course | null;
+      courseData as unknown as Course | null;
 
     if (!course) {
       return NextResponse.json(
@@ -177,9 +185,15 @@ export async function POST(
     }
 
     /*
-     * Certificate issuance requires a completed
-     * enrollment.
+     * --------------------------------------------------------------
+     * ENROLLMENT
+     * --------------------------------------------------------------
+     *
+     * Enrollment must exist, but certificate eligibility
+     * is determined by the actual learning requirements
+     * verified below.
      */
+
     const {
       data: enrollmentData,
       error: enrollmentError,
@@ -190,7 +204,10 @@ export async function POST(
       )
       .eq("student_id", user.id)
       .eq("course_id", courseId)
-      .eq("enrollment_status", "completed")
+      .in("enrollment_status", [
+        "active",
+        "completed",
+      ])
       .maybeSingle();
 
     if (enrollmentError) {
@@ -215,20 +232,22 @@ export async function POST(
       return NextResponse.json(
         {
           error:
-            "You must complete the course before claiming a certificate.",
+            "You must be enrolled in this course before claiming a certificate.",
         },
         { status: 403 }
       );
     }
 
     /*
-     * Verify the canonical payment state.
-     *
-     * Free courses require "free".
-     * Paid courses require "paid".
+     * --------------------------------------------------------------
+     * PAYMENT
+     * --------------------------------------------------------------
      */
+
     if (course.is_free) {
-      if (enrollment.payment_status !== "free") {
+      if (
+        enrollment.payment_status !== "free"
+      ) {
         return NextResponse.json(
           {
             error:
@@ -250,8 +269,11 @@ export async function POST(
     }
 
     /*
-     * Verify published curriculum.
+     * --------------------------------------------------------------
+     * PUBLISHED CURRICULUM
+     * --------------------------------------------------------------
      */
+
     const {
       data: curriculumData,
       error: curriculumError,
@@ -277,9 +299,18 @@ export async function POST(
     }
 
     const curriculum =
-      (curriculumData ?? []) as CurriculumLesson[];
+      (curriculumData ??
+        []) as unknown as CurriculumLesson[];
 
-    if (curriculum.length === 0) {
+    const lessonIds = [
+      ...new Set(
+        curriculum.map(
+          (lesson) => lesson.lesson_id
+        )
+      ),
+    ];
+
+    if (lessonIds.length === 0) {
       return NextResponse.json(
         {
           error:
@@ -289,13 +320,12 @@ export async function POST(
       );
     }
 
-    const lessonIds = curriculum.map(
-      (lesson) => lesson.lesson_id
-    );
-
     /*
-     * Every published lesson must be completed.
+     * --------------------------------------------------------------
+     * LESSON COMPLETION
+     * --------------------------------------------------------------
      */
+
     const {
       data: progressData,
       error: progressError,
@@ -349,9 +379,14 @@ export async function POST(
     }
 
     /*
-     * Find the student's most recent completed
-     * assessment attempt.
+     * --------------------------------------------------------------
+     * ASSESSMENT
+     * --------------------------------------------------------------
+     *
+     * The most recent completed assessment must
+     * achieve at least 70%.
      */
+
     const {
       data: assessmentData,
       error: assessmentError,
@@ -424,8 +459,16 @@ export async function POST(
     }
 
     /*
-     * Verify the published capstone.
+     * --------------------------------------------------------------
+     * PUBLISHED CAPSTONE
+     * --------------------------------------------------------------
+     *
+     * Deliberately do NOT order by sort_order.
+     * The certificate requirement only needs a published
+     * capstone and the existing course_projects schema does
+     * not require that column.
      */
+
     const {
       data: projectData,
       error: projectError,
@@ -435,16 +478,8 @@ export async function POST(
         "id, project_type"
       )
       .eq("course_id", courseId)
-      .eq(
-        "project_type",
-        "capstone"
-      )
-      .eq("is_published", true)
-      .order("sort_order", {
-        ascending: true,
-      })
-      .limit(1)
-      .maybeSingle();
+      .eq("project_type", "capstone")
+      .eq("is_published", true);
 
     if (projectError) {
       console.error(
@@ -461,10 +496,11 @@ export async function POST(
       );
     }
 
-    const project =
-      projectData as CourseProject | null;
+    const projects =
+      (projectData ??
+        []) as unknown as CourseProject[];
 
-    if (!project) {
+    if (projects.length === 0) {
       return NextResponse.json(
         {
           error:
@@ -474,9 +510,16 @@ export async function POST(
       );
     }
 
+    const capstoneIds = projects.map(
+      (project) => project.id
+    );
+
     /*
-     * The student's capstone submission must be approved.
+     * --------------------------------------------------------------
+     * APPROVED CAPSTONE SUBMISSION
+     * --------------------------------------------------------------
      */
+
     const {
       data: submissionData,
       error: submissionError,
@@ -485,18 +528,12 @@ export async function POST(
       .select(
         "id, score, status, reviewed_at"
       )
-      .eq(
+      .in(
         "project_id",
-        project.id
+        capstoneIds
       )
-      .eq(
-        "student_id",
-        user.id
-      )
-      .eq(
-        "status",
-        "approved"
-      )
+      .eq("student_id", user.id)
+      .eq("status", "approved")
       .order("reviewed_at", {
         ascending: false,
       })
@@ -531,12 +568,12 @@ export async function POST(
       );
     }
 
-    const capstoneScore =
-      submission.score ?? 0;
-
     /*
-     * Load certificate holder information.
+     * --------------------------------------------------------------
+     * LEARNER PROFILE
+     * --------------------------------------------------------------
      */
+
     const {
       data: profileData,
       error: profileError,
@@ -569,12 +606,18 @@ export async function POST(
     const holderName =
       profile?.full_name?.trim() ||
       user.user_metadata?.full_name?.trim() ||
-      user.email?.split("@")[0] ||
+      profile?.email?.trim() ||
+      user.email?.trim() ||
       "RuffNeck Learn Student";
 
     /*
-     * Prevent duplicate certificates.
+     * --------------------------------------------------------------
+     * EXISTING CERTIFICATE
+     * --------------------------------------------------------------
+     *
+     * Issuance is idempotent.
      */
+
     const {
       data: existingCertificateData,
       error: existingCertificateError,
@@ -583,14 +626,8 @@ export async function POST(
       .select(
         "id, certificate_number"
       )
-      .eq(
-        "student_id",
-        user.id
-      )
-      .eq(
-        "course_id",
-        courseId
-      )
+      .eq("student_id", user.id)
+      .eq("course_id", courseId)
       .maybeSingle();
 
     if (existingCertificateError) {
@@ -622,32 +659,32 @@ export async function POST(
     }
 
     /*
-     * All certificate requirements passed.
+     * --------------------------------------------------------------
+     * ISSUE CERTIFICATE
+     * --------------------------------------------------------------
      */
+
+    const capstoneScore =
+      submission.score ?? 0;
+
     const {
       data: certificateData,
       error: certificateError,
     } = await admin
       .from("course_certificates")
       .insert({
-        student_id:
-          user.id,
-        course_id:
-          courseId,
-        holder_name:
-          holderName,
-        course_title:
-          course.title,
-        course_slug:
-          course.slug,
+        student_id: user.id,
+        course_id: courseId,
+        holder_name: holderName,
+        course_title: course.title,
+        course_slug: course.slug,
         assessment_score:
           Math.round(
             assessmentPercentage
           ),
         capstone_score:
           capstoneScore,
-        is_revoked:
-          false,
+        is_revoked: false,
       })
       .select(
         "id, certificate_number"
@@ -656,7 +693,10 @@ export async function POST(
 
     if (certificateError) {
       /*
-       * Handle a concurrent issuance request.
+       * A unique constraint may reject a second
+       * simultaneous issuance request. Recover the
+       * existing certificate rather than returning
+       * a generic failure.
        */
       if (
         certificateError.code ===
@@ -703,6 +743,7 @@ export async function POST(
       return NextResponse.json(
         {
           error:
+            certificateError.message ||
             "Unable to issue certificate.",
         },
         { status: 500 }
