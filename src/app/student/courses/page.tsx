@@ -55,6 +55,23 @@ type CourseAssessment = {
   completed_at: string | null;
 };
 
+type Certificate = {
+  id: string;
+  student_id: string;
+  course_id: string;
+  certificate_number: string;
+  is_revoked: boolean;
+};
+
+type CourseCertificate = {
+  status:
+    | "not_issued"
+    | "valid"
+    | "revoked";
+  certificate_id: string | null;
+  certificate_number: string | null;
+};
+
 export default async function StudentCoursesPage() {
   const supabase = await createClient();
 
@@ -134,6 +151,7 @@ export default async function StudentCoursesPage() {
     curriculumResult,
     progressResult,
     assessmentResult,
+    certificateResult,
   ] = await Promise.all([
     supabase
       .from("courses")
@@ -172,6 +190,14 @@ export default async function StudentCoursesPage() {
       .order("completed_at", {
         ascending: false,
       }),
+
+    supabase
+      .from("course_certificates")
+      .select(
+        "id, student_id, course_id, certificate_number, is_revoked"
+      )
+      .eq("student_id", user.id)
+      .in("course_id", courseIds),
   ]);
 
   if (courseResult.error) {
@@ -196,6 +222,12 @@ export default async function StudentCoursesPage() {
     );
   }
 
+  if (certificateResult.error) {
+    throw new Error(
+      certificateResult.error.message
+    );
+  }
+
   const courses =
     (courseResult.data ?? []) as Course[];
 
@@ -210,6 +242,10 @@ export default async function StudentCoursesPage() {
   const assessmentAttempts =
     (assessmentResult.data ??
       []) as AssessmentAttempt[];
+
+  const certificates =
+    (certificateResult.data ??
+      []) as Certificate[];
 
   const courseMap = new Map(
     courses.map((course) => [
@@ -284,6 +320,29 @@ export default async function StudentCoursesPage() {
     );
   }
 
+  const certificateByCourse =
+    new Map<string, CourseCertificate>();
+
+  for (const certificate of certificates) {
+    /*
+     * A course should have at most one certificate for
+     * a student because of the unique student/course
+     * certificate constraint.
+     */
+    certificateByCourse.set(
+      certificate.course_id,
+      {
+        status: certificate.is_revoked
+          ? "revoked"
+          : "valid",
+        certificate_id:
+          certificate.id,
+        certificate_number:
+          certificate.certificate_number,
+      }
+    );
+  }
+
   const courseRows = enrollments
     .map((enrollment) => {
       const course = courseMap.get(
@@ -344,6 +403,15 @@ export default async function StudentCoursesPage() {
           completed_at: null,
         };
 
+      const certificate =
+        certificateByCourse.get(
+          course.id
+        ) ?? {
+          status: "not_issued" as const,
+          certificate_id: null,
+          certificate_number: null,
+        };
+
       return {
         enrollment,
         course,
@@ -357,6 +425,7 @@ export default async function StudentCoursesPage() {
         ),
         nextLesson,
         assessment,
+        certificate,
       };
     })
     .filter(
@@ -387,8 +456,8 @@ export default async function StudentCoursesPage() {
         <h1>My Courses</h1>
 
         <p>
-          Track your lessons, resume learning, and
-          monitor course assessments.
+          Track your lessons, resume learning, monitor
+          assessments, and manage your certificates.
         </p>
       </section>
 
@@ -429,6 +498,7 @@ export default async function StudentCoursesPage() {
             lessonPercent,
             nextLesson,
             assessment,
+            certificate,
           } = row;
 
           const courseAssessmentLabel =
@@ -473,6 +543,22 @@ export default async function StudentCoursesPage() {
             assessment.attempt_id
               ? `/student/assessment/results/${encodeURIComponent(
                   assessment.attempt_id
+                )}`
+              : null;
+
+          const certificateLabel =
+            certificate.status ===
+            "valid"
+              ? "View Certificate"
+              : certificate.status ===
+                  "revoked"
+                ? "View Revoked Certificate"
+                : "Certificate Not Issued";
+
+          const certificateHref =
+            certificate.certificate_id
+              ? `/student/certificates/${encodeURIComponent(
+                  certificate.certificate_id
                 )}`
               : null;
 
@@ -588,6 +674,82 @@ export default async function StudentCoursesPage() {
                     {assessmentLabel}
                   </Link>
                 </div>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent:
+                    "space-between",
+                  gap: 16,
+                  flexWrap: "wrap",
+                  padding: "16px 0",
+                  borderTop:
+                    "1px solid var(--border)",
+                  borderBottom:
+                    "1px solid var(--border)",
+                }}
+              >
+                <div>
+                  <strong>
+                    Certificate
+                  </strong>
+
+                  <p
+                    style={{
+                      margin:
+                        "5px 0 0",
+                      color:
+                        "var(--muted)",
+                    }}
+                  >
+                    {certificate.status ===
+                    "valid"
+                      ? "Certificate issued and valid."
+                      : certificate.status ===
+                          "revoked"
+                        ? "Certificate issued but currently revoked."
+                        : "Certificate has not been issued for this course."}
+                  </p>
+
+                  {certificate.certificate_number ? (
+                    <small
+                      style={{
+                        display:
+                          "block",
+                        marginTop: 5,
+                        color:
+                          "var(--muted)",
+                      }}
+                    >
+                      Certificate No:{" "}
+                      {
+                        certificate.certificate_number
+                      }
+                    </small>
+                  ) : null}
+                </div>
+
+                {certificateHref ? (
+                  <Link
+                    href={
+                      certificateHref
+                    }
+                    className="button secondary"
+                  >
+                    {certificateLabel}
+                  </Link>
+                ) : (
+                  <span
+                    className="status-badge"
+                    style={{
+                      opacity: 0.75,
+                    }}
+                  >
+                    {certificateLabel}
+                  </span>
+                )}
               </div>
 
               <div className="course-card-actions">
