@@ -15794,3 +15794,908 @@ main h6 {
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================================================
+   RUFFNECK LEARN — HEADER BUTTON POLISH
+   ADD-ONLY
+   ========================================================= */
+
+.site-header .nav > a,
+.site-header .nav .nav-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0.62rem 0.9rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-weight: 650;
+  text-decoration: none;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.site-header .nav > a:hover,
+.site-header .nav .nav-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.site-header .nav > a:focus-visible,
+.site-header .nav .nav-button:focus-visible {
+  outline: 3px solid rgba(0, 180, 216, 0.25);
+  outline-offset: 2px;
+}
+
+/* Standard navigation links */
+.site-header .nav > a {
+  color: #334155;
+  background: transparent;
+}
+
+.site-header .nav > a:hover {
+  color: #0b1e3a;
+  background: #f1f5f9;
+  border-color: #dbe3ed;
+}
+
+/* Login / primary navigation action */
+.site-header .nav > a[href="/login"] {
+  color: #0b1e3a;
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.site-header .nav > a[href="/login"]:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+}
+
+/* Sign up / primary CTA */
+.site-header .nav > a[href="/signup"] {
+  color: #ffffff;
+  background: #0b1e3a;
+  border-color: #0b1e3a;
+  box-shadow: 0 2px 5px rgba(11, 30, 58, 0.16);
+}
+
+.site-header .nav > a[href="/signup"]:hover {
+  background: #12325d;
+  border-color: #12325d;
+  box-shadow: 0 4px 10px rgba(11, 30, 58, 0.2);
+}
+
+/* Admin */
+.site-header .nav > a[href="/admin/lms"] {
+  color: #7c5200;
+  background: #fffbeb;
+  border-color: #f3d37a;
+}
+
+.site-header .nav > a[href="/admin/lms"]:hover {
+  background: #fef3c7;
+  border-color: #eabf45;
+}
+
+/* Sign out */
+.site-header .nav .nav-button {
+  color: #991b1b;
+  background: #fff;
+  border-color: #fecaca;
+  cursor: pointer;
+}
+
+.site-header .nav .nav-button:hover:not(:disabled) {
+  color: #7f1d1d;
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+.site-header .nav .nav-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Authenticated navigation spacing */
+.site-header .nav {
+  align-items: center;
+  gap: 0.45rem;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .site-header .nav > a,
+  .site-header .nav .nav-button {
+    min-height: 36px;
+    padding: 0.55rem 0.72rem;
+    border-radius: 7px;
+    font-size: 0.76rem;
+  }
+
+  .site-header .nav {
+    gap: 0.35rem;
+  }
+}
+
+/* =========================================================
+   RUFFNECK LEARN — PRIMARY ACTION BUTTON POLISH
+   ADD-ONLY
+   ========================================================= */
+
+button,
+a.button,
+.btn,
+button[type="submit"] {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+button:hover:not(:disabled),
+a.button:hover,
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+button:focus-visible,
+a.button:focus-visible,
+.btn:focus-visible {
+  outline: 3px solid rgba(0, 180, 216, 0.22);
+  outline-offset: 2px;
+}
+
+button:disabled,
+.btn:disabled {
+  cursor: not-allowed;
+}
+
+/* Common primary actions */
+button[type="submit"],
+button[class*="primary"],
+.btn-primary,
+.button-primary {
+  border-radius: 8px;
+  font-weight: 700;
+  box-shadow: 0 2px 5px rgba(11, 30, 58, 0.12);
+}
+
+button[type="submit"]:hover:not(:disabled),
+button[class*="primary"]:hover:not(:disabled),
+.btn-primary:hover,
+.button-primary:hover {
+  box-shadow: 0 5px 12px rgba(11, 30, 58, 0.16);
+}
+
+/* Enrollment / purchase actions */
+button[class*="enroll"],
+a[class*="enroll"],
+button[class*="purchase"],
+a[class*="purchase"] {
+  min-height: 44px;
+  padding: 0.7rem 1.15rem;
+  border-radius: 8px;
+  font-weight: 700;
+}
+
+/* Save actions */
+button[class*="save"] {
+  border-radius: 8px;
+  font-weight: 650;
+}
+
+/* Cancel / secondary actions */
+button[class*="cancel"],
+button[class*="secondary"],
+.btn-secondary,
+.button-secondary {
+  border-radius: 8px;
+  font-weight: 650;
+}
+
+/* Destructive actions */
+button[class*="delete"],
+button[class*="remove"],
+button[class*="danger"],
+.btn-danger,
+.button-danger {
+  border-radius: 8px;
+  font-weight: 650;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  button[type="submit"],
+  button[class*="primary"],
+  .btn-primary,
+  .button-primary {
+    min-height: 42px;
+  }
+
+  button[class*="enroll"],
+  a[class*="enroll"],
+  button[class*="purchase"],
+  a[class*="purchase"] {
+    min-height: 42px;
+    padding: 0.65rem 0.95rem;
+  }
+}
+
+/* =========================================================
+   RUFFNECK LEARN — COURSE CARD POLISH
+   ADD-ONLY
+   ========================================================= */
+
+.course-card,
+[class*="course-card"],
+.course-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.course-card:hover,
+[class*="course-card"]:hover,
+.course-item:hover {
+  transform: translateY(-3px);
+  border-color: #cbd5e1;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
+}
+
+/* Course titles */
+.course-card h2,
+.course-card h3,
+[class*="course-card"] h2,
+[class*="course-card"] h3,
+.course-item h2,
+.course-item h3 {
+  color: #0b1e3a;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+/* Course descriptions */
+.course-card p,
+[class*="course-card"] p,
+.course-item p {
+  color: #475569;
+  line-height: 1.6;
+}
+
+/* Pricing */
+.course-card [class*="price"],
+[class*="course-card"] [class*="price"],
+.course-item [class*="price"] {
+  color: #0b1e3a;
+  font-weight: 800;
+}
+
+/* Course metadata */
+.course-card [class*="meta"],
+[class*="course-card"] [class*="meta"],
+.course-item [class*="meta"] {
+  color: #64748b;
+  font-size: 0.84rem;
+}
+
+/* Free course indicator */
+.course-card [class*="free"],
+[class*="course-card"] [class*="free"],
+.course-item [class*="free"] {
+  font-weight: 750;
+}
+
+/* Course action area */
+.course-card > div:last-child,
+[class*="course-card"] > div:last-child,
+.course-item > div:last-child {
+  gap: 0.55rem;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .course-card,
+  [class*="course-card"],
+  .course-item {
+    border-radius: 10px;
+  }
+
+  .course-card:hover,
+  [class*="course-card"]:hover,
+  .course-item:hover {
+    transform: none;
+    box-shadow: 0 5px 14px rgba(15, 23, 42, 0.08);
+  }
+}
+
+/* =========================================================
+   RUFFNECK LEARN — COURSE PAGE POLISH
+   ADD-ONLY
+   ========================================================= */
+
+/* Course page main headings */
+.course-page h1,
+[class*="course-page"] h1 {
+  color: #0b1e3a;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.course-page h2,
+.course-page h3,
+[class*="course-page"] h2,
+[class*="course-page"] h3 {
+  color: #0b1e3a;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+/* Section / module containers */
+.course-section,
+.module-section,
+[class*="section-card"],
+[class*="module-card"] {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+/* Lesson rows */
+.lesson-row,
+[class*="lesson-row"],
+[class*="lesson-item"] {
+  border-bottom: 1px solid #eef2f7;
+  transition:
+    background-color 150ms ease,
+    padding-left 150ms ease;
+}
+
+.lesson-row:hover,
+[class*="lesson-row"]:hover,
+[class*="lesson-item"]:hover {
+  background: #f8fafc;
+}
+
+/* Last lesson should not have a divider */
+.lesson-row:last-child,
+[class*="lesson-row"]:last-child,
+[class*="lesson-item"]:last-child {
+  border-bottom: 0;
+}
+
+/* Progress bars */
+progress {
+  width: 100%;
+  height: 8px;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+progress::-webkit-progress-bar {
+  background: #e2e8f0;
+  border-radius: 999px;
+}
+
+progress::-webkit-progress-value {
+  background: #00b4d8;
+  border-radius: 999px;
+}
+
+progress::-moz-progress-bar {
+  background: #00b4d8;
+  border-radius: 999px;
+}
+
+/* Status badges */
+[class*="status"],
+[class*="badge"] {
+  border-radius: 999px;
+  font-weight: 650;
+}
+
+/* Course information panels */
+.course-info,
+[class*="course-info"],
+.course-overview,
+[class*="overview"] {
+  border-radius: 10px;
+}
+
+/* Links inside course content */
+.course-page a:not(.button):not(.btn),
+[class*="course-page"] a:not(.button):not(.btn) {
+  transition:
+    color 150ms ease,
+    text-decoration-color 150ms ease;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .course-page h1,
+  [class*="course-page"] h1 {
+    font-size: 1.65rem;
+  }
+
+  .course-page h2,
+  [class*="course-page"] h2 {
+    font-size: 1.25rem;
+  }
+
+  .course-section,
+  .module-section,
+  [class*="section-card"],
+  [class*="module-card"] {
+    border-radius: 8px;
+  }
+}
+
+/* =========================================================
+   RUFFNECK LEARN — STUDENT DASHBOARD POLISH
+   ADD-ONLY
+   ========================================================= */
+
+/* Dashboard cards */
+.dashboard-card,
+[class*="dashboard-card"],
+.stat-card,
+[class*="stat-card"] {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease;
+}
+
+.dashboard-card:hover,
+[class*="dashboard-card"]:hover,
+.stat-card:hover,
+[class*="stat-card"]:hover {
+  transform: translateY(-2px);
+  border-color: #cbd5e1;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.09);
+}
+
+/* Dashboard headings */
+.dashboard h1,
+[class*="dashboard"] h1 {
+  color: #0b1e3a;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.dashboard h2,
+.dashboard h3,
+[class*="dashboard"] h2,
+[class*="dashboard"] h3 {
+  color: #0b1e3a;
+  font-weight: 750;
+}
+
+/* Stat numbers */
+.dashboard [class*="value"],
+.dashboard [class*="number"],
+[class*="dashboard"] [class*="value"],
+[class*="dashboard"] [class*="number"] {
+  color: #0b1e3a;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+/* Supporting labels */
+.dashboard [class*="label"],
+.dashboard [class*="description"],
+[class*="dashboard"] [class*="label"],
+[class*="dashboard"] [class*="description"] {
+  color: #64748b;
+}
+
+/* Progress containers */
+.dashboard progress,
+[class*="dashboard"] progress {
+  height: 8px;
+  margin-top: 0.45rem;
+}
+
+/* Learning progress */
+.dashboard [class*="progress"],
+[class*="dashboard"] [class*="progress"] {
+  border-radius: 999px;
+}
+
+/* Dashboard links */
+.dashboard a,
+[class*="dashboard"] a {
+  transition:
+    color 150ms ease,
+    background-color 150ms ease;
+}
+
+/* Empty states */
+.dashboard [class*="empty"],
+[class*="dashboard"] [class*="empty"] {
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .dashboard-card,
+  [class*="dashboard-card"],
+  .stat-card,
+  [class*="stat-card"] {
+    border-radius: 10px;
+  }
+
+  .dashboard-card:hover,
+  [class*="dashboard-card"]:hover,
+  .stat-card:hover,
+  [class*="stat-card"]:hover {
+    transform: none;
+  }
+
+  .dashboard h1,
+  [class*="dashboard"] h1 {
+    font-size: 1.55rem;
+  }
+}
+
+/* =========================================================
+   RUFFNECK LEARN — FORM & INPUT POLISH
+   ADD-ONLY
+   ========================================================= */
+
+input,
+select,
+textarea {
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    background-color 150ms ease;
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: #94a3b8;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #00b4d8;
+  box-shadow: 0 0 0 3px rgba(0, 180, 216, 0.12);
+  outline: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #94a3b8;
+}
+
+label {
+  color: #334155;
+  font-weight: 650;
+}
+
+/* Form groups */
+form [class*="field"],
+form [class*="form-group"],
+.form-field,
+.form-group {
+  margin-bottom: 1rem;
+}
+
+/* Validation messages */
+[role="alert"] {
+  border-radius: 8px;
+  line-height: 1.5;
+}
+
+/* Checkboxes and radios should retain native proportions */
+input[type="checkbox"],
+input[type="radio"] {
+  width: auto;
+  box-shadow: none;
+  accent-color: #0b1e3a;
+}
+
+/* File inputs */
+input[type="file"] {
+  padding: 0.55rem;
+  cursor: pointer;
+}
+
+input[type="file"]:focus {
+  box-shadow: 0 0 0 3px rgba(0, 180, 216, 0.12);
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]),
+  select {
+    min-height: 42px;
+  }
+}
+
+/* =========================================================
+   RUFFNECK LEARN — TABLE & DATA PANEL POLISH
+   ADD-ONLY
+   ========================================================= */
+
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* Table header */
+thead th {
+  padding: 0.8rem 0.9rem;
+  background: #f8fafc;
+  color: #334155;
+  border-bottom: 1px solid #dbe3ed;
+  font-size: 0.8rem;
+  font-weight: 750;
+  text-align: left;
+  white-space: nowrap;
+}
+
+/* Table cells */
+tbody td {
+  padding: 0.78rem 0.9rem;
+  color: #475569;
+  border-bottom: 1px solid #eef2f7;
+  vertical-align: middle;
+}
+
+/* Row interaction */
+tbody tr {
+  transition: background-color 140ms ease;
+}
+
+tbody tr:hover {
+  background: #f8fafc;
+}
+
+/* Remove final divider */
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Numeric data */
+td[data-numeric],
+th[data-numeric] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Status cells */
+td [class*="status"],
+td [class*="badge"] {
+  white-space: nowrap;
+}
+
+/* Data panels around tables */
+.data-table,
+.table-container,
+[class*="table-container"],
+[class*="data-table"] {
+  border-radius: 10px;
+  overflow-x: auto;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  table {
+    min-width: 620px;
+  }
+
+  thead th,
+  tbody td {
+    padding: 0.68rem 0.75rem;
+    font-size: 0.82rem;
+  }
+
+  .data-table,
+  .table-container,
+  [class*="table-container"],
+  [class*="data-table"] {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* =========================================================
+   RUFFNECK LEARN — ALERT & STATUS POLISH
+   ADD-ONLY
+   ========================================================= */
+
+[role="alert"],
+[role="status"],
+.alert,
+.notice,
+.notification,
+.message {
+  border-radius: 9px;
+  padding: 0.75rem 0.9rem;
+  line-height: 1.5;
+}
+
+/* Success */
+[class*="success"],
+.status-success,
+.alert-success {
+  border-color: #bbf7d0;
+}
+
+/* Error */
+[class*="error"],
+.status-error,
+.alert-error {
+  border-color: #fecaca;
+}
+
+/* Warning */
+[class*="warning"],
+.status-warning,
+.alert-warning {
+  border-color: #fde68a;
+}
+
+/* Informational */
+[class*="info"],
+.status-info,
+.alert-info {
+  border-color: #bae6fd;
+}
+
+/* Status badges */
+.status-badge,
+[class*="status-badge"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Disabled / inactive */
+.status-disabled,
+.status-inactive {
+  opacity: 0.7;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  [role="alert"],
+  [role="status"],
+  .alert,
+  .notice,
+  .notification,
+  .message {
+    padding: 0.65rem 0.75rem;
+    font-size: 0.88rem;
+  }
+}
+
+/* =========================================================
+   RUFFNECK LEARN — PAGE LAYOUT POLISH
+   ADD-ONLY
+   ========================================================= */
+
+/* Main content breathing room */
+main {
+  line-height: 1.6;
+}
+
+/* Common page containers */
+.page-container,
+.content-container,
+.page-content,
+[class*="page-container"],
+[class*="content-container"] {
+  width: min(1200px, calc(100% - 2rem));
+  margin-inline: auto;
+}
+
+/* Section spacing */
+section {
+  margin-block: 1.5rem;
+}
+
+section > h2 {
+  margin-bottom: 0.75rem;
+}
+
+/* Page headings */
+main > h1,
+main > div > h1 {
+  margin-bottom: 0.5rem;
+  color: #0b1e3a;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+/* Intro text beneath headings */
+main > h1 + p,
+main > div > h1 + p {
+  max-width: 760px;
+  color: #64748b;
+  line-height: 1.65;
+}
+
+/* Horizontal separators */
+hr {
+  border: 0;
+  border-top: 1px solid #e2e8f0;
+  margin-block: 1.5rem;
+}
+
+/* Consistent content panels */
+.panel,
+.content-panel,
+.card-panel,
+[class*="content-panel"],
+[class*="card-panel"] {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .page-container,
+  .content-container,
+  .page-content,
+  [class*="page-container"],
+  [class*="content-container"] {
+    width: min(100% - 1rem, 1200px);
+  }
+
+  section {
+    margin-block: 1rem;
+  }
+
+  main > h1,
+  main > div > h1 {
+    font-size: 1.55rem;
+  }
+}

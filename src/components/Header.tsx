@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type Role =
@@ -14,8 +14,12 @@ type Role =
 
 export function Header() {
   const pathname = usePathname();
+  const router = useRouter();
+
   const [role, setRole] = useState<Role>(null);
   const [loading, setLoading] = useState(true);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -70,6 +74,41 @@ export function Header() {
   const canAccessAdmin =
     role === "admin" ||
     role === "instructor";
+
+  async function handleSignOut() {
+    if (signingOut) {
+      return;
+    }
+
+    setSigningOut(true);
+    setSignOutError("");
+
+    try {
+      const supabase = createClient();
+
+      const { error } =
+        await supabase.auth.signOut();
+
+      if (error) {
+        setSignOutError(error.message);
+        setSigningOut(false);
+        return;
+      }
+
+      setRole(null);
+
+      router.replace("/");
+      router.refresh();
+    } catch (error) {
+      setSignOutError(
+        error instanceof Error
+          ? error.message
+          : "Unable to sign out."
+      );
+
+      setSigningOut(false);
+    }
+  }
 
   return (
     <>
@@ -170,17 +209,16 @@ export function Header() {
                   </Link>
                 ) : null}
 
-                <form
-                  action="/api/auth/logout"
-                  method="post"
+                <button
+                  type="button"
+                  className="nav-button"
+                  onClick={handleSignOut}
+                  disabled={signingOut}
                 >
-                  <button
-                    type="submit"
-                    className="nav-button"
-                  >
-                    Sign out
-                  </button>
-                </form>
+                  {signingOut
+                    ? "Signing out..."
+                    : "Sign out"}
+                </button>
               </>
             ) : (
               <>
@@ -196,6 +234,24 @@ export function Header() {
           </nav>
         </div>
       </header>
+
+      {signOutError && (
+        <div
+          role="alert"
+          style={{
+            maxWidth: 1200,
+            margin: "10px auto",
+            padding: "10px 16px",
+            color: "#991b1b",
+            background: "#fef2f2",
+            border: "1px solid #fecaca",
+            borderRadius: 8,
+            fontSize: 14,
+          }}
+        >
+          Sign out failed: {signOutError}
+        </div>
+      )}
     </>
   );
 }
