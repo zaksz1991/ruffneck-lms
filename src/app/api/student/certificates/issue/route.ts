@@ -177,11 +177,8 @@ export async function POST(
     }
 
     /*
-     * Verify enrollment and payment state.
-     *
-     * Free courses do not require payment.
-     * Paid courses require the canonical enrollment
-     * payment state: "paid".
+     * Certificate issuance requires a completed
+     * enrollment.
      */
     const {
       data: enrollmentData,
@@ -193,10 +190,7 @@ export async function POST(
       )
       .eq("student_id", user.id)
       .eq("course_id", courseId)
-      .in("enrollment_status", [
-        "active",
-        "completed",
-      ])
+      .eq("enrollment_status", "completed")
       .maybeSingle();
 
     if (enrollmentError) {
@@ -221,14 +215,29 @@ export async function POST(
       return NextResponse.json(
         {
           error:
-            "You must be enrolled in this course before claiming a certificate.",
+            "You must complete the course before claiming a certificate.",
         },
         { status: 403 }
       );
     }
 
-    if (
-      !course.is_free &&
+    /*
+     * Verify the canonical payment state.
+     *
+     * Free courses require "free".
+     * Paid courses require "paid".
+     */
+    if (course.is_free) {
+      if (enrollment.payment_status !== "free") {
+        return NextResponse.json(
+          {
+            error:
+              "The enrollment payment state for this free course is invalid.",
+          },
+          { status: 403 }
+        );
+      }
+    } else if (
       enrollment.payment_status !== "paid"
     ) {
       return NextResponse.json(
@@ -241,7 +250,7 @@ export async function POST(
     }
 
     /*
-     * Verify that the course has published curriculum.
+     * Verify published curriculum.
      */
     const {
       data: curriculumData,
@@ -285,8 +294,7 @@ export async function POST(
     );
 
     /*
-     * Every published lesson must have a completed
-     * lesson_progress record.
+     * Every published lesson must be completed.
      */
     const {
       data: progressData,
@@ -416,9 +424,7 @@ export async function POST(
     }
 
     /*
-     * course_projects has no status column in the verified
-     * schema. The published state is represented by
-     * is_published.
+     * Verify the published capstone.
      */
     const {
       data: projectData,
@@ -469,7 +475,7 @@ export async function POST(
     }
 
     /*
-     * The capstone must have an approved submission.
+     * The student's capstone submission must be approved.
      */
     const {
       data: submissionData,
@@ -529,7 +535,7 @@ export async function POST(
       submission.score ?? 0;
 
     /*
-     * Load the student's certificate holder name.
+     * Load certificate holder information.
      */
     const {
       data: profileData,
@@ -567,8 +573,7 @@ export async function POST(
       "RuffNeck Learn Student";
 
     /*
-     * Prevent duplicate certificates for the same
-     * student/course pair.
+     * Prevent duplicate certificates.
      */
     const {
       data: existingCertificateData,
@@ -617,7 +622,7 @@ export async function POST(
     }
 
     /*
-     * All certificate requirements have passed.
+     * All certificate requirements passed.
      */
     const {
       data: certificateData,
@@ -651,7 +656,7 @@ export async function POST(
 
     if (certificateError) {
       /*
-       * Handle a concurrent certificate request safely.
+       * Handle a concurrent issuance request.
        */
       if (
         certificateError.code ===
