@@ -12,11 +12,16 @@ type Course = {
 type Enrollment = {
   id: string;
   enrollment_status: string;
-  payment_status: string;
+  payment_status: string | null;
 };
 
 type CurriculumLesson = {
   lesson_id: string;
+};
+
+type LessonProgress = {
+  lesson_id: string;
+  completed: boolean;
 };
 
 type AssessmentAttempt = {
@@ -59,23 +64,15 @@ function getAssessmentPercentage(
     attempt.total_points > 0 &&
     attempt.earned_points !== null
   ) {
-    return (
-      (attempt.earned_points /
-        attempt.total_points) *
-      100
-    );
+    return (attempt.earned_points / attempt.total_points) * 100;
   }
 
   if (
-    attempt.score !== null &&
     attempt.total_questions !== null &&
-    attempt.total_questions > 0
+    attempt.total_questions > 0 &&
+    attempt.score !== null
   ) {
-    return (
-      (attempt.score /
-        attempt.total_questions) *
-      100
-    );
+    return (attempt.score / attempt.total_questions) * 100;
   }
 
   if (attempt.score !== null) {
@@ -85,114 +82,122 @@ function getAssessmentPercentage(
   return 0;
 }
 
+function errorResponse(
+  stage: string,
+  message: string,
+  status = 500
+) {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: `Certificate issuance failed during ${stage}.`,
+      stage,
+      details: message,
+    },
+    { status }
+  );
+}
+
 export async function POST(request: Request) {
+  let stage = "request validation";
+
   try {
     const supabase = await createClient();
 
+    stage = "authentication";
+
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser();
 
+    if (authError) {
+      console.error("[certificate] authentication error:", authError);
+
+      return errorResponse(
+        stage,
+        authError.message || "Unable to authenticate the user.",
+        401
+      );
+    }
+
     if (!user) {
-      return NextResponse.json(
-        {
-          error: "Authentication required.",
-        },
-        { status: 401 }
+      return errorResponse(
+        stage,
+        "You must be logged in to claim a certificate.",
+        401
       );
     }
 
-    let body: unknown;
+    stage = "request body";
 
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json(
-        {
-          error: "Invalid request body.",
-        },
-        { status: 400 }
-      );
-    }
+    const body = await request.json().catch(() => null);
 
     const courseId =
-      typeof (body as { courseId?: unknown })?.courseId ===
-      "string"
-        ? (
-            (body as { courseId: string })
-              .courseId
-          ).trim()
+      body &&
+      typeof body.courseId === "string"
+        ? body.courseId.trim()
         : "";
 
     if (!courseId) {
-      return NextResponse.json(
-        {
-          error: "Course ID is required.",
-        },
-        { status: 400 }
+      return errorResponse(
+        stage,
+        "A valid courseId is required.",
+        400
       );
     }
 
-    /*
-     * Use the service-role client for certificate
-     * verification and issuance.
-     */
     const admin = createAdminClient();
 
     /*
-     * --------------------------------------------------------------
-     * COURSE
-     * --------------------------------------------------------------
+     * ---------------------------------------------------------
+     * 1. COURSE
+     * ---------------------------------------------------------
      */
+
+    stage = "course lookup";
 
     const {
       data: courseData,
       error: courseError,
     } = await admin
       .from("courses")
-      .select(
-        "id, title, slug, is_free"
-      )
+      .select("id, title, slug, is_free")
       .eq("id", courseId)
       .eq("status", "published")
       .maybeSingle();
 
     if (courseError) {
-      console.error(
-        "Certificate course lookup failed:",
-        courseError
-      );
+      console.error("[certificate] course lookup:", courseError);
 
-      return NextResponse.json(
-        {
-          error: "Unable to verify course.",
-        },
-        { status: 500 }
+      return errorResponse(
+        stage,
+        courseError.message,
+        500
       );
     }
 
-    const course =
-      courseData as unknown as Course | null;
+    const course = courseData as Course | null;
 
     if (!course) {
-      return NextResponse.json(
-        {
-          error:
-            "The requested course was not found.",
-        },
-        { status: 404 }
+      return errorResponse(
+        stage,
+        "The requested course does not exist or is not published.",
+        404
       );
     }
 
     /*
-     * --------------------------------------------------------------
-     * ENROLLMENT
-     * --------------------------------------------------------------
+     * ---------------------------------------------------------
+     * 2. ENROLLMENT
+     * ---------------------------------------------------------
      *
-     * Enrollment must exist, but certificate eligibility
-     * is determined by the actual learning requirements
-     * verified below.
+     * Do not require enrollment_status = completed here.
+     * Certificate eligibility is independently verified through
+     * lessons, assessment and capstone approval below.
      */
+
+    stage = "enrollment lookup";
 
     const {
       data: enrollmentData,
@@ -204,24 +209,19 @@ export async function POST(request: Request) {
       )
       .eq("student_id", user.id)
       .eq("course_id", courseId)
-      .in("enrollment_status", [
-        "active",
-        "completed",
-      ])
+      .in("enrollment_status", ["active", "completed"])
       .maybeSingle();
 
     if (enrollmentError) {
       console.error(
-        "Certificate enrollment lookup failed:",
+        "[certificate] enrollment lookup:",
         enrollmentError
       );
 
-      return NextResponse.json(
-        {
-          error:
-            "Unable to verify course enrollment.",
-        },
-        { status: 500 }
+      return errorResponse(
+        stage,
+        enrollmentError.message,
+        500
       );
     }
 
@@ -229,50 +229,52 @@ export async function POST(request: Request) {
       enrollmentData as Enrollment | null;
 
     if (!enrollment) {
-      return NextResponse.json(
-        {
-          error:
-            "You must be enrolled in this course before claiming a certificate.",
-        },
-        { status: 403 }
+      return errorResponse(
+        stage,
+        "No active or completed enrollment was found for this course.",
+        403
       );
     }
 
     /*
-     * --------------------------------------------------------------
-     * PAYMENT
-     * --------------------------------------------------------------
+     * ---------------------------------------------------------
+     * 3. PAYMENT
+     * ---------------------------------------------------------
      */
+
+    stage = "payment verification";
 
     if (course.is_free) {
       if (
+        enrollment.payment_status !== null &&
         enrollment.payment_status !== "free"
       ) {
-        return NextResponse.json(
-          {
-            error:
-              "The enrollment payment state for this free course is invalid.",
-          },
-          { status: 403 }
+        return errorResponse(
+          stage,
+          `The free course has an unexpected payment status: ${enrollment.payment_status}.`,
+          403
         );
       }
-    } else if (
-      enrollment.payment_status !== "paid"
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Payment is required before claiming a certificate for this course.",
-        },
-        { status: 403 }
-      );
+    } else {
+      if (
+        enrollment.payment_status !== null &&
+        enrollment.payment_status !== "paid"
+      ) {
+        return errorResponse(
+          stage,
+          `The paid course has not been marked as paid. Current payment status: ${enrollment.payment_status}.`,
+          403
+        );
+      }
     }
 
     /*
-     * --------------------------------------------------------------
-     * PUBLISHED CURRICULUM
-     * --------------------------------------------------------------
+     * ---------------------------------------------------------
+     * 4. PUBLISHED CURRICULUM
+     * ---------------------------------------------------------
      */
+
+    stage = "published curriculum lookup";
 
     const {
       data: curriculumData,
@@ -285,55 +287,46 @@ export async function POST(request: Request) {
 
     if (curriculumError) {
       console.error(
-        "Certificate curriculum lookup failed:",
+        "[certificate] curriculum lookup:",
         curriculumError
       );
 
-      return NextResponse.json(
-        {
-          error:
-            "Unable to verify course completion.",
-        },
-        { status: 500 }
+      return errorResponse(
+        stage,
+        curriculumError.message,
+        500
       );
     }
 
     const curriculum =
-      (curriculumData ??
-        []) as unknown as CurriculumLesson[];
+      (curriculumData ?? []) as CurriculumLesson[];
 
-    const lessonIds = [
-      ...new Set(
-        curriculum.map(
-          (lesson) => lesson.lesson_id
-        )
-      ),
-    ];
+    const lessonIds = curriculum
+      .map((lesson) => lesson.lesson_id)
+      .filter(Boolean);
 
     if (lessonIds.length === 0) {
-      return NextResponse.json(
-        {
-          error:
-            "This course does not currently have published lessons.",
-        },
-        { status: 400 }
+      return errorResponse(
+        stage,
+        "This course has no published lessons, so certificate eligibility cannot be verified.",
+        400
       );
     }
 
     /*
-     * --------------------------------------------------------------
-     * LESSON COMPLETION
-     * --------------------------------------------------------------
+     * ---------------------------------------------------------
+     * 5. LESSON COMPLETION
+     * ---------------------------------------------------------
      */
+
+    stage = "lesson completion verification";
 
     const {
       data: progressData,
       error: progressError,
     } = await admin
       .from("lesson_progress")
-      .select(
-        "lesson_id, completed"
-      )
+      .select("lesson_id, completed")
       .eq("student_id", user.id)
       .eq("course_id", courseId)
       .eq("completed", true)
@@ -341,51 +334,45 @@ export async function POST(request: Request) {
 
     if (progressError) {
       console.error(
-        "Certificate lesson progress lookup failed:",
+        "[certificate] lesson progress:",
         progressError
       );
 
-      return NextResponse.json(
-        {
-          error:
-            "Unable to verify lesson completion.",
-        },
-        { status: 500 }
+      return errorResponse(
+        stage,
+        progressError.message,
+        500
       );
     }
 
-    const completedLessonIds =
-      new Set(
-        (progressData ?? []).map(
-          (row) => row.lesson_id
-        )
-      );
+    const completedLessons =
+      (progressData ?? []) as LessonProgress[];
 
-    if (
-      completedLessonIds.size <
-      lessonIds.length
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Complete all published course lessons before claiming your certificate.",
-          completedLessons:
-            completedLessonIds.size,
-          totalLessons:
-            lessonIds.length,
-        },
-        { status: 400 }
+    const completedLessonIds = new Set(
+      completedLessons.map(
+        (lesson) => lesson.lesson_id
+      )
+    );
+
+    const incompleteLessons = lessonIds.filter(
+      (lessonId) => !completedLessonIds.has(lessonId)
+    );
+
+    if (incompleteLessons.length > 0) {
+      return errorResponse(
+        stage,
+        `${incompleteLessons.length} published lesson(s) are not completed.`,
+        403
       );
     }
 
     /*
-     * --------------------------------------------------------------
-     * ASSESSMENT
-     * --------------------------------------------------------------
-     *
-     * The most recent completed assessment must
-     * achieve at least 70%.
+     * ---------------------------------------------------------
+     * 6. ASSESSMENT
+     * ---------------------------------------------------------
      */
+
+    stage = "assessment lookup";
 
     const {
       data: assessmentData,
@@ -414,16 +401,14 @@ export async function POST(request: Request) {
 
     if (assessmentError) {
       console.error(
-        "Certificate assessment lookup failed:",
+        "[certificate] assessment lookup:",
         assessmentError
       );
 
-      return NextResponse.json(
-        {
-          error:
-            "Unable to verify assessment completion.",
-        },
-        { status: 500 }
+      return errorResponse(
+        stage,
+        assessmentError.message,
+        500
       );
     }
 
@@ -431,94 +416,82 @@ export async function POST(request: Request) {
       assessmentData as AssessmentAttempt | null;
 
     if (!assessment) {
-      return NextResponse.json(
-        {
-          error:
-            "Complete the course assessment before claiming your certificate.",
-        },
-        { status: 400 }
+      return errorResponse(
+        stage,
+        "No completed assessment attempt was found.",
+        403
       );
     }
 
     const assessmentPercentage =
-      getAssessmentPercentage(
-        assessment
-      );
+      getAssessmentPercentage(assessment);
 
     if (assessmentPercentage < 70) {
-      return NextResponse.json(
-        {
-          error:
-            "A minimum assessment score of 70% is required to claim this certificate.",
-          score: Math.round(
-            assessmentPercentage
-          ),
-        },
-        { status: 400 }
+      return errorResponse(
+        stage,
+        `Assessment score is ${Math.round(
+          assessmentPercentage
+        )}%. A minimum score of 70% is required.`,
+        403
       );
     }
 
     /*
-     * --------------------------------------------------------------
-     * PUBLISHED CAPSTONE
-     * --------------------------------------------------------------
+     * ---------------------------------------------------------
+     * 7. PUBLISHED CAPSTONE
+     * ---------------------------------------------------------
      *
-     * Deliberately do NOT order by sort_order.
-     * The certificate requirement only needs a published
-     * capstone and the existing course_projects schema does
-     * not require that column.
+     * Deliberately do not order by sort_order because that
+     * column has not been established as part of the schema.
      */
+
+    stage = "capstone lookup";
 
     const {
       data: projectData,
       error: projectError,
     } = await admin
       .from("course_projects")
-      .select(
-        "id, project_type"
-      )
+      .select("id, project_type")
       .eq("course_id", courseId)
       .eq("project_type", "capstone")
       .eq("is_published", true);
 
     if (projectError) {
       console.error(
-        "Certificate capstone lookup failed:",
+        "[certificate] capstone lookup:",
         projectError
       );
 
-      return NextResponse.json(
-        {
-          error:
-            "Unable to verify capstone requirements.",
-        },
-        { status: 500 }
+      return errorResponse(
+        stage,
+        projectError.message,
+        500
       );
     }
 
     const projects =
-      (projectData ??
-        []) as unknown as CourseProject[];
+      (projectData ?? []) as CourseProject[];
 
     if (projects.length === 0) {
-      return NextResponse.json(
-        {
-          error:
-            "This course does not currently have a published capstone project.",
-        },
-        { status: 400 }
+      return errorResponse(
+        stage,
+        "No published capstone was found for this course.",
+        403
       );
     }
 
-    const capstoneIds = projects.map(
-      (project) => project.id
-    );
-
     /*
-     * --------------------------------------------------------------
-     * APPROVED CAPSTONE SUBMISSION
-     * --------------------------------------------------------------
+     * ---------------------------------------------------------
+     * 8. APPROVED CAPSTONE SUBMISSION
+     * ---------------------------------------------------------
      */
+
+    stage = "capstone submission verification";
+
+    const projectIds = projects
+      .map((project) => project.id)
+      .filter(Boolean);
 
     const {
       data: submissionData,
@@ -526,12 +499,9 @@ export async function POST(request: Request) {
     } = await admin
       .from("project_submissions")
       .select(
-        "id, score, status, reviewed_at"
+        "id, project_id, score, status, reviewed_at"
       )
-      .in(
-        "project_id",
-        capstoneIds
-      )
+      .in("project_id", projectIds)
       .eq("student_id", user.id)
       .eq("status", "approved")
       .order("reviewed_at", {
@@ -542,16 +512,14 @@ export async function POST(request: Request) {
 
     if (submissionError) {
       console.error(
-        "Certificate capstone submission lookup failed:",
+        "[certificate] capstone submission:",
         submissionError
       );
 
-      return NextResponse.json(
-        {
-          error:
-            "Unable to verify capstone approval.",
-        },
-        { status: 500 }
+      return errorResponse(
+        stage,
+        submissionError.message,
+        500
       );
     }
 
@@ -559,44 +527,56 @@ export async function POST(request: Request) {
       submissionData as ProjectSubmission | null;
 
     if (!submission) {
-      return NextResponse.json(
-        {
-          error:
-            "Your capstone must be approved before claiming this certificate.",
-        },
-        { status: 400 }
+      return errorResponse(
+        stage,
+        "No approved capstone submission was found.",
+        403
+      );
+    }
+
+    const capstoneScore =
+      submission.score !== null
+        ? Math.round(submission.score)
+        : null;
+
+    if (
+      capstoneScore !== null &&
+      (capstoneScore < 0 || capstoneScore > 100)
+    ) {
+      return errorResponse(
+        stage,
+        `The approved capstone score is ${capstoneScore}, which is outside the allowed 0–100 range.`,
+        500
       );
     }
 
     /*
-     * --------------------------------------------------------------
-     * LEARNER PROFILE
-     * --------------------------------------------------------------
+     * ---------------------------------------------------------
+     * 9. PROFILE
+     * ---------------------------------------------------------
      */
+
+    stage = "profile lookup";
 
     const {
       data: profileData,
       error: profileError,
     } = await admin
       .from("profiles")
-      .select(
-        "full_name, email"
-      )
+      .select("full_name, email")
       .eq("id", user.id)
       .maybeSingle();
 
     if (profileError) {
       console.error(
-        "Certificate profile lookup failed:",
+        "[certificate] profile lookup:",
         profileError
       );
 
-      return NextResponse.json(
-        {
-          error:
-            "Unable to load certificate holder information.",
-        },
-        { status: 500 }
+      return errorResponse(
+        stage,
+        profileError.message,
+        500
       );
     }
 
@@ -605,43 +585,38 @@ export async function POST(request: Request) {
 
     const holderName =
       profile?.full_name?.trim() ||
-      user.user_metadata?.full_name?.trim() ||
       profile?.email?.trim() ||
       user.email?.trim() ||
       "RuffNeck Learn Student";
 
     /*
-     * --------------------------------------------------------------
-     * EXISTING CERTIFICATE
-     * --------------------------------------------------------------
-     *
-     * Issuance is idempotent.
+     * ---------------------------------------------------------
+     * 10. EXISTING CERTIFICATE
+     * ---------------------------------------------------------
      */
+
+    stage = "existing certificate lookup";
 
     const {
       data: existingCertificateData,
       error: existingCertificateError,
     } = await admin
       .from("course_certificates")
-      .select(
-        "id, certificate_number"
-      )
+      .select("id, certificate_number")
       .eq("student_id", user.id)
       .eq("course_id", courseId)
       .maybeSingle();
 
     if (existingCertificateError) {
       console.error(
-        "Existing certificate lookup failed:",
+        "[certificate] existing certificate lookup:",
         existingCertificateError
       );
 
-      return NextResponse.json(
-        {
-          error:
-            "Unable to check existing certificate records.",
-        },
-        { status: 500 }
+      return errorResponse(
+        stage,
+        existingCertificateError.message,
+        500
       );
     }
 
@@ -650,8 +625,8 @@ export async function POST(request: Request) {
 
     if (existingCertificate) {
       return NextResponse.json({
-        certificateId:
-          existingCertificate.id,
+        ok: true,
+        certificateId: existingCertificate.id,
         certificateNumber:
           existingCertificate.certificate_number,
         alreadyIssued: true,
@@ -659,129 +634,135 @@ export async function POST(request: Request) {
     }
 
     /*
-     * --------------------------------------------------------------
-     * ISSUE CERTIFICATE
-     * --------------------------------------------------------------
+     * ---------------------------------------------------------
+     * 11. ISSUE CERTIFICATE
+     * ---------------------------------------------------------
      */
 
-    const capstoneScore =
-      submission.score ?? 0;
+    stage = "certificate insertion";
 
     const {
-      data: certificateData,
+      data: insertedCertificateData,
       error: certificateError,
     } = await admin
       .from("course_certificates")
       .insert({
         student_id: user.id,
-        course_id: courseId,
+        course_id: course.id,
         holder_name: holderName,
         course_title: course.title,
         course_slug: course.slug,
-        assessment_score:
-          Math.round(
-            assessmentPercentage
-          ),
-        capstone_score:
-          capstoneScore,
+        assessment_score: Math.round(
+          assessmentPercentage
+        ),
+        capstone_score: capstoneScore,
         is_revoked: false,
       })
-      .select(
-        "id, certificate_number"
-      )
+      .select("id, certificate_number")
       .single();
 
     if (certificateError) {
+      console.error(
+        "[certificate] INSERT ERROR:",
+        certificateError
+      );
+
       /*
-       * A unique constraint may reject a second
-       * simultaneous issuance request. Recover the
-       * existing certificate rather than returning
-       * a generic failure.
+       * Another request may have issued the certificate
+       * between the existing-certificate check and INSERT.
        */
-      if (
-        certificateError.code ===
-        "23505"
-      ) {
+      if (certificateError.code === "23505") {
         const {
-          data: racedCertificate,
-          error:
-            racedCertificateError,
+          data: duplicateCertificate,
+          error: duplicateLookupError,
         } = await admin
           .from("course_certificates")
-          .select(
-            "id, certificate_number"
-          )
-          .eq(
-            "student_id",
-            user.id
-          )
-          .eq(
-            "course_id",
-            courseId
-          )
+          .select("id, certificate_number")
+          .eq("student_id", user.id)
+          .eq("course_id", courseId)
           .maybeSingle();
 
         if (
-          !racedCertificateError &&
-          racedCertificate
+          duplicateLookupError
         ) {
+          console.error(
+            "[certificate] duplicate lookup:",
+            duplicateLookupError
+          );
+
+          return errorResponse(
+            stage,
+            duplicateLookupError.message,
+            500
+          );
+        }
+
+        if (duplicateCertificate) {
           return NextResponse.json({
+            ok: true,
             certificateId:
-              racedCertificate.id,
+              duplicateCertificate.id,
             certificateNumber:
-              racedCertificate.certificate_number,
+              duplicateCertificate.certificate_number,
             alreadyIssued: true,
           });
         }
       }
 
-      console.error(
-        "Certificate issuance failed:",
-        certificateError
-      );
-
-      return NextResponse.json(
-        {
-          error:
+      return errorResponse(
+        stage,
+        [
+          `Database error code: ${
+            certificateError.code || "unknown"
+          }`,
+          `Message: ${
             certificateError.message ||
-            "Unable to issue certificate.",
-        },
-        { status: 500 }
+            "Unknown database error."
+          }`,
+          certificateError.details
+            ? `Details: ${certificateError.details}`
+            : "",
+          certificateError.hint
+            ? `Hint: ${certificateError.hint}`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" | "),
+        500
       );
     }
 
-    const certificate =
-      certificateData as Certificate | null;
+    const insertedCertificate =
+      insertedCertificateData as Certificate;
 
-    if (!certificate) {
-      return NextResponse.json(
-        {
-          error:
-            "Certificate was created but could not be retrieved.",
-        },
-        { status: 500 }
-      );
-    }
+    /*
+     * ---------------------------------------------------------
+     * SUCCESS
+     * ---------------------------------------------------------
+     */
 
     return NextResponse.json({
-      certificateId:
-        certificate.id,
+      ok: true,
+      certificateId: insertedCertificate.id,
       certificateNumber:
-        certificate.certificate_number,
+        insertedCertificate.certificate_number,
       alreadyIssued: false,
     });
   } catch (error) {
     console.error(
-      "Certificate issuance request failed:",
+      "[certificate] UNHANDLED ERROR:",
       error
     );
 
-    return NextResponse.json(
-      {
-        error:
-          "An unexpected error occurred while issuing the certificate.",
-      },
-      { status: 500 }
+    const message =
+      error instanceof Error
+        ? error.message
+        : String(error);
+
+    return errorResponse(
+      stage,
+      message || "Unknown server error.",
+      500
     );
   }
 }
