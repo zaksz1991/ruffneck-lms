@@ -17666,3 +17666,23 @@ hr {
 .rn-home-hero .hero-eyebrow {
   color: var(--navy, #0b1e3a) !important;
 }
+
+.site-header .brand-name,
+.site-header .brand-name:visited {
+  color: #000000 !important;
+  text-decoration: none !important;
+}
+
+.site-header .brand-name strong {
+  color: #000000 !important;
+}
+
+.site-header .brand-name span {
+  color: #000000 !important;
+}
+
+.site-header .brand-name:hover,
+.site-header .brand-name:hover strong,
+.site-header .brand-name:hover span {
+  color: #000000 !important;
+}
