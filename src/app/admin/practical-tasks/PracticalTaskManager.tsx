@@ -5,16 +5,14 @@ import { useEffect, useMemo, useState } from "react";
 type Course = {
   id: string;
   title: string;
-  slug: string;
-  instructor_id: string | null;
 };
 
-type SubmissionType =
-  | "text"
-  | "document"
-  | "spreadsheet"
-  | "presentation"
-  | "mixed";
+type Skill = {
+  id: string;
+  name: string;
+  slug: string;
+  category: string | null;
+};
 
 type PracticalTask = {
   id: string;
@@ -22,34 +20,36 @@ type PracticalTask = {
   title: string;
   scenario: string;
   instructions: string;
-  expected_outcome: string;
-  submission_type: SubmissionType;
+  expected_outcome: string | null;
+  submission_type: string;
   max_score: number;
   sort_order: number;
   is_published: boolean;
+  skill_id: string | null;
   created_at: string;
   updated_at: string;
-  courses?: {
-    id: string;
-    title: string;
-    slug: string;
-    instructor_id: string | null;
-  } | null;
+};
+
+type Props = {
+  courses: Course[];
 };
 
 type FormState = {
+  id: string;
   course_id: string;
   title: string;
   scenario: string;
   instructions: string;
   expected_outcome: string;
-  submission_type: SubmissionType;
+  submission_type: string;
   max_score: string;
   sort_order: string;
+  skill_id: string;
   is_published: boolean;
 };
 
 const EMPTY_FORM: FormState = {
+  id: "",
   course_id: "",
   title: "",
   scenario: "",
@@ -57,60 +57,61 @@ const EMPTY_FORM: FormState = {
   expected_outcome: "",
   submission_type: "text",
   max_score: "100",
-  sort_order: "1",
+  sort_order: "0",
+  skill_id: "",
   is_published: false,
 };
 
-const SUBMISSION_TYPES: Array<{
-  value: SubmissionType;
-  label: string;
-}> = [
-  {
-    value: "text",
-    label: "Written response",
-  },
-  {
-    value: "document",
-    label: "Document",
-  },
-  {
-    value: "spreadsheet",
-    label: "Spreadsheet",
-  },
-  {
-    value: "presentation",
-    label: "Presentation",
-  },
-  {
-    value: "mixed",
-    label: "Mixed submission",
-  },
+const SUBMISSION_TYPES = [
+  "text",
+  "document",
+  "spreadsheet",
+  "presentation",
+  "mixed",
 ];
+
+function emptyForm(
+  courseId = "",
+): FormState {
+  return {
+    ...EMPTY_FORM,
+    course_id: courseId,
+  };
+}
 
 export default function PracticalTaskManager({
   courses,
-}: {
-  courses: Course[];
-}) {
-  const [tasks, setTasks] = useState<PracticalTask[]>([]);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [editingId, setEditingId] = useState<string | null>(null);
+}: Props) {
+  const [tasks, setTasks] = useState<
+    PracticalTask[]
+  >([]);
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [skills, setSkills] = useState<
+    Skill[]
+  >([]);
 
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-
-  const courseMap = useMemo(() => {
-    return new Map(
-      courses.map((course) => [
-        course.id,
-        course,
-      ]),
+  const [form, setForm] =
+    useState<FormState>(() =>
+      emptyForm(courses[0]?.id || ""),
     );
-  }, [courses]);
+
+  const [editing, setEditing] =
+    useState(false);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [deletingId, setDeletingId] =
+    useState<string | null>(null);
+
+  const [error, setError] =
+    useState("");
+
+  const [message, setMessage] =
+    useState("");
 
   async function loadTasks() {
     setLoading(true);
@@ -120,7 +121,6 @@ export default function PracticalTaskManager({
       const response = await fetch(
         "/api/admin/practical-tasks",
         {
-          method: "GET",
           cache: "no-store",
         },
       );
@@ -139,6 +139,12 @@ export default function PracticalTaskManager({
           ? data.tasks
           : [],
       );
+
+      setSkills(
+        Array.isArray(data?.skills)
+          ? data.skills
+          : [],
+      );
     } catch (err) {
       setError(
         err instanceof Error
@@ -151,12 +157,45 @@ export default function PracticalTaskManager({
   }
 
   useEffect(() => {
-    loadTasks();
+    void loadTasks();
   }, []);
 
-  function updateField<K extends keyof FormState>(
-    field: K,
-    value: FormState[K],
+  const skillMap = useMemo(() => {
+    return new Map(
+      skills.map((skill) => [
+        skill.id,
+        skill,
+      ]),
+    );
+  }, [skills]);
+
+  const courseMap = useMemo(() => {
+    return new Map(
+      courses.map((course) => [
+        course.id,
+        course,
+      ]),
+    );
+  }, [courses]);
+
+  const groupedTasks = useMemo(() => {
+    return courses.map((course) => ({
+      course,
+      tasks: tasks
+        .filter(
+          (task) =>
+            task.course_id === course.id,
+        )
+        .sort(
+          (a, b) =>
+            a.sort_order - b.sort_order,
+        ),
+    }));
+  }, [courses, tasks]);
+
+  function updateForm(
+    field: keyof FormState,
+    value: string | boolean,
   ) {
     setForm((current) => ({
       ...current,
@@ -164,34 +203,53 @@ export default function PracticalTaskManager({
     }));
   }
 
-  function resetForm() {
-    setForm({
-      ...EMPTY_FORM,
-      course_id:
-        courses.length === 1
-          ? courses[0].id
-          : "",
-    });
-
-    setEditingId(null);
-  }
-
-  function startEditing(task: PracticalTask) {
+  function startCreate(courseId?: string) {
+    setEditing(false);
     setMessage("");
     setError("");
 
-    setEditingId(task.id);
+    setForm(
+      emptyForm(
+        courseId ||
+          form.course_id ||
+          courses[0]?.id ||
+          "",
+      ),
+    );
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  }
+
+  function startEdit(
+    task: PracticalTask,
+  ) {
+    setEditing(true);
+    setMessage("");
+    setError("");
 
     setForm({
+      id: task.id,
       course_id: task.course_id,
       title: task.title,
       scenario: task.scenario,
       instructions: task.instructions,
-      expected_outcome: task.expected_outcome,
-      submission_type: task.submission_type,
-      max_score: String(task.max_score),
-      sort_order: String(task.sort_order),
-      is_published: task.is_published,
+      expected_outcome:
+        task.expected_outcome || "",
+      submission_type:
+        task.submission_type || "text",
+      max_score: String(
+        task.max_score ?? 100,
+      ),
+      sort_order: String(
+        task.sort_order ?? 0,
+      ),
+      skill_id: task.skill_id || "",
+      is_published: Boolean(
+        task.is_published,
+      ),
     });
 
     window.scrollTo({
@@ -200,8 +258,22 @@ export default function PracticalTaskManager({
     });
   }
 
+  function cancelEdit() {
+    setEditing(false);
+    setError("");
+    setMessage("");
+
+    setForm(
+      emptyForm(
+        form.course_id ||
+          courses[0]?.id ||
+          "",
+      ),
+    );
+  }
+
   async function saveTask(
-    event: React.FormEvent<HTMLFormElement>,
+    event: React.FormEvent,
   ) {
     event.preventDefault();
 
@@ -209,47 +281,39 @@ export default function PracticalTaskManager({
     setError("");
     setMessage("");
 
-    const title = form.title.trim();
-    const scenario = form.scenario.trim();
-    const instructions =
-      form.instructions.trim();
-    const expectedOutcome =
-      form.expected_outcome.trim();
-
     if (!form.course_id) {
       setError("Select a course.");
       setSaving(false);
       return;
     }
 
-    if (!title) {
+    if (!form.title.trim()) {
       setError("Task title is required.");
       setSaving(false);
       return;
     }
 
-    if (!scenario) {
+    if (!form.scenario.trim()) {
       setError("Scenario is required.");
       setSaving(false);
       return;
     }
 
-    if (!instructions) {
-      setError("Instructions are required.");
-      setSaving(false);
-      return;
-    }
-
-    if (!expectedOutcome) {
+    if (!form.instructions.trim()) {
       setError(
-        "Expected outcome is required.",
+        "Task instructions are required.",
       );
       setSaving(false);
       return;
     }
 
-    const maxScore = Number(form.max_score);
-    const sortOrder = Number(form.sort_order);
+    const maxScore = Number(
+      form.max_score,
+    );
+
+    const sortOrder = Number(
+      form.sort_order,
+    );
 
     if (
       !Number.isFinite(maxScore) ||
@@ -262,12 +326,9 @@ export default function PracticalTaskManager({
       return;
     }
 
-    if (
-      !Number.isFinite(sortOrder) ||
-      sortOrder < 0
-    ) {
+    if (!Number.isFinite(sortOrder)) {
       setError(
-        "Sort order must be zero or greater.",
+        "Sort order must be a number.",
       );
       setSaving(false);
       return;
@@ -277,49 +338,41 @@ export default function PracticalTaskManager({
       const response = await fetch(
         "/api/admin/practical-tasks",
         {
-          method: editingId
+          method: editing
             ? "PATCH"
             : "POST",
           headers: {
             "Content-Type":
               "application/json",
           },
-          body: JSON.stringify(
-            editingId
-              ? {
-                  id: editingId,
-                  course_id: form.course_id,
-                  title,
-                  scenario,
-                  instructions,
-                  expected_outcome:
-                    expectedOutcome,
-                  submission_type:
-                    form.submission_type,
-                  max_score: maxScore,
-                  sort_order: sortOrder,
-                  is_published:
-                    form.is_published,
-                }
-              : {
-                  course_id: form.course_id,
-                  title,
-                  scenario,
-                  instructions,
-                  expected_outcome:
-                    expectedOutcome,
-                  submission_type:
-                    form.submission_type,
-                  max_score: maxScore,
-                  sort_order: sortOrder,
-                  is_published:
-                    form.is_published,
-                },
-          ),
+          body: JSON.stringify({
+            ...(editing
+              ? { id: form.id }
+              : {}),
+            course_id:
+              form.course_id,
+            title: form.title.trim(),
+            scenario:
+              form.scenario.trim(),
+            instructions:
+              form.instructions.trim(),
+            expected_outcome:
+              form.expected_outcome.trim() ||
+              null,
+            submission_type:
+              form.submission_type,
+            max_score: maxScore,
+            sort_order: sortOrder,
+            skill_id:
+              form.skill_id || null,
+            is_published:
+              form.is_published,
+          }),
         },
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -329,12 +382,17 @@ export default function PracticalTaskManager({
       }
 
       setMessage(
-        editingId
-          ? "Practical task updated successfully."
-          : "Practical task created successfully.",
+        editing
+          ? "Practical task updated."
+          : "Practical task created.",
       );
 
-      resetForm();
+      setEditing(false);
+
+      setForm(
+        emptyForm(form.course_id),
+      );
+
       await loadTasks();
     } catch (err) {
       setError(
@@ -344,63 +402,6 @@ export default function PracticalTaskManager({
       );
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function deleteTask(task: PracticalTask) {
-    const confirmed = window.confirm(
-      `Delete "${task.title}"? This cannot be undone.`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setDeletingId(task.id);
-    setError("");
-    setMessage("");
-
-    try {
-      const response = await fetch(
-        "/api/admin/practical-tasks",
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            id: task.id,
-          }),
-        },
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data?.error ||
-            "Unable to delete practical task.",
-        );
-      }
-
-      if (editingId === task.id) {
-        resetForm();
-      }
-
-      setMessage(
-        "Practical task deleted successfully.",
-      );
-
-      await loadTasks();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to delete practical task.",
-      );
-    } finally {
-      setDeletingId(null);
     }
   }
 
@@ -427,7 +428,8 @@ export default function PracticalTaskManager({
         },
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -438,8 +440,8 @@ export default function PracticalTaskManager({
 
       setMessage(
         task.is_published
-          ? "Practical task unpublished."
-          : "Practical task published.",
+          ? "Task unpublished."
+          : "Task published.",
       );
 
       await loadTasks();
@@ -447,67 +449,117 @@ export default function PracticalTaskManager({
       setError(
         err instanceof Error
           ? err.message
-          : "Unable to update publication status.",
+          : "Unable to update task.",
       );
     }
   }
 
-  const groupedTasks = courses.map(
-    (course) => ({
-      course,
-      tasks: tasks
-        .filter(
-          (task) =>
-            task.course_id === course.id,
-        )
-        .sort(
-          (a, b) =>
-            a.sort_order - b.sort_order ||
-            a.title.localeCompare(b.title),
-        ),
-    }),
-  );
+  async function deleteTask(
+    task: PracticalTask,
+  ) {
+    const confirmed =
+      window.confirm(
+        `Delete "${task.title}"? This cannot be undone.`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingId(task.id);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch(
+        "/api/admin/practical-tasks",
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            id: task.id,
+          }),
+        },
+      );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            "Unable to delete practical task.",
+        );
+      }
+
+      setMessage("Practical task deleted.");
+
+      if (form.id === task.id) {
+        cancelEdit();
+      }
+
+      await loadTasks();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to delete practical task.",
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <div className="stack">
-      {error ? (
-        <div className="alert error">
-          {error}
-        </div>
-      ) : null}
-
-      {message ? (
-        <div className="alert success">
-          {message}
-        </div>
-      ) : null}
-
       <section className="card">
-        <div className="page-header">
+        <div className="course-card-header">
           <div>
-            <h2>
-              {editingId
+            <span className="rn-eyebrow">
+              {editing
+                ? "EDIT PRACTICAL TASK"
+                : "CREATE PRACTICAL TASK"}
+            </span>
+
+            <h1>
+              {editing
                 ? "Edit practical task"
                 : "Create practical task"}
-            </h2>
+            </h1>
 
-            <p className="muted">
-              Build a realistic workplace task
-              that produces evidence of actual
-              learner ability.
+            <p>
+              Assign each practical task to a
+              measurable learning skill so approved
+              work can contribute evidence to the
+              learner skill profile.
             </p>
           </div>
 
-          {editingId ? (
+          {editing ? (
             <button
               type="button"
               className="button secondary"
-              onClick={resetForm}
+              onClick={cancelEdit}
             >
-              Cancel editing
+              Cancel
             </button>
           ) : null}
         </div>
+
+        {error ? (
+          <div className="alert error">
+            {error}
+          </div>
+        ) : null}
+
+        {message ? (
+          <div className="alert success">
+            {message}
+          </div>
+        ) : null}
 
         <form
           className="stack"
@@ -520,7 +572,7 @@ export default function PracticalTaskManager({
               <select
                 value={form.course_id}
                 onChange={(event) =>
-                  updateField(
+                  updateForm(
                     "course_id",
                     event.target.value,
                   )
@@ -543,96 +595,140 @@ export default function PracticalTaskManager({
             </label>
 
             <label>
-              <span>Task title</span>
+              <span>Learning skill</span>
 
-              <input
-                type="text"
-                value={form.title}
+              <select
+                value={form.skill_id}
                 onChange={(event) =>
-                  updateField(
-                    "title",
+                  updateForm(
+                    "skill_id",
                     event.target.value,
                   )
                 }
-                placeholder="e.g. Build a professional monthly sales report"
-                maxLength={200}
-                required
-              />
+              >
+                <option value="">
+                  No skill assigned
+                </option>
+
+                {skills.map((skill) => (
+                  <option
+                    key={skill.id}
+                    value={skill.id}
+                  >
+                    {skill.category
+                      ? `${skill.category} — ${skill.name}`
+                      : skill.name}
+                  </option>
+                ))}
+              </select>
+
+              <small>
+                The selected skill receives
+                practical evidence when this task
+                is approved.
+              </small>
             </label>
           </div>
 
           <label>
-            <span>Real-world scenario</span>
+            <span>Task title</span>
+
+            <input
+              type="text"
+              value={form.title}
+              onChange={(event) =>
+                updateForm(
+                  "title",
+                  event.target.value,
+                )
+              }
+              placeholder="e.g. Build a monthly management report"
+              required
+            />
+          </label>
+
+          <label>
+            <span>
+              Workplace scenario
+            </span>
 
             <textarea
+              rows={5}
               value={form.scenario}
               onChange={(event) =>
-                updateField(
+                updateForm(
                   "scenario",
                   event.target.value,
                 )
               }
-              placeholder="Describe the workplace situation the learner is facing."
-              rows={5}
+              placeholder="Describe the realistic workplace situation..."
               required
             />
           </label>
 
           <label>
-            <span>Task instructions</span>
+            <span>
+              Task instructions
+            </span>
 
             <textarea
+              rows={7}
               value={form.instructions}
               onChange={(event) =>
-                updateField(
+                updateForm(
                   "instructions",
                   event.target.value,
                 )
               }
-              placeholder="Give the learner clear instructions for completing the task."
-              rows={7}
+              placeholder="Tell the learner exactly what they must produce..."
               required
             />
           </label>
 
           <label>
-            <span>Expected outcome</span>
+            <span>
+              Expected outcome
+            </span>
 
             <textarea
-              value={form.expected_outcome}
+              rows={4}
+              value={
+                form.expected_outcome
+              }
               onChange={(event) =>
-                updateField(
+                updateForm(
                   "expected_outcome",
                   event.target.value,
                 )
               }
-              placeholder="Define what a successful submission should demonstrate."
-              rows={5}
-              required
+              placeholder="Describe what a successful submission should demonstrate..."
             />
           </label>
 
           <div className="form-grid">
             <label>
-              <span>Submission type</span>
+              <span>
+                Submission type
+              </span>
 
               <select
-                value={form.submission_type}
+                value={
+                  form.submission_type
+                }
                 onChange={(event) =>
-                  updateField(
+                  updateForm(
                     "submission_type",
-                    event.target
-                      .value as SubmissionType,
+                    event.target.value,
                   )
                 }
               >
                 {SUBMISSION_TYPES.map(
                   (type) => (
                     <option
-                      key={type.value}
-                      value={type.value}
+                      key={type}
+                      value={type}
                     >
-                      {type.label}
+                      {type}
                     </option>
                   ),
                 )}
@@ -640,14 +736,17 @@ export default function PracticalTaskManager({
             </label>
 
             <label>
-              <span>Maximum score</span>
+              <span>
+                Maximum score
+              </span>
 
               <input
                 type="number"
                 min="1"
+                step="1"
                 value={form.max_score}
                 onChange={(event) =>
-                  updateField(
+                  updateForm(
                     "max_score",
                     event.target.value,
                   )
@@ -656,14 +755,17 @@ export default function PracticalTaskManager({
             </label>
 
             <label>
-              <span>Sort order</span>
+              <span>
+                Sort order
+              </span>
 
               <input
                 type="number"
                 min="0"
+                step="1"
                 value={form.sort_order}
                 onChange={(event) =>
-                  updateField(
+                  updateForm(
                     "sort_order",
                     event.target.value,
                   )
@@ -675,9 +777,11 @@ export default function PracticalTaskManager({
           <label className="checkbox-row">
             <input
               type="checkbox"
-              checked={form.is_published}
+              checked={
+                form.is_published
+              }
               onChange={(event) =>
-                updateField(
+                updateForm(
                   "is_published",
                   event.target.checked,
                 )
@@ -685,12 +789,12 @@ export default function PracticalTaskManager({
             />
 
             <span>
-              Publish this task for enrolled
-              learners
+              Publish this practical task
+              immediately
             </span>
           </label>
 
-          <div className="actions">
+          <div>
             <button
               type="submit"
               className="button primary"
@@ -698,209 +802,228 @@ export default function PracticalTaskManager({
             >
               {saving
                 ? "Saving..."
-                : editingId
-                  ? "Update task"
-                  : "Create task"}
+                : editing
+                  ? "Save changes"
+                  : "Create practical task"}
             </button>
-
-            {editingId ? (
-              <button
-                type="button"
-                className="button secondary"
-                onClick={resetForm}
-                disabled={saving}
-              >
-                Cancel
-              </button>
-            ) : null}
           </div>
         </form>
       </section>
 
-      <section className="stack">
-        <div>
-          <h2>Practical tasks</h2>
+      <section className="card">
+        <div className="course-card-header">
+          <div>
+            <span className="rn-eyebrow">
+              PRACTICAL WORKBENCH
+            </span>
 
-          <p className="muted">
-            {tasks.length} task
-            {tasks.length === 1 ? "" : "s"} across{" "}
-            {courses.length} course
-            {courses.length === 1 ? "" : "s"}.
-          </p>
+            <h2>
+              Practical task library
+            </h2>
+          </div>
+
+          {courses.length > 0 ? (
+            <button
+              type="button"
+              className="button primary"
+              onClick={() =>
+                startCreate()
+              }
+            >
+              New task
+            </button>
+          ) : null}
         </div>
 
         {loading ? (
-          <div className="card">
-            <p>Loading practical tasks...</p>
-          </div>
-        ) : groupedTasks.every(
-            (group) =>
-              group.tasks.length === 0,
-          ) ? (
-          <div className="card">
-            <p>
-              No practical tasks have been
-              created yet.
-            </p>
-          </div>
+          <p>Loading practical tasks...</p>
+        ) : courses.length === 0 ? (
+          <p>
+            No courses are available for
+            practical task management.
+          </p>
         ) : (
-          groupedTasks.map((group) => {
-            if (group.tasks.length === 0) {
-              return null;
-            }
+          <div className="stack">
+            {groupedTasks.map(
+              ({
+                course,
+                tasks: courseTasks,
+              }) => (
+                <section
+                  className="card"
+                  key={course.id}
+                >
+                  <div className="course-card-header">
+                    <div>
+                      <span className="rn-eyebrow">
+                        COURSE
+                      </span>
 
-            return (
-              <section
-                className="card"
-                key={group.course.id}
-              >
-                <div className="page-header">
-                  <div>
-                    <h3>
-                      {group.course.title}
-                    </h3>
+                      <h3>
+                        {course.title}
+                      </h3>
+                    </div>
 
-                    <p className="muted">
-                      {group.tasks.length} practical
-                      task
-                      {group.tasks.length === 1
-                        ? ""
-                        : "s"}
-                    </p>
+                    <button
+                      type="button"
+                      className="button secondary"
+                      onClick={() =>
+                        startCreate(
+                          course.id,
+                        )
+                      }
+                    >
+                      Add task
+                    </button>
                   </div>
-                </div>
 
-                <div className="stack">
-                  {group.tasks.map(
-                    (task) => (
-                      <article
-                        key={task.id}
-                        className="card"
-                      >
-                        <div className="page-header">
-                          <div>
-                            <h3>
-                              {task.sort_order}.{" "}
-                              {task.title}
-                            </h3>
+                  {courseTasks.length ===
+                  0 ? (
+                    <p>
+                      No practical tasks
+                      created for this course
+                      yet.
+                    </p>
+                  ) : (
+                    <div className="stack">
+                      {courseTasks.map(
+                        (task, index) => {
+                          const skill =
+                            task.skill_id
+                              ? skillMap.get(
+                                  task.skill_id,
+                                )
+                              : null;
 
-                            <p className="muted">
-                              {task.submission_type}{" "}
-                              · max{" "}
-                              {task.max_score} points
-                            </p>
-                          </div>
-
-                          <span
-                            className={
-                              task.is_published
-                                ? "status-badge status-success"
-                                : "status-badge"
-                            }
-                          >
-                            {task.is_published
-                              ? "Published"
-                              : "Draft"}
-                          </span>
-                        </div>
-
-                        <div className="stack">
-                          <div>
-                            <strong>
-                              Scenario
-                            </strong>
-
-                            <p>
-                              {task.scenario}
-                            </p>
-                          </div>
-
-                          <div>
-                            <strong>
-                              Instructions
-                            </strong>
-
-                            <p
-                              style={{
-                                whiteSpace:
-                                  "pre-wrap",
-                              }}
+                          return (
+                            <article
+                              className="card"
+                              key={task.id}
                             >
-                              {
-                                task.instructions
-                              }
-                            </p>
-                          </div>
+                              <div className="course-card-header">
+                                <div>
+                                  <span className="rn-eyebrow">
+                                    TASK{" "}
+                                    {index +
+                                      1}
+                                  </span>
 
-                          <div>
-                            <strong>
-                              Expected outcome
-                            </strong>
+                                  <h4>
+                                    {
+                                      task.title
+                                    }
+                                  </h4>
+                                </div>
 
-                            <p
-                              style={{
-                                whiteSpace:
-                                  "pre-wrap",
-                              }}
-                            >
-                              {
-                                task.expected_outcome
-                              }
-                            </p>
-                          </div>
-                        </div>
+                                <span className="status-badge">
+                                  {task.is_published
+                                    ? "Published"
+                                    : "Draft"}
+                                </span>
+                              </div>
 
-                        <div className="actions">
-                          <button
-                            type="button"
-                            className="button primary"
-                            onClick={() =>
-                              startEditing(
-                                task,
-                              )
-                            }
-                          >
-                            Edit
-                          </button>
+                              <p>
+                                {
+                                  task.scenario
+                                }
+                              </p>
 
-                          <button
-                            type="button"
-                            className="button secondary"
-                            onClick={() =>
-                              togglePublished(
-                                task,
-                              )
-                            }
-                          >
-                            {task.is_published
-                              ? "Unpublish"
-                              : "Publish"}
-                          </button>
+                              <div className="course-meta">
+                                <span>
+                                  Submission:{" "}
+                                  {
+                                    task.submission_type
+                                  }
+                                </span>
 
-                          <button
-                            type="button"
-                            className="button secondary"
-                            onClick={() =>
-                              deleteTask(task)
-                            }
-                            disabled={
-                              deletingId ===
-                              task.id
-                            }
-                          >
-                            {deletingId ===
-                            task.id
-                              ? "Deleting..."
-                              : "Delete"}
-                          </button>
-                        </div>
-                      </article>
-                    ),
+                                <span>
+                                  Max score:{" "}
+                                  {
+                                    task.max_score
+                                  }
+                                </span>
+
+                                <span>
+                                  Order:{" "}
+                                  {
+                                    task.sort_order
+                                  }
+                                </span>
+
+                                <span>
+                                  Skill:{" "}
+                                  {skill
+                                    ? skill.name
+                                    : "Not assigned"}
+                                </span>
+                              </div>
+
+                              <div className="course-meta">
+                                <span>
+                                  Evidence:
+                                  {" "}
+                                  {skill
+                                    ? "Enabled"
+                                    : "Not linked"}
+                                </span>
+                              </div>
+
+                              <div className="button-row">
+                                <button
+                                  type="button"
+                                  className="button secondary"
+                                  onClick={() =>
+                                    startEdit(
+                                      task,
+                                    )
+                                  }
+                                >
+                                  Edit
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="button secondary"
+                                  onClick={() =>
+                                    togglePublished(
+                                      task,
+                                    )
+                                  }
+                                >
+                                  {task.is_published
+                                    ? "Unpublish"
+                                    : "Publish"}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="button danger"
+                                  disabled={
+                                    deletingId ===
+                                    task.id
+                                  }
+                                  onClick={() =>
+                                    deleteTask(
+                                      task,
+                                    )
+                                  }
+                                >
+                                  {deletingId ===
+                                  task.id
+                                    ? "Deleting..."
+                                    : "Delete"}
+                                </button>
+                              </div>
+                            </article>
+                          );
+                        },
+                      )}
+                    </div>
                   )}
-                </div>
-              </section>
-            );
-          })
+                </section>
+              ),
+            )}
+          </div>
         )}
       </section>
     </div>

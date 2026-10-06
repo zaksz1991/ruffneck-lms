@@ -1,25 +1,38 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-type TaskPayload = {
-  id?: string;
-  course_id?: string;
-  title?: string;
-  scenario?: string;
-  instructions?: string;
-  expected_outcome?: string | null;
-  submission_type?: string;
-  max_score?: number;
-  sort_order?: number;
-  is_published?: boolean;
-};
+type Role = "admin" | "instructor";
 
-type Profile = {
+type CourseRow = {
   id: string;
-  role: "admin" | "instructor" | "student";
+  title: string;
+  instructor_id: string | null;
 };
 
-const submissionTypes = [
+type SkillRow = {
+  id: string;
+  name: string;
+  slug: string;
+  category: string | null;
+};
+
+type PracticalTaskRow = {
+  id: string;
+  course_id: string;
+  title: string;
+  scenario: string;
+  instructions: string;
+  expected_outcome: string | null;
+  submission_type: string;
+  max_score: number;
+  sort_order: number;
+  is_published: boolean;
+  skill_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+const SUBMISSION_TYPES = [
   "text",
   "document",
   "spreadsheet",
@@ -27,20 +40,27 @@ const submissionTypes = [
   "mixed",
 ] as const;
 
-function errorResponse(
-  message: string,
-  status = 400,
-) {
-  return NextResponse.json(
-    {
-      ok: false,
-      error: message,
-    },
-    { status },
-  );
+type SubmissionType =
+  (typeof SUBMISSION_TYPES)[number];
+
+function cleanString(
+  value: unknown,
+): string {
+  return String(value ?? "").trim();
 }
 
-async function getAuthorizedUser() {
+function parseNumber(
+  value: unknown,
+  fallback: number,
+): number {
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : fallback;
+}
+
+async function getReviewerContext() {
   const supabase = await createClient();
 
   const {
@@ -51,23 +71,27 @@ async function getAuthorizedUser() {
     return {
       supabase,
       user: null,
-      profile: null,
+      role: null as Role | null,
     };
   }
 
   const { data: profile } =
     await supabase
       .from("profiles")
-      .select("id, role")
+      .select("role")
       .eq("id", user.id)
       .maybeSingle();
+
+  const role =
+    profile?.role === "admin" ||
+    profile?.role === "instructor"
+      ? (profile.role as Role)
+      : null;
 
   return {
     supabase,
     user,
-    profile:
-      (profile as Profile | null) ||
-      null,
+    role,
   };
 }
 
@@ -76,116 +100,190 @@ async function canManageCourse(
     ReturnType<typeof createClient>
   >,
   userId: string,
-  role: Profile["role"],
+  role: Role,
   courseId: string,
 ) {
   if (role === "admin") {
     return true;
   }
 
-  if (role !== "instructor") {
-    return false;
-  }
-
-  const { data: course } =
+  const { data: courseData } =
     await supabase
       .from("courses")
-      .select("id")
+      .select("id, instructor_id")
       .eq("id", courseId)
-      .eq("instructor_id", userId)
       .maybeSingle();
 
-  return Boolean(course);
+  const course =
+    courseData as CourseRow | null;
+
+  return (
+    course?.instructor_id === userId
+  );
+}
+
+async function validateSkill(
+  supabase: Awaited<
+    ReturnType<typeof createClient>
+  >,
+  skillId: string | null,
+) {
+  if (!skillId) {
+    return {
+      valid: true,
+      skill: null as SkillRow | null,
+    };
+  }
+
+  const { data, error } =
+    await supabase
+      .from("learning_skills")
+      .select(
+        "id, name, slug, category",
+      )
+      .eq("id", skillId)
+      .maybeSingle();
+
+  if (error) {
+    return {
+      valid: false,
+      skill: null,
+    };
+  }
+
+  return {
+    valid: Boolean(data),
+    skill:
+      (data as SkillRow | null) ??
+      null,
+  };
 }
 
 export async function GET() {
   const {
     supabase,
     user,
-    profile,
-  } = await getAuthorizedUser();
+    role,
+  } = await getReviewerContext();
 
   if (!user) {
-    return errorResponse(
-      "Authentication required.",
-      401,
+    return NextResponse.json(
+      {
+        error: "Authentication required.",
+      },
+      { status: 401 },
     );
   }
 
-  if (
-    !profile ||
-    (profile.role !== "admin" &&
-      profile.role !== "instructor")
-  ) {
-    return errorResponse(
-      "You are not authorized to manage practical tasks.",
-      403,
+  if (!role) {
+    return NextResponse.json(
+      {
+        error:
+          "Admin or instructor access required.",
+      },
+      { status: 403 },
     );
   }
 
-  let query = supabase
-    .from("course_practical_tasks")
-    .select(
-      `
-        id,
-        course_id,
-        title,
-        scenario,
-        instructions,
-        expected_outcome,
-        submission_type,
-        max_score,
-        sort_order,
-        is_published,
-        created_at,
-        updated_at,
-        courses (
-          id,
-          title,
-          slug,
-          instructor_id
-        )
-      `,
-    )
-    .order("course_id")
-    .order("sort_order");
-
-  const { data, error } = await query;
+  const { data: taskData, error } =
+    await supabase
+      .from("course_practical_tasks")
+      .select(
+        [
+          "id",
+          "course_id",
+          "title",
+          "scenario",
+          "instructions",
+          "expected_outcome",
+          "submission_type",
+          "max_score",
+          "sort_order",
+          "is_published",
+          "skill_id",
+          "created_at",
+          "updated_at",
+        ].join(", "),
+      )
+      .order("course_id")
+      .order("sort_order");
 
   if (error) {
-    console.error(
-      "Failed to load practical tasks:",
-      error,
-    );
-
-    return errorResponse(
-      "Unable to load practical tasks.",
-      500,
+    return NextResponse.json(
+      {
+        error:
+          "Unable to load practical tasks.",
+        details: error.message,
+      },
+      { status: 500 },
     );
   }
 
-  const tasks = (data || []).filter(
-    (task) => {
-      if (profile.role === "admin") {
-        return true;
-      }
+  const tasks =
+    (taskData ?? []) as unknown as PracticalTaskRow[];
 
-      const course = Array.isArray(
-        task.courses,
+  let visibleTasks = tasks;
+
+  if (role === "instructor") {
+    const courseIds = [
+      ...new Set(
+        tasks.map(
+          (task) => task.course_id,
+        ),
+      ),
+    ];
+
+    if (courseIds.length === 0) {
+      return NextResponse.json({
+        tasks: [],
+        skills: [],
+      });
+    }
+
+    const { data: courseData } =
+      await supabase
+        .from("courses")
+        .select(
+          "id, title, instructor_id",
+        )
+        .in("id", courseIds);
+
+    const courses =
+      (courseData ?? []) as unknown as CourseRow[];
+
+    const ownedCourseIds = new Set(
+      courses
+        .filter(
+          (course) =>
+            course.instructor_id ===
+            user.id,
+        )
+        .map((course) => course.id),
+    );
+
+    visibleTasks = tasks.filter(
+      (task) =>
+        ownedCourseIds.has(
+          task.course_id,
+        ),
+    );
+  }
+
+  const { data: skillData } =
+    await supabase
+      .from("learning_skills")
+      .select(
+        "id, name, slug, category",
       )
-        ? task.courses[0]
-        : task.courses;
+      .order("category")
+      .order("name");
 
-      return (
-        course?.instructor_id ===
-        user.id
-      );
-    },
-  );
+  const skills =
+    (skillData ?? []) as unknown as SkillRow[];
 
   return NextResponse.json({
-    ok: true,
-    tasks,
+    tasks: visibleTasks,
+    skills,
   });
 }
 
@@ -195,143 +293,176 @@ export async function POST(
   const {
     supabase,
     user,
-    profile,
-  } = await getAuthorizedUser();
+    role,
+  } = await getReviewerContext();
 
   if (!user) {
-    return errorResponse(
-      "Authentication required.",
-      401,
+    return NextResponse.json(
+      {
+        error: "Authentication required.",
+      },
+      { status: 401 },
     );
   }
 
-  if (
-    !profile ||
-    (profile.role !== "admin" &&
-      profile.role !== "instructor")
-  ) {
-    return errorResponse(
-      "You are not authorized to manage practical tasks.",
-      403,
+  if (!role) {
+    return NextResponse.json(
+      {
+        error:
+          "Admin or instructor access required.",
+      },
+      { status: 403 },
     );
   }
 
-  let body: TaskPayload;
+  let body: Record<
+    string,
+    unknown
+  >;
 
   try {
-    body =
-      (await request.json()) as TaskPayload;
+    body = (await request.json()) as Record<
+      string,
+      unknown
+    >;
   } catch {
-    return errorResponse(
-      "Invalid request body.",
+    return NextResponse.json(
+      {
+        error: "Invalid request body.",
+      },
+      { status: 400 },
     );
   }
 
-  const courseId = String(
-    body.course_id || "",
-  ).trim();
-
-  const title = String(
-    body.title || "",
-  ).trim();
-
-  const scenario = String(
-    body.scenario || "",
-  ).trim();
-
-  const instructions = String(
-    body.instructions || "",
-  ).trim();
-
+  const courseId = cleanString(
+    body.course_id,
+  );
+  const title = cleanString(body.title);
+  const scenario = cleanString(
+    body.scenario,
+  );
+  const instructions = cleanString(
+    body.instructions,
+  );
   const expectedOutcome =
-    body.expected_outcome === null ||
-    body.expected_outcome === undefined
-      ? null
-      : String(
-          body.expected_outcome,
-        ).trim() || null;
+    cleanString(body.expected_outcome) ||
+    null;
 
   const submissionType =
-    String(
-      body.submission_type || "text",
-    ).trim();
+    cleanString(body.submission_type) ||
+    "text";
 
-  const maxScore = Number(
-    body.max_score ?? 100,
+  const maxScore = parseNumber(
+    body.max_score,
+    100,
   );
 
-  const sortOrder = Number(
-    body.sort_order ?? 0,
+  const sortOrder = parseNumber(
+    body.sort_order,
+    0,
   );
 
   const isPublished =
-    Boolean(body.is_published);
+    body.is_published === true;
+
+  const skillId =
+    cleanString(body.skill_id) || null;
 
   if (!courseId) {
-    return errorResponse(
-      "Course is required.",
+    return NextResponse.json(
+      {
+        error: "Course is required.",
+      },
+      { status: 400 },
     );
   }
 
   if (!title) {
-    return errorResponse(
-      "Task title is required.",
+    return NextResponse.json(
+      {
+        error: "Task title is required.",
+      },
+      { status: 400 },
     );
   }
 
   if (!scenario) {
-    return errorResponse(
-      "Workplace scenario is required.",
+    return NextResponse.json(
+      {
+        error: "Scenario is required.",
+      },
+      { status: 400 },
     );
   }
 
   if (!instructions) {
-    return errorResponse(
-      "Task instructions are required.",
+    return NextResponse.json(
+      {
+        error:
+          "Task instructions are required.",
+      },
+      { status: 400 },
     );
   }
 
   if (
-    !submissionTypes.includes(
-      submissionType as (typeof submissionTypes)[number],
+    !SUBMISSION_TYPES.includes(
+      submissionType as SubmissionType,
     )
   ) {
-    return errorResponse(
-      "Invalid submission type.",
+    return NextResponse.json(
+      {
+        error:
+          "Invalid submission type.",
+      },
+      { status: 400 },
     );
   }
 
   if (
-    !Number.isInteger(maxScore) ||
-    maxScore <= 0 ||
-    maxScore > 1000
+    !Number.isFinite(maxScore) ||
+    maxScore <= 0
   ) {
-    return errorResponse(
-      "Maximum score must be a positive whole number.",
+    return NextResponse.json(
+      {
+        error:
+          "Maximum score must be greater than zero.",
+      },
+      { status: 400 },
     );
   }
 
-  if (
-    !Number.isInteger(sortOrder) ||
-    sortOrder < 0
-  ) {
-    return errorResponse(
-      "Sort order must be a non-negative whole number.",
-    );
-  }
-
-  const authorized =
+  const allowed =
     await canManageCourse(
       supabase,
       user.id,
-      profile.role,
+      role,
       courseId,
     );
 
-  if (!authorized) {
-    return errorResponse(
-      "You are not authorized to manage tasks for this course.",
-      403,
+  if (!allowed) {
+    return NextResponse.json(
+      {
+        error:
+          "You are not authorised to manage this course.",
+      },
+      { status: 403 },
+    );
+  }
+
+  const skillValidation =
+    await validateSkill(
+      supabase,
+      skillId,
+    );
+
+  if (!skillValidation.valid) {
+    return NextResponse.json(
+      {
+        error:
+          "The selected skill does not exist.",
+      },
+      { status: 400 },
     );
   }
 
@@ -344,42 +475,45 @@ export async function POST(
         scenario,
         instructions,
         expected_outcome: expectedOutcome,
-        submission_type: submissionType,
+        submission_type:
+          submissionType,
         max_score: maxScore,
         sort_order: sortOrder,
         is_published: isPublished,
+        skill_id: skillId,
       })
       .select(
-        `
-          id,
-          course_id,
-          title,
-          scenario,
-          instructions,
-          expected_outcome,
-          submission_type,
-          max_score,
-          sort_order,
-          is_published
-        `,
+        [
+          "id",
+          "course_id",
+          "title",
+          "scenario",
+          "instructions",
+          "expected_outcome",
+          "submission_type",
+          "max_score",
+          "sort_order",
+          "is_published",
+          "skill_id",
+          "created_at",
+          "updated_at",
+        ].join(", "),
       )
       .single();
 
   if (error) {
-    console.error(
-      "Failed to create practical task:",
-      error,
-    );
-
-    return errorResponse(
-      "Unable to create practical task.",
-      500,
+    return NextResponse.json(
+      {
+        error:
+          "Unable to create practical task.",
+        details: error.message,
+      },
+      { status: 500 },
     );
   }
 
   return NextResponse.json(
     {
-      ok: true,
       task: data,
     },
     { status: 201 },
@@ -392,237 +526,388 @@ export async function PATCH(
   const {
     supabase,
     user,
-    profile,
-  } = await getAuthorizedUser();
+    role,
+  } = await getReviewerContext();
 
   if (!user) {
-    return errorResponse(
-      "Authentication required.",
-      401,
+    return NextResponse.json(
+      {
+        error: "Authentication required.",
+      },
+      { status: 401 },
     );
   }
 
-  if (
-    !profile ||
-    (profile.role !== "admin" &&
-      profile.role !== "instructor")
-  ) {
-    return errorResponse(
-      "You are not authorized to manage practical tasks.",
-      403,
+  if (!role) {
+    return NextResponse.json(
+      {
+        error:
+          "Admin or instructor access required.",
+      },
+      { status: 403 },
     );
   }
 
-  let body: TaskPayload;
+  let body: Record<
+    string,
+    unknown
+  >;
 
   try {
-    body =
-      (await request.json()) as TaskPayload;
+    body = (await request.json()) as Record<
+      string,
+      unknown
+    >;
   } catch {
-    return errorResponse(
-      "Invalid request body.",
+    return NextResponse.json(
+      {
+        error: "Invalid request body.",
+      },
+      { status: 400 },
     );
   }
 
-  const taskId = String(
-    body.id || "",
-  ).trim();
+  const id = cleanString(body.id);
 
-  if (!taskId) {
-    return errorResponse(
-      "Task ID is required.",
+  if (!id) {
+    return NextResponse.json(
+      {
+        error: "Task ID is required.",
+      },
+      { status: 400 },
     );
   }
 
-  const { data: existingTask } =
+  const { data: existingData } =
     await supabase
       .from("course_practical_tasks")
       .select("id, course_id")
-      .eq("id", taskId)
+      .eq("id", id)
       .maybeSingle();
 
-  if (!existingTask) {
-    return errorResponse(
-      "Practical task not found.",
-      404,
+  const existing =
+    existingData as {
+      id: string;
+      course_id: string;
+    } | null;
+
+  if (!existing) {
+    return NextResponse.json(
+      {
+        error: "Practical task not found.",
+      },
+      { status: 404 },
     );
   }
 
-  const authorized =
+  const allowed =
     await canManageCourse(
       supabase,
       user.id,
-      profile.role,
-      existingTask.course_id,
+      role,
+      existing.course_id,
     );
 
-  if (!authorized) {
-    return errorResponse(
-      "You are not authorized to manage this task.",
-      403,
+  if (!allowed) {
+    return NextResponse.json(
+      {
+        error:
+          "You are not authorised to manage this task.",
+      },
+      { status: 403 },
     );
   }
 
-  const updates: Record<
+  const update: Record<
     string,
     unknown
-  > = {
-    updated_at:
-      new Date().toISOString(),
-  };
+  > = {};
 
-  if (body.title !== undefined) {
-    const title = String(
+  if (
+    Object.prototype.hasOwnProperty.call(
+      body,
+      "course_id",
+    )
+  ) {
+    const courseId = cleanString(
+      body.course_id,
+    );
+
+    if (!courseId) {
+      return NextResponse.json(
+        {
+          error: "Course is required.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const courseAllowed =
+      await canManageCourse(
+        supabase,
+        user.id,
+        role,
+        courseId,
+      );
+
+    if (!courseAllowed) {
+      return NextResponse.json(
+        {
+          error:
+            "You are not authorised to use that course.",
+        },
+        { status: 403 },
+      );
+    }
+
+    update.course_id = courseId;
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      body,
+      "title",
+    )
+  ) {
+    const title = cleanString(
       body.title,
-    ).trim();
+    );
 
     if (!title) {
-      return errorResponse(
-        "Task title cannot be empty.",
+      return NextResponse.json(
+        {
+          error:
+            "Task title is required.",
+        },
+        { status: 400 },
       );
     }
 
-    updates.title = title;
+    update.title = title;
   }
 
-  if (body.scenario !== undefined) {
-    const scenario = String(
+  if (
+    Object.prototype.hasOwnProperty.call(
+      body,
+      "scenario",
+    )
+  ) {
+    const scenario = cleanString(
       body.scenario,
-    ).trim();
+    );
 
     if (!scenario) {
-      return errorResponse(
-        "Workplace scenario cannot be empty.",
+      return NextResponse.json(
+        {
+          error: "Scenario is required.",
+        },
+        { status: 400 },
       );
     }
 
-    updates.scenario = scenario;
+    update.scenario = scenario;
   }
 
   if (
-    body.instructions !== undefined
+    Object.prototype.hasOwnProperty.call(
+      body,
+      "instructions",
+    )
   ) {
-    const instructions = String(
-      body.instructions,
-    ).trim();
+    const instructions =
+      cleanString(body.instructions);
 
     if (!instructions) {
-      return errorResponse(
-        "Task instructions cannot be empty.",
+      return NextResponse.json(
+        {
+          error:
+            "Task instructions are required.",
+        },
+        { status: 400 },
       );
     }
 
-    updates.instructions =
-      instructions;
+    update.instructions = instructions;
   }
 
   if (
-    body.expected_outcome !==
-    undefined
+    Object.prototype.hasOwnProperty.call(
+      body,
+      "expected_outcome",
+    )
   ) {
-    updates.expected_outcome =
-      body.expected_outcome
-        ? String(
-            body.expected_outcome,
-          ).trim()
-        : null;
+    update.expected_outcome =
+      cleanString(
+        body.expected_outcome,
+      ) || null;
   }
 
   if (
-    body.submission_type !==
-    undefined
+    Object.prototype.hasOwnProperty.call(
+      body,
+      "submission_type",
+    )
   ) {
+    const submissionType =
+      cleanString(
+        body.submission_type,
+      );
+
     if (
-      !submissionTypes.includes(
-        body.submission_type as (typeof submissionTypes)[number],
+      !SUBMISSION_TYPES.includes(
+        submissionType as SubmissionType,
       )
     ) {
-      return errorResponse(
-        "Invalid submission type.",
+      return NextResponse.json(
+        {
+          error:
+            "Invalid submission type.",
+        },
+        { status: 400 },
       );
     }
 
-    updates.submission_type =
-      body.submission_type;
-  }
-
-  if (body.max_score !== undefined) {
-    const maxScore = Number(
-      body.max_score,
-    );
-
-    if (
-      !Number.isInteger(maxScore) ||
-      maxScore <= 0 ||
-      maxScore > 1000
-    ) {
-      return errorResponse(
-        "Maximum score must be a positive whole number.",
-      );
-    }
-
-    updates.max_score = maxScore;
-  }
-
-  if (body.sort_order !== undefined) {
-    const sortOrder = Number(
-      body.sort_order,
-    );
-
-    if (
-      !Number.isInteger(sortOrder) ||
-      sortOrder < 0
-    ) {
-      return errorResponse(
-        "Sort order must be a non-negative whole number.",
-      );
-    }
-
-    updates.sort_order = sortOrder;
+    update.submission_type =
+      submissionType;
   }
 
   if (
-    body.is_published !== undefined
+    Object.prototype.hasOwnProperty.call(
+      body,
+      "max_score",
+    )
   ) {
-    updates.is_published =
-      Boolean(body.is_published);
+    const maxScore = parseNumber(
+      body.max_score,
+      NaN,
+    );
+
+    if (
+      !Number.isFinite(maxScore) ||
+      maxScore <= 0
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Maximum score must be greater than zero.",
+        },
+        { status: 400 },
+      );
+    }
+
+    update.max_score = maxScore;
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      body,
+      "sort_order",
+    )
+  ) {
+    const sortOrder = parseNumber(
+      body.sort_order,
+      NaN,
+    );
+
+    if (!Number.isFinite(sortOrder)) {
+      return NextResponse.json(
+        {
+          error:
+            "Sort order must be a number.",
+        },
+        { status: 400 },
+      );
+    }
+
+    update.sort_order = sortOrder;
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      body,
+      "is_published",
+    )
+  ) {
+    update.is_published =
+      body.is_published === true;
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      body,
+      "skill_id",
+    )
+  ) {
+    const skillId =
+      cleanString(body.skill_id) ||
+      null;
+
+    const skillValidation =
+      await validateSkill(
+        supabase,
+        skillId,
+      );
+
+    if (!skillValidation.valid) {
+      return NextResponse.json(
+        {
+          error:
+            "The selected skill does not exist.",
+        },
+        { status: 400 },
+      );
+    }
+
+    update.skill_id = skillId;
+  }
+
+  if (
+    Object.keys(update).length === 0
+  ) {
+    return NextResponse.json(
+      {
+        error: "No changes supplied.",
+      },
+      { status: 400 },
+    );
   }
 
   const { data, error } =
     await supabase
       .from("course_practical_tasks")
-      .update(updates)
-      .eq("id", taskId)
+      .update(update)
+      .eq("id", id)
       .select(
-        `
-          id,
-          course_id,
-          title,
-          scenario,
-          instructions,
-          expected_outcome,
-          submission_type,
-          max_score,
-          sort_order,
-          is_published
-        `,
+        [
+          "id",
+          "course_id",
+          "title",
+          "scenario",
+          "instructions",
+          "expected_outcome",
+          "submission_type",
+          "max_score",
+          "sort_order",
+          "is_published",
+          "skill_id",
+          "created_at",
+          "updated_at",
+        ].join(", "),
       )
       .single();
 
   if (error) {
-    console.error(
-      "Failed to update practical task:",
-      error,
-    );
-
-    return errorResponse(
-      "Unable to update practical task.",
-      500,
+    return NextResponse.json(
+      {
+        error:
+          "Unable to update practical task.",
+        details: error.message,
+      },
+      { status: 500 },
     );
   }
 
   return NextResponse.json({
-    ok: true,
     task: data,
   });
 }
@@ -633,66 +918,95 @@ export async function DELETE(
   const {
     supabase,
     user,
-    profile,
-  } = await getAuthorizedUser();
+    role,
+  } = await getReviewerContext();
 
   if (!user) {
-    return errorResponse(
-      "Authentication required.",
-      401,
+    return NextResponse.json(
+      {
+        error: "Authentication required.",
+      },
+      { status: 401 },
     );
   }
 
-  if (
-    !profile ||
-    (profile.role !== "admin" &&
-      profile.role !== "instructor")
-  ) {
-    return errorResponse(
-      "You are not authorized to manage practical tasks.",
-      403,
+  if (!role) {
+    return NextResponse.json(
+      {
+        error:
+          "Admin or instructor access required.",
+      },
+      { status: 403 },
     );
   }
 
-  const url = new URL(
-    request.url,
-  );
+  let body: Record<
+    string,
+    unknown
+  >;
 
-  const taskId =
-    url.searchParams.get("id")?.trim();
-
-  if (!taskId) {
-    return errorResponse(
-      "Task ID is required.",
+  try {
+    body = (await request.json()) as Record<
+      string,
+      unknown
+    >;
+  } catch {
+    return NextResponse.json(
+      {
+        error: "Invalid request body.",
+      },
+      { status: 400 },
     );
   }
 
-  const { data: task } =
+  const id = cleanString(body.id);
+
+  if (!id) {
+    return NextResponse.json(
+      {
+        error: "Task ID is required.",
+      },
+      { status: 400 },
+    );
+  }
+
+  const { data: existingData } =
     await supabase
       .from("course_practical_tasks")
       .select("id, course_id")
-      .eq("id", taskId)
+      .eq("id", id)
       .maybeSingle();
 
-  if (!task) {
-    return errorResponse(
-      "Practical task not found.",
-      404,
+  const existing =
+    existingData as {
+      id: string;
+      course_id: string;
+    } | null;
+
+  if (!existing) {
+    return NextResponse.json(
+      {
+        error: "Practical task not found.",
+      },
+      { status: 404 },
     );
   }
 
-  const authorized =
+  const allowed =
     await canManageCourse(
       supabase,
       user.id,
-      profile.role,
-      task.course_id,
+      role,
+      existing.course_id,
     );
 
-  if (!authorized) {
-    return errorResponse(
-      "You are not authorized to delete this task.",
-      403,
+  if (!allowed) {
+    return NextResponse.json(
+      {
+        error:
+          "You are not authorised to delete this task.",
+      },
+      { status: 403 },
     );
   }
 
@@ -700,17 +1014,16 @@ export async function DELETE(
     await supabase
       .from("course_practical_tasks")
       .delete()
-      .eq("id", taskId);
+      .eq("id", id);
 
   if (error) {
-    console.error(
-      "Failed to delete practical task:",
-      error,
-    );
-
-    return errorResponse(
-      "Unable to delete practical task.",
-      500,
+    return NextResponse.json(
+      {
+        error:
+          "Unable to delete practical task.",
+        details: error.message,
+      },
+      { status: 500 },
     );
   }
 
