@@ -16857,3 +16857,116 @@ hr {
     background: #ffffff !important;
   }
 }
+
+/* =========================================================
+   RUFFNECK HEADER BRAND — VISIBILITY + SANS-SERIF
+   ========================================================= */
+
+.site-header,
+.site-header *,
+.rn-parent-brand,
+.rn-parent-brand *,
+.site-header .brand-name,
+.site-header .brand-name * {
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif !important;
+}
+
+/* RuffNeck Entertainment parent brand */
+.rn-parent-brand-link {
+  color: #0b1e3a !important;
+  text-decoration: none !important;
+}
+
+.rn-parent-brand-link strong {
+  display: block;
+  color: #0b1e3a !important;
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif !important;
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rn-parent-brand-link span {
+  display: block;
+  margin-top: 0.2rem;
+  color: #475569 !important;
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif !important;
+  font-size: 0.76rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+/* RuffNeck Learn */
+.site-header .brand-name {
+  color: #0b1e3a !important;
+  text-decoration: none !important;
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif !important;
+}
+
+.site-header .brand-name strong {
+  display: block;
+  color: #0b1e3a !important;
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif !important;
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.site-header .brand-name span {
+  display: block;
+  margin-top: 0.2rem;
+  color: #475569 !important;
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif !important;
+  font-size: 0.74rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+/* Parent website link */
+.rn-parent-brand-visit {
+  color: #0b1e3a !important;
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif !important;
+  font-weight: 700;
+  text-decoration: none !important;
+}
+
+.rn-parent-brand-visit:hover {
+  color: #00b4d8 !important;
+}
+
+/* Header navigation */
+.site-header .nav a {
+  color: #0b1e3a !important;
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif !important;
+}
+
+.site-header .nav a:hover {
+  color: #00b4d8 !important;
+}
