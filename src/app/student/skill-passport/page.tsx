@@ -298,7 +298,9 @@ export default async function SkillPassportPage() {
       >
         <div className="card">
           <strong>Tracked skills</strong>
+
           <h2>{profileRows.length}</h2>
+
           <p className="muted">
             Skills currently recorded in your
             learning profile.
@@ -307,7 +309,9 @@ export default async function SkillPassportPage() {
 
         <div className="card">
           <strong>Verified evidence</strong>
+
           <h2>{verifiedEvidenceCount}</h2>
+
           <p className="muted">
             Approved practical submissions
             linked to skills.
@@ -316,7 +320,9 @@ export default async function SkillPassportPage() {
 
         <div className="card">
           <strong>Strong skills</strong>
+
           <h2>{strongSkills}</h2>
+
           <p className="muted">
             Skills with confidence of 80% or
             higher.
@@ -325,7 +331,9 @@ export default async function SkillPassportPage() {
 
         <div className="card">
           <strong>Average confidence</strong>
+
           <h2>{averageConfidence}%</h2>
+
           <p className="muted">
             Current learning intelligence
             confidence across tracked skills.
@@ -333,10 +341,13 @@ export default async function SkillPassportPage() {
         </div>
       </section>
 
+      <VerificationCard />
+
       <section
         className="card"
         style={{
           marginBottom: "2rem",
+          marginTop: "2rem",
         }}
       >
         <div
