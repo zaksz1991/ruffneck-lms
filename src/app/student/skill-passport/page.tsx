@@ -1,47 +1,72 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import EvidenceTimeline from "./EvidenceTimeline";
 
 type Skill = {
   id: string;
   name: string;
-  slug: string;
   category: string | null;
   description: string | null;
 };
 
 type SkillProfile = {
+  id: string;
   skill_id: string;
-  score: number | null;
-  confidence_score: number | null;
   skill_level: string | null;
+  confidence_score: number | null;
+  mastery_score: number | null;
   evidence_count: number | null;
-  evidence: string[] | null;
   strengths: string[] | null;
   gaps: string[] | null;
+  evidence: string[] | null;
 };
 
-function percentage(value: number | null) {
+type PracticalSubmission = {
+  id: string;
+  task_id: string;
+  score: number | null;
+  reviewed_at: string | null;
+  evidence_file_name: string | null;
+  evidence_recorded_at: string | null;
+};
+
+type PracticalTask = {
+  id: string;
+  title: string;
+  course_id: string;
+  skill_id: string | null;
+};
+
+type Course = {
+  id: string;
+  title: string;
+};
+
+type EvidenceItem = {
+  id: string;
+  skillName: string;
+  taskTitle: string;
+  courseTitle: string;
+  score: number | null;
+  reviewedAt: string | null;
+  evidenceFileName: string | null;
+};
+
+function scoreLabel(value: number | null) {
   if (value === null) {
-    return null;
+    return "Not assessed";
   }
 
-  const normalized =
-    value <= 1 ? value * 100 : value;
-
-  return Math.round(normalized);
+  return `${Math.round(value)}%`;
 }
 
-function label(value: string | null) {
+function levelLabel(value: string | null) {
   if (!value) {
     return "Developing";
   }
 
-  return value
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) =>
-      letter.toUpperCase(),
-    );
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 export default async function SkillPassportPage() {
@@ -52,72 +77,62 @@ export default async function SkillPassportPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect(
-      "/login?next=/student/skill-passport",
-    );
+    redirect("/login?next=/student/skill-passport");
   }
 
-  const { data: profiles, error } =
-    await supabase
+  const [
+    skillsResult,
+    profilesResult,
+    submissionsResult,
+  ] = await Promise.all([
+    supabase
+      .from("learning_skills")
+      .select(
+        "id,name,category,description",
+      )
+      .order("name", {
+        ascending: true,
+      }),
+
+    supabase
       .from("learner_skill_profiles")
       .select(
-        `
-          skill_id,
-          score,
-          confidence_score,
-          skill_level,
-          evidence_count,
-          evidence,
-          strengths,
-          gaps
-        `,
+        "id,skill_id,skill_level,confidence_score,mastery_score,evidence_count,strengths,gaps,evidence",
       )
-      .eq("student_id", user.id)
+      .eq("learner_id", user.id)
       .order("confidence_score", {
         ascending: false,
         nullsFirst: false,
-      });
+      }),
 
-  if (error) {
-    throw new Error(
-      "Unable to load your skill passport.",
-    );
-  }
+    supabase
+      .from(
+        "student_practical_task_submissions",
+      )
+      .select(
+        "id,task_id,score,reviewed_at,evidence_file_name,evidence_recorded_at",
+      )
+      .eq("student_id", user.id)
+      .eq("status", "approved")
+      .not(
+        "evidence_recorded_at",
+        "is",
+        null,
+      )
+      .order("reviewed_at", {
+        ascending: false,
+      }),
+  ]);
 
-  const skillIds = [
-    ...new Set(
-      (profiles ?? [])
-        .map(
-          (profile) =>
-            profile.skill_id,
-        )
-        .filter(Boolean),
-    ),
-  ];
+  const skills = (skillsResult.data ??
+    []) as Skill[];
 
-  let skills: Skill[] = [];
+  const profiles = (profilesResult.data ??
+    []) as SkillProfile[];
 
-  if (skillIds.length > 0) {
-    const { data, error: skillError } =
-      await supabase
-        .from("learning_skills")
-        .select(
-          "id, name, slug, category, description",
-        )
-        .in("id", skillIds)
-        .order("name", {
-          ascending: true,
-        });
-
-    if (skillError) {
-      throw new Error(
-        "Unable to load your skills.",
-      );
-    }
-
-    skills =
-      (data ?? []) as Skill[];
-  }
+  const submissions =
+    (submissionsResult.data ??
+      []) as PracticalSubmission[];
 
   const skillMap = new Map(
     skills.map((skill) => [
@@ -126,70 +141,137 @@ export default async function SkillPassportPage() {
     ]),
   );
 
-  const skillProfiles =
-    (profiles ?? []) as SkillProfile[];
+  const profileRows = profiles.filter(
+    (profile) =>
+      skillMap.has(profile.skill_id),
+  );
 
-  const passportSkills =
-    skillProfiles
-      .map((profile) => ({
-        profile,
-        skill: skillMap.get(
-          profile.skill_id,
-        ),
-      }))
+  const taskIds = Array.from(
+    new Set(
+      submissions.map(
+        (submission) =>
+          submission.task_id,
+      ),
+    ),
+  );
+
+  let tasks: PracticalTask[] = [];
+
+  if (taskIds.length > 0) {
+    const { data } = await supabase
+      .from("course_practical_tasks")
+      .select(
+        "id,title,course_id,skill_id",
+      )
+      .in("id", taskIds);
+
+    tasks = (data ?? []) as PracticalTask[];
+  }
+
+  const courseIds = Array.from(
+    new Set(
+      tasks.map(
+        (task) => task.course_id,
+      ),
+    ),
+  );
+
+  let courses: Course[] = [];
+
+  if (courseIds.length > 0) {
+    const { data } = await supabase
+      .from("courses")
+      .select("id,title")
+      .in("id", courseIds);
+
+    courses = (data ?? []) as Course[];
+  }
+
+  const taskMap = new Map(
+    tasks.map((task) => [
+      task.id,
+      task,
+    ]),
+  );
+
+  const courseMap = new Map(
+    courses.map((course) => [
+      course.id,
+      course,
+    ]),
+  );
+
+  const evidenceItems: EvidenceItem[] =
+    submissions
+      .map((submission) => {
+        const task = taskMap.get(
+          submission.task_id,
+        );
+
+        if (!task?.skill_id) {
+          return null;
+        }
+
+        const skill = skillMap.get(
+          task.skill_id,
+        );
+
+        const course = courseMap.get(
+          task.course_id,
+        );
+
+        if (!skill || !course) {
+          return null;
+        }
+
+        return {
+          id: submission.id,
+          skillName: skill.name,
+          taskTitle: task.title,
+          courseTitle: course.title,
+          score: submission.score,
+          reviewedAt:
+            submission.reviewed_at,
+          evidenceFileName:
+            submission.evidence_file_name,
+        };
+      })
       .filter(
         (
           item,
-        ): item is {
-          profile: SkillProfile;
-          skill: Skill;
-        } => Boolean(item.skill),
+        ): item is EvidenceItem =>
+          item !== null,
       );
 
   const verifiedEvidenceCount =
-    passportSkills.reduce(
-      (total, item) =>
-        total +
-        (item.profile.evidence_count ??
-          0),
-      0,
-    );
+    evidenceItems.length;
 
   const strongSkills =
-    passportSkills.filter((item) => {
-      const confidence =
-        percentage(
-          item.profile
-            .confidence_score,
-        );
-
-      return (
-        confidence !== null &&
-        confidence >= 80
-      );
-    }).length;
+    profileRows.filter(
+      (profile) =>
+        (profile.confidence_score ?? 0) >=
+        80,
+    ).length;
 
   const averageConfidence =
-    passportSkills.length > 0
+    profileRows.length > 0
       ? Math.round(
-          passportSkills.reduce(
-            (total, item) =>
+          profileRows.reduce(
+            (total, profile) =>
               total +
-              (percentage(
-                item.profile
-                  .confidence_score,
-              ) ?? 0),
+              (profile.confidence_score ??
+                0),
             0,
-          ) / passportSkills.length,
+          ) / profileRows.length,
         )
       : 0;
 
   return (
-    <main className="page">
-      <div className="page-header">
+    <main className="page-shell">
+      <section className="page-header">
         <div>
           <p className="eyebrow">
-            RuffNeck Learn
+            RUFFNECK LEARN
           </p>
 
           <h1>
@@ -197,428 +279,377 @@ export default async function SkillPassportPage() {
           </h1>
 
           <p className="muted">
-            A living record of the skills
-            you have demonstrated through
-            learning, assessment, and
-            approved practical work.
+            A living record of the skills you
+            have developed, demonstrated, and
+            verified through practical work.
+          </p>
+        </div>
+      </section>
+
+      <section
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: "1rem",
+          marginBottom: "2rem",
+        }}
+      >
+        <div className="card">
+          <strong>Tracked skills</strong>
+          <h2>{profileRows.length}</h2>
+          <p className="muted">
+            Skills currently recorded in your
+            learning profile.
           </p>
         </div>
 
-        <div className="actions">
+        <div className="card">
+          <strong>Verified evidence</strong>
+          <h2>{verifiedEvidenceCount}</h2>
+          <p className="muted">
+            Approved practical submissions
+            linked to skills.
+          </p>
+        </div>
+
+        <div className="card">
+          <strong>Strong skills</strong>
+          <h2>{strongSkills}</h2>
+          <p className="muted">
+            Skills with confidence of 80% or
+            higher.
+          </p>
+        </div>
+
+        <div className="card">
+          <strong>Average confidence</strong>
+          <h2>{averageConfidence}%</h2>
+          <p className="muted">
+            Current learning intelligence
+            confidence across tracked skills.
+          </p>
+        </div>
+      </section>
+
+      <section
+        className="card"
+        style={{
+          marginBottom: "2rem",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent:
+              "space-between",
+            alignItems: "center",
+            gap: "1rem",
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <p className="eyebrow">
+              VERIFIED PRACTICAL EVIDENCE
+            </p>
+
+            <h2>
+              Evidence Timeline
+            </h2>
+
+            <p className="muted">
+              Approved practical tasks become
+              permanent evidence of demonstrated
+              capability.
+            </p>
+          </div>
+
           <Link
             href="/student/practical-work"
-            className="button secondary"
+            className="rn-button rn-button-primary"
           >
-            Practical Work
+            Open Practical Work
           </Link>
+        </div>
+
+        <div
+          style={{
+            marginTop: "1.5rem",
+          }}
+        >
+          <EvidenceTimeline
+            items={evidenceItems}
+          />
+        </div>
+      </section>
+
+      <section>
+        <div
+          style={{
+            display: "flex",
+            justifyContent:
+              "space-between",
+            alignItems: "flex-end",
+            gap: "1rem",
+            flexWrap: "wrap",
+            marginBottom: "1rem",
+          }}
+        >
+          <div>
+            <p className="eyebrow">
+              SKILL PROFILE
+            </p>
+
+            <h2>
+              Demonstrated capabilities
+            </h2>
+          </div>
 
           <Link
             href="/student/certificates"
-            className="button secondary"
+            className="rn-button"
           >
-            Certificates
+            View Certificates
           </Link>
         </div>
-      </div>
 
-      <section
-        className="card"
-        style={{
-          marginBottom: "1.5rem",
-        }}
-      >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns:
-              "repeat(auto-fit, minmax(160px, 1fr))",
-            gap: "1rem",
-          }}
-        >
-          <div>
-            <strong>
-              Tracked skills
-            </strong>
+        {profileRows.length === 0 ? (
+          <div className="card">
+            <h3>
+              No skill evidence yet
+            </h3>
 
-            <p
-              style={{
-                fontSize: "1.7rem",
-                fontWeight: 800,
-                margin:
-                  "0.25rem 0 0",
-              }}
-            >
-              {passportSkills.length}
+            <p className="muted">
+              Complete lessons, assessments,
+              and Practical Work tasks to begin
+              building your Skill Passport.
             </p>
-          </div>
 
-          <div>
-            <strong>
-              Verified evidence
-            </strong>
-
-            <p
-              style={{
-                fontSize: "1.7rem",
-                fontWeight: 800,
-                margin:
-                  "0.25rem 0 0",
-              }}
-            >
-              {verifiedEvidenceCount}
-            </p>
-          </div>
-
-          <div>
-            <strong>
-              Strong skills
-            </strong>
-
-            <p
-              style={{
-                fontSize: "1.7rem",
-                fontWeight: 800,
-                margin:
-                  "0.25rem 0 0",
-              }}
-            >
-              {strongSkills}
-            </p>
-          </div>
-
-          <div>
-            <strong>
-              Average confidence
-            </strong>
-
-            <p
-              style={{
-                fontSize: "1.7rem",
-                fontWeight: 800,
-                margin:
-                  "0.25rem 0 0",
-              }}
-            >
-              {averageConfidence}%
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section
-        className="card"
-        style={{
-          marginBottom: "1.5rem",
-        }}
-      >
-        <h2>
-          What makes this a skill passport?
-        </h2>
-
-        <div
-          style={{
-            display: "grid",
-            gap: "0.7rem",
-          }}
-        >
-          <p>
-            <strong>
-              Learning
-            </strong>{" "}
-            — skills are connected to the
-            learning completed on RuffNeck
-            Learn.
-          </p>
-
-          <p>
-            <strong>
-              Assessment
-            </strong>{" "}
-            — assessment performance
-            contributes to your learning
-            profile.
-          </p>
-
-          <p>
-            <strong>
-              Practical evidence
-            </strong>{" "}
-            — approved workplace tasks
-            provide evidence that you can
-            actually apply the skill.
-          </p>
-
-          <p>
-            <strong>
-              Continuous development
-            </strong>{" "}
-            — confidence, strengths,
-            evidence, and development gaps
-            can change as you continue
-            learning.
-          </p>
-        </div>
-      </section>
-
-      {passportSkills.length === 0 ? (
-        <section className="card">
-          <h2>
-            Your skill passport is
-            developing
-          </h2>
-
-          <p className="muted">
-            Complete lessons and practical
-            activities to begin building
-            your evidence-based skill
-            profile.
-          </p>
-
-          <div className="actions">
             <Link
-              href="/student/courses"
-              className="button primary"
+              href="/student/practical-work"
+              className="rn-button rn-button-primary"
+              style={{
+                marginTop: "1rem",
+              }}
             >
-              Continue learning
+              Start Practical Work
             </Link>
           </div>
-        </section>
-      ) : (
-        <section
-          style={{
-            display: "grid",
-            gap: "1rem",
-          }}
-        >
-          {passportSkills.map(
-            ({
-              skill,
-              profile,
-            }) => {
-              const confidence =
-                percentage(
-                  profile.confidence_score,
-                );
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(280px, 1fr))",
+              gap: "1rem",
+            }}
+          >
+            {profileRows.map(
+              (profile) => {
+                const skill =
+                  skillMap.get(
+                    profile.skill_id,
+                  );
 
-              const score =
-                percentage(
-                  profile.score,
-                );
+                if (!skill) {
+                  return null;
+                }
 
-              return (
-                <article
-                  key={skill.id}
-                  className="card"
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent:
-                        "space-between",
-                      alignItems:
-                        "flex-start",
-                      gap: "1rem",
-                      flexWrap:
-                        "wrap",
-                    }}
+                return (
+                  <article
+                    key={profile.id}
+                    className="card"
                   >
-                    <div>
-                      <p className="eyebrow">
-                        {skill.category ??
-                          "Professional skill"}
-                      </p>
-
-                      <h2
-                        style={{
-                          marginBottom:
-                            "0.35rem",
-                        }}
-                      >
-                        {skill.name}
-                      </h2>
-
-                      {skill.description ? (
-                        <p className="muted">
-                          {skill.description}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent:
+                          "space-between",
+                        alignItems:
+                          "flex-start",
+                        gap: "1rem",
+                      }}
+                    >
+                      <div>
+                        <p className="eyebrow">
+                          {skill.category ??
+                            "Professional Skill"}
                         </p>
-                      ) : null}
+
+                        <h3>
+                          {skill.name}
+                        </h3>
+                      </div>
+
+                      <span className="rn-badge rn-badge-success">
+                        {levelLabel(
+                          profile.skill_level,
+                        )}
+                      </span>
                     </div>
 
-                    <span className="rn-badge rn-badge-success">
-                      {label(
-                        profile.skill_level,
+                    {skill.description && (
+                      <p className="muted">
+                        {skill.description}
+                      </p>
+                    )}
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(2, 1fr)",
+                        gap: "1rem",
+                        marginTop:
+                          "1rem",
+                      }}
+                    >
+                      <div>
+                        <strong>
+                          Confidence
+                        </strong>
+
+                        <p>
+                          {scoreLabel(
+                            profile.confidence_score,
+                          )}
+                        </p>
+                      </div>
+
+                      <div>
+                        <strong>
+                          Mastery
+                        </strong>
+
+                        <p>
+                          {scoreLabel(
+                            profile.mastery_score,
+                          )}
+                        </p>
+                      </div>
+
+                      <div>
+                        <strong>
+                          Evidence
+                        </strong>
+
+                        <p>
+                          {profile.evidence_count ??
+                            0}
+                        </p>
+                      </div>
+
+                      <div>
+                        <strong>
+                          Level
+                        </strong>
+
+                        <p>
+                          {levelLabel(
+                            profile.skill_level,
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    {profile.strengths &&
+                      profile.strengths
+                        .length > 0 && (
+                        <div
+                          style={{
+                            marginTop:
+                              "1rem",
+                          }}
+                        >
+                          <strong>
+                            Strengths
+                          </strong>
+
+                          <ul>
+                            {profile.strengths.map(
+                              (
+                                strength,
+                                index,
+                              ) => (
+                                <li
+                                  key={`${profile.id}-strength-${index}`}
+                                >
+                                  {strength}
+                                </li>
+                              ),
+                            )}
+                          </ul>
+                        </div>
                       )}
-                    </span>
-                  </div>
 
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns:
-                        "repeat(auto-fit, minmax(150px, 1fr))",
-                      gap: "1rem",
-                      marginTop:
-                        "1.25rem",
-                    }}
-                  >
-                    <div>
-                      <strong>
-                        Confidence
-                      </strong>
+                    {profile.gaps &&
+                      profile.gaps
+                        .length > 0 && (
+                        <div
+                          style={{
+                            marginTop:
+                              "1rem",
+                          }}
+                        >
+                          <strong>
+                            Development areas
+                          </strong>
 
-                      <p
-                        style={{
-                          fontSize:
-                            "1.3rem",
-                          fontWeight: 800,
-                        }}
-                      >
-                        {confidence ?? "—"}
-                        {confidence !==
-                        null
-                          ? "%"
-                          : ""}
-                      </p>
-                    </div>
+                          <ul>
+                            {profile.gaps.map(
+                              (
+                                gap,
+                                index,
+                              ) => (
+                                <li
+                                  key={`${profile.id}-gap-${index}`}
+                                >
+                                  {gap}
+                                </li>
+                              ),
+                            )}
+                          </ul>
+                        </div>
+                      )}
 
-                    <div>
-                      <strong>
-                        Skill score
-                      </strong>
+                    {profile.evidence &&
+                      profile.evidence
+                        .length > 0 && (
+                        <div
+                          style={{
+                            marginTop:
+                              "1rem",
+                          }}
+                        >
+                          <strong>
+                            Evidence record
+                          </strong>
 
-                      <p
-                        style={{
-                          fontSize:
-                            "1.3rem",
-                          fontWeight: 800,
-                        }}
-                      >
-                        {score ?? "—"}
-                        {score !== null
-                          ? "%"
-                          : ""}
-                      </p>
-                    </div>
-
-                    <div>
-                      <strong>
-                        Evidence
-                      </strong>
-
-                      <p
-                        style={{
-                          fontSize:
-                            "1.3rem",
-                          fontWeight: 800,
-                        }}
-                      >
-                        {profile.evidence_count ??
-                          0}
-                      </p>
-                    </div>
-                  </div>
-
-                  {profile.evidence &&
-                  profile.evidence.length >
-                    0 ? (
-                    <div
-                      style={{
-                        marginTop:
-                          "1.25rem",
-                      }}
-                    >
-                      <h3>
-                        Evidence
-                      </h3>
-
-                      <ul>
-                        {profile.evidence
-                          .slice(-5)
-                          .map(
-                            (
-                              evidence,
-                              index,
-                            ) => (
-                              <li
-                                key={`${skill.id}-evidence-${index}`}
-                              >
-                                {evidence}
-                              </li>
-                            ),
-                          )}
-                      </ul>
-                    </div>
-                  ) : null}
-
-                  {profile.strengths &&
-                  profile.strengths.length >
-                    0 ? (
-                    <div
-                      style={{
-                        marginTop:
-                          "1rem",
-                      }}
-                    >
-                      <h3>
-                        Strengths
-                      </h3>
-
-                      <ul>
-                        {profile.strengths
-                          .slice(-5)
-                          .map(
-                            (
-                              strength,
-                              index,
-                            ) => (
-                              <li
-                                key={`${skill.id}-strength-${index}`}
-                              >
-                                {strength}
-                              </li>
-                            ),
-                          )}
-                      </ul>
-                    </div>
-                  ) : null}
-
-                  {profile.gaps &&
-                  profile.gaps.length >
-                    0 ? (
-                    <div
-                      style={{
-                        marginTop:
-                          "1rem",
-                      }}
-                    >
-                      <h3>
-                        Development areas
-                      </h3>
-
-                      <ul>
-                        {profile.gaps
-                          .slice(-5)
-                          .map(
-                            (
-                              gap,
-                              index,
-                            ) => (
-                              <li
-                                key={`${skill.id}-gap-${index}`}
-                              >
-                                {gap}
-                              </li>
-                            ),
-                          )}
-                      </ul>
-                    </div>
-                  ) : null}
-                </article>
-              );
-            },
-          )}
-        </section>
-      )}
+                          <ul>
+                            {profile.evidence
+                              .slice(0, 5)
+                              .map(
+                                (
+                                  evidence,
+                                  index,
+                                ) => (
+                                  <li
+                                    key={`${profile.id}-evidence-${index}`}
+                                  >
+                                    {evidence}
+                                  </li>
+                                ),
+                              )}
+                          </ul>
+                        </div>
+                      )}
+                  </article>
+                );
+              },
+            )}
+          </div>
+        )}
+      </section>
     </main>
   );
 }
