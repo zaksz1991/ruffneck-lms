@@ -20614,3 +20614,610 @@ main.page-shell .rn-button {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* =========================================================
+   RUFFNECK LEARN — MY LEARNING PROFILE
+   SKILL PASSPORT / PROFILE LAYOUT
+   ========================================================= */
+
+.rn-profile-shell {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 42px 0 64px;
+}
+
+/* ---------------------------------------------------------
+   HEADER
+   --------------------------------------------------------- */
+
+.rn-profile-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+  margin-bottom: 30px;
+}
+
+.rn-profile-header > div:first-child {
+  min-width: 0;
+  max-width: 760px;
+}
+
+.rn-profile-header .rn-eyebrow {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--cyan, #00b4d8);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.14em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.rn-profile-header h1 {
+  margin: 0;
+  color: var(--navy, #0b1e3a);
+  font-size: clamp(2rem, 4vw, 2.65rem);
+  font-weight: 850;
+  letter-spacing: -0.04em;
+  line-height: 1.08;
+}
+
+.rn-profile-header p {
+  max-width: 720px;
+  margin: 12px 0 0;
+  color: #64748b;
+  font-size: 0.96rem;
+  line-height: 1.65;
+}
+
+.rn-profile-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 9px;
+  flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------
+   STATISTICS
+   --------------------------------------------------------- */
+
+.rn-profile-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.rn-profile-stat {
+  min-width: 0;
+  min-height: 142px;
+  padding: 21px;
+  border: 1px solid #dbe3ec;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 5px 18px rgba(11, 30, 58, 0.05);
+}
+
+.rn-profile-stat > span {
+  display: block;
+  margin-bottom: 13px;
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.rn-profile-stat > strong {
+  display: block;
+  color: var(--navy, #0b1e3a);
+  font-size: 2.15rem;
+  font-weight: 850;
+  line-height: 1;
+}
+
+/* ---------------------------------------------------------
+   MAIN TWO-COLUMN LAYOUT
+   --------------------------------------------------------- */
+
+.rn-profile-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(300px, 0.8fr);
+  align-items: start;
+  gap: 20px;
+}
+
+.rn-profile-panel {
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid #dbe3ec;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 5px 18px rgba(11, 30, 58, 0.05);
+}
+
+.rn-profile-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------
+   PANEL HEADINGS
+   --------------------------------------------------------- */
+
+.rn-profile-panel-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.rn-profile-panel-heading > div {
+  min-width: 0;
+}
+
+.rn-profile-panel-heading .rn-eyebrow,
+.rn-profile-sidebar .rn-eyebrow {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--cyan, #00b4d8);
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.13em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.rn-profile-panel h2 {
+  margin: 0;
+  color: var(--navy, #0b1e3a);
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.rn-profile-sidebar h2 {
+  margin: 0;
+  color: var(--navy, #0b1e3a);
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.rn-text-link {
+  flex-shrink: 0;
+  color: var(--navy, #0b1e3a);
+  font-size: 0.84rem;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.rn-text-link:hover {
+  color: var(--cyan, #00b4d8);
+  text-decoration: underline;
+}
+
+/* ---------------------------------------------------------
+   SKILL LIST
+   --------------------------------------------------------- */
+
+.rn-profile-skill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rn-profile-skill {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #e1e7ef;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.rn-profile-skill-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.rn-profile-skill-heading > div:first-child {
+  min-width: 0;
+}
+
+.rn-profile-skill-heading strong {
+  display: block;
+  color: var(--navy, #0b1e3a);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.rn-profile-skill-heading > div:first-child > span {
+  display: inline-block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.rn-profile-skill-score {
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.rn-profile-skill-score strong {
+  display: block;
+  color: var(--navy, #0b1e3a);
+  font-size: 1.25rem;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.rn-profile-skill-score span {
+  display: block;
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+/* ---------------------------------------------------------
+   SKILL PROGRESS
+   --------------------------------------------------------- */
+
+.rn-skill-bar {
+  width: 100%;
+  height: 8px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8eef4;
+}
+
+.rn-skill-bar > span {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: var(--cyan, #00b4d8);
+  transition: width 0.3s ease;
+}
+
+/* ---------------------------------------------------------
+   EVIDENCE
+   --------------------------------------------------------- */
+
+.rn-profile-evidence {
+  margin: 13px 0 0;
+  color: #475569;
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.rn-profile-insight {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.rn-profile-insight > div {
+  min-width: 0;
+  padding: 11px 12px;
+  border-radius: 9px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.rn-profile-insight strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #475569;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.rn-profile-insight span {
+  display: block;
+  color: #334155;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+/* ---------------------------------------------------------
+   SIDEBAR LISTS
+   --------------------------------------------------------- */
+
+.rn-profile-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 17px;
+}
+
+.rn-profile-mini-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid #e8edf3;
+}
+
+.rn-profile-mini-list > div:first-child {
+  padding-top: 0;
+}
+
+.rn-profile-mini-list > div:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.rn-profile-mini-list strong {
+  min-width: 0;
+  color: var(--navy, #0b1e3a);
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
+.rn-profile-mini-list span {
+  flex-shrink: 0;
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.rn-profile-muted {
+  margin: 14px 0 0;
+  color: #64748b;
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+/* ---------------------------------------------------------
+   NEXT STEP
+   --------------------------------------------------------- */
+
+.rn-profile-next {
+  background: #f8fbfd;
+  border-color: #cfeaf0;
+}
+
+.rn-profile-next p {
+  margin: 12px 0 18px;
+  color: #475569;
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+
+.rn-profile-next .btn-block {
+  width: 100%;
+}
+
+/* ---------------------------------------------------------
+   EMPTY PROFILE
+   --------------------------------------------------------- */
+
+.rn-profile-empty {
+  max-width: 760px;
+  margin: 20px auto 0;
+  padding: 42px 30px;
+  text-align: center;
+  border: 1px solid #dbe3ec;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 5px 18px rgba(11, 30, 58, 0.05);
+}
+
+.rn-profile-empty-icon {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  margin: 0 auto 18px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--navy, #0b1e3a);
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.rn-profile-empty h2 {
+  margin: 0;
+  color: var(--navy, #0b1e3a);
+  font-size: 1.45rem;
+  font-weight: 800;
+}
+
+.rn-profile-empty p {
+  max-width: 620px;
+  margin: 10px auto 20px;
+  color: #64748b;
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+/* ---------------------------------------------------------
+   LAST UPDATED
+   --------------------------------------------------------- */
+
+.rn-profile-updated {
+  margin: 22px 0 0;
+  text-align: right;
+  color: #94a3b8;
+  font-size: 0.74rem;
+}
+
+/* =========================================================
+   TABLET
+   ========================================================= */
+
+@media (max-width: 950px) {
+  .rn-profile-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .rn-profile-header-actions {
+    justify-content: flex-start;
+  }
+
+  .rn-profile-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rn-profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rn-profile-sidebar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .rn-profile-next {
+    grid-column: 1 / -1;
+  }
+}
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 640px) {
+  .rn-profile-shell {
+    width: calc(100% - 24px);
+    padding: 28px 0 48px;
+  }
+
+  .rn-profile-header {
+    gap: 18px;
+    margin-bottom: 22px;
+  }
+
+  .rn-profile-header h1 {
+    font-size: 1.8rem;
+  }
+
+  .rn-profile-header p {
+    font-size: 0.88rem;
+  }
+
+  .rn-profile-header-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rn-profile-header-actions .btn {
+    width: 100%;
+  }
+
+  .rn-profile-stats {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .rn-profile-stat {
+    min-height: auto;
+    padding: 18px;
+  }
+
+  .rn-profile-grid {
+    gap: 14px;
+  }
+
+  .rn-profile-panel {
+    padding: 18px;
+  }
+
+  .rn-profile-panel-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .rn-profile-panel-heading .rn-text-link {
+    align-self: flex-start;
+  }
+
+  .rn-profile-skill {
+    padding: 16px;
+  }
+
+  .rn-profile-skill-heading {
+    gap: 10px;
+  }
+
+  .rn-profile-insight {
+    grid-template-columns: 1fr;
+  }
+
+  .rn-profile-sidebar {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .rn-profile-next {
+    grid-column: auto;
+  }
+
+  .rn-profile-updated {
+    text-align: left;
+  }
+
+  .rn-profile-empty {
+    padding: 30px 20px;
+  }
+
+  .rn-profile-empty .btn {
+    width: 100%;
+  }
+}
+
+/* =========================================================
+   SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 420px) {
+  .rn-profile-shell {
+    width: calc(100% - 16px);
+  }
+
+  .rn-profile-skill-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .rn-profile-skill-score {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    text-align: left;
+  }
+
+  .rn-profile-skill-score span {
+    margin-top: 0;
+  }
+
+  .rn-profile-mini-list > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+}
