@@ -33,7 +33,9 @@ function hasLearningOutcomes(value: unknown): boolean {
   }
 
   return value.some(
-    (item) => typeof item === "string" && item.trim().length > 0
+    (item) =>
+      typeof item === "string" &&
+      item.trim().length > 0
   );
 }
 
@@ -57,7 +59,10 @@ export async function GET(request: Request) {
 
     const adminClient = createAdminClient();
 
-    const { data: profile, error: profileError } = await adminClient
+    const {
+      data: profile,
+      error: profileError,
+    } = await adminClient
       .from("profiles")
       .select("role")
       .eq("id", user.id)
@@ -75,18 +80,25 @@ export async function GET(request: Request) {
 
     const role = profile?.role;
 
-    if (role !== "admin" && role !== "instructor") {
+    if (
+      role !== "admin" &&
+      role !== "instructor"
+    ) {
       return NextResponse.json(
         {
           ok: false,
-          error: "You do not have permission to check course publishing readiness.",
+          error:
+            "You do not have permission to check course publishing readiness.",
         },
         { status: 403 }
       );
     }
 
-    const { searchParams } = new URL(request.url);
-    const courseId = searchParams.get("courseId")?.trim();
+    const { searchParams } =
+      new URL(request.url);
+
+    const courseId =
+      searchParams.get("courseId")?.trim();
 
     if (!courseId) {
       return NextResponse.json(
@@ -98,7 +110,10 @@ export async function GET(request: Request) {
       );
     }
 
-    const { data: course, error: courseError } = await adminClient
+    const {
+      data: course,
+      error: courseError,
+    } = await adminClient
       .from("courses")
       .select(
         "id,title,short_description,description,learning_outcomes,is_free,price_ngn,instructor_id"
@@ -126,21 +141,30 @@ export async function GET(request: Request) {
       );
     }
 
-    if (role === "instructor" && course.instructor_id !== user.id) {
+    if (
+      role === "instructor" &&
+      course.instructor_id !== user.id
+    ) {
       return NextResponse.json(
         {
           ok: false,
-          error: "You do not have permission to publish this course.",
+          error:
+            "You do not have permission to publish this course.",
         },
         { status: 403 }
       );
     }
 
-    const { data: sections, error: sectionsError } = await adminClient
+    const {
+      data: sections,
+      error: sectionsError,
+    } = await adminClient
       .from("course_sections")
       .select("id")
       .eq("course_id", course.id)
-      .order("sort_order", { ascending: true })
+      .order("sort_order", {
+        ascending: true,
+      })
       .returns<Section[]>();
 
     if (sectionsError) {
@@ -153,16 +177,25 @@ export async function GET(request: Request) {
       );
     }
 
-    const sectionIds = (sections ?? []).map((section) => section.id);
+    const sectionIds = (
+      sections ?? []
+    ).map((section) => section.id);
 
     let lessons: Lesson[] = [];
 
     if (sectionIds.length > 0) {
-      const { data: lessonRows, error: lessonsError } = await adminClient
-        .from("course_lessons")
-        .select("id,section_id,is_published")
+      const {
+        data: lessonRows,
+        error: lessonsError,
+      } = await adminClient
+        .from("lessons")
+        .select(
+          "id,section_id,is_published"
+        )
         .in("section_id", sectionIds)
-        .order("sort_order", { ascending: true })
+        .order("sort_order", {
+          ascending: true,
+        })
         .returns<Lesson[]>();
 
       if (lessonsError) {
@@ -181,41 +214,75 @@ export async function GET(request: Request) {
     const reasons: string[] = [];
 
     if (!normaliseText(course.title)) {
-      reasons.push("A course title is required.");
+      reasons.push(
+        "A course title is required."
+      );
     }
 
-    if (!normaliseText(course.short_description)) {
-      reasons.push("A short course description is required.");
+    if (
+      !normaliseText(
+        course.short_description
+      )
+    ) {
+      reasons.push(
+        "A short course description is required."
+      );
     }
 
-    if (!normaliseText(course.description)) {
-      reasons.push("A full course description is required.");
+    if (
+      !normaliseText(course.description)
+    ) {
+      reasons.push(
+        "A full course description is required."
+      );
     }
 
-    if (!hasLearningOutcomes(course.learning_outcomes)) {
-      reasons.push("At least one learning outcome is required.");
+    if (
+      !hasLearningOutcomes(
+        course.learning_outcomes
+      )
+    ) {
+      reasons.push(
+        "At least one learning outcome is required."
+      );
     }
 
     if (sections.length === 0) {
-      reasons.push("At least one course section is required.");
+      reasons.push(
+        "At least one course section is required."
+      );
     }
 
     if (lessons.length === 0) {
-      reasons.push("At least one lesson is required.");
+      reasons.push(
+        "At least one lesson is required."
+      );
     }
 
-    const publishedLessons = lessons.filter(
-      (lesson) => lesson.is_published === true
-    );
+    const publishedLessons =
+      lessons.filter(
+        (lesson) =>
+          lesson.is_published === true
+      );
 
-    if (lessons.length > 0 && publishedLessons.length === 0) {
-      reasons.push("At least one lesson must be published.");
+    if (
+      lessons.length > 0 &&
+      publishedLessons.length === 0
+    ) {
+      reasons.push(
+        "At least one lesson must be published."
+      );
     }
 
     if (!course.is_free) {
-      const price = Number(course.price_ngn ?? 0);
+      const price = Number(
+        course.price_ngn ?? 0
+      );
 
-      if (!Number.isFinite(price) || price <= 0) {
+      if (
+        !Number.isFinite(price) ||
+        price <= 0
+      ) {
         reasons.push(
           "A paid course must have a price greater than ₦0."
         );
@@ -223,35 +290,64 @@ export async function GET(request: Request) {
     }
 
     if (!course.instructor_id) {
-      reasons.push("An instructor must be assigned.");
+      reasons.push(
+        "An instructor must be assigned."
+      );
     }
 
     return NextResponse.json({
       ok: true,
       ready: reasons.length === 0,
       courseId: course.id,
+
       checks: {
-        title: Boolean(normaliseText(course.title)),
+        title: Boolean(
+          normaliseText(course.title)
+        ),
+
         shortDescription: Boolean(
-          normaliseText(course.short_description)
+          normaliseText(
+            course.short_description
+          )
         ),
-        description: Boolean(normaliseText(course.description)),
-        learningOutcomes: hasLearningOutcomes(
-          course.learning_outcomes
+
+        description: Boolean(
+          normaliseText(
+            course.description
+          )
         ),
-        sections: sections.length > 0,
-        lessons: lessons.length > 0,
-        publishedLessons: publishedLessons.length > 0,
+
+        learningOutcomes:
+          hasLearningOutcomes(
+            course.learning_outcomes
+          ),
+
+        sections:
+          sections.length > 0,
+
+        lessons:
+          lessons.length > 0,
+
+        publishedLessons:
+          publishedLessons.length > 0,
+
         pricing: course.is_free
           ? true
-          : Number(course.price_ngn ?? 0) > 0,
-        instructor: Boolean(course.instructor_id),
+          : Number(
+              course.price_ngn ?? 0
+            ) > 0,
+
+        instructor:
+          Boolean(course.instructor_id),
       },
+
       totals: {
         sections: sections.length,
         lessons: lessons.length,
-        publishedLessons: publishedLessons.length,
+        publishedLessons:
+          publishedLessons.length,
       },
+
       reasons,
     });
   } catch (error) {
