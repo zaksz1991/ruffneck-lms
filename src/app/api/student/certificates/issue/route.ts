@@ -6,11 +6,13 @@ type Course = {
   id: string;
   title: string;
   slug: string;
+  is_free: boolean;
 };
 
 type Enrollment = {
   id: string;
   enrollment_status: string;
+  payment_status: string;
 };
 
 type CurriculumLesson = {
@@ -51,7 +53,7 @@ type Certificate = {
 
 function getAssessmentPercentage(
   attempt: AssessmentAttempt
-) {
+): number {
   if (
     attempt.total_points !== null &&
     attempt.total_points > 0 &&
@@ -102,11 +104,26 @@ export async function POST(
       );
     }
 
-    const body = await request.json();
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        {
+          error: "Invalid request body.",
+        },
+        { status: 400 }
+      );
+    }
 
     const courseId =
-      typeof body?.courseId === "string"
-        ? body.courseId.trim()
+      typeof (body as { courseId?: unknown })?.courseId ===
+      "string"
+        ? (
+            (body as { courseId: string })
+              .courseId
+          ).trim()
         : "";
 
     if (!courseId) {
@@ -120,13 +137,17 @@ export async function POST(
 
     const admin = createAdminClient();
 
-    const { data: courseData, error: courseError } =
-      await admin
-        .from("courses")
-        .select("id, title, slug")
-        .eq("id", courseId)
-        .eq("status", "published")
-        .maybeSingle();
+    const {
+      data: courseData,
+      error: courseError,
+    } = await admin
+      .from("courses")
+      .select(
+        "id, title, slug, is_free"
+      )
+      .eq("id", courseId)
+      .eq("status", "published")
+      .maybeSingle();
 
     if (courseError) {
       console.error(
@@ -155,17 +176,28 @@ export async function POST(
       );
     }
 
-    const { data: enrollmentData, error: enrollmentError } =
-      await admin
-        .from("enrollments")
-        .select("id, enrollment_status")
-        .eq("student_id", user.id)
-        .eq("course_id", courseId)
-        .in("enrollment_status", [
-          "active",
-          "completed",
-        ])
-        .maybeSingle();
+    /*
+     * Verify enrollment and payment state.
+     *
+     * Free courses do not require payment.
+     * Paid courses require the canonical enrollment
+     * payment state: "paid".
+     */
+    const {
+      data: enrollmentData,
+      error: enrollmentError,
+    } = await admin
+      .from("enrollments")
+      .select(
+        "id, enrollment_status, payment_status"
+      )
+      .eq("student_id", user.id)
+      .eq("course_id", courseId)
+      .in("enrollment_status", [
+        "active",
+        "completed",
+      ])
+      .maybeSingle();
 
     if (enrollmentError) {
       console.error(
@@ -195,6 +227,22 @@ export async function POST(
       );
     }
 
+    if (
+      !course.is_free &&
+      enrollment.payment_status !== "paid"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Payment is required before claiming a certificate for this course.",
+        },
+        { status: 403 }
+      );
+    }
+
+    /*
+     * Verify that the course has published curriculum.
+     */
     const {
       data: curriculumData,
       error: curriculumError,
@@ -236,12 +284,18 @@ export async function POST(
       (lesson) => lesson.lesson_id
     );
 
+    /*
+     * Every published lesson must have a completed
+     * lesson_progress record.
+     */
     const {
       data: progressData,
       error: progressError,
     } = await admin
       .from("lesson_progress")
-      .select("lesson_id, completed")
+      .select(
+        "lesson_id, completed"
+      )
       .eq("student_id", user.id)
       .eq("course_id", courseId)
       .eq("completed", true)
@@ -262,11 +316,12 @@ export async function POST(
       );
     }
 
-    const completedLessonIds = new Set(
-      (progressData ?? []).map(
-        (row) => row.lesson_id
-      )
-    );
+    const completedLessonIds =
+      new Set(
+        (progressData ?? []).map(
+          (row) => row.lesson_id
+        )
+      );
 
     if (
       completedLessonIds.size <
@@ -278,12 +333,17 @@ export async function POST(
             "Complete all published course lessons before claiming your certificate.",
           completedLessons:
             completedLessonIds.size,
-          totalLessons: lessonIds.length,
+          totalLessons:
+            lessonIds.length,
         },
         { status: 400 }
       );
     }
 
+    /*
+     * Find the student's most recent completed
+     * assessment attempt.
+     */
     const {
       data: assessmentData,
       error: assessmentError,
@@ -338,7 +398,9 @@ export async function POST(
     }
 
     const assessmentPercentage =
-      getAssessmentPercentage(assessment);
+      getAssessmentPercentage(
+        assessment
+      );
 
     if (assessmentPercentage < 70) {
       return NextResponse.json(
@@ -353,15 +415,28 @@ export async function POST(
       );
     }
 
+    /*
+     * course_projects has no status column in the verified
+     * schema. The published state is represented by
+     * is_published.
+     */
     const {
       data: projectData,
       error: projectError,
     } = await admin
       .from("course_projects")
-      .select("id, project_type")
+      .select(
+        "id, project_type"
+      )
       .eq("course_id", courseId)
-      .eq("project_type", "capstone")
-      .eq("status", "published")
+      .eq(
+        "project_type",
+        "capstone"
+      )
+      .eq("is_published", true)
+      .order("sort_order", {
+        ascending: true,
+      })
       .limit(1)
       .maybeSingle();
 
@@ -393,6 +468,9 @@ export async function POST(
       );
     }
 
+    /*
+     * The capstone must have an approved submission.
+     */
     const {
       data: submissionData,
       error: submissionError,
@@ -401,9 +479,18 @@ export async function POST(
       .select(
         "id, score, status, reviewed_at"
       )
-      .eq("project_id", project.id)
-      .eq("student_id", user.id)
-      .eq("status", "approved")
+      .eq(
+        "project_id",
+        project.id
+      )
+      .eq(
+        "student_id",
+        user.id
+      )
+      .eq(
+        "status",
+        "approved"
+      )
       .order("reviewed_at", {
         ascending: false,
       })
@@ -441,12 +528,17 @@ export async function POST(
     const capstoneScore =
       submission.score ?? 0;
 
+    /*
+     * Load the student's certificate holder name.
+     */
     const {
       data: profileData,
       error: profileError,
     } = await admin
       .from("profiles")
-      .select("full_name, email")
+      .select(
+        "full_name, email"
+      )
       .eq("id", user.id)
       .maybeSingle();
 
@@ -474,6 +566,10 @@ export async function POST(
       user.email?.split("@")[0] ||
       "RuffNeck Learn Student";
 
+    /*
+     * Prevent duplicate certificates for the same
+     * student/course pair.
+     */
     const {
       data: existingCertificateData,
       error: existingCertificateError,
@@ -482,8 +578,14 @@ export async function POST(
       .select(
         "id, certificate_number"
       )
-      .eq("student_id", user.id)
-      .eq("course_id", courseId)
+      .eq(
+        "student_id",
+        user.id
+      )
+      .eq(
+        "course_id",
+        courseId
+      )
       .maybeSingle();
 
     if (existingCertificateError) {
@@ -514,40 +616,64 @@ export async function POST(
       });
     }
 
-    const { data: certificateData, error: certificateError } =
-      await admin
-        .from("course_certificates")
-        .insert({
-          student_id: user.id,
-          course_id: courseId,
-          holder_name: holderName,
-          course_title: course.title,
-          course_slug: course.slug,
-          assessment_score: Math.round(
+    /*
+     * All certificate requirements have passed.
+     */
+    const {
+      data: certificateData,
+      error: certificateError,
+    } = await admin
+      .from("course_certificates")
+      .insert({
+        student_id:
+          user.id,
+        course_id:
+          courseId,
+        holder_name:
+          holderName,
+        course_title:
+          course.title,
+        course_slug:
+          course.slug,
+        assessment_score:
+          Math.round(
             assessmentPercentage
           ),
-          capstone_score: capstoneScore,
-          is_revoked: false,
-        })
-        .select(
-          "id, certificate_number"
-        )
-        .single();
+        capstone_score:
+          capstoneScore,
+        is_revoked:
+          false,
+      })
+      .select(
+        "id, certificate_number"
+      )
+      .single();
 
     if (certificateError) {
+      /*
+       * Handle a concurrent certificate request safely.
+       */
       if (
-        certificateError.code === "23505"
+        certificateError.code ===
+        "23505"
       ) {
         const {
           data: racedCertificate,
-          error: racedCertificateError,
+          error:
+            racedCertificateError,
         } = await admin
           .from("course_certificates")
           .select(
             "id, certificate_number"
           )
-          .eq("student_id", user.id)
-          .eq("course_id", courseId)
+          .eq(
+            "student_id",
+            user.id
+          )
+          .eq(
+            "course_id",
+            courseId
+          )
           .maybeSingle();
 
         if (
@@ -592,7 +718,8 @@ export async function POST(
     }
 
     return NextResponse.json({
-      certificateId: certificate.id,
+      certificateId:
+        certificate.id,
       certificateNumber:
         certificate.certificate_number,
       alreadyIssued: false,
