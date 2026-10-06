@@ -7,7 +7,7 @@ type Enrollment = {
   id: string;
   course_id: string;
   enrollment_status: string;
-  payment_status: string;
+  payment_status: string | null;
   progress_percent: number | null;
   created_at: string;
 };
@@ -66,10 +66,7 @@ type Certificate = {
 };
 
 type CourseCertificate = {
-  status:
-    | "not_issued"
-    | "valid"
-    | "revoked";
+  status: "not_issued" | "valid" | "revoked";
   certificate_id: string | null;
   certificate_number: string | null;
 };
@@ -114,25 +111,120 @@ export default async function StudentCoursesPage() {
     redirect("/login?next=/student/courses");
   }
 
+  /*
+   * Enrollment data is the only mandatory query.
+   * Without it we cannot determine what belongs on this page.
+   */
   const {
     data: enrollmentData,
     error: enrollmentError,
   } = await supabase
     .from("enrollments")
     .select(
-      "id, course_id, enrollment_status, payment_status, progress_percent, created_at"
+      "id, course_id, enrollment_status, payment_status, progress_percent, created_at",
     )
     .eq("student_id", user.id)
-    .in("enrollment_status", [
-      "active",
-      "completed",
-    ])
+    .in("enrollment_status", ["active", "completed"])
     .order("created_at", {
       ascending: false,
     });
 
   if (enrollmentError) {
-    throw new Error(enrollmentError.message);
+    console.error(
+      "Student courses: enrollment query failed:",
+      enrollmentError,
+    );
+
+    /*
+     * Try a minimal fallback in case a non-essential enrollment
+     * column has changed in the database.
+     */
+    const {
+      data: fallbackEnrollmentData,
+      error: fallbackEnrollmentError,
+    } = await supabase
+      .from("enrollments")
+      .select("id, course_id, enrollment_status")
+      .eq("student_id", user.id)
+      .in("enrollment_status", ["active", "completed"]);
+
+    if (fallbackEnrollmentError) {
+      console.error(
+        "Student courses: enrollment fallback failed:",
+        fallbackEnrollmentError,
+      );
+
+      return (
+        <main className="container">
+          <section className="page-header">
+            <h1>My Courses</h1>
+            <p>
+              We could not load your enrolled courses right now.
+            </p>
+          </section>
+
+          <section className="card">
+            <h2>Learning data temporarily unavailable</h2>
+            <p>
+              Your account is still intact. The learning dashboard
+              could not retrieve your enrollment data.
+            </p>
+            <Link
+              href="/courses"
+              className="button primary"
+            >
+              Browse Courses
+            </Link>
+          </section>
+        </main>
+      );
+    }
+
+    const fallbackEnrollments = (
+      fallbackEnrollmentData ?? []
+    ).map((row) => ({
+      id: row.id,
+      course_id: row.course_id,
+      enrollment_status: row.enrollment_status,
+      payment_status: null,
+      progress_percent: null,
+      created_at: "",
+    })) as Enrollment[];
+
+    if (fallbackEnrollments.length === 0) {
+      return (
+        <main className="container">
+          <section className="page-header">
+            <h1>My Courses</h1>
+            <p>
+              Your enrolled courses and learning progress
+              will appear here.
+            </p>
+          </section>
+
+          <section className="card">
+            <h2>No courses yet</h2>
+            <p>
+              You are not currently enrolled in any courses.
+            </p>
+
+            <Link
+              href="/courses"
+              className="button primary"
+            >
+              Browse Courses
+            </Link>
+          </section>
+        </main>
+      );
+    }
+
+    return renderCoursesPage(
+      supabase,
+      user.id,
+      fallbackEnrollments,
+      true,
+    );
   }
 
   const enrollments =
@@ -169,12 +261,26 @@ export default async function StudentCoursesPage() {
     );
   }
 
+  return renderCoursesPage(
+    supabase,
+    user.id,
+    enrollments,
+    false,
+  );
+}
+
+async function renderCoursesPage(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  enrollments: Enrollment[],
+  usedEnrollmentFallback: boolean,
+) {
   const courseIds = Array.from(
     new Set(
       enrollments.map(
-        (enrollment) => enrollment.course_id
-      )
-    )
+        (enrollment) => enrollment.course_id,
+      ),
+    ),
   );
 
   const [
@@ -188,14 +294,14 @@ export default async function StudentCoursesPage() {
     supabase
       .from("courses")
       .select(
-        "id, title, slug, short_description, level, duration_minutes"
+        "id, title, slug, short_description, level, duration_minutes",
       )
       .in("id", courseIds),
 
     supabase
       .from("course_curriculum")
       .select(
-        "course_id, lesson_id, lesson_slug, lesson_title, lesson_sort_order, is_published"
+        "course_id, lesson_id, lesson_slug, lesson_title, lesson_sort_order, is_published",
       )
       .in("course_id", courseIds)
       .eq("is_published", true)
@@ -206,17 +312,17 @@ export default async function StudentCoursesPage() {
     supabase
       .from("lesson_progress")
       .select(
-        "student_id, lesson_id, course_id, completed"
+        "student_id, lesson_id, course_id, completed",
       )
-      .eq("student_id", user.id)
+      .eq("student_id", userId)
       .in("course_id", courseIds),
 
     supabase
       .from("assessment_attempts")
       .select(
-        "id, course_id, score, total_points, earned_points, total_questions, time_spent_seconds, completed_at"
+        "id, course_id, score, total_points, earned_points, total_questions, time_spent_seconds, completed_at",
       )
-      .eq("student_id", user.id)
+      .eq("student_id", userId)
       .in("course_id", courseIds)
       .not("completed_at", "is", null)
       .order("completed_at", {
@@ -226,53 +332,94 @@ export default async function StudentCoursesPage() {
     supabase
       .from("course_certificates")
       .select(
-        "id, student_id, course_id, certificate_number, is_revoked"
+        "id, student_id, course_id, certificate_number, is_revoked",
       )
-      .eq("student_id", user.id)
+      .eq("student_id", userId)
       .in("course_id", courseIds),
 
     supabase
       .from("course_projects")
       .select(
-        "id, course_id, project_type, is_published"
+        "id, course_id, project_type, is_published",
       )
       .in("course_id", courseIds)
       .eq("project_type", "capstone")
       .eq("is_published", true),
   ]);
 
+  /*
+   * IMPORTANT:
+   * These are deliberately non-fatal.
+   *
+   * A failure in one of these supporting tables must not produce
+   * a Next.js server exception for the entire My Courses page.
+   */
   if (courseResult.error) {
-    throw new Error(courseResult.error.message);
+    console.error(
+      "Student courses: courses query failed:",
+      courseResult.error,
+    );
   }
 
   if (curriculumResult.error) {
-    throw new Error(
-      curriculumResult.error.message
+    console.error(
+      "Student courses: curriculum query failed:",
+      curriculumResult.error,
     );
   }
 
   if (progressResult.error) {
-    throw new Error(
-      progressResult.error.message
+    console.error(
+      "Student courses: lesson progress query failed:",
+      progressResult.error,
     );
   }
 
   if (assessmentResult.error) {
-    throw new Error(
-      assessmentResult.error.message
+    console.error(
+      "Student courses: assessment query failed:",
+      assessmentResult.error,
     );
   }
 
   if (certificateResult.error) {
-    throw new Error(
-      certificateResult.error.message
+    console.error(
+      "Student courses: certificate query failed:",
+      certificateResult.error,
     );
   }
 
   if (projectResult.error) {
-    throw new Error(
-      projectResult.error.message
+    console.error(
+      "Student courses: project query failed:",
+      projectResult.error,
     );
+  }
+
+  const dataWarnings: string[] = [];
+
+  if (courseResult.error) {
+    dataWarnings.push("course information");
+  }
+
+  if (curriculumResult.error) {
+    dataWarnings.push("lesson curriculum");
+  }
+
+  if (progressResult.error) {
+    dataWarnings.push("lesson progress");
+  }
+
+  if (assessmentResult.error) {
+    dataWarnings.push("assessment history");
+  }
+
+  if (certificateResult.error) {
+    dataWarnings.push("certificate information");
+  }
+
+  if (projectResult.error) {
+    dataWarnings.push("capstone information");
   }
 
   const courses =
@@ -298,9 +445,67 @@ export default async function StudentCoursesPage() {
     (projectResult.data ??
       []) as CourseProject[];
 
+  /*
+   * If the course query itself failed, do not render an empty
+   * dashboard that falsely says the student has no courses.
+   */
+  if (courseResult.error) {
+    return (
+      <main className="container">
+        <section className="page-header">
+          <h1>My Courses</h1>
+
+          <p>
+            Track your lessons, resume learning, monitor
+            assessments, and manage your certificates.
+          </p>
+        </section>
+
+        {usedEnrollmentFallback ? (
+          <section className="card">
+            <p
+              style={{
+                margin: 0,
+                color: "var(--muted)",
+              }}
+            >
+              Your enrollment was recovered, but course
+              information is temporarily unavailable.
+            </p>
+          </section>
+        ) : null}
+
+        <section className="card">
+          <h2>Course information unavailable</h2>
+
+          <p>
+            Your enrollment was found, but the course
+            catalogue could not be loaded at this time.
+          </p>
+
+          <div className="course-card-actions">
+            <Link
+              href="/courses"
+              className="button primary"
+            >
+              Browse Courses
+            </Link>
+
+            <Link
+              href="/"
+              className="button secondary"
+            >
+              Back to Home
+            </Link>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   const capstoneProjectIds =
     capstoneProjects.map(
-      (project) => project.id
+      (project) => project.id,
     );
 
   let submissionData: ProjectSubmission[] =
@@ -313,27 +518,34 @@ export default async function StudentCoursesPage() {
     } = await supabase
       .from("project_submissions")
       .select(
-        "id, project_id, student_id, status, score"
+        "id, project_id, student_id, status, score",
       )
-      .eq("student_id", user.id)
+      .eq("student_id", userId)
       .in(
         "project_id",
-        capstoneProjectIds
+        capstoneProjectIds,
       );
 
     if (error) {
-      throw new Error(error.message);
-    }
+      console.error(
+        "Student courses: project submissions query failed:",
+        error,
+      );
 
-    submissionData =
-      (data ?? []) as ProjectSubmission[];
+      dataWarnings.push(
+        "capstone submission status",
+      );
+    } else {
+      submissionData =
+        (data ?? []) as ProjectSubmission[];
+    }
   }
 
   const courseMap = new Map(
     courses.map((course) => [
       course.id,
       course,
-    ])
+    ]),
   );
 
   const lessonsByCourse = new Map<
@@ -344,25 +556,25 @@ export default async function StudentCoursesPage() {
   for (const lesson of curriculum) {
     const existing =
       lessonsByCourse.get(
-        lesson.course_id
+        lesson.course_id,
       ) ?? [];
 
     existing.push(lesson);
 
     lessonsByCourse.set(
       lesson.course_id,
-      existing
+      existing,
     );
   }
 
   const completedLessonIds = new Set(
     lessonProgress
       .filter(
-        (progress) => progress.completed
+        (progress) => progress.completed,
       )
       .map(
-        (progress) => progress.lesson_id
-      )
+        (progress) => progress.lesson_id,
+      ),
   );
 
   /*
@@ -376,13 +588,14 @@ export default async function StudentCoursesPage() {
   for (const attempt of assessmentAttempts) {
     if (
       assessmentByCourse.has(
-        attempt.course_id
+        attempt.course_id,
       )
     ) {
       continue;
     }
 
-    let percentage: number | null = null;
+    let percentage: number | null =
+      null;
 
     if (
       typeof attempt.earned_points ===
@@ -399,7 +612,7 @@ export default async function StudentCoursesPage() {
       typeof attempt.score === "number"
     ) {
       percentage = Number(
-        attempt.score
+        attempt.score,
       );
     }
 
@@ -423,7 +636,7 @@ export default async function StudentCoursesPage() {
           percentage !== null
             ? Math.round(percentage)
             : null,
-      }
+      },
     );
   }
 
@@ -433,7 +646,7 @@ export default async function StudentCoursesPage() {
   for (const project of capstoneProjects) {
     const existing =
       capstoneByCourse.get(
-        project.course_id
+        project.course_id,
       ) ?? {
         has_capstone: false,
         approved_submission: false,
@@ -447,7 +660,7 @@ export default async function StudentCoursesPage() {
           submission.project_id ===
             project.id &&
           submission.status ===
-            "approved"
+            "approved",
       );
 
     if (approvedSubmission) {
@@ -457,7 +670,7 @@ export default async function StudentCoursesPage() {
 
     capstoneByCourse.set(
       project.course_id,
-      existing
+      existing,
     );
   }
 
@@ -475,14 +688,14 @@ export default async function StudentCoursesPage() {
           certificate.id,
         certificate_number:
           certificate.certificate_number,
-      }
+      },
     );
   }
 
   const courseRows = enrollments
     .map((enrollment) => {
       const course = courseMap.get(
-        enrollment.course_id
+        enrollment.course_id,
       );
 
       if (!course) {
@@ -491,14 +704,14 @@ export default async function StudentCoursesPage() {
 
       const lessons =
         lessonsByCourse.get(
-          course.id
+          course.id,
         ) ?? [];
 
       const completedCount =
         lessons.filter((lesson) =>
           completedLessonIds.has(
-            lesson.lesson_id
-          )
+            lesson.lesson_id,
+          ),
         ).length;
 
       const totalLessons =
@@ -513,24 +726,24 @@ export default async function StudentCoursesPage() {
           ? Math.round(
               (completedCount /
                 totalLessons) *
-                100
+                100,
             )
           : Number(
               enrollment.progress_percent ??
-                0
+                0,
             );
 
       const nextLesson =
         lessons.find(
           (lesson) =>
             !completedLessonIds.has(
-              lesson.lesson_id
-            )
+              lesson.lesson_id,
+            ),
         ) ?? null;
 
       const assessment =
         assessmentByCourse.get(
-          course.id
+          course.id,
         ) ?? {
           status: "not_started" as const,
           attempt_id: null,
@@ -542,7 +755,7 @@ export default async function StudentCoursesPage() {
 
       const certificate =
         certificateByCourse.get(
-          course.id
+          course.id,
         ) ?? {
           status: "not_issued" as const,
           certificate_id: null,
@@ -551,7 +764,7 @@ export default async function StudentCoursesPage() {
 
       const capstone =
         capstoneByCourse.get(
-          course.id
+          course.id,
         ) ?? {
           has_capstone: false,
           approved_submission: false,
@@ -597,7 +810,7 @@ export default async function StudentCoursesPage() {
         allLessonsCompleted,
         lessonPercent: Math.min(
           100,
-          Math.max(0, lessonPercent)
+          Math.max(0, lessonPercent),
         ),
         nextLesson,
         assessment,
@@ -608,24 +821,26 @@ export default async function StudentCoursesPage() {
     })
     .filter(
       (
-        row
+        row,
       ): row is NonNullable<typeof row> =>
-        row !== null
+        row !== null,
     );
 
   const activeCourses =
     courseRows.filter(
       (row) =>
-        row.enrollment.enrollment_status ===
-        "active"
+        row.enrollment
+          .enrollment_status ===
+        "active",
     );
 
   const completedCourses =
     courseRows.filter(
       (row) =>
-        row.enrollment.enrollment_status ===
+        row.enrollment
+          .enrollment_status ===
           "completed" ||
-        row.allLessonsCompleted
+        row.allLessonsCompleted,
     );
 
   return (
@@ -634,10 +849,61 @@ export default async function StudentCoursesPage() {
         <h1>My Courses</h1>
 
         <p>
-          Track your lessons, resume learning, monitor
-          assessments, and manage your certificates.
+          Track your lessons, resume learning,
+          monitor assessments, and manage your
+          certificates.
         </p>
       </section>
+
+      {dataWarnings.length > 0 ? (
+        <section
+          className="card"
+          role="status"
+          style={{
+            marginBottom: 20,
+            borderColor: "#fbbf24",
+            background:
+              "#fffbeb",
+          }}
+        >
+          <strong>
+            Some learning information could not
+            be loaded
+          </strong>
+
+          <p
+            style={{
+              margin:
+                "6px 0 0",
+              color:
+                "var(--muted)",
+            }}
+          >
+            Your courses remain available.
+            Some secondary information may be
+            temporarily unavailable.
+          </p>
+        </section>
+      ) : null}
+
+      {usedEnrollmentFallback ? (
+        <section
+          className="card"
+          style={{
+            marginBottom: 20,
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              color: "var(--muted)",
+            }}
+          >
+            Your enrolled courses were loaded
+            using a compatibility fallback.
+          </p>
+        </section>
+      ) : null}
 
       <section className="stats-grid">
         <div className="card">
@@ -711,13 +977,13 @@ export default async function StudentCoursesPage() {
 
           const assessmentHref =
             `/student/assessment?course=${encodeURIComponent(
-              course.slug
+              course.slug,
             )}`;
 
           const resultHref =
             assessment.attempt_id
               ? `/student/assessment/results/${encodeURIComponent(
-                  assessment.attempt_id
+                  assessment.attempt_id,
                 )}`
               : null;
 
@@ -733,7 +999,7 @@ export default async function StudentCoursesPage() {
           const certificateHref =
             certificate.certificate_id
               ? `/student/certificates/${encodeURIComponent(
-                  certificate.certificate_id
+                  certificate.certificate_id,
                 )}`
               : null;
 
@@ -744,7 +1010,9 @@ export default async function StudentCoursesPage() {
             >
               <div className="course-card-header">
                 <div>
-                  <h2>{course.title}</h2>
+                  <h2>
+                    {course.title}
+                  </h2>
 
                   {course.short_description ? (
                     <p>
@@ -830,12 +1098,15 @@ export default async function StudentCoursesPage() {
                   style={{
                     display: "flex",
                     gap: 8,
-                    flexWrap: "wrap",
+                    flexWrap:
+                      "wrap",
                   }}
                 >
                   {resultHref ? (
                     <Link
-                      href={resultHref}
+                      href={
+                        resultHref
+                      }
                       className="button secondary"
                     >
                       View Latest Result
@@ -843,7 +1114,9 @@ export default async function StudentCoursesPage() {
                   ) : null}
 
                   <Link
-                    href={assessmentHref}
+                    href={
+                      assessmentHref
+                    }
                     className="button secondary"
                   >
                     {assessmentLabel}
@@ -853,7 +1126,8 @@ export default async function StudentCoursesPage() {
 
               <div
                 style={{
-                  padding: "16px 0",
+                  padding:
+                    "16px 0",
                   borderTop:
                     "1px solid var(--border)",
                   borderBottom:
@@ -862,13 +1136,15 @@ export default async function StudentCoursesPage() {
               >
                 <div
                   style={{
-                    display: "flex",
+                    display:
+                      "flex",
                     alignItems:
                       "flex-start",
                     justifyContent:
                       "space-between",
                     gap: 16,
-                    flexWrap: "wrap",
+                    flexWrap:
+                      "wrap",
                   }}
                 >
                   <div>
@@ -900,7 +1176,8 @@ export default async function StudentCoursesPage() {
                         style={{
                           display:
                             "block",
-                          marginTop: 5,
+                          marginTop:
+                            5,
                           color:
                             "var(--muted)",
                         }}
@@ -920,7 +1197,9 @@ export default async function StudentCoursesPage() {
                       }
                       className="button secondary"
                     >
-                      {certificateLabel}
+                      {
+                        certificateLabel
+                      }
                     </Link>
                   ) : certificateEligibility.eligible ? (
                     <CertificateIssueButton
@@ -936,8 +1215,10 @@ export default async function StudentCoursesPage() {
                 !certificateEligibility.eligible ? (
                   <div
                     style={{
-                      marginTop: 14,
-                      display: "grid",
+                      marginTop:
+                        14,
+                      display:
+                        "grid",
                       gap: 7,
                     }}
                   >
