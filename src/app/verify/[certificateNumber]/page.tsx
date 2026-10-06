@@ -55,9 +55,7 @@ export async function generateMetadata({
   const { certificateNumber } = await params;
 
   const normalizedCertificateNumber =
-    decodeURIComponent(
-      certificateNumber
-    ).trim();
+    decodeURIComponent(certificateNumber).trim();
 
   if (!normalizedCertificateNumber) {
     return {
@@ -143,9 +141,7 @@ export default async function CertificateVerificationPage({
   const { certificateNumber } = await params;
 
   const normalizedCertificateNumber =
-    decodeURIComponent(
-      certificateNumber
-    ).trim();
+    decodeURIComponent(certificateNumber).trim();
 
   if (!normalizedCertificateNumber) {
     notFound();
@@ -228,6 +224,18 @@ export default async function CertificateVerificationPage({
             marginBottom: 32,
           }}
         >
+          <img
+            src="/brand/ruffneck-logo.png"
+            alt="RuffNeck Entertainment"
+            style={{
+              display: "block",
+              width: 220,
+              maxWidth: "80%",
+              height: "auto",
+              margin: "0 auto 20px",
+            }}
+          />
+
           <div
             style={{
               fontSize: 12,
@@ -269,8 +277,10 @@ export default async function CertificateVerificationPage({
           style={{
             border: "1px solid var(--border)",
             borderRadius: 16,
-            background: "var(--surface, #ffffff)",
-            padding: "clamp(24px, 5vw, 48px)",
+            background:
+              "var(--surface, #ffffff)",
+            padding:
+              "clamp(24px, 5vw, 48px)",
             boxShadow:
               "0 12px 35px rgba(11, 30, 58, 0.08)",
           }}
@@ -290,7 +300,8 @@ export default async function CertificateVerificationPage({
                 fontWeight: 700,
                 letterSpacing: 2,
                 textTransform: "uppercase",
-                color: "var(--muted, #64748b)",
+                color:
+                  "var(--muted, #64748b)",
                 marginBottom: 12,
               }}
             >
@@ -383,9 +394,7 @@ export default async function CertificateVerificationPage({
                 Issued
               </div>
 
-              <strong>
-                {issuedDate}
-              </strong>
+              <strong>{issuedDate}</strong>
             </div>
 
             <div
