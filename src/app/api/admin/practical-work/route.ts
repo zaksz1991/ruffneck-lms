@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+const STORAGE_BUCKET =
+  "practical-work-evidence";
+
 type ReviewStatus =
   | "under_review"
   | "approved"
@@ -11,12 +14,16 @@ type SubmissionRow = {
   id: string;
   task_id: string;
   student_id: string;
-  submission_text: string;
+  submission_text: string | null;
   status: string;
   score: number | null;
   reviewer_feedback: string | null;
   submitted_at: string | null;
   reviewed_at: string | null;
+  evidence_file_path: string | null;
+  evidence_file_name: string | null;
+  evidence_file_type: string | null;
+  evidence_file_size: number | null;
   evidence_recorded_at: string | null;
   created_at: string;
   updated_at: string;
@@ -49,11 +56,6 @@ type ProfileRow = {
   email: string | null;
 };
 
-type SkillRow = {
-  id: string;
-  name: string;
-};
-
 function jsonError(
   message: string,
   status = 400
@@ -83,11 +85,12 @@ async function getReviewer() {
     };
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
+  const { data: profile } =
+    await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
 
   return {
     supabase,
@@ -96,8 +99,42 @@ async function getReviewer() {
   };
 }
 
+async function createEvidenceSignedUrl(
+  admin: ReturnType<
+    typeof createAdminClient
+  >,
+  filePath: string | null
+) {
+  if (!filePath) {
+    return null;
+  }
+
+  const {
+    data,
+    error,
+  } = await admin.storage
+    .from(STORAGE_BUCKET)
+    .createSignedUrl(
+      filePath,
+      60 * 60
+    );
+
+  if (error) {
+    console.error(
+      "Practical evidence signed URL error:",
+      error
+    );
+
+    return null;
+  }
+
+  return data?.signedUrl ?? null;
+}
+
 async function recordPracticalEvidence(
-  admin: ReturnType<typeof createAdminClient>,
+  admin: ReturnType<
+    typeof createAdminClient
+  >,
   submission: SubmissionRow,
   score: number
 ) {
@@ -151,75 +188,79 @@ async function recordPracticalEvidence(
         evidence_count
       `
     )
-    .eq("student_id", submission.student_id)
-    .eq("skill_id", task.skill_id)
+    .eq(
+      "student_id",
+      submission.student_id
+    )
+    .eq(
+      "skill_id",
+      task.skill_id
+    )
     .maybeSingle();
 
   if (profileLookupError) {
     throw profileLookupError;
   }
 
-  const previousConfidence = Math.max(
-    0,
-    Math.min(
-      100,
-      Number(
-        existingProfile?.confidence_score ??
-          existingProfile?.confidence ??
-          existingProfile?.score ??
-          0
+  const previousConfidence =
+    Math.max(
+      0,
+      Math.min(
+        100,
+        Number(
+          existingProfile?.confidence_score ??
+            existingProfile?.confidence ??
+            existingProfile?.score ??
+            0
+        )
       )
-    )
-  );
+    );
 
   const previousEvidenceCount =
     Math.max(
       0,
       Number(
-        existingProfile?.evidence_count ?? 0
+        existingProfile?.evidence_count ??
+          0
       )
     );
 
-  /*
-   * Practical evidence is deliberately given
-   * meaningful weight without completely replacing
-   * an existing assessment-based profile.
-   *
-   * First practical demonstration:
-   *   60% existing profile
-   *   40% practical performance
-   *
-   * Later demonstrations gradually strengthen
-   * the profile without allowing one submission
-   * to dominate it.
-   */
   const practicalWeight =
     previousEvidenceCount > 0
       ? 0.25
       : 0.4;
 
-  const newConfidence = Math.round(
-    previousConfidence *
-      (1 - practicalWeight) +
-      score * practicalWeight
-  );
+  const newConfidence =
+    Math.round(
+      previousConfidence *
+        (1 - practicalWeight) +
+        score * practicalWeight
+    );
 
   const normalizedConfidence =
     Math.max(
       0,
-      Math.min(100, newConfidence)
+      Math.min(
+        100,
+        newConfidence
+      )
     );
 
   let skillLevel = "beginner";
 
-  if (normalizedConfidence >= 80) {
+  if (
+    normalizedConfidence >= 80
+  ) {
     skillLevel = "advanced";
-  } else if (normalizedConfidence >= 60) {
+  } else if (
+    normalizedConfidence >= 60
+  ) {
     skillLevel = "intermediate";
   }
 
   const previousEvidence =
-    existingProfile?.evidence?.trim() || "";
+    existingProfile?.evidence?.trim() ||
+    "";
 
   const evidenceLine =
     `${new Date().toISOString().slice(0, 10)}: ` +
@@ -291,8 +332,7 @@ async function recordPracticalEvidence(
         score,
         max_score:
           task.max_score,
-        verified:
-          true,
+        verified: true,
       },
     });
 
@@ -313,7 +353,10 @@ async function recordPracticalEvidence(
       evidence_recorded_at:
         new Date().toISOString(),
     })
-    .eq("id", submission.id)
+    .eq(
+      "id",
+      submission.id
+    )
     .is(
       "evidence_recorded_at",
       null
@@ -322,6 +365,113 @@ async function recordPracticalEvidence(
   if (evidenceMarkerError) {
     throw evidenceMarkerError;
   }
+}
+
+async function buildSubmissionResponse(
+  admin: ReturnType<
+    typeof createAdminClient
+  >,
+  row: SubmissionRow,
+  profile: ProfileRow | undefined
+) {
+  const task =
+    row.course_practical_tasks;
+
+  const course =
+    task?.courses;
+
+  const evidenceFileUrl =
+    await createEvidenceSignedUrl(
+      admin,
+      row.evidence_file_path
+    );
+
+  return {
+    id: row.id,
+    task_id: row.task_id,
+    student_id: row.student_id,
+    submission_text:
+      row.submission_text,
+    status: row.status,
+    score: row.score,
+    reviewer_feedback:
+      row.reviewer_feedback,
+    submitted_at:
+      row.submitted_at,
+    reviewed_at:
+      row.reviewed_at,
+    evidence_file_path:
+      row.evidence_file_path,
+    evidence_file_name:
+      row.evidence_file_name,
+    evidence_file_type:
+      row.evidence_file_type,
+    evidence_file_size:
+      row.evidence_file_size,
+    evidence_file_url:
+      evidenceFileUrl,
+    evidence_recorded_at:
+      row.evidence_recorded_at,
+    created_at:
+      row.created_at,
+    updated_at:
+      row.updated_at,
+
+    student: {
+      id:
+        profile?.id ??
+        row.student_id,
+      display_name:
+        profile?.full_name ??
+        null,
+      email:
+        profile?.email ??
+        null,
+    },
+
+    course_practical_tasks:
+      task
+        ? {
+            id: task.id,
+            course_id:
+              task.course_id,
+            title:
+              task.title,
+            scenario:
+              task.scenario,
+            expected_outcome:
+              task.expected_outcome,
+            submission_type:
+              task.submission_type,
+            max_score:
+              Number(
+                task.max_score ??
+                  100
+              ),
+            sort_order:
+              Number(
+                task.sort_order ??
+                  0
+              ),
+            skill_id:
+              task.skill_id ??
+              null,
+            courses:
+              course
+                ? {
+                    id:
+                      course.id,
+                    title:
+                      course.title,
+                    slug:
+                      course.slug,
+                    instructor_id:
+                      course.instructor_id,
+                  }
+                : null,
+          }
+        : null,
+  };
 }
 
 export async function GET() {
@@ -369,6 +519,10 @@ export async function GET() {
           reviewer_feedback,
           submitted_at,
           reviewed_at,
+          evidence_file_path,
+          evidence_file_name,
+          evidence_file_type,
+          evidence_file_size,
           evidence_recorded_at,
           created_at,
           updated_at,
@@ -435,9 +589,12 @@ export async function GET() {
       ),
     ];
 
-    let profiles: ProfileRow[] = [];
+    let profiles: ProfileRow[] =
+      [];
 
-    if (studentIds.length > 0) {
+    if (
+      studentIds.length > 0
+    ) {
       const {
         data: profileData,
         error: profileError,
@@ -452,6 +609,11 @@ export async function GET() {
         );
 
       if (profileError) {
+        console.error(
+          "Practical learner profile query failed:",
+          profileError
+        );
+
         return jsonError(
           "Unable to load learner information.",
           500
@@ -469,116 +631,25 @@ export async function GET() {
         ProfileRow
       >();
 
-    profiles.forEach(
-      (profile) => {
-        profileMap.set(
-          profile.id,
-          profile
-        );
-      }
-    );
+    for (const profile of profiles) {
+      profileMap.set(
+        profile.id,
+        profile
+      );
+    }
 
     const submissions =
-      visibleRows.map(
-        (row) => {
-          const task =
-            row.course_practical_tasks;
-
-          const course =
-            task?.courses;
-
-          const profile =
-            profileMap.get(
-              row.student_id
-            );
-
-          return {
-            id: row.id,
-            task_id:
-              row.task_id,
-            student_id:
-              row.student_id,
-            submission_text:
-              row.submission_text,
-            status:
-              row.status,
-            score:
-              row.score,
-            reviewer_feedback:
-              row.reviewer_feedback,
-            submitted_at:
-              row.submitted_at,
-            reviewed_at:
-              row.reviewed_at,
-            evidence_recorded_at:
-              row.evidence_recorded_at,
-            created_at:
-              row.created_at,
-            updated_at:
-              row.updated_at,
-
-            student: {
-              id:
-                profile?.id ??
-                row.student_id,
-              full_name:
-                profile?.full_name ??
-                null,
-              email:
-                profile?.email ??
-                null,
-            },
-
-            task: {
-              id:
-                task?.id ??
-                row.task_id,
-              course_id:
-                task?.course_id ??
-                null,
-              title:
-                task?.title ??
-                "Practical task",
-              scenario:
-                task?.scenario ??
-                "",
-              expected_outcome:
-                task?.expected_outcome ??
-                "",
-              submission_type:
-                task?.submission_type ??
-                "text",
-              max_score:
-                Number(
-                  task?.max_score ??
-                    100
-                ),
-              sort_order:
-                Number(
-                  task?.sort_order ??
-                    0
-                ),
-              skill_id:
-                task?.skill_id ??
-                null,
-            },
-
-            course: {
-              id:
-                course?.id ??
-                null,
-              title:
-                course?.title ??
-                "Course",
-              slug:
-                course?.slug ??
-                "",
-              instructor_id:
-                course?.instructor_id ??
-                null,
-            },
-          };
-        }
+      await Promise.all(
+        visibleRows.map(
+          (row) =>
+            buildSubmissionResponse(
+              admin,
+              row,
+              profileMap.get(
+                row.student_id
+              )
+            )
+        )
       );
 
     return NextResponse.json({
@@ -698,6 +769,10 @@ export async function PATCH(
           reviewer_feedback,
           submitted_at,
           reviewed_at,
+          evidence_file_path,
+          evidence_file_name,
+          evidence_file_type,
+          evidence_file_size,
           evidence_recorded_at,
           created_at,
           updated_at,
@@ -724,6 +799,11 @@ export async function PATCH(
       .maybeSingle();
 
     if (submissionError) {
+      console.error(
+        "Practical submission lookup failed:",
+        submissionError
+      );
+
       return jsonError(
         "Unable to load the practical submission.",
         500
@@ -817,7 +897,8 @@ export async function PATCH(
     }
 
     if (
-      status === "revision_required" &&
+      status ===
+        "revision_required" &&
       !feedback
     ) {
       return jsonError(
@@ -857,6 +938,10 @@ export async function PATCH(
           reviewer_feedback,
           submitted_at,
           reviewed_at,
+          evidence_file_path,
+          evidence_file_name,
+          evidence_file_type,
+          evidence_file_size,
           evidence_recorded_at,
           created_at,
           updated_at,
@@ -896,11 +981,6 @@ export async function PATCH(
     const updatedRow =
       updatedSubmission as unknown as SubmissionRow;
 
-    /*
-     * Record verified evidence only after
-     * an approval. The evidence marker makes
-     * this operation idempotent.
-     */
     if (
       status === "approved" &&
       score !== null &&
@@ -917,14 +997,14 @@ export async function PATCH(
           "Practical evidence recording failed:",
           e
         );
-
-        /*
-         * Do not undo the human review.
-         * The review remains approved and the
-         * evidence can be repaired separately.
-         */
       }
     }
+
+    const evidenceFileUrl =
+      await createEvidenceSignedUrl(
+        admin,
+        updatedRow.evidence_file_path
+      );
 
     return NextResponse.json({
       success: true,
@@ -940,6 +1020,14 @@ export async function PATCH(
           updatedRow.reviewer_feedback,
         reviewed_at:
           updatedRow.reviewed_at,
+        evidence_file_name:
+          updatedRow.evidence_file_name,
+        evidence_file_type:
+          updatedRow.evidence_file_type,
+        evidence_file_size:
+          updatedRow.evidence_file_size,
+        evidence_file_url:
+          evidenceFileUrl,
         evidence_recorded_at:
           updatedRow.evidence_recorded_at,
       },
