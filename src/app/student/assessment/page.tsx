@@ -187,18 +187,44 @@ export default async function AssessmentPage({
       <main className="rn-assessment-hub">
         <div className="container">
           <section className="rn-assessment-hub-header">
-            <span className="rn-eyebrow">
-              LEARNING ASSESSMENTS
-            </span>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: 16,
+                flexWrap: "wrap",
+              }}
+            >
+              <div
+                style={{
+                  flex: 1,
+                  minWidth: 260,
+                }}
+              >
+                <span className="rn-eyebrow">
+                  LEARNING ASSESSMENTS
+                </span>
 
-            <h1>Choose your course assessment</h1>
+                <h1>
+                  Choose your course assessment
+                </h1>
 
-            <p>
-              Assess your knowledge, identify skill
-              strengths and find areas to develop.
-              Each assessment is aligned with the
-              course curriculum.
-            </p>
+                <p>
+                  Assess your knowledge, identify
+                  skill strengths and find areas to
+                  develop. Each assessment is aligned
+                  with the course curriculum.
+                </p>
+              </div>
+
+              <Link
+                href="/student/assessment/results"
+                className="rn-button rn-button-secondary"
+              >
+                Assessment Results
+              </Link>
+            </div>
           </section>
 
           <section className="rn-assessment-course-grid">
@@ -267,6 +293,13 @@ export default async function AssessmentPage({
               className="rn-button rn-button-secondary"
             >
               View Skills
+            </Link>
+
+            <Link
+              href="/student/assessment/results"
+              className="rn-button rn-button-secondary"
+            >
+              Assessment Results
             </Link>
           </div>
         </div>
@@ -370,12 +403,28 @@ export default async function AssessmentPage({
               been populated.
             </p>
 
-            <Link
-              href={`/courses/${selectedCourse.slug}`}
-              className="rn-button rn-button-primary"
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 10,
+                marginTop: 18,
+              }}
             >
-              View Course
-            </Link>
+              <Link
+                href={`/courses/${selectedCourse.slug}`}
+                className="rn-button rn-button-primary"
+              >
+                View Course
+              </Link>
+
+              <Link
+                href="/student/assessment/results"
+                className="rn-button rn-button-secondary"
+              >
+                Assessment Results
+              </Link>
+            </div>
           </section>
         </div>
       </main>
@@ -391,12 +440,30 @@ export default async function AssessmentPage({
     <main className="rn-assessment-shell">
       <div className="container">
         <div className="rn-assessment-course-header">
-          <Link
-            href="/student/assessment"
-            className="rn-learning-back"
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+              marginBottom: 20,
+            }}
           >
-            ← All assessments
-          </Link>
+            <Link
+              href="/student/assessment"
+              className="rn-learning-back"
+            >
+              ← All assessments
+            </Link>
+
+            <Link
+              href="/student/assessment/results"
+              className="rn-button rn-button-secondary"
+            >
+              Assessment Results
+            </Link>
+          </div>
 
           <div className="rn-assessment-course-heading">
             <span className="rn-eyebrow">
