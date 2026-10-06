@@ -17392,8 +17392,8 @@ hr {
 
 .site-header .brand-logo {
   display: block;
-  width: 160px;
-  height: 60px;
+  width: 190px;
+  height: 70px;
   object-fit: contain;
   object-position: center;
 }
@@ -17563,7 +17563,7 @@ hr {
   }
 
   .site-header .brand-logo {
-    width: 150px;
+    width: 130px;
     height: 100px;
   }
 
