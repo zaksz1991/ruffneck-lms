@@ -4,10 +4,14 @@ import { QRCodeSVG } from "qrcode.react";
 
 type VerificationQrProps = {
   value: string;
+  title?: string;
+  subtitle?: string;
 };
 
 export default function VerificationQr({
   value,
+  title = "Scan to verify",
+  subtitle = "Scan this code to open the official RuffNeck Learn verification record.",
 }: VerificationQrProps) {
   return (
     <div
@@ -30,20 +34,17 @@ export default function VerificationQr({
         includeMargin
       />
 
-      <strong>
-        Scan to verify
-      </strong>
+      <strong>{title}</strong>
 
       <span
         className="muted"
         style={{
           fontSize: "0.8rem",
           textAlign: "center",
-          maxWidth: 180,
+          maxWidth: 220,
         }}
       >
-        Scan this code to open the public
-        RuffNeck Learn Skill Passport.
+        {subtitle}
       </span>
     </div>
   );

@@ -1,14 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import VerificationQr from "../../VerificationQr";
-import PrintVerificationButton from "../../PrintVerificationButton";
-
-type PageProps = {
-  params: Promise<{
-    code: string;
-  }>;
-};
+import VerificationQr from "../../[code]/VerificationQr";
+import PrintVerificationButton from "../../[code]/PrintVerificationButton";
 
 type VerificationRecord = {
   id: string;
@@ -16,60 +10,51 @@ type VerificationRecord = {
   verification_code: string;
   is_active: boolean;
   expires_at: string | null;
-  created_at: string;
 };
 
-type CertificateRecord = {
+type Certificate = {
   id: string;
   certificate_number: string;
-  student_id: string;
-  course_id: string;
+  holder_name: string;
   course_title: string;
   issued_at: string;
-  is_revoked: boolean;
   assessment_score: number | null;
   capstone_score: number | null;
+  is_revoked: boolean;
+  revoked_reason: string | null;
+  student_id: string;
 };
 
-type ProfileRecord = {
-  id: string;
+type Profile = {
   full_name: string | null;
   display_name: string | null;
-};
-
-type SkillProfile = {
-  skill_id: string;
-  skill_level: string | null;
-  confidence_score: number | null;
-  evidence_count: number | null;
 };
 
 type Skill = {
   id: string;
   name: string;
-  category: string | null;
+  description: string | null;
 };
 
-type PracticalTask = {
+type SkillProfile = {
+  skill_id: string;
+  confidence_score: number | null;
+  verification_status: string | null;
+};
+
+type PracticalEvidence = {
   id: string;
   title: string;
-  skill_id: string | null;
-  course_id: string;
-};
-
-type PracticalSubmission = {
-  id: string;
-  task_id: string;
   score: number | null;
   reviewed_at: string | null;
-  evidence_file_name: string | null;
-  evidence_recorded_at: string | null;
+  course_id: string | null;
 };
 
-type CertificateVerificationPageProps =
-  PageProps;
+function formatDate(value: string | null) {
+  if (!value) {
+    return "—";
+  }
 
-function formatDate(value: string) {
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
@@ -82,31 +67,29 @@ function formatDate(value: string) {
 }
 
 function formatScore(
-  value: number | null
+  value: number | null,
+  suffix = "%",
 ) {
-  if (value === null) {
-    return "—";
-  }
-
-  return `${Math.round(value)}%`;
+  return value === null
+    ? "—"
+    : `${value}${suffix}`;
 }
 
-function levelLabel(
-  value: string | null
-) {
-  if (!value) {
-    return "Developing";
-  }
-
+function getPublicName(profile: Profile | null) {
   return (
-    value.charAt(0).toUpperCase() +
-    value.slice(1)
+    profile?.full_name?.trim() ||
+    profile?.display_name?.trim() ||
+    "RuffNeck Learn Student"
   );
 }
 
 export default async function CertificateVerificationPage({
   params,
-}: CertificateVerificationPageProps) {
+}: {
+  params: Promise<{
+    code: string;
+  }>;
+}) {
   const { code } = await params;
 
   const verificationCode =
@@ -116,790 +99,777 @@ export default async function CertificateVerificationPage({
     notFound();
   }
 
-  const adminClient =
-    createAdminClient();
+  const supabase = createAdminClient();
 
   const {
-    data: verification,
+    data: verificationData,
     error: verificationError,
-  } =
-    await adminClient
-      .from("certificate_verifications")
-      .select(
-        "id,certificate_id,verification_code,is_active,expires_at,created_at"
-      )
-      .eq(
+  } = await supabase
+    .from("certificate_verifications")
+    .select(
+      [
+        "id",
+        "certificate_id",
         "verification_code",
-        verificationCode
-      )
-      .maybeSingle();
+        "is_active",
+        "expires_at",
+      ].join(", "),
+    )
+    .eq(
+      "verification_code",
+      verificationCode,
+    )
+    .maybeSingle();
 
   if (verificationError) {
     console.error(
       "Certificate verification lookup failed:",
-      verificationError
+      verificationError,
     );
 
-    notFound();
+    throw new Error(
+      "Unable to verify certificate.",
+    );
   }
 
-  if (!verification) {
-    notFound();
+  if (!verificationData) {
+    return (
+      <main className="rn-page">
+        <div className="container">
+          <div className="card">
+            <span className="rn-eyebrow">
+              CERTIFICATE VERIFICATION
+            </span>
+
+            <h1>
+              Certificate Not Found
+            </h1>
+
+            <p className="muted">
+              The verification code does not
+              match a RuffNeck Learn certificate
+              verification record.
+            </p>
+
+            <Link
+              href="/courses"
+              className="rn-button rn-button-primary"
+            >
+              Visit RuffNeck Learn
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
   }
 
-  const verificationRecord =
-    verification as VerificationRecord;
+  const verification =
+    verificationData as VerificationRecord;
 
   const {
-    data: certificate,
+    data: certificateData,
     error: certificateError,
-  } = await adminClient
+  } = await supabase
     .from("course_certificates")
     .select(
       [
         "id",
         "certificate_number",
-        "student_id",
-        "course_id",
+        "holder_name",
         "course_title",
         "issued_at",
-        "is_revoked",
         "assessment_score",
         "capstone_score",
-      ].join(", ")
+        "is_revoked",
+        "revoked_reason",
+        "student_id",
+      ].join(", "),
     )
     .eq(
       "id",
-      verificationRecord.certificate_id
+      verification.certificate_id,
     )
     .maybeSingle();
 
   if (certificateError) {
     console.error(
-      "Public certificate lookup failed:",
-      certificateError
+      "Certificate record lookup failed:",
+      certificateError,
     );
 
+    throw new Error(
+      "Unable to load certificate.",
+    );
+  }
+
+  if (!certificateData) {
     notFound();
   }
 
-  if (!certificate) {
-    notFound();
-  }
+  const certificate =
+    certificateData as Certificate;
 
-  const certificateRecord =
-    certificate as CertificateRecord;
-
-  const isExpired =
-    verificationRecord.expires_at !==
-      null &&
-    new Date(
-      verificationRecord.expires_at
-    ).getTime() <= Date.now();
+  const expired =
+    Boolean(
+      verification.expires_at &&
+        new Date(
+          verification.expires_at,
+        ).getTime() <= Date.now(),
+    );
 
   const isValid =
-    verificationRecord.is_active &&
-    !isExpired &&
-    !certificateRecord.is_revoked;
+    verification.is_active &&
+    !expired &&
+    !certificate.is_revoked;
 
-  const [
-    profileResult,
-    skillProfilesResult,
-    submissionsResult,
-  ] = await Promise.all([
-    adminClient
-      .from("profiles")
-      .select(
-        "id,full_name,display_name"
-      )
-      .eq(
-        "id",
-        certificateRecord.student_id
-      )
-      .maybeSingle(),
-
-    adminClient
-      .from("learner_skill_profiles")
-      .select(
-        "skill_id,skill_level,confidence_score,evidence_count"
-      )
-      .eq(
-        "learner_id",
-        certificateRecord.student_id
-      )
-      .order("confidence_score", {
-        ascending: false,
-        nullsFirst: false,
-      }),
-
-    adminClient
-      .from(
-        "student_practical_task_submissions"
-      )
-      .select(
-        "id,task_id,score,reviewed_at,evidence_file_name,evidence_recorded_at"
-      )
-      .eq(
-        "student_id",
-        certificateRecord.student_id
-      )
-      .eq("status", "approved")
-      .not(
-        "evidence_recorded_at",
-        "is",
-        null
-      )
-      .order("reviewed_at", {
-        ascending: false,
-      }),
-  ]);
+  const {
+    data: profileData,
+  } = await supabase
+    .from("profiles")
+    .select(
+      "full_name,display_name",
+    )
+    .eq(
+      "id",
+      certificate.student_id,
+    )
+    .maybeSingle();
 
   const profile =
-    (profileResult.data ??
-      null) as ProfileRecord | null;
+    (profileData as Profile | null) ??
+    null;
+
+  const publicName =
+    certificate.holder_name?.trim() ||
+    getPublicName(profile);
+
+  const {
+    data: skillProfileData,
+  } = await supabase
+    .from("learner_skill_profiles")
+    .select(
+      "skill_id,confidence_score,verification_status",
+    )
+    .eq(
+      "student_id",
+      certificate.student_id,
+    );
 
   const skillProfiles =
-    (skillProfilesResult.data ??
-      []) as SkillProfile[];
+    (skillProfileData as SkillProfile[] | null) ??
+    [];
 
-  const submissions =
-    (submissionsResult.data ??
-      []) as PracticalSubmission[];
+  const skillIds = skillProfiles
+    .map((item) => item.skill_id)
+    .filter(Boolean);
 
-  const skillIds = Array.from(
-    new Set(
-      skillProfiles.map(
-        (item) => item.skill_id
+  let skills: Skill[] = [];
+
+  if (skillIds.length > 0) {
+    const {
+      data: skillsData,
+    } = await supabase
+      .from("learning_skills")
+      .select(
+        "id,name,description",
       )
-    )
-  );
+      .in("id", skillIds);
 
-  const taskIds = Array.from(
-    new Set(
-      submissions.map(
-        (item) => item.task_id
-      )
-    )
-  );
-
-  const [
-    skillsResult,
-    tasksResult,
-  ] = await Promise.all([
-    skillIds.length > 0
-      ? adminClient
-          .from("learning_skills")
-          .select(
-            "id,name,category"
-          )
-          .in("id", skillIds)
-      : Promise.resolve({
-          data: [],
-          error: null,
-        }),
-
-    taskIds.length > 0
-      ? adminClient
-          .from(
-            "course_practical_tasks"
-          )
-          .select(
-            "id,title,skill_id,course_id"
-          )
-          .in("id", taskIds)
-      : Promise.resolve({
-          data: [],
-          error: null,
-        }),
-  ]);
-
-  const skills =
-    (skillsResult.data ??
-      []) as Skill[];
-
-  const tasks =
-    (tasksResult.data ??
-      []) as PracticalTask[];
+    skills =
+      (skillsData as Skill[] | null) ??
+      [];
+  }
 
   const skillMap = new Map(
     skills.map((skill) => [
       skill.id,
       skill,
-    ])
+    ]),
   );
 
-  const taskMap = new Map(
-    tasks.map((task) => [
-      task.id,
-      task,
-    ])
-  );
+  const verifiedSkills =
+    skillProfiles
+      .filter(
+        (profile) =>
+          profile.verification_status ===
+            "verified" ||
+          profile.verification_status ===
+            "strong" ||
+          profile.confidence_score !==
+            null &&
+            profile.confidence_score >=
+              80,
+      )
+      .map((profile) => ({
+        ...profile,
+        skill:
+          skillMap.get(
+            profile.skill_id,
+          ) ?? null,
+      }))
+      .filter((item) => item.skill);
 
-  const verificationUrl =
-    `${
-      process.env.NEXT_PUBLIC_SITE_URL ??
-      "https://ruffneck-lms.vercel.app"
-    }/verify/certificate/` +
-    encodeURIComponent(
-      verificationRecord.verification_code
+  const {
+    data: evidenceData,
+  } = await supabase
+    .from(
+      "student_practical_task_submissions",
+    )
+    .select(
+      "id,score,reviewed_at,task_id",
+    )
+    .eq(
+      "student_id",
+      certificate.student_id,
+    )
+    .eq(
+      "status",
+      "approved",
+    )
+    .not(
+      "reviewed_at",
+      "is",
+      null,
+    )
+    .order(
+      "reviewed_at",
+      {
+        ascending: false,
+      },
+    )
+    .limit(10);
+
+  const evidenceRows =
+    (evidenceData as Array<{
+      id: string;
+      score: number | null;
+      reviewed_at: string | null;
+      task_id: string;
+    }> | null) ?? [];
+
+  const taskIds = evidenceRows
+    .map((item) => item.task_id)
+    .filter(Boolean);
+
+  let practicalEvidence:
+    PracticalEvidence[] = [];
+
+  if (taskIds.length > 0) {
+    const {
+      data: tasksData,
+    } = await supabase
+      .from(
+        "course_practical_tasks",
+      )
+      .select(
+        "id,title,course_id",
+      )
+      .in("id", taskIds);
+
+    const taskMap = new Map(
+      (
+        tasksData as Array<{
+          id: string;
+          title: string;
+          course_id: string | null;
+        }> | null
+      )?.map((task) => [
+        task.id,
+        task,
+      ]) ?? [],
     );
 
-  const learnerName =
-    profile?.display_name?.trim() ||
-    profile?.full_name?.trim() ||
-    "RuffNeck Learn Learner";
+    practicalEvidence =
+      evidenceRows.map((evidence) => {
+        const task =
+          taskMap.get(
+            evidence.task_id,
+          );
+
+        return {
+          id: evidence.id,
+          title:
+            task?.title ??
+            "Approved practical work",
+          score: evidence.score,
+          reviewed_at:
+            evidence.reviewed_at,
+          course_id:
+            task?.course_id ?? null,
+        };
+      });
+  }
+
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "https://ruffneck-lms.vercel.app";
+
+  const verificationUrl = `${siteUrl.replace(
+    /\/$/,
+    "",
+  )}/verify/certificate/${encodeURIComponent(
+    verification.verification_code,
+  )}`;
 
   return (
-    <main className="page-shell">
+    <main className="rn-page">
       <div
-        className="rn-verification-print-area"
-        style={{
-          maxWidth: 1000,
-          margin: "0 auto",
-        }}
+        className="container rn-verification-print-area"
       >
-        <section className="page-header">
-          <div>
-            <p className="eyebrow">
-              RUFFNECK LEARN
-            </p>
-
-            <h1>
-              Certificate Verification
-            </h1>
-
-            <p className="muted">
-              Independent verification of a
-              RuffNeck Learn professional learning
-              credential.
-            </p>
-          </div>
-
-          <div
-            className="rn-verification-actions"
-            style={{
-              display: "flex",
-              gap: "0.75rem",
-              flexWrap: "wrap",
-            }}
-          >
-            <PrintVerificationButton />
-
-            <Link
-              href="/courses"
-              className="rn-button"
-            >
-              RuffNeck Learn Courses
-            </Link>
-          </div>
-        </section>
-
-        <section
-          className="card"
+        <div
+          className="rn-verification-actions"
           style={{
-            marginBottom: "1.5rem",
+            display: "flex",
+            justifyContent:
+              "space-between",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+            marginBottom: 20,
           }}
         >
+          <Link
+            href="/courses"
+            className="rn-learning-back"
+          >
+            ← RuffNeck Learn
+          </Link>
+
+          <PrintVerificationButton />
+        </div>
+
+        <article className="card">
           <div
             style={{
               display: "flex",
               justifyContent:
                 "space-between",
               alignItems: "flex-start",
-              gap: "1.5rem",
+              gap: 24,
               flexWrap: "wrap",
             }}
           >
             <div>
-              <p className="eyebrow">
-                VERIFICATION STATUS
-              </p>
+              <img
+                src="/brand/ruffneck-logo.png"
+                alt="RuffNeck Entertainment"
+                style={{
+                  width: 220,
+                  maxWidth: "100%",
+                  height: "auto",
+                }}
+              />
 
-              <h2>
-                {isValid
-                  ? "Certificate Verified"
-                  : "Certificate Not Valid"}
-              </h2>
+              <span
+                className="rn-eyebrow"
+                style={{
+                  display: "block",
+                  marginTop: 20,
+                }}
+              >
+                CERTIFICATE VERIFICATION
+              </span>
 
-              <p className="muted">
-                {isValid
-                  ? "This certificate record matches an issued RuffNeck Learn credential."
-                  : certificateRecord.is_revoked
-                    ? "This certificate has been revoked."
-                    : isExpired
-                      ? "This certificate verification has expired."
-                      : "Public verification for this certificate is currently disabled."}
-              </p>
+              <h1>
+                RuffNeck Learn Certificate
+              </h1>
             </div>
 
-            <span
-              className={
-                isValid
-                  ? "rn-badge rn-badge-success"
-                  : "rn-badge"
-              }
+            <div
+              style={{
+                minWidth: 170,
+                padding: 16,
+                borderRadius: 12,
+                textAlign: "center",
+                border:
+                  "1px solid #e2e8f0",
+                background:
+                  isValid
+                    ? "#f0fdf4"
+                    : "#fef2f2",
+              }}
             >
-              {isValid
-                ? "VALID"
-                : "NOT VALID"}
-            </span>
+              <strong
+                style={{
+                  display: "block",
+                  fontSize: 18,
+                  color:
+                    isValid
+                      ? "#166534"
+                      : "#991b1b",
+                }}
+              >
+                {isValid
+                  ? "VERIFIED"
+                  : "NOT VALID"}
+              </strong>
+
+              <span
+                style={{
+                  display: "block",
+                  marginTop: 6,
+                  fontSize: 13,
+                  color: "#64748b",
+                }}
+              >
+                {certificate.is_revoked
+                  ? "Certificate revoked"
+                  : expired
+                    ? "Verification expired"
+                    : !verification.is_active
+                      ? "Verification inactive"
+                      : "Official record"}
+              </span>
+            </div>
           </div>
-        </section>
-
-        <section
-          className="card"
-          style={{
-            marginBottom: "1.5rem",
-          }}
-        >
-          <p className="eyebrow">
-            CERTIFICATE RECORD
-          </p>
-
-          <h2>
-            {certificateRecord.course_title}
-          </h2>
 
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns:
-                "repeat(auto-fit, minmax(210px, 1fr))",
-              gap: "1rem",
-              marginTop: "1.25rem",
+              marginTop: 32,
+              paddingTop: 28,
+              borderTop:
+                "1px solid #e2e8f0",
+            }}
+          >
+            <p
+              className="muted"
+              style={{
+                marginBottom: 8,
+              }}
+            >
+              This certificate belongs to
+            </p>
+
+            <h2
+              style={{
+                marginTop: 0,
+              }}
+            >
+              {publicName}
+            </h2>
+
+            <p
+              style={{
+                fontSize: 18,
+                lineHeight: 1.6,
+              }}
+            >
+              {certificate.course_title}
+            </p>
+          </div>
+
+          <div
+            className="rn-certificate-details"
+            style={{
+              marginTop: 24,
             }}
           >
             <div>
+              <span>
+                Certificate Number
+              </span>
               <strong>
-                Certificate holder
+                {
+                  certificate.certificate_number
+                }
               </strong>
-
-              <p>{learnerName}</p>
             </div>
 
             <div>
+              <span>
+                Date Issued
+              </span>
               <strong>
-                Certificate number
+                {formatDate(
+                  certificate.issued_at,
+                )}
               </strong>
+            </div>
+
+            <div>
+              <span>
+                Assessment
+              </span>
+              <strong>
+                {formatScore(
+                  certificate.assessment_score,
+                )}
+              </strong>
+            </div>
+
+            <div>
+              <span>
+                Capstone
+              </span>
+              <strong>
+                {formatScore(
+                  certificate.capstone_score,
+                  "/100",
+                )}
+              </strong>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent:
+                "center",
+              alignItems: "center",
+              gap: 32,
+              flexWrap: "wrap",
+              marginTop: 32,
+              padding: 24,
+              border:
+                "1px solid #e2e8f0",
+              borderRadius: 12,
+              background:
+                "#f8fafc",
+            }}
+          >
+            <VerificationQr
+              value={verificationUrl}
+              title="Scan to verify certificate"
+              subtitle="Scan this code to open the official RuffNeck Learn certificate verification record."
+            />
+
+            <div
+              style={{
+                flex:
+                  "1 1 300px",
+                minWidth: 250,
+              }}
+            >
+              <span className="rn-eyebrow">
+                VERIFICATION CODE
+              </span>
+
+              <h3
+                style={{
+                  margin:
+                    "8px 0 12px",
+                }}
+              >
+                {
+                  verification.verification_code
+                }
+              </h3>
 
               <p
+                className="muted"
                 style={{
+                  lineHeight: 1.6,
                   overflowWrap:
                     "anywhere",
                 }}
               >
-                {
-                  certificateRecord.certificate_number
-                }
+                {verificationUrl}
               </p>
-            </div>
 
-            <div>
-              <strong>
-                Course
-              </strong>
-
-              <p>
-                {
-                  certificateRecord.course_title
-                }
-              </p>
-            </div>
-
-            <div>
-              <strong>
-                Issue date
-              </strong>
-
-              <p>
-                {formatDate(
-                  certificateRecord.issued_at
-                )}
-              </p>
-            </div>
-
-            <div>
-              <strong>
-                Assessment
-              </strong>
-
-              <p>
-                {formatScore(
-                  certificateRecord.assessment_score
-                )}
-              </p>
-            </div>
-
-            <div>
-              <strong>
-                Capstone
-              </strong>
-
-              <p>
-                {certificateRecord.capstone_score !==
-                null
-                  ? `${Math.round(
-                      certificateRecord.capstone_score
-                    )}/100`
-                  : "—"}
+              <p
+                style={{
+                  marginTop: 12,
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  color: "#64748b",
+                }}
+              >
+                Verification is based on
+                the official RuffNeck Learn
+                certificate record.
               </p>
             </div>
           </div>
-        </section>
 
-        {isValid && (
-          <>
-            <section
-              className="card"
+          {certificate.is_revoked ? (
+            <div
               style={{
-                marginBottom: "1.5rem",
+                marginTop: 24,
+                padding: 16,
+                borderRadius: 10,
+                background: "#fef2f2",
+                border:
+                  "1px solid #fecaca",
+                color: "#991b1b",
               }}
             >
+              <strong>
+                Certificate revoked
+              </strong>
+
+              {certificate.revoked_reason ? (
+                <p
+                  style={{
+                    marginBottom: 0,
+                  }}
+                >
+                  {
+                    certificate.revoked_reason
+                  }
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {verifiedSkills.length > 0 ? (
+            <section
+              style={{
+                marginTop: 32,
+              }}
+            >
+              <span className="rn-eyebrow">
+                VERIFIED SKILLS
+              </span>
+
+              <h2>
+                Demonstrated Skills
+              </h2>
+
               <div
                 style={{
-                  display: "flex",
-                  justifyContent:
-                    "space-between",
-                  alignItems: "flex-start",
-                  gap: "1.5rem",
-                  flexWrap: "wrap",
+                  display: "grid",
+                  gap: 12,
                 }}
               >
-                <div>
-                  <p className="eyebrow">
-                    VERIFICATION CODE
-                  </p>
+                {verifiedSkills.map(
+                  ({
+                    skill,
+                    confidence_score,
+                  }) => (
+                    <div
+                      key={skill!.id}
+                      style={{
+                        padding: 16,
+                        border:
+                          "1px solid #e2e8f0",
+                        borderRadius: 10,
+                      }}
+                    >
+                      <strong>
+                        {skill!.name}
+                      </strong>
 
-                  <h2
-                    style={{
-                      overflowWrap:
-                        "anywhere",
-                    }}
-                  >
-                    {
-                      verificationRecord.verification_code
-                    }
-                  </h2>
+                      {skill!
+                        .description ? (
+                        <p
+                          className="muted"
+                          style={{
+                            marginBottom: 8,
+                          }}
+                        >
+                          {
+                            skill!
+                              .description
+                          }
+                        </p>
+                      ) : null}
 
-                  <p className="muted">
-                    Use this code together with
-                    the public verification page
-                    to confirm this credential.
-                  </p>
-                </div>
-
-                <VerificationQr
-                  value={verificationUrl}
-                />
+                      {confidence_score !==
+                      null ? (
+                        <small>
+                          Confidence:{" "}
+                          {
+                            confidence_score
+                          }
+                          %
+                        </small>
+                      ) : null}
+                    </div>
+                  ),
+                )}
               </div>
             </section>
+          ) : null}
 
+          {practicalEvidence.length > 0 ? (
             <section
-              className="card"
               style={{
-                marginBottom: "1.5rem",
+                marginTop: 32,
               }}
             >
-              <p className="eyebrow">
-                VERIFIED SKILLS
-              </p>
-
-              <h2>
-                Demonstrated capabilities
-              </h2>
-
-              {skillProfiles.length ===
-              0 ? (
-                <p className="muted">
-                  No additional skill evidence is
-                  attached to this certificate.
-                </p>
-              ) : (
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "repeat(auto-fit, minmax(240px, 1fr))",
-                    gap: "1rem",
-                    marginTop: "1rem",
-                  }}
-                >
-                  {skillProfiles.map(
-                    (profile) => {
-                      const skill =
-                        skillMap.get(
-                          profile.skill_id
-                        );
-
-                      if (!skill) {
-                        return null;
-                      }
-
-                      return (
-                        <article
-                          key={
-                            profile.skill_id
-                          }
-                          className="card"
-                          style={{
-                            margin: 0,
-                          }}
-                        >
-                          <p className="eyebrow">
-                            {skill.category ??
-                              "Professional Skill"}
-                          </p>
-
-                          <h3>
-                            {skill.name}
-                          </h3>
-
-                          <div
-                            style={{
-                              display:
-                                "grid",
-                              gridTemplateColumns:
-                                "repeat(2, 1fr)",
-                              gap: "0.75rem",
-                              marginTop:
-                                "0.75rem",
-                            }}
-                          >
-                            <div>
-                              <strong>
-                                Level
-                              </strong>
-
-                              <p>
-                                {levelLabel(
-                                  profile.skill_level
-                                )}
-                              </p>
-                            </div>
-
-                            <div>
-                              <strong>
-                                Confidence
-                              </strong>
-
-                              <p>
-                                {formatScore(
-                                  profile.confidence_score
-                                )}
-                              </p>
-                            </div>
-
-                            <div>
-                              <strong>
-                                Evidence
-                              </strong>
-
-                              <p>
-                                {profile.evidence_count ??
-                                  0}
-                              </p>
-                            </div>
-                          </div>
-                        </article>
-                      );
-                    }
-                  )}
-                </div>
-              )}
-            </section>
-
-            <section
-              className="card"
-              style={{
-                marginBottom: "1.5rem",
-              }}
-            >
-              <p className="eyebrow">
+              <span className="rn-eyebrow">
                 PRACTICAL EVIDENCE
-              </p>
+              </span>
 
               <h2>
-                Approved practical work
+                Approved Practical Work
               </h2>
 
-              {submissions.length ===
-              0 ? (
-                <p className="muted">
-                  No public practical evidence is
-                  attached to this credential.
-                </p>
-              ) : (
-                <div
-                  style={{
-                    display: "grid",
-                    gap: "0.75rem",
-                    marginTop: "1rem",
-                  }}
-                >
-                  {submissions.map(
-                    (submission) => {
-                      const task =
-                        taskMap.get(
-                          submission.task_id
-                        );
+              <div
+                style={{
+                  display: "grid",
+                  gap: 12,
+                }}
+              >
+                {practicalEvidence.map(
+                  (evidence) => (
+                    <div
+                      key={evidence.id}
+                      style={{
+                        padding: 16,
+                        border:
+                          "1px solid #e2e8f0",
+                        borderRadius: 10,
+                      }}
+                    >
+                      <strong>
+                        {evidence.title}
+                      </strong>
 
-                      if (!task) {
-                        return null;
-                      }
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 16,
+                          flexWrap:
+                            "wrap",
+                          marginTop: 8,
+                          fontSize: 13,
+                          color:
+                            "#64748b",
+                        }}
+                      >
+                        <span>
+                          Score:{" "}
+                          {evidence.score ??
+                            "—"}
+                        </span>
 
-                      const skill =
-                        task.skill_id
-                          ? skillMap.get(
-                              task.skill_id
-                            )
-                          : null;
-
-                      return (
-                        <article
-                          key={
-                            submission.id
-                          }
-                          style={{
-                            padding:
-                              "1rem",
-                            border:
-                              "1px solid var(--border, #e2e8f0)",
-                            borderRadius: 10,
-                          }}
-                        >
-                          <div
-                            style={{
-                              display:
-                                "flex",
-                              justifyContent:
-                                "space-between",
-                              gap: "1rem",
-                              flexWrap:
-                                "wrap",
-                            }}
-                          >
-                            <div>
-                              <strong>
-                                {
-                                  task.title
-                                }
-                              </strong>
-
-                              {skill && (
-                                <p
-                                  className="muted"
-                                  style={{
-                                    margin:
-                                      "0.25rem 0 0",
-                                  }}
-                                >
-                                  {
-                                    skill.name
-                                  }
-                                </p>
-                              )}
-                            </div>
-
-                            <span className="rn-badge rn-badge-success">
-                              Approved
-                            </span>
-                          </div>
-
-                          <div
-                            style={{
-                              display:
-                                "flex",
-                              gap: "1.25rem",
-                              flexWrap:
-                                "wrap",
-                              marginTop:
-                                "0.75rem",
-                            }}
-                          >
-                            <span>
-                              Score:{" "}
-                              {submission.score !==
-                              null
-                                ? `${Math.round(
-                                    submission.score
-                                  )}%`
-                                : "Not scored"}
-                            </span>
-
-                            {submission.evidence_file_name && (
-                              <span>
-                                Evidence:{" "}
-                                {
-                                  submission.evidence_file_name
-                                }
-                              </span>
-                            )}
-
-                            {submission.reviewed_at && (
-                              <span>
-                                Reviewed:{" "}
-                                {formatDate(
-                                  submission.reviewed_at
-                                )}
-                              </span>
-                            )}
-                          </div>
-                        </article>
-                      );
-                    }
-                  )}
-                </div>
-              )}
+                        <span>
+                          Approved:{" "}
+                          {formatDate(
+                            evidence.reviewed_at,
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  ),
+                )}
+              </div>
             </section>
-          </>
-        )}
+          ) : null}
 
-        <section
-          className="card"
-          style={{
-            marginBottom: "1.5rem",
-          }}
-        >
-          <p className="eyebrow">
-            VERIFICATION INFORMATION
-          </p>
-
-          <p>
-            Verification code:{" "}
+          <div
+            style={{
+              marginTop: 36,
+              paddingTop: 20,
+              borderTop:
+                "1px solid #e2e8f0",
+              fontSize: 13,
+              lineHeight: 1.6,
+              color: "#64748b",
+            }}
+          >
             <strong>
-              {
-                verificationRecord.verification_code
-              }
-            </strong>
-          </p>
-
-          <p className="muted">
-            This page displays only information
-            intended for public credential
-            verification. Private account,
-            payment, submission, and authentication
-            information is not disclosed.
-          </p>
-
-          <p className="muted">
-            RuffNeck Learn credentials are issued
-            based on the completion requirements
-            established for the relevant course.
-          </p>
-        </section>
-
-        <footer
-          className="rn-verification-footer"
-          style={{
-            paddingBottom: "2rem",
-            textAlign: "center",
-          }}
-        >
-          <p className="muted">
-            RuffNeck Learn · RuffNeck
-            Entertainment
-          </p>
-        </footer>
+              Privacy notice:
+            </strong>{" "}
+            This public verification page
+            displays only information necessary
+            to verify the authenticity of the
+            certificate. Private learner records
+            are not exposed.
+          </div>
+        </article>
       </div>
     </main>
   );
