@@ -53,14 +53,19 @@ function statusLabel(status: Payment["status"]) {
   switch (status) {
     case "successful":
       return "Successful";
+
     case "pending":
       return "Pending";
+
     case "initiated":
       return "Initiated";
+
     case "failed":
       return "Failed";
+
     case "cancelled":
       return "Cancelled";
+
     default:
       return status;
   }
@@ -69,13 +74,20 @@ function statusLabel(status: Payment["status"]) {
 function statusClass(status: Payment["status"]) {
   switch (status) {
     case "successful":
-      return "rn-payment-status rn-payment-status-success";
+      return "rn-payment-status rn-payment-status-successful";
+
     case "pending":
-    case "initiated":
       return "rn-payment-status rn-payment-status-pending";
+
+    case "initiated":
+      return "rn-payment-status rn-payment-status-initiated";
+
     case "failed":
-    case "cancelled":
       return "rn-payment-status rn-payment-status-failed";
+
+    case "cancelled":
+      return "rn-payment-status rn-payment-status-cancelled";
+
     default:
       return "rn-payment-status";
   }

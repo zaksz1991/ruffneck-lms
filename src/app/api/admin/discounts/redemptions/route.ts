@@ -2,52 +2,150 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-async function requireAdmin() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return null;
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (
-    profile?.role !== "admin" &&
-    profile?.role !== "instructor"
-  ) {
-    return null;
-  }
-
-  return {
-    userId: user.id,
-    role: profile.role,
-  };
-}
+type UserRole = "admin" | "instructor" | "student";
 
 export async function GET(request: Request) {
   try {
-    const access = await requireAdmin();
+    const supabase = await createClient();
 
-    if (!access) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
       return NextResponse.json(
         { error: "Unauthorized." },
         { status: 401 }
       );
     }
 
-    const admin = createAdminClient();
-    const { searchParams } = new URL(request.url);
+    const { data: profile, error: profileError } =
+      await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
 
+    if (profileError) {
+      console.error(
+        "Discount redemption profile lookup failed:",
+        profileError
+      );
+
+      return NextResponse.json(
+        { error: "Unable to verify account permissions." },
+        { status: 500 }
+      );
+    }
+
+    const role = profile?.role as UserRole | undefined;
+
+    if (role !== "admin" && role !== "instructor") {
+      return NextResponse.json(
+        { error: "Forbidden." },
+        { status: 403 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
     const codeId = searchParams.get("codeId");
     const courseId = searchParams.get("courseId");
+
+    const admin = createAdminClient();
+
+    /*
+     * Build the instructor's allowed course set first.
+     * This is required because the service-role client bypasses RLS.
+     */
+    let allowedCourseIds: string[] | null = null;
+
+    if (role === "instructor") {
+      const { data: instructorCourses, error: coursesError } =
+        await admin
+          .from("courses")
+          .select("id")
+          .eq("instructor_id", user.id);
+
+      if (coursesError) {
+        console.error(
+          "Instructor course lookup failed:",
+          coursesError
+        );
+
+        return NextResponse.json(
+          { error: "Unable to load instructor courses." },
+          { status: 500 }
+        );
+      }
+
+      allowedCourseIds =
+        instructorCourses?.map((course) => course.id) ?? [];
+
+      if (courseId && !allowedCourseIds.includes(courseId)) {
+        return NextResponse.json(
+          { error: "You do not have access to this course report." },
+          { status: 403 }
+        );
+      }
+    }
+
+    /*
+     * If a specific discount code was requested, verify that
+     * the code itself belongs to an accessible course.
+     */
+    if (codeId) {
+      const { data: discount, error: discountError } =
+        await admin
+          .from("course_discount_codes")
+          .select("id, course_id")
+          .eq("id", codeId)
+          .maybeSingle();
+
+      if (discountError) {
+        console.error(
+          "Discount lookup failed:",
+          discountError
+        );
+
+        return NextResponse.json(
+          { error: "Unable to verify discount code." },
+          { status: 500 }
+        );
+      }
+
+      if (!discount) {
+        return NextResponse.json(
+          { error: "Discount code not found." },
+          { status: 404 }
+        );
+      }
+
+      if (
+        role === "instructor" &&
+        discount.course_id &&
+        !allowedCourseIds?.includes(discount.course_id)
+      ) {
+        return NextResponse.json(
+          { error: "You do not have access to this discount report." },
+          { status: 403 }
+        );
+      }
+
+      /*
+       * Site-wide discount codes have no course_id.
+       * Instructors cannot view those reports because there is
+       * no safe course ownership boundary.
+       */
+      if (
+        role === "instructor" &&
+        !discount.course_id
+      ) {
+        return NextResponse.json(
+          { error: "You do not have access to this discount report." },
+          { status: 403 }
+        );
+      }
+    }
 
     let query = admin
       .from("course_discount_redemptions")
@@ -61,7 +159,24 @@ export async function GET(request: Request) {
           amount_before_discount,
           discount_amount,
           amount_paid,
-          created_at
+          created_at,
+          course_discount_codes (
+            id,
+            code,
+            discount_type,
+            discount_value
+          ),
+          courses (
+            id,
+            title,
+            slug
+          ),
+          course_payments (
+            id,
+            tx_ref,
+            flutterwave_transaction_id,
+            status
+          )
         `
       )
       .order("created_at", {
@@ -82,15 +197,37 @@ export async function GET(request: Request) {
       );
     }
 
+    if (
+      role === "instructor" &&
+      allowedCourseIds
+    ) {
+      if (allowedCourseIds.length === 0) {
+        return NextResponse.json({
+          redemptions: [],
+          summary: {
+            redemptions: 0,
+            originalAmount: 0,
+            discountAmount: 0,
+            amountPaid: 0,
+          },
+        });
+      }
+
+      query = query.in(
+        "course_id",
+        allowedCourseIds
+      );
+    }
+
     const {
       data: redemptions,
-      error,
+      error: redemptionsError,
     } = await query;
 
-    if (error) {
+    if (redemptionsError) {
       console.error(
-        "Discount redemption query error:",
-        error
+        "Discount redemption query failed:",
+        redemptionsError
       );
 
       return NextResponse.json(
@@ -102,205 +239,139 @@ export async function GET(request: Request) {
       );
     }
 
-    const rows = redemptions ?? [];
-
-    if (!rows.length) {
-      return NextResponse.json({
-        redemptions: [],
-        summary: {
-          redemptions: 0,
-          originalAmount: 0,
-          discountAmount: 0,
-          amountPaid: 0,
-        },
-      });
-    }
-
-    const discountIds = [
-      ...new Set(
-        rows.map(
-          (row) => row.discount_code_id
-        )
-      ),
-    ];
-
-    const courseIds = [
-      ...new Set(
-        rows.map(
-          (row) => row.course_id
-        )
-      ),
-    ];
-
     const studentIds = [
       ...new Set(
-        rows.map(
-          (row) => row.student_id
+        (redemptions ?? []).map(
+          (redemption) =>
+            redemption.student_id
         )
       ),
     ];
 
-    const paymentIds = [
-      ...new Set(
-        rows
-          .map((row) => row.payment_id)
-          .filter(Boolean)
-      ),
-    ];
+    let students: Array<{
+      id: string;
+      display_name: string | null;
+      full_name: string | null;
+      email: string | null;
+    }> = [];
 
-    const [
-      discountResult,
-      courseResult,
-      profileResult,
-      paymentResult,
-    ] = await Promise.all([
-      admin
-        .from("course_discount_codes")
-        .select(
-          "id, code, discount_type, discount_value"
-        )
-        .in("id", discountIds),
-
-      admin
-        .from("courses")
-        .select("id, title, slug")
-        .in("id", courseIds),
-
-      admin
+    if (studentIds.length > 0) {
+      const {
+        data: studentProfiles,
+        error: studentsError,
+      } = await admin
         .from("profiles")
-        .select("id, display_name, full_name, email")
-        .in("id", studentIds),
+        .select(
+          "id, display_name, full_name, email"
+        )
+        .in("id", studentIds);
 
-      paymentIds.length
-        ? admin
-            .from("course_payments")
-            .select(
-              "id, tx_ref, flutterwave_transaction_id, status"
-            )
-            .in("id", paymentIds)
-        : Promise.resolve({
-            data: [],
-            error: null,
-          }),
-    ]);
+      if (studentsError) {
+        console.error(
+          "Student profile lookup failed:",
+          studentsError
+        );
 
-    if (discountResult.error) {
-      console.error(
-        "Discount lookup error:",
-        discountResult.error
-      );
+        return NextResponse.json(
+          {
+            error:
+              "Unable to load student information.",
+          },
+          { status: 500 }
+        );
+      }
+
+      students = studentProfiles ?? [];
     }
 
-    if (courseResult.error) {
-      console.error(
-        "Course lookup error:",
-        courseResult.error
-      );
-    }
-
-    if (profileResult.error) {
-      console.error(
-        "Student lookup error:",
-        profileResult.error
-      );
-    }
-
-    if (paymentResult.error) {
-      console.error(
-        "Payment lookup error:",
-        paymentResult.error
-      );
-    }
-
-    const discounts = new Map(
-      (discountResult.data ?? []).map(
-        (item) => [item.id, item]
-      )
+    const studentMap = new Map(
+      students.map((student) => [
+        student.id,
+        student,
+      ])
     );
 
-    const courses = new Map(
-      (courseResult.data ?? []).map(
-        (item) => [item.id, item]
-      )
+    const formatted = (redemptions ?? []).map(
+      (redemption) => {
+        const discount = Array.isArray(
+          redemption.course_discount_codes
+        )
+          ? redemption.course_discount_codes[0]
+          : redemption.course_discount_codes;
+
+        const course = Array.isArray(
+          redemption.courses
+        )
+          ? redemption.courses[0]
+          : redemption.courses;
+
+        const payment = Array.isArray(
+          redemption.course_payments
+        )
+          ? redemption.course_payments[0]
+          : redemption.course_payments;
+
+        const student = studentMap.get(
+          redemption.student_id
+        );
+
+        const studentName =
+          student?.display_name ||
+          student?.full_name ||
+          student?.email ||
+          redemption.student_id;
+
+        return {
+          id: redemption.id,
+          createdAt: redemption.created_at,
+
+          code: discount?.code ?? "Unknown",
+          discountType:
+            discount?.discount_type ?? null,
+          discountValue:
+            discount?.discount_value ?? null,
+
+          courseId: redemption.course_id,
+          courseTitle:
+            course?.title ?? "Unknown course",
+          courseSlug:
+            course?.slug ?? null,
+
+          studentId:
+            redemption.student_id,
+          studentName,
+
+          paymentId:
+            redemption.payment_id ?? null,
+          txRef:
+            payment?.tx_ref ?? null,
+          flutterwaveTransactionId:
+            payment?.flutterwave_transaction_id ??
+            null,
+          paymentStatus:
+            payment?.status ?? null,
+
+          amountBeforeDiscount:
+            redemption.amount_before_discount,
+          discountAmount:
+            redemption.discount_amount,
+          amountPaid:
+            redemption.amount_paid,
+        };
+      }
     );
 
-    const students = new Map(
-      (profileResult.data ?? []).map(
-        (item) => [item.id, item]
-      )
-    );
+    const summary = formatted.reduce(
+      (result, redemption) => {
+        result.redemptions += 1;
+        result.originalAmount +=
+          redemption.amountBeforeDiscount;
+        result.discountAmount +=
+          redemption.discountAmount;
+        result.amountPaid +=
+          redemption.amountPaid;
 
-    const payments = new Map(
-      (paymentResult.data ?? []).map(
-        (item) => [item.id, item]
-      )
-    );
-
-    const result = rows.map((row) => {
-      const discount =
-        discounts.get(row.discount_code_id);
-
-      const course =
-        courses.get(row.course_id);
-
-      const student =
-        students.get(row.student_id);
-
-      const payment = row.payment_id
-        ? payments.get(row.payment_id)
-        : null;
-
-      return {
-        id: row.id,
-        createdAt: row.created_at,
-
-        code: discount?.code ?? "Unknown",
-        discountType:
-          discount?.discount_type ?? null,
-        discountValue:
-          discount?.discount_value ?? null,
-
-        courseId: row.course_id,
-        courseTitle:
-          course?.title ?? "Unknown course",
-        courseSlug:
-          course?.slug ?? null,
-
-        studentId: row.student_id,
-        studentName:
-          student?.display_name ??
-          student?.full_name ??
-          student?.email ??
-          "Student",
-
-        paymentId: row.payment_id,
-        txRef: payment?.tx_ref ?? null,
-        flutterwaveTransactionId:
-          payment?.flutterwave_transaction_id ??
-          null,
-        paymentStatus:
-          payment?.status ?? null,
-
-        amountBeforeDiscount:
-          row.amount_before_discount,
-        discountAmount:
-          row.discount_amount,
-        amountPaid:
-          row.amount_paid,
-      };
-    });
-
-    const summary = result.reduce(
-      (totals, row) => {
-        totals.redemptions += 1;
-        totals.originalAmount +=
-          row.amountBeforeDiscount;
-        totals.discountAmount +=
-          row.discountAmount;
-        totals.amountPaid +=
-          row.amountPaid;
-
-        return totals;
+        return result;
       },
       {
         redemptions: 0,
@@ -311,19 +382,19 @@ export async function GET(request: Request) {
     );
 
     return NextResponse.json({
-      redemptions: result,
+      redemptions: formatted,
       summary,
     });
   } catch (error) {
     console.error(
-      "Discount redemption API error:",
+      "Discount redemption report error:",
       error
     );
 
     return NextResponse.json(
       {
         error:
-          "Unable to load discount redemption data.",
+          "Unexpected error loading redemption report.",
       },
       { status: 500 }
     );
