@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import CertificateIssueButton from "@/components/CertificateIssueButton";
 
 type Enrollment = {
   id: string;
@@ -53,6 +54,7 @@ type CourseAssessment = {
   score: number | null;
   total_questions: number | null;
   completed_at: string | null;
+  percentage: number | null;
 };
 
 type Certificate = {
@@ -70,6 +72,35 @@ type CourseCertificate = {
     | "revoked";
   certificate_id: string | null;
   certificate_number: string | null;
+};
+
+type CourseProject = {
+  id: string;
+  course_id: string;
+  project_type: string | null;
+  is_published: boolean;
+};
+
+type ProjectSubmission = {
+  id: string;
+  project_id: string;
+  student_id: string;
+  status: string;
+  score: number | null;
+};
+
+type CourseCapstone = {
+  has_capstone: boolean;
+  approved_submission: boolean;
+};
+
+type CertificateEligibility = {
+  eligible: boolean;
+  lessons_complete: boolean;
+  assessment_complete: boolean;
+  assessment_passed: boolean;
+  capstone_available: boolean;
+  capstone_approved: boolean;
 };
 
 export default async function StudentCoursesPage() {
@@ -152,6 +183,7 @@ export default async function StudentCoursesPage() {
     progressResult,
     assessmentResult,
     certificateResult,
+    projectResult,
   ] = await Promise.all([
     supabase
       .from("courses")
@@ -198,6 +230,15 @@ export default async function StudentCoursesPage() {
       )
       .eq("student_id", user.id)
       .in("course_id", courseIds),
+
+    supabase
+      .from("course_projects")
+      .select(
+        "id, course_id, project_type, is_published"
+      )
+      .in("course_id", courseIds)
+      .eq("project_type", "capstone")
+      .eq("is_published", true),
   ]);
 
   if (courseResult.error) {
@@ -228,6 +269,12 @@ export default async function StudentCoursesPage() {
     );
   }
 
+  if (projectResult.error) {
+    throw new Error(
+      projectResult.error.message
+    );
+  }
+
   const courses =
     (courseResult.data ?? []) as Course[];
 
@@ -246,6 +293,41 @@ export default async function StudentCoursesPage() {
   const certificates =
     (certificateResult.data ??
       []) as Certificate[];
+
+  const capstoneProjects =
+    (projectResult.data ??
+      []) as CourseProject[];
+
+  const capstoneProjectIds =
+    capstoneProjects.map(
+      (project) => project.id
+    );
+
+  let submissionData: ProjectSubmission[] =
+    [];
+
+  if (capstoneProjectIds.length > 0) {
+    const {
+      data,
+      error,
+    } = await supabase
+      .from("project_submissions")
+      .select(
+        "id, project_id, student_id, status, score"
+      )
+      .eq("student_id", user.id)
+      .in(
+        "project_id",
+        capstoneProjectIds
+      );
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    submissionData =
+      (data ?? []) as ProjectSubmission[];
+  }
 
   const courseMap = new Map(
     courses.map((course) => [
@@ -300,6 +382,27 @@ export default async function StudentCoursesPage() {
       continue;
     }
 
+    let percentage: number | null = null;
+
+    if (
+      typeof attempt.earned_points ===
+        "number" &&
+      typeof attempt.total_points ===
+        "number" &&
+      attempt.total_points > 0
+    ) {
+      percentage =
+        (attempt.earned_points /
+          attempt.total_points) *
+        100;
+    } else if (
+      typeof attempt.score === "number"
+    ) {
+      percentage = Number(
+        attempt.score
+      );
+    }
+
     assessmentByCourse.set(
       attempt.course_id,
       {
@@ -316,7 +419,45 @@ export default async function StudentCoursesPage() {
             : null,
         completed_at:
           attempt.completed_at,
+        percentage:
+          percentage !== null
+            ? Math.round(percentage)
+            : null,
       }
+    );
+  }
+
+  const capstoneByCourse =
+    new Map<string, CourseCapstone>();
+
+  for (const project of capstoneProjects) {
+    const existing =
+      capstoneByCourse.get(
+        project.course_id
+      ) ?? {
+        has_capstone: false,
+        approved_submission: false,
+      };
+
+    existing.has_capstone = true;
+
+    const approvedSubmission =
+      submissionData.some(
+        (submission) =>
+          submission.project_id ===
+            project.id &&
+          submission.status ===
+            "approved"
+      );
+
+    if (approvedSubmission) {
+      existing.approved_submission =
+        true;
+    }
+
+    capstoneByCourse.set(
+      project.course_id,
+      existing
     );
   }
 
@@ -324,11 +465,6 @@ export default async function StudentCoursesPage() {
     new Map<string, CourseCertificate>();
 
   for (const certificate of certificates) {
-    /*
-     * A course should have at most one certificate for
-     * a student because of the unique student/course
-     * certificate constraint.
-     */
     certificateByCourse.set(
       certificate.course_id,
       {
@@ -401,6 +537,7 @@ export default async function StudentCoursesPage() {
           score: null,
           total_questions: null,
           completed_at: null,
+          percentage: null,
         };
 
       const certificate =
@@ -410,6 +547,45 @@ export default async function StudentCoursesPage() {
           status: "not_issued" as const,
           certificate_id: null,
           certificate_number: null,
+        };
+
+      const capstone =
+        capstoneByCourse.get(
+          course.id
+        ) ?? {
+          has_capstone: false,
+          approved_submission: false,
+        };
+
+      const assessmentPassed =
+        assessment.percentage !== null &&
+        assessment.percentage >= 70;
+
+      const certificateEligibility: CertificateEligibility =
+        {
+          eligible:
+            allLessonsCompleted &&
+            assessment.status ===
+              "completed" &&
+            assessmentPassed &&
+            capstone.has_capstone &&
+            capstone.approved_submission,
+
+          lessons_complete:
+            allLessonsCompleted,
+
+          assessment_complete:
+            assessment.status ===
+            "completed",
+
+          assessment_passed:
+            assessmentPassed,
+
+          capstone_available:
+            capstone.has_capstone,
+
+          capstone_approved:
+            capstone.approved_submission,
         };
 
       return {
@@ -426,6 +602,8 @@ export default async function StudentCoursesPage() {
         nextLesson,
         assessment,
         certificate,
+        capstone,
+        certificateEligibility,
       };
     })
     .filter(
@@ -499,6 +677,7 @@ export default async function StudentCoursesPage() {
             nextLesson,
             assessment,
             certificate,
+            certificateEligibility,
           } = row;
 
           const courseAssessmentLabel =
@@ -508,12 +687,8 @@ export default async function StudentCoursesPage() {
               : "Not started";
 
           const assessmentScore =
-            assessment.score !== null
-              ? `${Math.round(
-                  Number(
-                    assessment.score
-                  )
-                )}%`
+            assessment.percentage !== null
+              ? `${assessment.percentage}%`
               : null;
 
           const primaryHref =
@@ -678,12 +853,6 @@ export default async function StudentCoursesPage() {
 
               <div
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent:
-                    "space-between",
-                  gap: 16,
-                  flexWrap: "wrap",
                   padding: "16px 0",
                   borderTop:
                     "1px solid var(--border)",
@@ -691,65 +860,132 @@ export default async function StudentCoursesPage() {
                     "1px solid var(--border)",
                 }}
               >
-                <div>
-                  <strong>
-                    Certificate
-                  </strong>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems:
+                      "flex-start",
+                    justifyContent:
+                      "space-between",
+                    gap: 16,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div>
+                    <strong>
+                      Certificate
+                    </strong>
 
-                  <p
-                    style={{
-                      margin:
-                        "5px 0 0",
-                      color:
-                        "var(--muted)",
-                    }}
-                  >
-                    {certificate.status ===
-                    "valid"
-                      ? "Certificate issued and valid."
-                      : certificate.status ===
-                          "revoked"
-                        ? "Certificate issued but currently revoked."
-                        : "Certificate has not been issued for this course."}
-                  </p>
-
-                  {certificate.certificate_number ? (
-                    <small
+                    <p
                       style={{
-                        display:
-                          "block",
-                        marginTop: 5,
+                        margin:
+                          "5px 0 0",
                         color:
                           "var(--muted)",
                       }}
                     >
-                      Certificate No:{" "}
-                      {
-                        certificate.certificate_number
+                      {certificate.status ===
+                      "valid"
+                        ? "Certificate issued and valid."
+                        : certificate.status ===
+                            "revoked"
+                          ? "Certificate issued but currently revoked."
+                          : certificateEligibility.eligible
+                            ? "You have completed all certificate requirements."
+                            : "Certificate requirements are not yet complete."}
+                    </p>
+
+                    {certificate.certificate_number ? (
+                      <small
+                        style={{
+                          display:
+                            "block",
+                          marginTop: 5,
+                          color:
+                            "var(--muted)",
+                        }}
+                      >
+                        Certificate No:{" "}
+                        {
+                          certificate.certificate_number
+                        }
+                      </small>
+                    ) : null}
+                  </div>
+
+                  {certificateHref ? (
+                    <Link
+                      href={
+                        certificateHref
                       }
-                    </small>
+                      className="button secondary"
+                    >
+                      {certificateLabel}
+                    </Link>
+                  ) : certificateEligibility.eligible ? (
+                    <CertificateIssueButton
+                      courseId={
+                        course.id
+                      }
+                    />
                   ) : null}
                 </div>
 
-                {certificateHref ? (
-                  <Link
-                    href={
-                      certificateHref
-                    }
-                    className="button secondary"
-                  >
-                    {certificateLabel}
-                  </Link>
-                ) : (
-                  <span
-                    className="status-badge"
+                {certificate.status ===
+                  "not_issued" &&
+                !certificateEligibility.eligible ? (
+                  <div
                     style={{
-                      opacity: 0.75,
+                      marginTop: 14,
+                      display: "grid",
+                      gap: 7,
                     }}
                   >
-                    {certificateLabel}
-                  </span>
-                )}
+                    <small
+                      style={{
+                        color:
+                          certificateEligibility.lessons_complete
+                            ? "var(--muted)"
+                            : "#b45309",
+                      }}
+                    >
+                      {certificateEligibility.lessons_complete
+                        ? "✓ All published lessons completed"
+                        : "○ Complete all published lessons"}
+                    </small>
+
+                    <small
+                      style={{
+                        color:
+                          certificateEligibility.assessment_passed
+                            ? "var(--muted)"
+                            : "#b45309",
+                      }}
+                    >
+                      {certificateEligibility.assessment_complete
+                        ? certificateEligibility.assessment_passed
+                          ? "✓ Assessment passed with at least 70%"
+                          : "○ Assessment score must be at least 70%"
+                        : "○ Complete the course assessment with at least 70%"}
+                    </small>
+
+                    <small
+                      style={{
+                        color:
+                          certificateEligibility.capstone_available &&
+                          certificateEligibility.capstone_approved
+                            ? "var(--muted)"
+                            : "#b45309",
+                      }}
+                    >
+                      {certificateEligibility.capstone_available
+                        ? certificateEligibility.capstone_approved
+                          ? "✓ Capstone project approved"
+                          : "○ Submit the capstone project and receive approval"
+                        : "○ Capstone project is not yet available"}
+                    </small>
+                  </div>
+                ) : null}
               </div>
 
               <div className="course-card-actions">
