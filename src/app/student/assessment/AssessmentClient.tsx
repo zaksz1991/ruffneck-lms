@@ -21,6 +21,7 @@ type SkillResult = {
 };
 
 type AssessmentResult = {
+  attemptId: string;
   score: number;
   correctAnswers: number;
   totalQuestions: number;
@@ -147,6 +148,15 @@ export default function AssessmentClient({
         );
       }
 
+      if (
+        !("attemptId" in data) ||
+        !data.attemptId
+      ) {
+        throw new Error(
+          "Assessment was submitted, but no result ID was returned."
+        );
+      }
+
       setResult(
         data as AssessmentResult
       );
@@ -265,8 +275,24 @@ export default function AssessmentClient({
 
         <div className="rn-assessment-actions">
           <Link
-            href="/student/skills"
+            href={`/student/assessment/results/${encodeURIComponent(
+              result.attemptId
+            )}`}
             className="rn-button rn-button-primary"
+          >
+            View Assessment Result
+          </Link>
+
+          <Link
+            href="/student/assessment/results"
+            className="rn-button rn-button-secondary"
+          >
+            All Assessment Results
+          </Link>
+
+          <Link
+            href="/student/skills"
+            className="rn-button rn-button-secondary"
           >
             View My Skills
           </Link>
