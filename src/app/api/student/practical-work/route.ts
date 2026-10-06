@@ -1,265 +1,392 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-type SubmissionPayload = {
-  task_id?: string;
-  submission_text?: string;
+type Enrollment = {
+  course_id: string;
+  enrollment_status: string;
 };
 
-function jsonError(message: string, status = 400) {
-  return NextResponse.json(
-    {
-      ok: false,
-      error: message,
-    },
-    { status },
-  );
-}
+type PracticalTask = {
+  id: string;
+  course_id: string;
+  title: string;
+  scenario: string;
+  instructions: string;
+  expected_outcome: string;
+  submission_type:
+    | "text"
+    | "document"
+    | "spreadsheet"
+    | "presentation"
+    | "mixed";
+  max_score: number;
+  sort_order: number;
+  is_published: boolean;
+  skill_id: string | null;
+};
 
-export async function GET() {
+type PracticalSubmission = {
+  id: string;
+  task_id: string;
+  student_id: string;
+  submission_text: string | null;
+  status:
+    | "draft"
+    | "submitted"
+    | "under_review"
+    | "approved"
+    | "revision_required";
+  score: number | null;
+  reviewer_feedback: string | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+};
+
+async function getAuthenticatedUser() {
   const supabase = await createClient();
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    return jsonError("Authentication required.", 401);
-  }
+  return {
+    supabase,
+    user,
+  };
+}
 
-  const { data: enrollments, error: enrollmentError } =
-    await supabase
+export async function GET() {
+  try {
+    const { supabase, user } =
+      await getAuthenticatedUser();
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          error: "Authentication required.",
+        },
+        { status: 401 }
+      );
+    }
+
+    const {
+      data: enrollmentData,
+      error: enrollmentError,
+    } = await supabase
       .from("enrollments")
-      .select("course_id")
+      .select(
+        "course_id, enrollment_status"
+      )
       .eq("student_id", user.id)
-      .in("enrollment_status", ["active", "completed"]);
+      .in("enrollment_status", [
+        "active",
+        "completed",
+      ]);
 
-  if (enrollmentError) {
-    console.error(
-      "Failed to load practical-work enrollments:",
-      enrollmentError,
-    );
+    if (enrollmentError) {
+      console.error(
+        "Practical work enrollment error:",
+        enrollmentError
+      );
 
-    return jsonError(
-      "Unable to load your enrolled courses.",
-      500,
-    );
-  }
+      return NextResponse.json(
+        {
+          error:
+            "Unable to load your course access.",
+        },
+        { status: 500 }
+      );
+    }
 
-  const courseIds = [
-    ...new Set(
-      (enrollments || []).map(
-        (row) => row.course_id,
+    const enrollments =
+      (enrollmentData ?? []) as Enrollment[];
+
+    const courseIds = [
+      ...new Set(
+        enrollments.map(
+          (enrollment) =>
+            enrollment.course_id
+        )
       ),
-    ),
-  ];
+    ];
 
-  if (courseIds.length === 0) {
-    return NextResponse.json({
-      ok: true,
-      tasks: [],
-    });
-  }
+    if (courseIds.length === 0) {
+      return NextResponse.json({
+        tasks: [],
+        submissions: [],
+      });
+    }
 
-  const { data: tasks, error: tasksError } =
-    await supabase
+    const {
+      data: taskData,
+      error: taskError,
+    } = await supabase
       .from("course_practical_tasks")
       .select(
-        [
-          "id",
-          "course_id",
-          "title",
-          "scenario",
-          "instructions",
-          "expected_outcome",
-          "submission_type",
-          "max_score",
-          "sort_order",
-        ].join(", "),
+        `
+          id,
+          course_id,
+          title,
+          scenario,
+          instructions,
+          expected_outcome,
+          submission_type,
+          max_score,
+          sort_order,
+          is_published,
+          skill_id
+        `
       )
       .in("course_id", courseIds)
       .eq("is_published", true)
-      .order("course_id", {
-        ascending: true,
-      })
       .order("sort_order", {
         ascending: true,
       });
 
-  if (tasksError) {
-    console.error(
-      "Failed to load practical tasks:",
-      tasksError,
-    );
-
-    return jsonError(
-      "Unable to load practical tasks.",
-      500,
-    );
-  }
-
-  const taskIds = (tasks || []).map(
-    (task) => task.id,
-  );
-
-  let submissions: Array<{
-    id: string;
-    task_id: string;
-    submission_text: string | null;
-    status: string;
-    score: number | null;
-    reviewer_feedback: string | null;
-    submitted_at: string | null;
-    reviewed_at: string | null;
-  }> = [];
-
-  if (taskIds.length > 0) {
-    const {
-      data: submissionRows,
-      error: submissionsError,
-    } = await supabase
-      .from(
-        "student_practical_task_submissions",
-      )
-      .select(
-        [
-          "id",
-          "task_id",
-          "submission_text",
-          "status",
-          "score",
-          "reviewer_feedback",
-          "submitted_at",
-          "reviewed_at",
-        ].join(", "),
-      )
-      .eq("student_id", user.id)
-      .in("task_id", taskIds);
-
-    if (submissionsError) {
+    if (taskError) {
       console.error(
-        "Failed to load practical submissions:",
-        submissionsError,
+        "Practical tasks load error:",
+        taskError
       );
 
-      return jsonError(
-        "Unable to load your practical submissions.",
-        500,
+      return NextResponse.json(
+        {
+          error:
+            "Unable to load practical tasks.",
+        },
+        { status: 500 }
       );
     }
 
-    submissions =
-      (submissionRows || []) as typeof submissions;
-  }
+    /*
+     * Supabase's generated response type can become a
+     * GenericStringError when the project database types
+     * do not contain the newest practical-work columns.
+     *
+     * Cast the validated response explicitly so this
+     * route remains compatible with the current schema.
+     */
+    const tasks =
+      (taskData ?? []) as unknown as PracticalTask[];
 
-  const submissionMap = new Map(
-    submissions.map((submission) => [
-      submission.task_id,
-      submission,
-    ]),
-  );
+    const taskIds = tasks.map(
+      (task) => task.id
+    );
 
-  const enrichedTasks = (tasks || []).map(
-    (task) => ({
+    let submissions: PracticalSubmission[] = [];
+
+    if (taskIds.length > 0) {
+      const {
+        data: submissionData,
+        error: submissionError,
+      } = await supabase
+        .from(
+          "student_practical_task_submissions"
+        )
+        .select(
+          `
+            id,
+            task_id,
+            student_id,
+            submission_text,
+            status,
+            score,
+            reviewer_feedback,
+            submitted_at,
+            reviewed_at
+          `
+        )
+        .eq("student_id", user.id)
+        .in("task_id", taskIds);
+
+      if (submissionError) {
+        console.error(
+          "Practical submissions load error:",
+          submissionError
+        );
+
+        return NextResponse.json(
+          {
+            error:
+              "Unable to load your practical submissions.",
+          },
+          { status: 500 }
+        );
+      }
+
+      submissions =
+        (submissionData ??
+          []) as unknown as PracticalSubmission[];
+    }
+
+    const submissionMap = new Map<
+      string,
+      PracticalSubmission
+    >();
+
+    for (const submission of submissions) {
+      submissionMap.set(
+        submission.task_id,
+        submission
+      );
+    }
+
+    const enrichedTasks = tasks.map((task) => ({
       ...task,
       submission:
-        submissionMap.get(task.id) || null,
-    }),
-  );
+        submissionMap.get(task.id) ?? null,
+    }));
 
-  return NextResponse.json({
-    ok: true,
-    tasks: enrichedTasks,
-  });
+    return NextResponse.json({
+      tasks: enrichedTasks,
+      submissions,
+    });
+  } catch (error) {
+    console.error(
+      "Practical work GET error:",
+      error
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          "An unexpected error occurred while loading practical work.",
+      },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(
-  request: Request,
+  request: Request
 ) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return jsonError("Authentication required.", 401);
-  }
-
-  let body: SubmissionPayload;
-
   try {
-    body =
-      (await request.json()) as SubmissionPayload;
-  } catch {
-    return jsonError("Invalid request body.");
-  }
+    const { supabase, user } =
+      await getAuthenticatedUser();
 
-  const taskId = String(
-    body.task_id || "",
-  ).trim();
+    if (!user) {
+      return NextResponse.json(
+        {
+          error: "Authentication required.",
+        },
+        { status: 401 }
+      );
+    }
 
-  const submissionText = String(
-    body.submission_text || "",
-  ).trim();
+    let body: {
+      taskId?: unknown;
+      submissionText?: unknown;
+    };
 
-  if (!taskId) {
-    return jsonError(
-      "Practical task is required.",
-    );
-  }
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        {
+          error: "Invalid request body.",
+        },
+        { status: 400 }
+      );
+    }
 
-  if (!submissionText) {
-    return jsonError(
-      "Your practical work cannot be empty.",
-    );
-  }
+    const taskId =
+      typeof body.taskId === "string"
+        ? body.taskId.trim()
+        : "";
 
-  if (submissionText.length > 50000) {
-    return jsonError(
-      "Your submission is too long.",
-    );
-  }
+    const submissionText =
+      typeof body.submissionText === "string"
+        ? body.submissionText.trim()
+        : "";
 
-  const { data: task, error: taskError } =
-    await supabase
+    if (!taskId) {
+      return NextResponse.json(
+        {
+          error: "Task ID is required.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!submissionText) {
+      return NextResponse.json(
+        {
+          error:
+            "Please enter your practical work before submitting.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (submissionText.length > 50000) {
+      return NextResponse.json(
+        {
+          error:
+            "Your submission is too long. Maximum length is 50,000 characters.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const {
+      data: taskData,
+      error: taskError,
+    } = await supabase
       .from("course_practical_tasks")
       .select(
-        [
-          "id",
-          "course_id",
-          "title",
-          "is_published",
-        ].join(", "),
+        `
+          id,
+          course_id,
+          title,
+          scenario,
+          instructions,
+          expected_outcome,
+          submission_type,
+          max_score,
+          sort_order,
+          is_published,
+          skill_id
+        `
       )
       .eq("id", taskId)
       .eq("is_published", true)
       .maybeSingle();
 
-  if (taskError) {
-    console.error(
-      "Failed to load practical task:",
-      taskError,
-    );
+    if (taskError) {
+      console.error(
+        "Practical task lookup error:",
+        taskError
+      );
 
-    return jsonError(
-      "Unable to load the practical task.",
-      500,
-    );
-  }
+      return NextResponse.json(
+        {
+          error:
+            "Unable to verify the practical task.",
+        },
+        { status: 500 }
+      );
+    }
 
-  if (!task) {
-    return jsonError(
-      "Practical task not found.",
-      404,
-    );
-  }
+    const task =
+      taskData as unknown as PracticalTask | null;
 
-  const { data: enrollment } =
-    await supabase
+    if (!task) {
+      return NextResponse.json(
+        {
+          error:
+            "Practical task not found or is not currently available.",
+        },
+        { status: 404 }
+      );
+    }
+
+    const {
+      data: enrollment,
+      error: enrollmentError,
+    } = await supabase
       .from("enrollments")
       .select(
-        "id, enrollment_status",
+        "id, enrollment_status"
       )
       .eq("student_id", user.id)
       .eq("course_id", task.course_id)
@@ -269,99 +396,164 @@ export async function POST(
       ])
       .maybeSingle();
 
-  if (!enrollment) {
-    return jsonError(
-      "You are not enrolled in this course.",
-      403,
-    );
-  }
+    if (enrollmentError) {
+      console.error(
+        "Practical work enrollment verification error:",
+        enrollmentError
+      );
 
-  const now = new Date().toISOString();
+      return NextResponse.json(
+        {
+          error:
+            "Unable to verify your course enrollment.",
+        },
+        { status: 500 }
+      );
+    }
 
-  const { data: existingSubmission } =
-    await supabase
+    if (!enrollment) {
+      return NextResponse.json(
+        {
+          error:
+            "You must be enrolled in this course before submitting practical work.",
+        },
+        { status: 403 }
+      );
+    }
+
+    const {
+      data: existingData,
+      error: existingError,
+    } = await supabase
       .from(
-        "student_practical_task_submissions",
+        "student_practical_task_submissions"
       )
       .select(
-        [
-          "id",
-          "status",
-          "score",
-          "reviewer_feedback",
-        ].join(", "),
+        `
+          id,
+          task_id,
+          student_id,
+          submission_text,
+          status,
+          score,
+          reviewer_feedback,
+          submitted_at,
+          reviewed_at
+        `
       )
-      .eq("task_id", taskId)
+      .eq("task_id", task.id)
       .eq("student_id", user.id)
       .maybeSingle();
 
-  if (
-    existingSubmission &&
-    (
-      existingSubmission.status ===
+    if (existingError) {
+      console.error(
+        "Existing practical submission lookup error:",
+        existingError
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "Unable to check your previous submission.",
+        },
+        { status: 500 }
+      );
+    }
+
+    const existingSubmission =
+      existingData as unknown as PracticalSubmission | null;
+
+    if (
+      existingSubmission?.status ===
         "approved" ||
-      existingSubmission.status ===
+      existingSubmission?.status ===
         "under_review"
-    )
-  ) {
-    return jsonError(
-      "This submission is already under review or has been approved.",
-      409,
-    );
-  }
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "This practical task cannot be resubmitted while the current submission is approved or under review.",
+        },
+        { status: 409 }
+      );
+    }
 
-  const submissionPayload = {
-    task_id: taskId,
-    student_id: user.id,
-    submission_text: submissionText,
-    status: "submitted",
-    score: null,
-    reviewer_feedback: null,
-    submitted_at: now,
-    reviewed_at: null,
-    updated_at: now,
-  };
+    const now =
+      new Date().toISOString();
 
-  const { data: submission, error } =
-    await supabase
+    const {
+      data: savedData,
+      error: saveError,
+    } = await supabase
       .from(
-        "student_practical_task_submissions",
+        "student_practical_task_submissions"
       )
       .upsert(
-        submissionPayload,
+        {
+          task_id: task.id,
+          student_id: user.id,
+          submission_text:
+            submissionText,
+          status: "submitted",
+          score: null,
+          reviewer_feedback: null,
+          submitted_at: now,
+          reviewed_at: null,
+        },
         {
           onConflict:
             "task_id,student_id",
-        },
+        }
       )
       .select(
-        [
-          "id",
-          "task_id",
-          "submission_text",
-          "status",
-          "score",
-          "reviewer_feedback",
-          "submitted_at",
-          "reviewed_at",
-        ].join(", "),
+        `
+          id,
+          task_id,
+          student_id,
+          submission_text,
+          status,
+          score,
+          reviewer_feedback,
+          submitted_at,
+          reviewed_at
+        `
       )
       .single();
 
-  if (error) {
+    if (saveError) {
+      console.error(
+        "Practical submission save error:",
+        saveError
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "Unable to submit your practical work.",
+        },
+        { status: 500 }
+      );
+    }
+
+    const submission =
+      savedData as unknown as PracticalSubmission;
+
+    return NextResponse.json({
+      success: true,
+      submission,
+    });
+  } catch (error) {
     console.error(
-      "Failed to save practical submission:",
-      error,
+      "Practical work POST error:",
+      error
     );
 
-    return jsonError(
-      "Unable to submit your practical work.",
-      500,
+    return NextResponse.json(
+      {
+        error:
+          "An unexpected error occurred while submitting practical work.",
+      },
+      { status: 500 }
     );
   }
-
-  return NextResponse.json({
-    ok: true,
-    submission,
-  });
 }
