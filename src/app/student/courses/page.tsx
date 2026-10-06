@@ -6,7 +6,7 @@ import CertificateIssueButton from "@/components/CertificateIssueButton";
 type Enrollment = {
   id: string;
   course_id: string;
-  enrollment_status: string | null;
+  enrollment_status: string;
   payment_status: string | null;
   progress_percent: number | null;
 };
@@ -23,12 +23,12 @@ type Course = {
 type CurriculumLesson = {
   lesson_id: string;
   course_id: string;
-  section_id: string;
-  section_title: string;
-  section_sort: number;
+  section_id: string | null;
+  section_title: string | null;
+  section_sort: number | null;
   lesson_title: string;
   lesson_slug: string;
-  lesson_sort: number;
+  lesson_sort: number | null;
   duration_minutes: number | null;
   duration_seconds: number | null;
   is_preview: boolean;
@@ -36,6 +36,7 @@ type CurriculumLesson = {
 };
 
 type LessonProgress = {
+  student_id: string;
   lesson_id: string;
   course_id: string;
   completed: boolean;
@@ -48,7 +49,17 @@ type AssessmentAttempt = {
   total_points: number | null;
   earned_points: number | null;
   total_questions: number | null;
+  time_spent_seconds: number | null;
   completed_at: string | null;
+};
+
+type CourseAssessment = {
+  status: "not_started" | "completed";
+  attempt_id: string | null;
+  score: number | null;
+  total_questions: number | null;
+  completed_at: string | null;
+  percentage: number | null;
 };
 
 type Certificate = {
@@ -57,6 +68,12 @@ type Certificate = {
   course_id: string;
   certificate_number: string;
   is_revoked: boolean;
+};
+
+type CourseCertificate = {
+  status: "not_issued" | "valid" | "revoked";
+  certificate_id: string | null;
+  certificate_number: string | null;
 };
 
 type CourseProject = {
@@ -74,49 +91,19 @@ type ProjectSubmission = {
   score: number | null;
 };
 
-type CourseRow = {
-  enrollment: Enrollment;
-  course: Course;
-  lessons: CurriculumLesson[];
-  completedCount: number;
-  totalLessons: number;
-  progressPercent: number;
-  nextLesson: CurriculumLesson | null;
-  assessment: {
-    completed: boolean;
-    attemptId: string | null;
-    percentage: number | null;
-  };
-  certificate: {
-    status: "not_issued" | "valid" | "revoked";
-    id: string | null;
-    number: string | null;
-  };
-  capstone: {
-    available: boolean;
-    approved: boolean;
-  };
+type CourseCapstone = {
+  has_capstone: boolean;
+  approved_submission: boolean;
 };
 
-function calculateAssessmentPercentage(
-  attempt: AssessmentAttempt,
-) {
-  if (
-    typeof attempt.earned_points === "number" &&
-    typeof attempt.total_points === "number" &&
-    attempt.total_points > 0
-  ) {
-    return Math.round(
-      (attempt.earned_points / attempt.total_points) * 100,
-    );
-  }
-
-  if (typeof attempt.score === "number") {
-    return Math.round(attempt.score);
-  }
-
-  return null;
-}
+type CertificateEligibility = {
+  eligible: boolean;
+  lessons_complete: boolean;
+  assessment_complete: boolean;
+  assessment_passed: boolean;
+  capstone_available: boolean;
+  capstone_approved: boolean;
+};
 
 export default async function StudentCoursesPage() {
   const supabase = await createClient();
@@ -130,10 +117,10 @@ export default async function StudentCoursesPage() {
   }
 
   /*
-   * IMPORTANT:
-   * Do not select created_at here.
-   * The actual enrollment schema used by the course-detail
-   * page contains the fields below.
+   * Keep the enrollment query minimal.
+   *
+   * created_at is intentionally not selected or used here because
+   * the current enrollments schema does not require it for this page.
    */
   const {
     data: enrollmentData,
@@ -152,74 +139,134 @@ export default async function StudentCoursesPage() {
       enrollmentError,
     );
 
-    return (
-      <main className="container rn-student-courses-page">
-        <section className="rn-student-page-header">
-          <span className="rn-eyebrow">
-            MY LEARNING
-          </span>
+    /*
+     * Minimal fallback.
+     *
+     * This protects the page if payment_status or progress_percent
+     * is unavailable while preserving the student's enrollment.
+     */
+    const {
+      data: fallbackEnrollmentData,
+      error: fallbackEnrollmentError,
+    } = await supabase
+      .from("enrollments")
+      .select("id, course_id, enrollment_status")
+      .eq("student_id", user.id)
+      .in("enrollment_status", ["active", "completed"]);
 
-          <h1>My Courses</h1>
+    if (fallbackEnrollmentError) {
+      console.error(
+        "Student courses: enrollment fallback failed:",
+        fallbackEnrollmentError,
+      );
 
-          <p>
-            Your enrolled courses could not be loaded
-            because the enrollment data is temporarily
-            unavailable.
-          </p>
-        </section>
+      return (
+        <main className="container">
+          <section className="page-header">
+            <h1>My Courses</h1>
+            <p>
+              We could not load your enrolled courses right now.
+            </p>
+          </section>
 
-        <section className="rn-student-message rn-student-message-error">
-          <h2>Learning data unavailable</h2>
+          <section className="card">
+            <h2>Learning data temporarily unavailable</h2>
 
-          <p>
-            Your account has not been removed. The
-            dashboard could not retrieve your current
-            enrollment information.
-          </p>
+            <p>
+              Your account is still intact. The learning dashboard
+              could not retrieve your enrollment data.
+            </p>
 
-          <Link
-            href="/courses"
-            className="rn-button rn-button-primary"
-          >
-            Browse Courses
-          </Link>
-        </section>
-      </main>
+            <Link
+              href="/courses"
+              className="button primary"
+            >
+              Browse Courses
+            </Link>
+          </section>
+        </main>
+      );
+    }
+
+    const fallbackEnrollments =
+      (fallbackEnrollmentData ?? []) as unknown as Array<{
+        id: string;
+        course_id: string;
+        enrollment_status: string;
+      }>;
+
+    const normalizedFallbackEnrollments: Enrollment[] =
+      fallbackEnrollments.map((row) => ({
+        id: row.id,
+        course_id: row.course_id,
+        enrollment_status: row.enrollment_status,
+        payment_status: null,
+        progress_percent: null,
+      }));
+
+    if (normalizedFallbackEnrollments.length === 0) {
+      return (
+        <main className="container">
+          <section className="page-header">
+            <h1>My Courses</h1>
+
+            <p>
+              Your enrolled courses and learning progress will
+              appear here.
+            </p>
+          </section>
+
+          <section className="card">
+            <h2>No courses yet</h2>
+
+            <p>
+              You are not currently enrolled in any courses.
+            </p>
+
+            <Link
+              href="/courses"
+              className="button primary"
+            >
+              Browse Courses
+            </Link>
+          </section>
+        </main>
+      );
+    }
+
+    return renderCoursesPage(
+      supabase,
+      user.id,
+      normalizedFallbackEnrollments,
+      true,
     );
   }
 
   const enrollments =
-    (enrollmentData ?? []) as Enrollment[];
+    (enrollmentData ?? []) as unknown as Enrollment[];
 
   if (enrollments.length === 0) {
     return (
-      <main className="container rn-student-courses-page">
-        <section className="rn-student-page-header">
-          <span className="rn-eyebrow">
-            MY LEARNING
-          </span>
-
+      <main className="container">
+        <section className="page-header">
           <h1>My Courses</h1>
 
           <p>
-            Track your lessons, assessments,
-            practical work and certificates.
+            Your enrolled courses and learning progress will
+            appear here.
           </p>
         </section>
 
-        <section className="rn-student-empty">
-          <div className="rn-empty-icon">+</div>
-
+        <section className="card">
           <h2>No courses yet</h2>
 
           <p>
-            You are not currently enrolled in any
-            courses.
+            You are not currently enrolled in any courses.
           </p>
 
           <Link
             href="/courses"
-            className="rn-button rn-button-primary"
+            className="button primary"
           >
             Browse Courses
           </Link>
@@ -228,6 +275,20 @@ export default async function StudentCoursesPage() {
     );
   }
 
+  return renderCoursesPage(
+    supabase,
+    user.id,
+    enrollments,
+    false,
+  );
+}
+
+async function renderCoursesPage(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  enrollments: Enrollment[],
+  usedEnrollmentFallback: boolean,
+) {
   const courseIds = Array.from(
     new Set(
       enrollments.map(
@@ -237,7 +298,7 @@ export default async function StudentCoursesPage() {
   );
 
   const [
-    coursesResult,
+    courseResult,
     curriculumResult,
     progressResult,
     assessmentResult,
@@ -252,9 +313,7 @@ export default async function StudentCoursesPage() {
       .in("id", courseIds),
 
     /*
-     * IMPORTANT:
-     * These are the real course_curriculum columns used
-     * elsewhere in RuffNeck Learn.
+     * course_curriculum uses lesson_sort, not lesson_sort_order.
      */
     supabase
       .from("course_curriculum")
@@ -276,23 +335,36 @@ export default async function StudentCoursesPage() {
       )
       .in("course_id", courseIds)
       .eq("is_published", true)
-      .order("section_sort")
-      .order("lesson_sort"),
+      .order("section_sort", {
+        ascending: true,
+      })
+      .order("lesson_sort", {
+        ascending: true,
+      }),
 
     supabase
       .from("lesson_progress")
       .select(
-        "lesson_id, course_id, completed",
+        "student_id, lesson_id, course_id, completed",
       )
-      .eq("student_id", user.id)
+      .eq("student_id", userId)
       .in("course_id", courseIds),
 
     supabase
       .from("assessment_attempts")
       .select(
-        "id, course_id, score, total_points, earned_points, total_questions, completed_at",
+        [
+          "id",
+          "course_id",
+          "score",
+          "total_points",
+          "earned_points",
+          "total_questions",
+          "time_spent_seconds",
+          "completed_at",
+        ].join(", "),
       )
-      .eq("student_id", user.id)
+      .eq("student_id", userId)
       .in("course_id", courseIds)
       .not("completed_at", "is", null)
       .order("completed_at", {
@@ -304,7 +376,7 @@ export default async function StudentCoursesPage() {
       .select(
         "id, student_id, course_id, certificate_number, is_revoked",
       )
-      .eq("student_id", user.id)
+      .eq("student_id", userId)
       .in("course_id", courseIds),
 
     supabase
@@ -317,10 +389,10 @@ export default async function StudentCoursesPage() {
       .eq("is_published", true),
   ]);
 
-  if (coursesResult.error) {
+  if (courseResult.error) {
     console.error(
       "Student courses: courses query failed:",
-      coursesResult.error,
+      courseResult.error,
     );
   }
 
@@ -359,70 +431,119 @@ export default async function StudentCoursesPage() {
     );
   }
 
-  if (coursesResult.error) {
-    return (
-      <main className="container rn-student-courses-page">
-        <section className="rn-student-page-header">
-          <span className="rn-eyebrow">
-            MY LEARNING
-          </span>
+  const dataWarnings: string[] = [];
 
+  if (courseResult.error) {
+    dataWarnings.push("course information");
+  }
+
+  if (curriculumResult.error) {
+    dataWarnings.push("lesson curriculum");
+  }
+
+  if (progressResult.error) {
+    dataWarnings.push("lesson progress");
+  }
+
+  if (assessmentResult.error) {
+    dataWarnings.push("assessment history");
+  }
+
+  if (certificateResult.error) {
+    dataWarnings.push("certificate information");
+  }
+
+  if (projectResult.error) {
+    dataWarnings.push("capstone information");
+  }
+
+  /*
+   * Supabase can expose GenericStringError[] for dynamically
+   * selected columns. The intermediate unknown cast is intentional:
+   * these values are mapped into our explicit application types.
+   */
+  const courses =
+    (courseResult.data ?? []) as unknown as Course[];
+
+  const curriculum =
+    (curriculumResult.data ?? []) as unknown as CurriculumLesson[];
+
+  const lessonProgress =
+    (progressResult.data ?? []) as unknown as LessonProgress[];
+
+  const assessmentAttempts =
+    (assessmentResult.data ?? []) as unknown as AssessmentAttempt[];
+
+  const certificates =
+    (certificateResult.data ?? []) as unknown as Certificate[];
+
+  const capstoneProjects =
+    (projectResult.data ?? []) as unknown as CourseProject[];
+
+  /*
+   * If the course query itself failed, do not render an empty
+   * dashboard that falsely says the student has no courses.
+   */
+  if (courseResult.error) {
+    return (
+      <main className="container">
+        <section className="page-header">
           <h1>My Courses</h1>
 
           <p>
-            Your enrollment exists, but course
-            information could not be loaded.
+            Track your lessons, resume learning, monitor
+            assessments, and manage your certificates.
           </p>
         </section>
 
-        <section className="rn-student-message rn-student-message-error">
+        {usedEnrollmentFallback ? (
+          <section className="card">
+            <p
+              style={{
+                margin: 0,
+                color: "var(--muted)",
+              }}
+            >
+              Your enrollment was recovered, but course
+              information is temporarily unavailable.
+            </p>
+          </section>
+        ) : null}
+
+        <section className="card">
           <h2>Course information unavailable</h2>
 
           <p>
-            Please return to the course catalogue.
+            Your enrollment was found, but the course catalogue
+            could not be loaded at this time.
           </p>
 
-          <Link
-            href="/courses"
-            className="rn-button rn-button-primary"
-          >
-            Browse Courses
-          </Link>
+          <div className="course-card-actions">
+            <Link
+              href="/courses"
+              className="button primary"
+            >
+              Browse Courses
+            </Link>
+
+            <Link
+              href="/"
+              className="button secondary"
+            >
+              Back to Home
+            </Link>
+          </div>
         </section>
       </main>
     );
   }
-
-  const courses =
-    (coursesResult.data ?? []) as Course[];
-
-  const curriculum =
-    (curriculumResult.data ??
-      []) as CurriculumLesson[];
-
-  const lessonProgress =
-    (progressResult.data ??
-      []) as LessonProgress[];
-
-  const assessmentAttempts =
-    (assessmentResult.data ??
-      []) as AssessmentAttempt[];
-
-  const certificates =
-    (certificateResult.data ??
-      []) as Certificate[];
-
-  const capstoneProjects =
-    (projectResult.data ??
-      []) as CourseProject[];
 
   const capstoneProjectIds =
     capstoneProjects.map(
       (project) => project.id,
     );
 
-  let submissions: ProjectSubmission[] =
-    [];
+  let submissionData: ProjectSubmission[] = [];
 
   if (capstoneProjectIds.length > 0) {
     const {
@@ -433,20 +554,21 @@ export default async function StudentCoursesPage() {
       .select(
         "id, project_id, student_id, status, score",
       )
-      .eq("student_id", user.id)
-      .in(
-        "project_id",
-        capstoneProjectIds,
-      );
+      .eq("student_id", userId)
+      .in("project_id", capstoneProjectIds);
 
     if (error) {
       console.error(
         "Student courses: project submissions query failed:",
         error,
       );
+
+      dataWarnings.push(
+        "capstone submission status",
+      );
     } else {
-      submissions =
-        (data ?? []) as ProjectSubmission[];
+      submissionData =
+        (data ?? []) as unknown as ProjectSubmission[];
     }
   }
 
@@ -476,66 +598,102 @@ export default async function StudentCoursesPage() {
     );
   }
 
-  const completedLessonIdsByCourse =
-    new Map<string, Set<string>>();
+  const completedLessonIds = new Set(
+    lessonProgress
+      .filter(
+        (progress) => progress.completed,
+      )
+      .map(
+        (progress) => progress.lesson_id,
+      ),
+  );
 
-  for (const progress of lessonProgress) {
-    if (!progress.completed) {
-      continue;
-    }
-
-    const existing =
-      completedLessonIdsByCourse.get(
-        progress.course_id,
-      ) ?? new Set<string>();
-
-    existing.add(progress.lesson_id);
-
-    completedLessonIdsByCourse.set(
-      progress.course_id,
-      existing,
-    );
-  }
-
-  const latestAssessmentByCourse =
-    new Map<
-      string,
-      AssessmentAttempt
-    >();
+  /*
+   * assessment_attempts is ordered newest first.
+   * Therefore the first completed attempt for each course
+   * is the latest attempt.
+   */
+  const assessmentByCourse =
+    new Map<string, CourseAssessment>();
 
   for (const attempt of assessmentAttempts) {
     if (
-      !latestAssessmentByCourse.has(
+      assessmentByCourse.has(
         attempt.course_id,
       )
     ) {
-      latestAssessmentByCourse.set(
-        attempt.course_id,
-        attempt,
+      continue;
+    }
+
+    let percentage: number | null = null;
+
+    if (
+      typeof attempt.earned_points === "number" &&
+      typeof attempt.total_points === "number" &&
+      attempt.total_points > 0
+    ) {
+      percentage =
+        (attempt.earned_points /
+          attempt.total_points) *
+        100;
+    } else if (
+      typeof attempt.score === "number"
+    ) {
+      percentage = Number(
+        attempt.score,
       );
     }
-  }
 
-  const certificateByCourse =
-    new Map<string, Certificate>();
-
-  for (const certificate of certificates) {
-    certificateByCourse.set(
-      certificate.course_id,
-      certificate,
+    assessmentByCourse.set(
+      attempt.course_id,
+      {
+        status: "completed",
+        attempt_id: attempt.id,
+        score:
+          typeof attempt.score === "number"
+            ? attempt.score
+            : null,
+        total_questions:
+          typeof attempt.total_questions ===
+          "number"
+            ? attempt.total_questions
+            : null,
+        completed_at:
+          attempt.completed_at,
+        percentage:
+          percentage !== null
+            ? Math.round(percentage)
+            : null,
+      },
     );
   }
 
   const capstoneByCourse =
-    new Map<string, CourseProject[]>();
+    new Map<string, CourseCapstone>();
 
   for (const project of capstoneProjects) {
     const existing =
       capstoneByCourse.get(
         project.course_id,
-      ) ?? [];
+      ) ?? {
+        has_capstone: false,
+        approved_submission: false,
+      };
 
-    existing.push(project);
+    existing.has_capstone = true;
+
+    const approvedSubmission =
+      submissionData.some(
+        (submission) =>
+          submission.project_id ===
+            project.id &&
+          submission.status ===
+            "approved",
+      );
+
+    if (approvedSubmission) {
+      existing.approved_submission = true;
+    }
 
     capstoneByCourse.set(
       project.course_id,
@@ -543,250 +701,336 @@ export default async function StudentCoursesPage() {
     );
   }
 
-  const rows: CourseRow[] =
-    enrollments
-      .map((enrollment) => {
-        const course =
-          courseMap.get(
-            enrollment.course_id,
-          );
+  const certificateByCourse =
+    new Map<string, CourseCertificate>();
 
-        if (!course) {
-          return null;
-        }
+  for (const certificate of certificates) {
+    certificateByCourse.set(
+      certificate.course_id,
+      {
+        status: certificate.is_revoked
+          ? "revoked"
+          : "valid",
+        certificate_id:
+          certificate.id,
+        certificate_number:
+          certificate.certificate_number,
+      },
+    );
+  }
 
-        const lessons =
-          lessonsByCourse.get(
-            course.id,
-          ) ?? [];
-
-        const completedIds =
-          completedLessonIdsByCourse.get(
-            course.id,
-          ) ?? new Set<string>();
-
-        const completedCount =
-          lessons.filter((lesson) =>
-            completedIds.has(
-              lesson.lesson_id,
-            ),
-          ).length;
-
-        const totalLessons =
-          lessons.length;
-
-        const calculatedProgress =
-          totalLessons > 0
-            ? Math.round(
-                (completedCount /
-                  totalLessons) *
-                  100,
-              )
-            : Number(
-                enrollment.progress_percent ??
-                  0,
-              );
-
-        const progressPercent =
-          Math.min(
-            100,
-            Math.max(
-              0,
-              calculatedProgress,
-            ),
-          );
-
-        const nextLesson =
-          lessons.find(
-            (lesson) =>
-              !completedIds.has(
-                lesson.lesson_id,
-              ),
-          ) ?? null;
-
-        const attempt =
-          latestAssessmentByCourse.get(
-            course.id,
-          ) ?? null;
-
-        const assessmentPercentage =
-          attempt
-            ? calculateAssessmentPercentage(
-                attempt,
-              )
-            : null;
-
-        const certificate =
-          certificateByCourse.get(
-            course.id,
-          );
-
-        const projects =
-          capstoneByCourse.get(
-            course.id,
-          ) ?? [];
-
-        const approved =
-          projects.some(
-            (project) =>
-              submissions.some(
-                (submission) =>
-                  submission.project_id ===
-                    project.id &&
-                  submission.status ===
-                    "approved",
-              ),
-          );
-
-        return {
-          enrollment,
-          course,
-          lessons,
-          completedCount,
-          totalLessons,
-          progressPercent,
-          nextLesson,
-          assessment: {
-            completed: Boolean(attempt),
-            attemptId:
-              attempt?.id ?? null,
-            percentage:
-              assessmentPercentage,
-          },
-          certificate: certificate
-            ? {
-                status:
-                  certificate.is_revoked
-                    ? "revoked"
-                    : "valid",
-                id: certificate.id,
-                number:
-                  certificate.certificate_number,
-              }
-            : {
-                status: "not_issued",
-                id: null,
-                number: null,
-              },
-          capstone: {
-            available:
-              projects.length > 0,
-            approved,
-          },
-        };
-      })
-      .filter(
-        (
-          row,
-        ): row is CourseRow =>
-          row !== null,
+  const courseRows = enrollments
+    .map((enrollment) => {
+      const course = courseMap.get(
+        enrollment.course_id,
       );
 
-  const activeCount =
-    rows.filter(
+      if (!course) {
+        return null;
+      }
+
+      const lessons =
+        lessonsByCourse.get(
+          course.id,
+        ) ?? [];
+
+      const completedCount =
+        lessons.filter((lesson) =>
+          completedLessonIds.has(
+            lesson.lesson_id,
+          ),
+        ).length;
+
+      const totalLessons =
+        lessons.length;
+
+      const allLessonsCompleted =
+        totalLessons > 0 &&
+        completedCount === totalLessons;
+
+      const lessonPercent =
+        totalLessons > 0
+          ? Math.round(
+              (completedCount /
+                totalLessons) *
+                100,
+            )
+          : Number(
+              enrollment.progress_percent ??
+                0,
+            );
+
+      const nextLesson =
+        lessons.find(
+          (lesson) =>
+            !completedLessonIds.has(
+              lesson.lesson_id,
+            ),
+        ) ?? null;
+
+      const assessment =
+        assessmentByCourse.get(
+          course.id,
+        ) ?? {
+          status: "not_started" as const,
+          attempt_id: null,
+          score: null,
+          total_questions: null,
+          completed_at: null,
+          percentage: null,
+        };
+
+      const certificate =
+        certificateByCourse.get(
+          course.id,
+        ) ?? {
+          status: "not_issued" as const,
+          certificate_id: null,
+          certificate_number: null,
+        };
+
+      const capstone =
+        capstoneByCourse.get(
+          course.id,
+        ) ?? {
+          has_capstone: false,
+          approved_submission: false,
+        };
+
+      const assessmentPassed =
+        assessment.percentage !== null &&
+        assessment.percentage >= 70;
+
+      const certificateEligibility: CertificateEligibility =
+        {
+          eligible:
+            allLessonsCompleted &&
+            assessment.status ===
+              "completed" &&
+            assessmentPassed &&
+            capstone.has_capstone &&
+            capstone.approved_submission,
+
+          lessons_complete:
+            allLessonsCompleted,
+
+          assessment_complete:
+            assessment.status ===
+            "completed",
+
+          assessment_passed:
+            assessmentPassed,
+
+          capstone_available:
+            capstone.has_capstone,
+
+          capstone_approved:
+            capstone.approved_submission,
+        };
+
+      return {
+        enrollment,
+        course,
+        lessons,
+        completedCount,
+        totalLessons,
+        allLessonsCompleted,
+        lessonPercent: Math.min(
+          100,
+          Math.max(0, lessonPercent),
+        ),
+        nextLesson,
+        assessment,
+        certificate,
+        capstone,
+        certificateEligibility,
+      };
+    })
+    .filter(
+      (
+        row,
+      ): row is NonNullable<typeof row> =>
+        row !== null,
+    );
+
+  const activeCourses =
+    courseRows.filter(
       (row) =>
         row.enrollment
           .enrollment_status ===
         "active",
-    ).length;
+    );
 
-  const completedCount =
-    rows.filter(
+  const completedCourses =
+    courseRows.filter(
       (row) =>
-        row.progressPercent >= 100 ||
         row.enrollment
           .enrollment_status ===
-          "completed",
-    ).length;
+          "completed" ||
+        row.allLessonsCompleted,
+    );
 
   return (
-    <main className="container rn-student-courses-page">
-      <section className="rn-student-page-header">
-        <span className="rn-eyebrow">
-          MY LEARNING
-        </span>
-
+    <main className="container">
+      <section className="page-header">
         <h1>My Courses</h1>
 
         <p>
-          Track your lessons, resume learning,
-          monitor assessments, and manage your
-          certificates.
+          Track your lessons, resume learning, monitor
+          assessments, and manage your certificates.
         </p>
       </section>
 
-      <section className="rn-course-dashboard-stats">
-        <div className="rn-course-stat-card">
+      {dataWarnings.length > 0 ? (
+        <section
+          className="card"
+          role="status"
+          style={{
+            marginBottom: 20,
+            borderColor: "#fbbf24",
+            background: "#fffbeb",
+          }}
+        >
           <strong>
-            {rows.length}
+            Some learning information could not be loaded
           </strong>
+
+          <p
+            style={{
+              margin: "6px 0 0",
+              color: "var(--muted)",
+            }}
+          >
+            Your courses remain available. Some secondary
+            information may be temporarily unavailable.
+          </p>
+        </section>
+      ) : null}
+
+      {usedEnrollmentFallback ? (
+        <section
+          className="card"
+          style={{
+            marginBottom: 20,
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              color: "var(--muted)",
+            }}
+          >
+            Your enrolled courses were loaded using a
+            compatibility fallback.
+          </p>
+        </section>
+      ) : null}
+
+      <section className="stats-grid">
+        <div className="card">
+          <strong>
+            {courseRows.length}
+          </strong>
+
           <span>Enrolled Courses</span>
         </div>
 
-        <div className="rn-course-stat-card">
+        <div className="card">
           <strong>
-            {activeCount}
+            {activeCourses.length}
           </strong>
+
           <span>Active Learning</span>
         </div>
 
-        <div className="rn-course-stat-card">
+        <div className="card">
           <strong>
-            {completedCount}
+            {completedCourses.length}
           </strong>
+
           <span>Completed</span>
         </div>
       </section>
 
-      <section className="rn-student-course-list">
-        {rows.map((row) => {
+      <section className="stack">
+        {courseRows.map((row) => {
           const {
             course,
             enrollment,
-            lessons,
             completedCount,
             totalLessons,
-            progressPercent,
+            allLessonsCompleted,
+            lessonPercent,
             nextLesson,
             assessment,
             certificate,
-            capstone,
+            certificateEligibility,
           } = row;
 
-          const certificateEligible =
-            totalLessons > 0 &&
-            completedCount ===
-              totalLessons &&
-            assessment.completed &&
-            assessment.percentage !== null &&
-            assessment.percentage >= 70 &&
-            capstone.available &&
-            capstone.approved;
+          const courseAssessmentLabel =
+            assessment.status ===
+            "completed"
+              ? "Completed"
+              : "Not started";
 
-          const continueHref =
+          const assessmentScore =
+            assessment.percentage !== null
+              ? `${assessment.percentage}%`
+              : null;
+
+          const primaryHref =
+            !allLessonsCompleted &&
             nextLesson
               ? `/learn/${course.slug}/${nextLesson.lesson_slug}`
               : `/courses/${course.slug}`;
 
-          const continueLabel =
+          const primaryLabel =
+            !allLessonsCompleted &&
             nextLesson
-              ? progressPercent > 0
-                ? "Continue Learning"
-                : "Start Learning"
+              ? "Continue Learning"
               : "Review Course";
+
+          const assessmentLabel =
+            assessment.status ===
+            "completed"
+              ? "Retake Assessment"
+              : "Start Assessment";
+
+          const assessmentHref =
+            `/student/assessment?course=${encodeURIComponent(
+              course.slug,
+            )}`;
+
+          const resultHref =
+            assessment.attempt_id
+              ? `/student/assessment/results/${encodeURIComponent(
+                  assessment.attempt_id,
+                )}`
+              : null;
+
+          const certificateLabel =
+            certificate.status ===
+            "valid"
+              ? "View Certificate"
+              : certificate.status ===
+                  "revoked"
+                ? "View Revoked Certificate"
+                : "Certificate Not Issued";
+
+          const certificateHref =
+            certificate.certificate_id
+              ? `/student/certificates/${encodeURIComponent(
+                  certificate.certificate_id,
+                )}`
+              : null;
 
           return (
             <article
               key={enrollment.id}
-              className="rn-student-course-card"
+              className="card"
             >
-              <div className="rn-student-course-card-top">
-                <div className="rn-student-course-title">
-                  <span className="rn-course-level">
-                    {course.level ||
-                      "Professional"}
-                  </span>
-
+              <div className="course-card-header">
+                <div>
                   <h2>
                     {course.title}
                   </h2>
@@ -800,31 +1044,27 @@ export default async function StudentCoursesPage() {
                   ) : null}
                 </div>
 
-                <span className="rn-enrollment-badge">
+                <span className="status-badge">
                   {
                     enrollment.enrollment_status
                   }
                 </span>
               </div>
 
-              <div className="rn-student-course-meta">
+              <div className="course-meta">
                 {course.level ? (
                   <span>
-                    Level:{" "}
-                    {course.level}
+                    Level: {course.level}
                   </span>
                 ) : null}
 
                 {course.duration_minutes ? (
                   <span>
-                    {course.duration_minutes >=
-                    60
-                      ? `${Math.round(
-                          (course.duration_minutes /
-                            60) *
-                            10,
-                        ) / 10} hours`
-                      : `${course.duration_minutes} min`}
+                    Duration:{" "}
+                    {
+                      course.duration_minutes
+                    }{" "}
+                    min
                   </span>
                 ) : null}
 
@@ -834,170 +1074,237 @@ export default async function StudentCoursesPage() {
                 </span>
               </div>
 
-              <div className="rn-learning-progress">
-                <div className="rn-learning-progress-heading">
+              <div className="progress-section">
+                <div className="progress-header">
                   <strong>
                     Lesson Progress
                   </strong>
 
                   <span>
-                    {progressPercent}%
+                    {lessonPercent}%
                   </span>
                 </div>
 
-                <div className="rn-learning-progress-track">
+                <div
+                  className="progress-bar"
+                  aria-label={`Lesson progress: ${lessonPercent}%`}
+                >
                   <div
-                    className="rn-learning-progress-fill"
+                    className="progress-fill"
                     style={{
-                      width: `${progressPercent}%`,
+                      width: `${lessonPercent}%`,
                     }}
                   />
                 </div>
               </div>
 
-              <div className="rn-course-dashboard-grid">
-                <div className="rn-course-dashboard-panel">
-                  <span className="rn-panel-label">
-                    COURSE ASSESSMENT
-                  </span>
-
+              <div className="assessment-progress">
+                <div>
                   <strong>
-                    {assessment.completed
-                      ? assessment.percentage !==
-                        null
-                        ? `${assessment.percentage}%`
-                        : "Completed"
-                      : "Not started"}
+                    Course Assessment
                   </strong>
 
                   <p>
-                    {assessment.completed
-                      ? "Latest assessment attempt recorded."
-                      : "Complete the course assessment when ready."}
+                    {
+                      courseAssessmentLabel
+                    }
+
+                    {assessmentScore
+                      ? ` · Latest score: ${assessmentScore}`
+                      : ""}
                   </p>
-
-                  <div className="rn-panel-actions">
-                    <Link
-                      href={
-                        `/student/assessment?course=${encodeURIComponent(
-                          course.slug,
-                        )}`
-                      }
-                      className="rn-button rn-button-secondary"
-                    >
-                      {assessment.completed
-                        ? "Retake Assessment"
-                        : "Start Assessment"}
-                    </Link>
-
-                    {assessment.attemptId ? (
-                      <Link
-                        href={`/student/assessment/results/${encodeURIComponent(
-                          assessment.attemptId,
-                        )}`}
-                        className="rn-text-button"
-                      >
-                        View Result
-                      </Link>
-                    ) : null}
-                  </div>
                 </div>
 
-                <div className="rn-course-dashboard-panel">
-                  <span className="rn-panel-label">
-                    CERTIFICATE
-                  </span>
-
-                  <strong>
-                    {certificate.status ===
-                    "valid"
-                      ? "Issued"
-                      : certificate.status ===
-                          "revoked"
-                        ? "Revoked"
-                        : "Not issued"}
-                  </strong>
-
-                  <p>
-                    {certificate.status ===
-                    "valid"
-                      ? certificate.number
-                        ? `Certificate ${certificate.number}`
-                        : "Certificate available."
-                      : certificateEligible
-                        ? "All certificate requirements are complete."
-                        : "Complete lessons, pass the assessment and receive capstone approval."}
-                  </p>
-
-                  {certificate.id ? (
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {resultHref ? (
                     <Link
-                      href={`/student/certificates/${encodeURIComponent(
-                        certificate.id,
-                      )}`}
-                      className="rn-button rn-button-secondary"
+                      href={resultHref}
+                      className="button secondary"
                     >
-                      View Certificate
+                      View Latest Result
                     </Link>
-                  ) : certificateEligible ? (
-                    <CertificateIssueButton
-                      courseId={
-                        course.id
-                      }
-                    />
                   ) : null}
+
+                  <Link
+                    href={assessmentHref}
+                    className="button secondary"
+                  >
+                    {assessmentLabel}
+                  </Link>
                 </div>
               </div>
 
-              <div className="rn-student-course-actions">
-                <Link
-                  href={continueHref}
-                  className="rn-button rn-button-primary"
+              <div
+                style={{
+                  padding: "16px 0",
+                  borderTop:
+                    "1px solid var(--border)",
+                  borderBottom:
+                    "1px solid var(--border)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems:
+                      "flex-start",
+                    justifyContent:
+                      "space-between",
+                    gap: 16,
+                    flexWrap: "wrap",
+                  }}
                 >
-                  {continueLabel}
+                  <div>
+                    <strong>
+                      Certificate
+                    </strong>
+
+                    <p
+                      style={{
+                        margin: "5px 0 0",
+                        color:
+                          "var(--muted)",
+                      }}
+                    >
+                      {certificate.status ===
+                      "valid"
+                        ? "Certificate issued and valid."
+                        : certificate.status ===
+                            "revoked"
+                          ? "Certificate issued but currently revoked."
+                          : certificateEligibility.eligible
+                            ? "You have completed all certificate requirements."
+                            : "Certificate requirements are not yet complete."}
+                    </p>
+
+                    {certificate.certificate_number ? (
+                      <small
+                        style={{
+                          display:
+                            "block",
+                          marginTop: 5,
+                          color:
+                            "var(--muted)",
+                        }}
+                      >
+                        Certificate No:{" "}
+                        {
+                          certificate.certificate_number
+                        }
+                      </small>
+                    ) : null}
+                  </div>
+
+                  {certificateHref ? (
+                    <Link
+                      href={certificateHref}
+                      className="button secondary"
+                    >
+                      {
+                        certificateLabel
+                      }
+                    </Link>
+                  ) : certificateEligibility.eligible ? (
+                    <CertificateIssueButton
+                      courseId={course.id}
+                    />
+                  ) : null}
+                </div>
+
+                {certificate.status ===
+                  "not_issued" &&
+                !certificateEligibility.eligible ? (
+                  <div
+                    style={{
+                      marginTop: 14,
+                      display: "grid",
+                      gap: 7,
+                    }}
+                  >
+                    <small
+                      style={{
+                        color:
+                          certificateEligibility.lessons_complete
+                            ? "var(--muted)"
+                            : "#b45309",
+                      }}
+                    >
+                      {certificateEligibility.lessons_complete
+                        ? "✓ All published lessons completed"
+                        : "○ Complete all published lessons"}
+                    </small>
+
+                    <small
+                      style={{
+                        color:
+                          certificateEligibility.assessment_passed
+                            ? "var(--muted)"
+                            : "#b45309",
+                      }}
+                    >
+                      {certificateEligibility.assessment_complete
+                        ? certificateEligibility.assessment_passed
+                          ? "✓ Assessment passed with at least 70%"
+                          : "○ Assessment score must be at least 70%"
+                        : "○ Complete the course assessment with at least 70%"}
+                    </small>
+
+                    <small
+                      style={{
+                        color:
+                          certificateEligibility.capstone_available &&
+                          certificateEligibility.capstone_approved
+                            ? "var(--muted)"
+                            : "#b45309",
+                      }}
+                    >
+                      {certificateEligibility.capstone_available
+                        ? certificateEligibility.capstone_approved
+                          ? "✓ Capstone project approved"
+                          : "○ Submit the capstone project and receive approval"
+                        : "○ Capstone project is not yet available"}
+                    </small>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="course-card-actions">
+                <Link
+                  href={primaryHref}
+                  className="button primary"
+                >
+                  {primaryLabel}
                 </Link>
 
                 <Link
                   href={`/courses/${course.slug}`}
-                  className="rn-button rn-button-secondary"
+                  className="button secondary"
                 >
                   Course Details
                 </Link>
-
-                {lessons.length > 0 ? (
-                  <span className="rn-course-lesson-summary">
-                    {lessons.length} published{" "}
-                    {lessons.length === 1
-                      ? "lesson"
-                      : "lessons"}
-                  </span>
-                ) : null}
               </div>
             </article>
           );
         })}
       </section>
 
-      <section className="rn-student-catalog-cta">
-        <div>
-          <span className="rn-eyebrow">
-            KEEP BUILDING
-          </span>
+      <section className="card">
+        <h2>Need another course?</h2>
 
-          <h2>
-            Continue developing practical
-            professional skills.
-          </h2>
-
-          <p>
-            Explore more RuffNeck Learn courses
-            covering AI, productivity, business,
-            education, data and digital work.
-          </p>
-        </div>
+        <p>
+          Browse the RuffNeck Learn catalog to continue
+          building practical professional skills.
+        </p>
 
         <Link
           href="/courses"
-          className="rn-button rn-button-primary"
+          className="button secondary"
         >
           Browse Courses
         </Link>
