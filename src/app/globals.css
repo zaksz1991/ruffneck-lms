@@ -15131,3 +15131,168 @@ main h6 {
     font-size: clamp(1.2rem, 5vw, 1.55rem) !important;
   }
 }
+
+/* =========================================================
+   RUFFNECK LEARN — CERTIFICATE PRINT
+   Add-only
+   ========================================================= */
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 0;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  header,
+  footer,
+  nav,
+  .no-print,
+  .rn-certificate-view-actions,
+  .rn-assessment-actions {
+    display: none !important;
+  }
+
+  .rn-certificate-view-page {
+    width: 100% !important;
+    min-height: 100vh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .rn-certificate-view-page > .container {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .rn-certificate-document {
+    width: 100% !important;
+    min-height: 100vh !important;
+    margin: 0 !important;
+    padding: 18mm !important;
+    box-sizing: border-box !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: none !important;
+    page-break-inside: avoid !important;
+  }
+
+  .rn-certificate-border {
+    min-height: calc(100vh - 36mm) !important;
+    box-sizing: border-box !important;
+    padding: 14mm !important;
+    border: 3px solid #0b1e3a !important;
+    outline: 1px solid #00b4d8 !important;
+    outline-offset: -8px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+
+  .rn-certificate-brand {
+    margin-bottom: 10mm !important;
+  }
+
+  .rn-certificate-logo {
+    max-width: 170px !important;
+    max-height: 55px !important;
+    object-fit: contain !important;
+    margin: 0 auto 5px !important;
+  }
+
+  .rn-certificate-document h1 {
+    margin: 5mm 0 !important;
+    font-size: 30pt !important;
+  }
+
+  .rn-certificate-document h2 {
+    margin: 4mm 0 !important;
+    font-size: 24pt !important;
+  }
+
+  .rn-certificate-document h3 {
+    margin: 3mm auto !important;
+    max-width: 80% !important;
+    font-size: 18pt !important;
+  }
+
+  .rn-certificate-presented,
+  .rn-certificate-completion-text {
+    font-size: 11pt !important;
+  }
+
+  .rn-certificate-divider {
+    margin: 6mm auto !important;
+    width: 65% !important;
+  }
+
+  .rn-certificate-details {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 8mm !important;
+    margin: 5mm 0 !important;
+  }
+
+  .rn-certificate-details span {
+    display: block !important;
+    font-size: 8pt !important;
+  }
+
+  .rn-certificate-details strong {
+    display: block !important;
+    margin-top: 2mm !important;
+    font-size: 10pt !important;
+  }
+
+  .rn-certificate-verification {
+    display: none !important;
+  }
+
+  .rn-certificate-footer {
+    margin-top: auto !important;
+    padding-top: 8mm !important;
+    font-size: 8pt !important;
+  }
+
+  .rn-certificate-revoked {
+    font-size: 22pt !important;
+    font-weight: 800 !important;
+  }
+
+  .rn-certificate-revoked-note {
+    margin: 5mm auto !important;
+    max-width: 70% !important;
+  }
+}
+
+@media screen and (max-width: 700px) {
+  .rn-certificate-verification {
+    flex-direction: column !important;
+  }
+
+  .rn-certificate-verification > div {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .rn-certificate-verification img {
+    max-width: 220px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+}
