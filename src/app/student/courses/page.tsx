@@ -152,39 +152,30 @@ export default async function StudentCoursesPage() {
         <main className="container rn-dashboard-shell">
           <section className="rn-dashboard-header">
             <div>
-              <span className="rn-eyebrow">
-                RUFFNECK LEARN
-              </span>
-
+              <span className="rn-eyebrow">RUFFNECK LEARN</span>
               <h1>My Courses</h1>
-
-              <p className="rn-dashboard-intro">
-                Your learning dashboard could not retrieve your
-                enrollment information.
+              <p>
+                Track your lessons, resume learning, monitor assessments and
+                manage your certificates.
               </p>
             </div>
-          </section>
 
-          <section className="rn-dashboard-card">
-            <span className="rn-eyebrow">
-              TEMPORARILY UNAVAILABLE
-            </span>
-
-            <h2>Learning data unavailable</h2>
-
-            <p className="rn-dashboard-card-text">
-              Your account is still intact. Your enrolled courses
-              could not be loaded at this time.
-            </p>
-
-            <div className="rn-dashboard-inline-actions">
-              <Link
-                href="/courses"
-                className="rn-button rn-button-primary"
-              >
+            <div className="rn-dashboard-header-actions">
+              <Link href="/courses" className="rn-button rn-button-primary">
                 Browse Courses
               </Link>
             </div>
+          </section>
+
+          <section className="rn-dashboard-card rn-empty-state">
+            <h2>Learning data temporarily unavailable</h2>
+            <p>
+              Your account is still intact, but your enrollment data could not
+              be retrieved at this time.
+            </p>
+            <Link href="/courses" className="rn-button rn-button-primary">
+              Browse Courses
+            </Link>
           </section>
         </main>
       );
@@ -238,46 +229,28 @@ function EmptyCoursesPage() {
     <main className="container rn-dashboard-shell">
       <section className="rn-dashboard-header">
         <div>
-          <span className="rn-eyebrow">
-            RUFFNECK LEARN
-          </span>
-
+          <span className="rn-eyebrow">RUFFNECK LEARN</span>
           <h1>My Courses</h1>
-
-          <p className="rn-dashboard-intro">
-            Your enrolled courses, progress, assessments and
-            certificates will appear here.
+          <p>
+            Your enrolled courses and learning progress will appear here.
           </p>
         </div>
 
         <div className="rn-dashboard-header-actions">
-          <Link
-            href="/courses"
-            className="rn-button rn-button-primary"
-          >
+          <Link href="/courses" className="rn-button rn-button-primary">
             Browse Courses
           </Link>
         </div>
       </section>
 
-      <section className="rn-empty-state">
-        <span className="rn-eyebrow">
-          MY LEARNING
-        </span>
-
+      <section className="rn-dashboard-card rn-empty-state">
         <h2>No courses yet</h2>
-
         <p>
-          You are not currently enrolled in any published
-          courses. Explore the RuffNeck Learn catalogue to
-          get started.
+          You are not currently enrolled in any courses. Browse the RuffNeck
+          Learn catalog to start building practical professional skills.
         </p>
-
-        <Link
-          href="/courses"
-          className="rn-button rn-button-primary"
-        >
-          Explore Courses
+        <Link href="/courses" className="rn-button rn-button-primary">
+          Browse Courses
         </Link>
       </section>
     </main>
@@ -291,11 +264,7 @@ async function renderCoursesPage(
   usedEnrollmentFallback: boolean,
 ) {
   const courseIds = Array.from(
-    new Set(
-      enrollments.map(
-        (enrollment) => enrollment.course_id,
-      ),
-    ),
+    new Set(enrollments.map((enrollment) => enrollment.course_id)),
   );
 
   const [
@@ -387,14 +356,11 @@ async function renderCoursesPage(
       .eq("is_published", true),
   ]);
 
-  const dataWarnings: string[] = [];
-
   if (courseResult.error) {
     console.error(
       "Student courses: courses query failed:",
       courseResult.error,
     );
-    dataWarnings.push("course information");
   }
 
   if (curriculumResult.error) {
@@ -402,7 +368,6 @@ async function renderCoursesPage(
       "Student courses: curriculum query failed:",
       curriculumResult.error,
     );
-    dataWarnings.push("lesson curriculum");
   }
 
   if (progressResult.error) {
@@ -410,7 +375,6 @@ async function renderCoursesPage(
       "Student courses: lesson progress query failed:",
       progressResult.error,
     );
-    dataWarnings.push("lesson progress");
   }
 
   if (assessmentResult.error) {
@@ -418,7 +382,6 @@ async function renderCoursesPage(
       "Student courses: assessment query failed:",
       assessmentResult.error,
     );
-    dataWarnings.push("assessment history");
   }
 
   if (certificateResult.error) {
@@ -426,7 +389,6 @@ async function renderCoursesPage(
       "Student courses: certificate query failed:",
       certificateResult.error,
     );
-    dataWarnings.push("certificate information");
   }
 
   if (projectResult.error) {
@@ -434,6 +396,31 @@ async function renderCoursesPage(
       "Student courses: project query failed:",
       projectResult.error,
     );
+  }
+
+  const dataWarnings: string[] = [];
+
+  if (courseResult.error) {
+    dataWarnings.push("course information");
+  }
+
+  if (curriculumResult.error) {
+    dataWarnings.push("lesson curriculum");
+  }
+
+  if (progressResult.error) {
+    dataWarnings.push("lesson progress");
+  }
+
+  if (assessmentResult.error) {
+    dataWarnings.push("assessment history");
+  }
+
+  if (certificateResult.error) {
+    dataWarnings.push("certificate information");
+  }
+
+  if (projectResult.error) {
     dataWarnings.push("capstone information");
   }
 
@@ -460,43 +447,42 @@ async function renderCoursesPage(
       <main className="container rn-dashboard-shell">
         <section className="rn-dashboard-header">
           <div>
-            <span className="rn-eyebrow">
-              RUFFNECK LEARN
-            </span>
-
+            <span className="rn-eyebrow">RUFFNECK LEARN</span>
             <h1>My Courses</h1>
-
-            <p className="rn-dashboard-intro">
-              Track your lessons, resume learning, monitor
-              assessments and manage your certificates.
+            <p>
+              Track your lessons, resume learning, monitor assessments and
+              manage your certificates.
             </p>
+          </div>
+
+          <div className="rn-dashboard-header-actions">
+            <Link href="/courses" className="rn-button rn-button-primary">
+              Browse Courses
+            </Link>
           </div>
         </section>
 
         <section className="rn-dashboard-card">
-          <span className="rn-eyebrow">
-            COURSE DATA
-          </span>
+          {usedEnrollmentFallback ? (
+            <div className="rn-dashboard-notice">
+              Your enrollment was recovered, but course information is
+              temporarily unavailable.
+            </div>
+          ) : null}
 
           <h2>Course information unavailable</h2>
 
-          <p className="rn-dashboard-card-text">
-            Your enrollment was found, but the course catalogue
-            could not be loaded at this time.
+          <p>
+            Your enrollment was found, but the course catalogue could not be
+            loaded at this time.
           </p>
 
-          <div className="rn-dashboard-inline-actions">
-            <Link
-              href="/courses"
-              className="rn-button rn-button-primary"
-            >
+          <div className="rn-course-card-actions">
+            <Link href="/courses" className="rn-button rn-button-primary">
               Browse Courses
             </Link>
 
-            <Link
-              href="/"
-              className="rn-button rn-button-secondary"
-            >
+            <Link href="/" className="rn-button rn-button-secondary">
               Back to Home
             </Link>
           </div>
@@ -505,10 +491,9 @@ async function renderCoursesPage(
     );
   }
 
-  const capstoneProjectIds =
-    capstoneProjects.map(
-      (project) => project.id,
-    );
+  const capstoneProjectIds = capstoneProjects.map(
+    (project) => project.id,
+  );
 
   let submissionData: ProjectSubmission[] = [];
 
@@ -530,9 +515,7 @@ async function renderCoursesPage(
         error,
       );
 
-      dataWarnings.push(
-        "capstone submission status",
-      );
+      dataWarnings.push("capstone submission status");
     } else {
       submissionData =
         (data ?? []) as unknown as ProjectSubmission[];
@@ -553,9 +536,7 @@ async function renderCoursesPage(
 
   for (const lesson of curriculum) {
     const existing =
-      lessonsByCourse.get(
-        lesson.course_id,
-      ) ?? [];
+      lessonsByCourse.get(lesson.course_id) ?? [];
 
     existing.push(lesson);
 
@@ -567,23 +548,15 @@ async function renderCoursesPage(
 
   const completedLessonIds = new Set(
     lessonProgress
-      .filter(
-        (progress) => progress.completed,
-      )
-      .map(
-        (progress) => progress.lesson_id,
-      ),
+      .filter((progress) => progress.completed)
+      .map((progress) => progress.lesson_id),
   );
 
   const assessmentByCourse =
     new Map<string, CourseAssessment>();
 
   for (const attempt of assessmentAttempts) {
-    if (
-      assessmentByCourse.has(
-        attempt.course_id,
-      )
-    ) {
+    if (assessmentByCourse.has(attempt.course_id)) {
       continue;
     }
 
@@ -598,12 +571,8 @@ async function renderCoursesPage(
         (attempt.earned_points /
           attempt.total_points) *
         100;
-    } else if (
-      typeof attempt.score === "number"
-    ) {
-      percentage = Number(
-        attempt.score,
-      );
+    } else if (typeof attempt.score === "number") {
+      percentage = Number(attempt.score);
     }
 
     assessmentByCourse.set(
@@ -616,12 +585,10 @@ async function renderCoursesPage(
             ? attempt.score
             : null,
         total_questions:
-          typeof attempt.total_questions ===
-          "number"
+          typeof attempt.total_questions === "number"
             ? attempt.total_questions
             : null,
-        completed_at:
-          attempt.completed_at,
+        completed_at: attempt.completed_at,
         percentage:
           percentage !== null
             ? Math.round(percentage)
@@ -635,9 +602,7 @@ async function renderCoursesPage(
 
   for (const project of capstoneProjects) {
     const existing =
-      capstoneByCourse.get(
-        project.course_id,
-      ) ?? {
+      capstoneByCourse.get(project.course_id) ?? {
         has_capstone: false,
         approved_submission: false,
       };
@@ -647,10 +612,8 @@ async function renderCoursesPage(
     const approvedSubmission =
       submissionData.some(
         (submission) =>
-          submission.project_id ===
-            project.id &&
-          submission.status ===
-            "approved",
+          submission.project_id === project.id &&
+          submission.status === "approved",
       );
 
     if (approvedSubmission) {
@@ -673,8 +636,7 @@ async function renderCoursesPage(
         status: certificate.is_revoked
           ? "revoked"
           : "valid",
-        certificate_id:
-          certificate.id,
+        certificate_id: certificate.id,
         certificate_number:
           certificate.certificate_number,
       },
@@ -683,28 +645,21 @@ async function renderCoursesPage(
 
   const courseRows = enrollments
     .map((enrollment) => {
-      const course = courseMap.get(
-        enrollment.course_id,
-      );
+      const course = courseMap.get(enrollment.course_id);
 
       if (!course) {
         return null;
       }
 
       const lessons =
-        lessonsByCourse.get(
-          course.id,
-        ) ?? [];
+        lessonsByCourse.get(course.id) ?? [];
 
       const completedCount =
         lessons.filter((lesson) =>
-          completedLessonIds.has(
-            lesson.lesson_id,
-          ),
+          completedLessonIds.has(lesson.lesson_id),
         ).length;
 
-      const totalLessons =
-        lessons.length;
+      const totalLessons = lessons.length;
 
       const allLessonsCompleted =
         totalLessons > 0 &&
@@ -713,27 +668,18 @@ async function renderCoursesPage(
       const lessonPercent =
         totalLessons > 0
           ? Math.round(
-              (completedCount /
-                totalLessons) *
-                100,
+              (completedCount / totalLessons) * 100,
             )
-          : Number(
-              enrollment.progress_percent ??
-                0,
-            );
+          : Number(enrollment.progress_percent ?? 0);
 
       const nextLesson =
         lessons.find(
           (lesson) =>
-            !completedLessonIds.has(
-              lesson.lesson_id,
-            ),
+            !completedLessonIds.has(lesson.lesson_id),
         ) ?? null;
 
       const assessment =
-        assessmentByCourse.get(
-          course.id,
-        ) ?? {
+        assessmentByCourse.get(course.id) ?? {
           status: "not_started" as const,
           attempt_id: null,
           score: null,
@@ -743,18 +689,14 @@ async function renderCoursesPage(
         };
 
       const certificate =
-        certificateByCourse.get(
-          course.id,
-        ) ?? {
+        certificateByCourse.get(course.id) ?? {
           status: "not_issued" as const,
           certificate_id: null,
           certificate_number: null,
         };
 
       const capstone =
-        capstoneByCourse.get(
-          course.id,
-        ) ?? {
+        capstoneByCourse.get(course.id) ?? {
           has_capstone: false,
           approved_submission: false,
         };
@@ -763,32 +705,27 @@ async function renderCoursesPage(
         assessment.percentage !== null &&
         assessment.percentage >= 70;
 
-      const certificateEligibility: CertificateEligibility =
-        {
-          eligible:
-            allLessonsCompleted &&
-            assessment.status ===
-              "completed" &&
-            assessmentPassed &&
-            capstone.has_capstone &&
-            capstone.approved_submission,
+      const certificateEligibility: CertificateEligibility = {
+        eligible:
+          allLessonsCompleted &&
+          assessment.status === "completed" &&
+          assessmentPassed &&
+          capstone.has_capstone &&
+          capstone.approved_submission,
 
-          lessons_complete:
-            allLessonsCompleted,
+        lessons_complete: allLessonsCompleted,
 
-          assessment_complete:
-            assessment.status ===
-            "completed",
+        assessment_complete:
+          assessment.status === "completed",
 
-          assessment_passed:
-            assessmentPassed,
+        assessment_passed: assessmentPassed,
 
-          capstone_available:
-            capstone.has_capstone,
+        capstone_available:
+          capstone.has_capstone,
 
-          capstone_approved:
-            capstone.approved_submission,
-        };
+        capstone_approved:
+          capstone.approved_submission,
+      };
 
       return {
         enrollment,
@@ -818,33 +755,33 @@ async function renderCoursesPage(
   const activeCourses =
     courseRows.filter(
       (row) =>
-        row.enrollment
-          .enrollment_status ===
-        "active",
+        row.enrollment.enrollment_status === "active",
     );
 
   const completedCourses =
     courseRows.filter(
       (row) =>
-        row.enrollment
-          .enrollment_status ===
-          "completed" ||
+        row.enrollment.enrollment_status === "completed" ||
         row.allLessonsCompleted,
+    );
+
+  const totalCompletedLessons =
+    courseRows.reduce(
+      (total, row) => total + row.completedCount,
+      0,
     );
 
   return (
     <main className="container rn-dashboard-shell">
       <section className="rn-dashboard-header">
         <div>
-          <span className="rn-eyebrow">
-            RUFFNECK LEARN
-          </span>
+          <span className="rn-eyebrow">RUFFNECK LEARN</span>
 
           <h1>My Courses</h1>
 
-          <p className="rn-dashboard-intro">
-            Track your lessons, resume learning, monitor
-            assessments and manage your certificates.
+          <p>
+            Track your lessons, resume learning, monitor assessments and
+            manage your certificates.
           </p>
         </div>
 
@@ -866,102 +803,51 @@ async function renderCoursesPage(
       </section>
 
       {dataWarnings.length > 0 ? (
-        <section className="rn-dashboard-card rn-dashboard-notice">
-          <span className="rn-eyebrow">
-            PARTIAL DATA
-          </span>
-
-          <h2>
-            Some learning information could not be loaded
-          </h2>
-
-          <p className="rn-dashboard-card-text">
-            Your courses remain available. Some secondary
-            learning information may temporarily be unavailable.
-          </p>
+        <section
+          className="rn-dashboard-notice"
+          role="status"
+        >
+          Some learning information could not be loaded. Your courses remain
+          available while secondary information is being recovered.
         </section>
       ) : null}
 
       {usedEnrollmentFallback ? (
-        <section className="rn-dashboard-card rn-dashboard-notice">
-          <p className="rn-dashboard-card-text">
-            Your enrolled courses were loaded using a
-            compatibility fallback.
-          </p>
+        <section
+          className="rn-dashboard-notice"
+          role="status"
+        >
+          Your enrolled courses were loaded using a compatibility fallback.
         </section>
       ) : null}
 
       <section className="rn-dashboard-stats">
-        <article className="rn-dashboard-stat">
-          <span className="rn-dashboard-stat-label">
-            Enrolled
-          </span>
+        <div className="rn-dashboard-stat">
+          <strong>{courseRows.length}</strong>
+          <span>Enrolled Courses</span>
+        </div>
 
-          <strong>
-            {courseRows.length}
-          </strong>
+        <div className="rn-dashboard-stat">
+          <strong>{activeCourses.length}</strong>
+          <span>Active Learning</span>
+        </div>
 
-          <small>
-            Courses
-          </small>
-        </article>
+        <div className="rn-dashboard-stat">
+          <strong>{completedCourses.length}</strong>
+          <span>Completed</span>
+        </div>
 
-        <article className="rn-dashboard-stat">
-          <span className="rn-dashboard-stat-label">
-            Active
-          </span>
-
-          <strong>
-            {activeCourses.length}
-          </strong>
-
-          <small>
-            Courses in progress
-          </small>
-        </article>
-
-        <article className="rn-dashboard-stat">
-          <span className="rn-dashboard-stat-label">
-            Completed
-          </span>
-
-          <strong>
-            {completedCourses.length}
-          </strong>
-
-          <small>
-            Courses completed
-          </small>
-        </article>
-
-        <article className="rn-dashboard-stat">
-          <span className="rn-dashboard-stat-label">
-            Lessons
-          </span>
-
-          <strong>
-            {courseRows.reduce(
-              (total, row) =>
-                total + row.completedCount,
-              0,
-            )}
-          </strong>
-
-          <small>
-            Completed lessons
-          </small>
-        </article>
+        <div className="rn-dashboard-stat">
+          <strong>{totalCompletedLessons}</strong>
+          <span>Lessons Completed</span>
+        </div>
       </section>
 
       <section className="rn-dashboard-section">
         <div className="rn-dashboard-section-header">
           <div>
-            <span className="rn-eyebrow">
-              MY LEARNING
-            </span>
-
+            <span className="rn-eyebrow">MY LEARNING</span>
             <h2>Enrolled Courses</h2>
-
             <p>
               Continue your courses and track your progress.
             </p>
@@ -991,14 +877,12 @@ async function renderCoursesPage(
             } = row;
 
             const primaryHref =
-              !allLessonsCompleted &&
-              nextLesson
+              !allLessonsCompleted && nextLesson
                 ? `/learn/${course.slug}/${nextLesson.lesson_slug}`
                 : `/courses/${course.slug}`;
 
             const primaryLabel =
-              !allLessonsCompleted &&
-              nextLesson
+              !allLessonsCompleted && nextLesson
                 ? "Continue Learning"
                 : "Review Course";
 
@@ -1021,6 +905,22 @@ async function renderCoursesPage(
                   )}`
                 : null;
 
+            const assessmentStatus =
+              assessment.status === "completed"
+                ? assessment.percentage !== null
+                  ? `Completed · ${assessment.percentage}%`
+                  : "Completed"
+                : "Not started";
+
+            const certificateStatus =
+              certificate.status === "valid"
+                ? "Issued"
+                : certificate.status === "revoked"
+                  ? "Revoked"
+                  : certificateEligibility.eligible
+                    ? "Ready to issue"
+                    : "In progress";
+
             return (
               <article
                 key={enrollment.id}
@@ -1028,9 +928,9 @@ async function renderCoursesPage(
               >
                 <div className="rn-course-card-body">
                   <div className="rn-course-card-meta">
-                    <span>
-                      {course.level || "Professional"}
-                    </span>
+                    {course.level ? (
+                      <span>{course.level}</span>
+                    ) : null}
 
                     <span>
                       {enrollment.enrollment_status}
@@ -1043,30 +943,16 @@ async function renderCoursesPage(
                     ) : null}
                   </div>
 
-                  <h3>
-                    {course.title}
-                  </h3>
+                  <h3>{course.title}</h3>
 
                   {course.short_description ? (
-                    <p>
-                      {course.short_description}
-                    </p>
-                  ) : (
-                    <p>
-                      Continue learning and build practical
-                      professional skills.
-                    </p>
-                  )}
+                    <p>{course.short_description}</p>
+                  ) : null}
 
                   <div className="rn-progress-block">
                     <div className="rn-progress-header">
-                      <span>
-                        Lesson Progress
-                      </span>
-
-                      <strong>
-                        {lessonPercent}%
-                      </strong>
+                      <strong>Lesson Progress</strong>
+                      <span>{lessonPercent}%</span>
                     </div>
 
                     <div className="rn-progress-track">
@@ -1079,146 +965,103 @@ async function renderCoursesPage(
                     </div>
 
                     <small>
-                      {completedCount} of{" "}
-                      {totalLessons} lessons completed
+                      {completedCount} of {totalLessons} lessons completed
                     </small>
                   </div>
 
                   <div className="rn-course-card-details">
                     <div>
-                      <span className="rn-eyebrow">
-                        ASSESSMENT
-                      </span>
-
-                      <strong>
-                        {assessment.status ===
-                        "completed"
-                          ? assessment.percentage !== null
-                            ? `${assessment.percentage}%`
-                            : "Completed"
-                          : "Not started"}
-                      </strong>
+                      <strong>Assessment</strong>
+                      <span>{assessmentStatus}</span>
                     </div>
 
                     <div>
-                      <span className="rn-eyebrow">
-                        CERTIFICATE
-                      </span>
-
-                      <strong>
-                        {certificate.status ===
-                        "valid"
-                          ? "Issued"
-                          : certificateEligibility.eligible
-                            ? "Ready"
-                            : "In progress"}
-                      </strong>
+                      <strong>Certificate</strong>
+                      <span>{certificateStatus}</span>
                     </div>
                   </div>
 
-                  <div className="rn-course-card-footer">
-                    <span>
-                      {allLessonsCompleted
-                        ? "Course complete"
-                        : nextLesson
-                          ? `Next: ${nextLesson.lesson_title}`
-                          : "Continue learning"}
-                    </span>
+                  {nextLesson ? (
+                    <div className="rn-course-next-lesson">
+                      <small>Next lesson</small>
+                      <strong>{nextLesson.lesson_title}</strong>
+                    </div>
+                  ) : null}
+                </div>
 
+                <div className="rn-course-card-footer">
+                  <div className="rn-course-card-actions">
                     <Link
                       href={primaryHref}
                       className="rn-button rn-button-primary"
                     >
                       {primaryLabel}
                     </Link>
+
+                    <Link
+                      href={`/courses/${course.slug}`}
+                      className="rn-button rn-button-secondary"
+                    >
+                      Course Details
+                    </Link>
+                  </div>
+
+                  <div className="rn-course-card-actions">
+                    <Link
+                      href={assessmentHref}
+                      className="rn-button rn-button-secondary"
+                    >
+                      {assessment.status === "completed"
+                        ? "Retake Assessment"
+                        : "Start Assessment"}
+                    </Link>
+
+                    {resultHref ? (
+                      <Link
+                        href={resultHref}
+                        className="rn-text-link"
+                      >
+                        View Result
+                      </Link>
+                    ) : null}
+
+                    {certificateHref ? (
+                      <Link
+                        href={certificateHref}
+                        className="rn-text-link"
+                      >
+                        View Certificate
+                      </Link>
+                    ) : certificateEligibility.eligible ? (
+                      <CertificateIssueButton
+                        courseId={course.id}
+                      />
+                    ) : null}
                   </div>
                 </div>
 
-                <div className="rn-course-card-actions">
-                  <Link
-                    href={assessmentHref}
-                    className="rn-button rn-button-secondary"
-                  >
-                    {assessment.status ===
-                    "completed"
-                      ? "Retake Assessment"
-                      : "Start Assessment"}
-                  </Link>
-
-                  {resultHref ? (
-                    <Link
-                      href={resultHref}
-                      className="rn-button rn-button-secondary"
-                    >
-                      Latest Result
-                    </Link>
-                  ) : null}
-
-                  {certificateHref ? (
-                    <Link
-                      href={certificateHref}
-                      className="rn-button rn-button-secondary"
-                    >
-                      {certificate.status ===
-                      "revoked"
-                        ? "Revoked Certificate"
-                        : "View Certificate"}
-                    </Link>
-                  ) : certificateEligibility.eligible ? (
-                    <CertificateIssueButton
-                      courseId={course.id}
-                    />
-                  ) : null}
-                </div>
-
                 {!certificateEligibility.eligible &&
-                certificate.status ===
-                  "not_issued" ? (
+                certificate.status === "not_issued" ? (
                   <div className="rn-course-requirements">
-                    <span className="rn-eyebrow">
-                      CERTIFICATE REQUIREMENTS
+                    <strong>Certificate Requirements</strong>
+
+                    <span>
+                      {certificateEligibility.lessons_complete
+                        ? "✓ Complete all published lessons"
+                        : "○ Complete all published lessons"}
                     </span>
 
-                    <div>
-                      <span
-                        className={
-                          certificateEligibility.lessons_complete
-                            ? "is-complete"
-                            : ""
-                        }
-                      >
-                        {certificateEligibility.lessons_complete
-                          ? "✓"
-                          : "○"}{" "}
-                        Complete all published lessons
-                      </span>
+                    <span>
+                      {certificateEligibility.assessment_passed
+                        ? "✓ Pass the assessment with at least 70%"
+                        : "○ Pass the assessment with at least 70%"}
+                    </span>
 
-                      <span
-                        className={
-                          certificateEligibility.assessment_passed
-                            ? "is-complete"
-                            : ""
-                        }
-                      >
-                        {certificateEligibility.assessment_passed
-                          ? "✓"
-                          : "○"}{" "}
-                        Pass the assessment with at least 70%
-                      </span>
-
-                      <span
-                        className={
-                          certificateEligibility.capstone_approved
-                            ? "is-complete"
-                            : ""
-                        }
-                      >
-                        {certificateEligibility.capstone_approved
-                          ? "✓"
-                          : "○"}{" "}
-                        Receive capstone approval
-                      </span>
-                    </div>
+                    <span>
+                      {certificateEligibility.capstone_approved
+                        ? "✓ Receive capstone approval"
+                        : "○ Receive capstone approval"}
+                    </span>
                   </div>
                 ) : null}
               </article>
@@ -1230,15 +1073,10 @@ async function renderCoursesPage(
       <section className="rn-dashboard-section">
         <div className="rn-dashboard-section-header">
           <div>
-            <span className="rn-eyebrow">
-              CONTINUE BUILDING
-            </span>
-
-            <h2>Continue Learning</h2>
-
+            <span className="rn-eyebrow">CONTINUE BUILDING</span>
+            <h2>Continue your learning pathway</h2>
             <p>
-              Explore additional courses and practical learning
-              pathways.
+              Explore additional courses and practical learning pathways.
             </p>
           </div>
         </div>
@@ -1248,40 +1086,30 @@ async function renderCoursesPage(
             href="/courses"
             className="rn-dashboard-action"
           >
-            <strong>
-              Browse Courses
-            </strong>
-
+            <strong>Browse Courses</strong>
             <span>
-              Explore practical AI, data, digital marketing,
-              productivity and professional skills courses.
+              Explore practical AI, data, digital marketing, productivity and
+              professional skills courses.
             </span>
           </Link>
 
           <Link
-            href="/student/projects"
+            href="/student/practical-work"
             className="rn-dashboard-action"
           >
-            <strong>
-              Projects & Capstones
-            </strong>
-
+            <strong>Projects & Capstones</strong>
             <span>
               Complete practical work and track project reviews.
             </span>
           </Link>
 
           <Link
-            href="/student/skills"
+            href="/student/skill-passport"
             className="rn-dashboard-action"
           >
-            <strong>
-              Skill Passport
-            </strong>
-
+            <strong>Skill Passport</strong>
             <span>
-              Review your measured skills, strengths and
-              development areas.
+              Review your measured skills, strengths and development areas.
             </span>
           </Link>
 
@@ -1289,10 +1117,7 @@ async function renderCoursesPage(
             href="/student/certificates"
             className="rn-dashboard-action"
           >
-            <strong>
-              Certificates
-            </strong>
-
+            <strong>Certificates</strong>
             <span>
               View your RuffNeck Learn course credentials.
             </span>
