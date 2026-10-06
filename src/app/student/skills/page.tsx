@@ -19,17 +19,11 @@ type SkillProfile = {
   strengths: string | null;
   gaps: string | null;
   updated_at: string | null;
-  learning_skills:
-    | Skill
-    | Skill[]
-    | null;
+  learning_skills: Skill | Skill[] | null;
 };
 
 function clampScore(value: number | null) {
-  return Math.min(
-    100,
-    Math.max(0, Number(value ?? 0))
-  );
+  return Math.min(100, Math.max(0, Number(value ?? 0)));
 }
 
 function formatLevel(level: string | null) {
@@ -37,10 +31,7 @@ function formatLevel(level: string | null) {
     return "Beginner";
   }
 
-  return (
-    level.charAt(0).toUpperCase() +
-    level.slice(1)
-  );
+  return level.charAt(0).toUpperCase() + level.slice(1);
 }
 
 function formatDate(value: string | null) {
@@ -109,30 +100,23 @@ export default async function StudentSkillsPage() {
   const skillProfiles =
     (profiles || []) as unknown as SkillProfile[];
 
-  const normalized = skillProfiles.map(
-    (profile) => {
-      const skill = Array.isArray(
-        profile.learning_skills
-      )
-        ? profile.learning_skills[0] ?? null
-        : profile.learning_skills;
+  const normalized = skillProfiles.map((profile) => {
+    const skill = Array.isArray(profile.learning_skills)
+      ? profile.learning_skills[0] ?? null
+      : profile.learning_skills;
 
-      return {
-        ...profile,
-        skill,
-        score: clampScore(
-          profile.confidence_score
-        ),
-      };
-    }
-  );
+    return {
+      ...profile,
+      skill,
+      score: clampScore(profile.confidence_score),
+    };
+  });
 
   const averageScore =
     normalized.length > 0
       ? Math.round(
           normalized.reduce(
-            (sum, item) =>
-              sum + item.score,
+            (sum, item) => sum + item.score,
             0
           ) / normalized.length
         )
@@ -142,10 +126,9 @@ export default async function StudentSkillsPage() {
     (item) => item.score >= 80
   );
 
-  const developmentAreas =
-    normalized.filter(
-      (item) => item.score < 50
-    );
+  const developmentAreas = normalized.filter(
+    (item) => item.score < 50
+  );
 
   const latestUpdate =
     normalized
@@ -286,94 +269,82 @@ export default async function StudentSkillsPage() {
                 </div>
 
                 <div className="rn-profile-skill-list">
-                  {normalized.map(
-                    (item) => (
-                      <article
-                        className="rn-profile-skill"
-                        key={item.id}
-                      >
-                        <div className="rn-profile-skill-heading">
-                          <div>
-                            <strong>
-                              {item.skill
-                                ?.name ||
-                                "Learning skill"}
-                            </strong>
+                  {normalized.map((item) => (
+                    <article
+                      className="rn-profile-skill"
+                      key={item.id}
+                    >
+                      <div className="rn-profile-skill-heading">
+                        <div>
+                          <strong>
+                            {item.skill?.name ||
+                              "Learning skill"}
+                          </strong>
 
-                            {item.skill
-                              ?.category && (
-                              <span>
-                                {
-                                  item
-                                    .skill
-                                    .category
-                                }
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="rn-profile-skill-score">
-                            <strong>
-                              {item.score}%
-                            </strong>
-
+                          {item.skill?.category && (
                             <span>
-                              {formatLevel(
-                                item.skill_level
-                              )}
+                              {item.skill.category}
                             </span>
-                          </div>
+                          )}
                         </div>
 
-                        <div className="rn-skill-bar">
-                          <span
-                            style={{
-                              width: `${item.score}%`,
-                            }}
-                          />
+                        <div className="rn-profile-skill-score">
+                          <strong>
+                            {item.score}%
+                          </strong>
+
+                          <span>
+                            {formatLevel(
+                              item.skill_level
+                            )}
+                          </span>
                         </div>
+                      </div>
 
-                        {item.evidence && (
-                          <p className="rn-profile-evidence">
-                            {item.evidence}
-                          </p>
-                        )}
+                      <div className="rn-skill-bar">
+                        <span
+                          style={{
+                            width: `${item.score}%`,
+                          }}
+                        />
+                      </div>
 
-                        {(
-                          item.strengths ||
-                          item.gaps
-                        ) && (
-                          <div className="rn-profile-insight">
-                            {item.strengths && (
-                              <div>
-                                <strong>
-                                  Strength
-                                </strong>
+                      {item.evidence && (
+                        <p className="rn-profile-evidence">
+                          {item.evidence}
+                        </p>
+                      )}
 
-                                <span>
-                                  {
-                                    item.strengths
-                                  }
-                                </span>
-                              </div>
-                            )}
+                      {(item.strengths ||
+                        item.gaps) && (
+                        <div className="rn-profile-insight">
+                          {item.strengths && (
+                            <div>
+                              <strong>
+                                Strength
+                              </strong>
 
-                            {item.gaps && (
-                              <div>
-                                <strong>
-                                  Development
-                                </strong>
+                              <span>
+                                {item.strengths}
+                              </span>
+                            </div>
+                          )}
 
-                                <span>
-                                  {item.gaps}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </article>
-                    )
-                  )}
+                          {item.gaps && (
+                            <div>
+                              <strong>
+                                Development
+                              </strong>
+
+                              <span>
+                                {item.gaps}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </article>
+                  ))}
                 </div>
               </section>
 
@@ -389,31 +360,25 @@ export default async function StudentSkillsPage() {
 
                   {strengths.length ? (
                     <div className="rn-profile-mini-list">
-                      {strengths
-                        .slice(0, 6)
-                        .map((item) => (
-                          <div
-                            key={item.id}
-                          >
-                            <strong>
-                              {item.skill
-                                ?.name ||
-                                "Skill"}
-                            </strong>
+                      {strengths.map((item) => (
+                        <div key={item.id}>
+                          <strong>
+                            {item.skill?.name ||
+                              "Skill"}
+                          </strong>
 
-                            <span>
-                              {item.score}%
-                              demonstrated
-                            </span>
-                          </div>
-                        ))}
+                          <span>
+                            {item.score}%
+                            demonstrated
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <p className="rn-profile-muted">
                       Complete more course
-                      assessments to
-                      identify your strongest
-                      areas.
+                      assessments to identify
+                      your strongest areas.
                     </p>
                   )}
                 </section>
@@ -429,15 +394,11 @@ export default async function StudentSkillsPage() {
 
                   {developmentAreas.length ? (
                     <div className="rn-profile-mini-list">
-                      {developmentAreas
-                        .slice(0, 6)
-                        .map((item) => (
-                          <div
-                            key={item.id}
-                          >
+                      {developmentAreas.map(
+                        (item) => (
+                          <div key={item.id}>
                             <strong>
-                              {item.skill
-                                ?.name ||
+                              {item.skill?.name ||
                                 "Skill"}
                             </strong>
 
@@ -446,14 +407,14 @@ export default async function StudentSkillsPage() {
                               demonstrated
                             </span>
                           </div>
-                        ))}
+                        )
+                      )}
                     </div>
                   ) : (
                     <p className="rn-profile-muted">
                       No major development
-                      areas identified from
-                      the available
-                      assessment data.
+                      areas identified from the
+                      available assessment data.
                     </p>
                   )}
                 </section>
@@ -488,9 +449,7 @@ export default async function StudentSkillsPage() {
             {latestUpdate && (
               <p className="rn-profile-updated">
                 Profile last updated{" "}
-                {formatDate(
-                  latestUpdate
-                )}
+                {formatDate(latestUpdate)}
               </p>
             )}
           </>
