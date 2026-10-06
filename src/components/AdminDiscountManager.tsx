@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
 type Course = {
@@ -73,9 +74,7 @@ function formatNaira(amount: number) {
   }).format(amount);
 }
 
-function toDateTimeLocal(
-  value: string | null
-) {
+function toDateTimeLocal(value: string | null) {
   if (!value) {
     return "";
   }
@@ -184,12 +183,11 @@ export default function AdminDiscountManager() {
 
     setForm({
       code: discount.code,
-      discountType:
-        discount.discount_type,
-      discountValue:
-        String(discount.discount_value),
-      courseId:
-        discount.course_id ?? "",
+      discountType: discount.discount_type,
+      discountValue: String(
+        discount.discount_value
+      ),
+      courseId: discount.course_id ?? "",
       minimumAmount:
         discount.minimum_amount !== null
           ? String(discount.minimum_amount)
@@ -208,8 +206,9 @@ export default function AdminDiscountManager() {
         discount.usage_limit !== null
           ? String(discount.usage_limit)
           : "",
-      perStudentLimit:
-        String(discount.per_student_limit),
+      perStudentLimit: String(
+        discount.per_student_limit
+      ),
       isActive: discount.is_active,
       description:
         discount.description ?? "",
@@ -248,30 +247,25 @@ export default function AdminDiscountManager() {
         ? { id: editingId }
         : {}),
       code: form.code.trim().toUpperCase(),
-      discountType:
-        form.discountType,
-      discountValue:
-        Number(form.discountValue),
-      courseId:
-        form.courseId || null,
-      minimumAmount:
-        form.minimumAmount
-          ? Number(form.minimumAmount)
-          : null,
-      maximumDiscount:
-        form.maximumDiscount
-          ? Number(form.maximumDiscount)
-          : null,
-      startsAt:
-        toIsoOrNull(form.startsAt),
-      expiresAt:
-        toIsoOrNull(form.expiresAt),
-      usageLimit:
-        form.usageLimit
-          ? Number(form.usageLimit)
-          : null,
-      perStudentLimit:
-        Number(form.perStudentLimit || 1),
+      discountType: form.discountType,
+      discountValue: Number(
+        form.discountValue
+      ),
+      courseId: form.courseId || null,
+      minimumAmount: form.minimumAmount
+        ? Number(form.minimumAmount)
+        : null,
+      maximumDiscount: form.maximumDiscount
+        ? Number(form.maximumDiscount)
+        : null,
+      startsAt: toIsoOrNull(form.startsAt),
+      expiresAt: toIsoOrNull(form.expiresAt),
+      usageLimit: form.usageLimit
+        ? Number(form.usageLimit)
+        : null,
+      perStudentLimit: Number(
+        form.perStudentLimit || 1
+      ),
       isActive: form.isActive,
       description:
         form.description.trim() || null,
@@ -309,7 +303,6 @@ export default function AdminDiscountManager() {
       );
 
       resetForm();
-
       await loadDiscounts();
     } catch (saveError) {
       setError(
@@ -344,22 +337,18 @@ export default function AdminDiscountManager() {
               discount.discount_type,
             discountValue:
               discount.discount_value,
-            courseId:
-              discount.course_id,
+            courseId: discount.course_id,
             minimumAmount:
               discount.minimum_amount,
             maximumDiscount:
               discount.maximum_discount,
-            startsAt:
-              discount.starts_at,
-            expiresAt:
-              discount.expires_at,
+            startsAt: discount.starts_at,
+            expiresAt: discount.expires_at,
             usageLimit:
               discount.usage_limit,
             perStudentLimit:
               discount.per_student_limit,
-            isActive:
-              !discount.is_active,
+            isActive: !discount.is_active,
             description:
               discount.description,
           }),
@@ -460,10 +449,8 @@ export default function AdminDiscountManager() {
 
     return (
       courses.find(
-        (course) =>
-          course.id === courseId
-      )?.title ??
-      "Course unavailable"
+        (course) => course.id === courseId
+      )?.title ?? "Course unavailable"
     );
   }
 
@@ -666,9 +653,7 @@ export default function AdminDiscountManager() {
               <input
                 type="number"
                 min="1"
-                value={
-                  form.perStudentLimit
-                }
+                value={form.perStudentLimit}
                 onChange={(event) =>
                   updateField(
                     "perStudentLimit",
@@ -825,10 +810,8 @@ export default function AdminDiscountManager() {
                   </div>
 
                   <p>
-                    {formatDiscount(
-                      discount
-                    )}{" "}
-                    ·{" "}
+                    {formatDiscount(discount)}
+                    {" · "}
                     {getCourseName(
                       discount.course_id
                     )}
@@ -845,21 +828,17 @@ export default function AdminDiscountManager() {
                   <span>
                     Used:{" "}
                     <strong>
-                      {
-                        discount.usage_count
-                      }
-                    }
-                    {discount.usage_limit
-                      ? ` / ${discount.usage_limit}`
-                      : ""}
+                      {discount.usage_count}
+                      {discount.usage_limit
+                        ? ` / ${discount.usage_limit}`
+                        : ""}
+                    </strong>
                   </span>
 
                   <span>
                     Per student:{" "}
                     <strong>
-                      {
-                        discount.per_student_limit
-                      }
+                      {discount.per_student_limit}
                     </strong>
                   </span>
 
@@ -904,6 +883,15 @@ export default function AdminDiscountManager() {
                   >
                     Edit
                   </button>
+
+                  <Link
+                    className="btn"
+                    href={`/admin/discounts/redemptions?codeId=${encodeURIComponent(
+                      discount.id
+                    )}`}
+                  >
+                    View Redemptions
+                  </Link>
 
                   <button
                     type="button"

@@ -49,12 +49,20 @@ function formatDate(value: string) {
 }
 
 export default function DiscountRedemptionReport() {
-  const [rows, setRows] = useState<Redemption[]>([]);
-  const [summary, setSummary] =
-    useState<ReportResponse["summary"]>(undefined);
+  const [rows, setRows] = useState<Redemption[]>(
+    []
+  );
 
-  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] =
+    useState<ReportResponse["summary"]>();
+
+  const [loading, setLoading] =
+    useState(true);
+
   const [error, setError] =
+    useState<string | null>(null);
+
+  const [selectedCode, setSelectedCode] =
     useState<string | null>(null);
 
   async function loadReport() {
@@ -62,8 +70,24 @@ export default function DiscountRedemptionReport() {
     setError(null);
 
     try {
+      const params =
+        new URLSearchParams(
+          window.location.search
+        );
+
+      const codeId =
+        params.get("codeId");
+
+      setSelectedCode(codeId);
+
+      const endpoint = codeId
+        ? `/api/admin/discounts/redemptions?codeId=${encodeURIComponent(
+            codeId
+          )}`
+        : "/api/admin/discounts/redemptions";
+
       const response = await fetch(
-        "/api/admin/discounts/redemptions",
+        endpoint,
         {
           cache: "no-store",
         }
@@ -99,7 +123,9 @@ export default function DiscountRedemptionReport() {
   if (loading) {
     return (
       <section className="admin-card">
-        <p>Loading discount redemption report...</p>
+        <p>
+          Loading discount redemption report...
+        </p>
       </section>
     );
   }
@@ -160,22 +186,54 @@ export default function DiscountRedemptionReport() {
         </div>
       </section>
 
+      {selectedCode ? (
+        <section className="admin-card">
+          <div className="rn-discount-report-heading">
+            <div>
+              <p>
+                Filtered discount report
+              </p>
+
+              <h2>
+                Code-specific redemptions
+              </h2>
+            </div>
+
+            <a
+              className="btn"
+              href="/admin/discounts/redemptions"
+            >
+              View All Redemptions
+            </a>
+          </div>
+        </section>
+      ) : null}
+
       {!rows.length ? (
         <section className="admin-card">
-          <h2>No discount redemptions yet</h2>
+          <h2>
+            No discount redemptions yet
+          </h2>
+
           <p>
-            Discount usage will appear here after
-            students successfully redeem codes.
+            Discount usage will appear here
+            after students successfully redeem
+            codes.
           </p>
         </section>
       ) : (
         <section className="admin-card">
           <div className="admin-card-header">
             <div>
-              <h2>Redemption History</h2>
+              <h2>
+                Redemption History
+              </h2>
+
               <p>
                 {rows.length} redemption
-                {rows.length === 1 ? "" : "s"}
+                {rows.length === 1
+                  ? ""
+                  : "s"}
               </p>
             </div>
           </div>
@@ -202,7 +260,9 @@ export default function DiscountRedemptionReport() {
                   </div>
 
                   <span className="rn-discount-report-date">
-                    {formatDate(row.createdAt)}
+                    {formatDate(
+                      row.createdAt
+                    )}
                   </span>
                 </div>
 
@@ -246,7 +306,10 @@ export default function DiscountRedemptionReport() {
 
                 {row.txRef ? (
                   <div className="rn-discount-report-reference">
-                    <span>Transaction reference</span>
+                    <span>
+                      Transaction reference
+                    </span>
+
                     <code>
                       {row.txRef}
                     </code>
