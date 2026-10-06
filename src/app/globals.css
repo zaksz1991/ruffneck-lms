@@ -15526,3 +15526,137 @@ main h6 {
     text-align: center;
   }
 }
+
+/* =========================================================
+   RUFFNECK LEARN — ADMIN DISCOUNT MANAGEMENT
+   ADD-ONLY
+   ========================================================= */
+
+.rn-discount-admin-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.rn-discount-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.rn-discount-admin-grid label,
+.rn-discount-admin-full {
+  display: grid;
+  gap: 0.4rem;
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.rn-discount-admin-grid input,
+.rn-discount-admin-grid select,
+.rn-discount-admin-full textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.75rem 0.8rem;
+  border: 1px solid rgba(11, 30, 58, 0.16);
+  border-radius: 9px;
+  background: #fff;
+  color: #0b1e3a;
+  font: inherit;
+}
+
+.rn-discount-admin-grid input:focus,
+.rn-discount-admin-grid select:focus,
+.rn-discount-admin-full textarea:focus {
+  outline: 2px solid rgba(0, 180, 216, 0.2);
+  border-color: #00b4d8;
+}
+
+.rn-discount-admin-full {
+  grid-column: 1 / -1;
+}
+
+.rn-discount-admin-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.rn-discount-admin-checkbox input {
+  width: 16px;
+  height: 16px;
+}
+
+.rn-discount-admin-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.rn-discount-admin-item {
+  display: grid;
+  gap: 1rem;
+  padding: 1.15rem;
+  border: 1px solid rgba(11, 30, 58, 0.12);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.rn-discount-admin-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+.rn-discount-admin-title > strong {
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.rn-discount-admin-item p {
+  margin: 0.35rem 0 0;
+  color: #64748b;
+  font-size: 0.84rem;
+}
+
+.rn-discount-admin-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(11, 30, 58, 0.08);
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.rn-discount-admin-meta strong {
+  color: #0b1e3a;
+}
+
+@media (max-width: 768px) {
+  .rn-discount-admin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rn-discount-admin-full {
+    grid-column: auto;
+  }
+
+  .rn-discount-admin-meta {
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .rn-discount-admin-item
+    .rn-payment-history-actions {
+    flex-direction: column;
+  }
+
+  .rn-discount-admin-item
+    .rn-payment-history-actions
+    .btn {
+    width: 100%;
+  }
+}
