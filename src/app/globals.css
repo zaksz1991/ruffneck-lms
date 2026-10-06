@@ -15660,3 +15660,137 @@ main h6 {
     width: 100%;
   }
 }
+
+/* =========================================================
+   RUFFNECK LEARN — DISCOUNT REDEMPTION REPORT
+   ADD-ONLY
+   ========================================================= */
+
+.rn-discount-report {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.rn-discount-report-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.rn-discount-report-summary .admin-card {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.rn-discount-report-summary span {
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rn-discount-report-summary strong {
+  color: #0b1e3a;
+  font-size: 1.25rem;
+}
+
+.rn-discount-report-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.rn-discount-report-item {
+  display: grid;
+  gap: 1rem;
+  padding: 1.1rem;
+  border: 1px solid rgba(11, 30, 58, 0.1);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.rn-discount-report-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.rn-discount-report-heading strong {
+  display: inline-block;
+  color: #0b1e3a;
+  letter-spacing: 0.06em;
+}
+
+.rn-discount-report-heading h3 {
+  margin: 0.35rem 0 0;
+}
+
+.rn-discount-report-heading p {
+  margin: 0.3rem 0 0;
+  color: #64748b;
+  font-size: 0.84rem;
+}
+
+.rn-discount-report-date {
+  flex-shrink: 0;
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.rn-discount-report-values {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(11, 30, 58, 0.08);
+}
+
+.rn-discount-report-values span,
+.rn-discount-report-reference span {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rn-discount-report-values strong {
+  font-size: 0.9rem;
+}
+
+.rn-discount-report-reference {
+  padding-top: 0.8rem;
+  border-top: 1px solid rgba(11, 30, 58, 0.08);
+}
+
+.rn-discount-report-reference code {
+  overflow-wrap: anywhere;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 900px) {
+  .rn-discount-report-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rn-discount-report-values {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .rn-discount-report-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .rn-discount-report-heading {
+    flex-direction: column;
+  }
+
+  .rn-discount-report-values {
+    grid-template-columns: 1fr;
+  }
+}
