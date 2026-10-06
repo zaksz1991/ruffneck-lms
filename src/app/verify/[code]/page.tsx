@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import VerificationQr from "./VerificationQr";
+import PrintVerificationButton from "./PrintVerificationButton";
 
 type PageProps = {
   params: Promise<{
@@ -377,12 +378,31 @@ export default async function PublicVerificationPage({
   return (
     <main className="page-shell">
       <section
-        className="card"
+        className="card rn-verification-print-area"
         style={{
           maxWidth: 960,
           margin: "2rem auto",
         }}
       >
+        <div
+          className="rn-verification-actions"
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: "0.75rem",
+            marginBottom: "1.5rem",
+          }}
+        >
+          <PrintVerificationButton />
+
+          <Link
+            href="/"
+            className="rn-button"
+          >
+            RuffNeck Learn
+          </Link>
+        </div>
+
         <div
           style={{
             display: "flex",
@@ -447,7 +467,8 @@ export default async function PublicVerificationPage({
             style={{
               marginTop: "1.5rem",
               display: "flex",
-              justifyContent: "flex-start",
+              justifyContent:
+                "flex-start",
             }}
           >
             <VerificationQr

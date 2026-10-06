@@ -16820,3 +16820,40 @@ hr {
   color: var(--navy, #0b1e3a);
   font-weight: 700;
 }
+
+/* =========================================================
+   PUBLIC SKILL PASSPORT PRINT VIEW
+   ========================================================= */
+
+@media print {
+  .rn-verification-actions {
+    display: none !important;
+  }
+
+  .rn-verification-print-area {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .rn-verification-print-area .card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .rn-verification-print-area a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+
+  .rn-verification-print-area {
+    color: #111827 !important;
+    background: #ffffff !important;
+  }
+
+  body {
+    background: #ffffff !important;
+  }
+}
