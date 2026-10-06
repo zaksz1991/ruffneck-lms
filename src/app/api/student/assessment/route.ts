@@ -88,7 +88,7 @@ async function verifyCourseAccess(
     error: courseError,
   } = await supabase
     .from("courses")
-    .select("id")
+    .select("id, is_free")
     .eq("id", courseId)
     .eq("status", "published")
     .maybeSingle();
@@ -135,6 +135,22 @@ async function verifyCourseAccess(
     return {
       error:
         "You must be enrolled in this course before accessing its assessment.",
+      status: 403,
+    };
+  }
+
+  /*
+   * Free courses may be assessed through an active/completed
+   * enrollment. Paid courses require the canonical enrollment
+   * payment state: "paid".
+   */
+  if (
+    !course.is_free &&
+    enrollment.payment_status !== "paid"
+  ) {
+    return {
+      error:
+        "Payment is required before accessing this course assessment.",
       status: 403,
     };
   }
@@ -654,10 +670,6 @@ export async function POST(request: Request) {
         );
       }
 
-      /*
-       * The submitted answer must actually be one of the
-       * choices supplied by the server.
-       */
       const canonicalOption =
         options.find(
           (option) =>
@@ -755,10 +767,6 @@ export async function POST(request: Request) {
     const timestamp =
       new Date().toISOString();
 
-    /*
-     * Create the attempt first because assessment_answers
-     * requires its attempt_id.
-     */
     const {
       data: attemptData,
       error: attemptError,
@@ -823,11 +831,6 @@ export async function POST(request: Request) {
         assessmentAnswerRows
       );
 
-    /*
-     * Prevent an orphaned assessment attempt from being
-     * treated as a valid completed attempt when answer
-     * persistence fails.
-     */
     if (answersError) {
       const {
         error: rollbackError,
@@ -860,10 +863,6 @@ export async function POST(request: Request) {
       );
     }
 
-    /*
-     * Update learner skill profiles after the assessment
-     * and all individual answers have been persisted.
-     */
     const skillResults: Array<{
       id: string;
       name: string;
@@ -934,10 +933,6 @@ export async function POST(request: Request) {
         );
 
       if (profileError) {
-        /*
-         * Skill analytics are supplementary. The actual
-         * assessment has already been persisted successfully.
-         */
         console.error(
           "Skill profile update failed:",
           profileError
@@ -957,11 +952,6 @@ export async function POST(request: Request) {
       });
     }
 
-    /*
-     * Activity logging is supplementary analytics.
-     * It must not invalidate an otherwise successful
-     * assessment submission.
-     */
     const {
       error: activityError,
     } = await supabase
