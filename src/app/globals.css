@@ -17007,3 +17007,39 @@ hr {
   font-weight: 500 !important;
   line-height: 1.35 !important;
 }
+
+/* =========================================================
+   MOBILE NAVIGATION — KEEP ALL ITEMS ACCESSIBLE
+   ========================================================= */
+
+@media (max-width: 768px) {
+  .site-header .nav {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    white-space: nowrap !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+  }
+
+  .site-header .nav::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .site-header .nav a,
+  .site-header .nav button {
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+  }
+
+  .site-header .nav a:last-of-type,
+  .site-header .nav button:last-of-type {
+    flex-shrink: 0 !important;
+  }
+}
