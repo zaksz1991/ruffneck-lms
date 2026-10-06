@@ -15,6 +15,9 @@ type PaymentRecord = {
   amount: number;
   currency: string;
   status: string;
+  original_amount: number | null;
+  discount_code_id: string | null;
+  discount_amount: number;
 };
 
 type EnrollmentRecord = {
@@ -195,13 +198,147 @@ async function markPaymentSuccessful(
   }
 }
 
+/**
+ * Records a successful coupon redemption exactly once.
+ *
+ * The unique index on:
+ *   (discount_code_id, student_id)
+ *
+ * prevents repeated Flutterwave callbacks from creating duplicate
+ * redemption records or incrementing usage more than once.
+ */
+async function recordDiscountRedemption(
+  payment: PaymentRecord
+) {
+  if (
+    !payment.discount_code_id ||
+    payment.discount_amount <= 0
+  ) {
+    return;
+  }
+
+  const admin = createAdminClient();
+
+  const {
+    data: existingRedemption,
+    error: existingRedemptionError,
+  } = await admin
+    .from("course_discount_redemptions")
+    .select("id")
+    .eq(
+      "discount_code_id",
+      payment.discount_code_id
+    )
+    .eq("student_id", payment.student_id)
+    .maybeSingle<{ id: string }>();
+
+  if (existingRedemptionError) {
+    throw new Error(
+      `Unable to check discount redemption: ${existingRedemptionError.message}`
+    );
+  }
+
+  if (existingRedemption) {
+    return;
+  }
+
+  const originalAmount =
+    payment.original_amount ??
+    payment.amount + payment.discount_amount;
+
+  const {
+    data: redemption,
+    error: redemptionError,
+  } = await admin
+    .from("course_discount_redemptions")
+    .insert({
+      discount_code_id:
+        payment.discount_code_id,
+      student_id: payment.student_id,
+      course_id: payment.course_id,
+      payment_id: payment.id,
+      amount_before_discount: originalAmount,
+      discount_amount: payment.discount_amount,
+      amount_paid: payment.amount,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (!redemptionError && redemption) {
+    const {
+      data: discount,
+      error: discountLookupError,
+    } = await admin
+      .from("course_discount_codes")
+      .select("usage_count, usage_limit")
+      .eq(
+        "id",
+        payment.discount_code_id
+      )
+      .single<{
+        usage_count: number;
+        usage_limit: number | null;
+      }>();
+
+    if (discountLookupError || !discount) {
+      throw new Error(
+        discountLookupError?.message ||
+          "Discount redemption was recorded but the discount code could not be updated."
+      );
+    }
+
+    const nextUsageCount =
+      discount.usage_count + 1;
+
+    const {
+      error: usageUpdateError,
+    } = await admin
+      .from("course_discount_codes")
+      .update({
+        usage_count: nextUsageCount,
+        updated_at: new Date().toISOString(),
+      })
+      .eq(
+        "id",
+        payment.discount_code_id
+      );
+
+    if (usageUpdateError) {
+      throw new Error(
+        `Discount redemption was recorded but usage count could not be updated: ${usageUpdateError.message}`
+      );
+    }
+
+    return;
+  }
+
+  /*
+   * Another callback may have inserted the redemption
+   * between our existence check and insert.
+   *
+   * The unique constraint makes that safe.
+   */
+  if (redemptionError?.code === "23505") {
+    return;
+  }
+
+  throw new Error(
+    redemptionError?.message ||
+      "The discount redemption could not be recorded."
+  );
+}
+
 async function fulfilPayment(
   payment: PaymentRecord,
   transactionId: string | null
 ) {
   const verification = transactionId
-    ? await verifyFlutterwaveTransaction(transactionId)
-    : await verifyFlutterwaveByReference(payment.tx_ref);
+    ? await verifyFlutterwaveTransaction(
+        transactionId
+      )
+    : await verifyFlutterwaveByReference(
+        payment.tx_ref
+      );
 
   if (verification.status !== "successful") {
     throw new Error(
@@ -231,20 +368,26 @@ async function fulfilPayment(
   }
 
   /*
-   * IMPORTANT:
-   *
-   * course_payments.status represents the verified payment transaction.
-   * enrollments.payment_status represents the student's course access state.
-   *
-   * The payment is therefore marked successful FIRST.
-   * Only after that succeeds do we grant paid enrollment access.
+   * Mark the verified payment first.
    */
   await markPaymentSuccessful(
     payment,
     verification.id
   );
 
-  return activateEnrollment(payment);
+  /*
+   * Grant course access.
+   */
+  const enrollment =
+    await activateEnrollment(payment);
+
+  /*
+   * Record coupon redemption only after
+   * the payment and enrollment are successful.
+   */
+  await recordDiscountRedemption(payment);
+
+  return enrollment;
 }
 
 export async function GET(request: Request) {
@@ -293,6 +436,9 @@ export async function GET(request: Request) {
         "amount",
         "currency",
         "status",
+        "original_amount",
+        "discount_code_id",
+        "discount_amount",
       ].join(", ")
     )
     .eq("tx_ref", txRef)
@@ -313,15 +459,14 @@ export async function GET(request: Request) {
   }
 
   /*
-   * An already-successful payment must still have a paid enrollment.
-   *
-   * This handles cases where the payment was successfully recorded but
-   * enrollment creation was interrupted or failed during an earlier
-   * callback attempt.
+   * An already-successful payment must still have:
+   * 1. paid enrollment
+   * 2. discount redemption, where applicable
    */
   if (payment.status === "successful") {
     try {
       await activateEnrollment(payment);
+      await recordDiscountRedemption(payment);
 
       return redirectToCourse(
         request,
@@ -330,7 +475,7 @@ export async function GET(request: Request) {
       );
     } catch (error) {
       console.error(
-        "Successful Flutterwave payment could not activate enrollment:",
+        "Successful Flutterwave payment could not complete fulfilment:",
         error
       );
 
@@ -347,7 +492,8 @@ export async function GET(request: Request) {
       .from("course_payments")
       .update({
         status: "failed",
-        updated_at: new Date().toISOString(),
+        updated_at:
+          new Date().toISOString(),
       })
       .eq("id", payment.id);
 
@@ -379,7 +525,8 @@ export async function GET(request: Request) {
       .from("course_payments")
       .update({
         status: "failed",
-        updated_at: new Date().toISOString(),
+        updated_at:
+          new Date().toISOString(),
       })
       .eq("id", payment.id);
 
