@@ -103,7 +103,7 @@ export function Header() {
       setSignOutError(
         error instanceof Error
           ? error.message
-          : "Unable to sign out."
+          : "Unable to sign out.",
       );
 
       setSigningOut(false);
@@ -185,6 +185,14 @@ export function Header() {
 
                 <Link href="/student/scan">
                   Scan & Learn
+                </Link>
+
+                <Link href="/student/practical-work">
+                  Practical Work
+                </Link>
+
+                <Link href="/student/skill-passport">
+                  Skill Passport
                 </Link>
 
                 <Link href="/student/ai-drafts">
