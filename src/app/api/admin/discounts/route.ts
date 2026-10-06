@@ -36,19 +36,16 @@ async function requireAdmin() {
     };
   }
 
-  const { data: profile, error } =
-    await supabase
-      .from("profiles")
-      .select("id, role")
-      .eq("id", user.id)
-      .single();
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("id, role")
+    .eq("id", user.id)
+    .single();
 
   if (
     error ||
     !profile ||
-    !["admin", "instructor"].includes(
-      profile.role
-    )
+    !["admin", "instructor"].includes(profile.role)
   ) {
     return {
       error: NextResponse.json(
@@ -81,9 +78,7 @@ function normalizeNullableNumber(
     : null;
 }
 
-function validatePayload(
-  payload: DiscountPayload
-) {
+function validatePayload(payload: DiscountPayload) {
   const code = payload.code
     ?.trim()
     .toUpperCase();
@@ -136,8 +131,9 @@ function validatePayload(
       payload.usageLimit
     );
 
-  const perStudentLimit =
-    Number(payload.perStudentLimit ?? 1);
+  const perStudentLimit = Number(
+    payload.perStudentLimit ?? 1
+  );
 
   if (
     minimumAmount !== null &&
@@ -191,6 +187,88 @@ function validatePayload(
   return null;
 }
 
+async function validateSelectedCourse({
+  admin,
+  role,
+  userId,
+  courseId,
+  discountType,
+  discountValue,
+}: {
+  admin: ReturnType<typeof createAdminClient>;
+  role: string;
+  userId: string;
+  courseId?: string | null;
+  discountType: DiscountType;
+  discountValue: number;
+}) {
+  if (!courseId) {
+    if (role === "instructor") {
+      return {
+        error:
+          "Instructors must assign discounts to one of their courses.",
+      };
+      }
+
+    return {
+      course: null,
+      error: null,
+    };
+  }
+
+  const { data: course, error } = await admin
+    .from("courses")
+    .select(
+      "id, title, price_ngn, instructor_id, status"
+    )
+    .eq("id", courseId)
+    .maybeSingle();
+
+  if (error) {
+    return {
+      error: error.message,
+    };
+  }
+
+  if (!course) {
+    return {
+      error: "Selected course was not found.",
+    };
+  }
+
+  if (course.status !== "published") {
+    return {
+      error:
+        "Discounts can only be assigned to published courses.",
+    };
+  }
+
+  if (
+    role === "instructor" &&
+    course.instructor_id !== userId
+  ) {
+    return {
+      error:
+        "You can only create discounts for your assigned courses.",
+    };
+  }
+
+  if (
+    discountType === "fixed" &&
+    discountValue > Number(course.price_ngn ?? 0)
+  ) {
+    return {
+      error:
+        "Fixed discount cannot exceed the course price.",
+    };
+  }
+
+  return {
+    course,
+    error: null,
+  };
+}
+
 export async function GET() {
   const auth = await requireAdmin();
 
@@ -200,7 +278,7 @@ export async function GET() {
 
   const { admin, role, user } = auth;
 
-  let query = admin
+  let discountQuery = admin
     .from("course_discount_codes")
     .select(
       `
@@ -227,7 +305,23 @@ export async function GET() {
       ascending: false,
     });
 
+  let courseQuery = admin
+    .from("courses")
+    .select(
+      "id, title, slug, price_ngn, status"
+    )
+    .eq("status", "published")
+    .gt("price_ngn", 0)
+    .order("title", {
+      ascending: true,
+    });
+
   if (role === "instructor") {
+    courseQuery = courseQuery.eq(
+      "instructor_id",
+      user.id
+    );
+
     const { data: courses, error } =
       await admin
         .from("courses")
@@ -245,47 +339,46 @@ export async function GET() {
       (course) => course.id
     );
 
-    query = courseIds.length
-      ? query.in("course_id", courseIds)
-      : query.is("course_id", null);
+    discountQuery = courseIds.length
+      ? discountQuery.in(
+          "course_id",
+          courseIds
+        )
+      : discountQuery.eq(
+          "course_id",
+          "00000000-0000-0000-0000-000000000000"
+        );
   }
 
-  const { data, error } = await query;
+  const [
+    discountsResult,
+    coursesResult,
+  ] = await Promise.all([
+    discountQuery,
+    courseQuery,
+  ]);
 
-  if (error) {
+  if (discountsResult.error) {
     return NextResponse.json(
-      { error: error.message },
+      { error: discountsResult.error.message },
       { status: 500 }
     );
   }
 
-  const courseIds = [
-    ...new Set(
-      (data ?? [])
-        .map((item) => item.course_id)
-        .filter(Boolean)
-    ),
-  ];
-
-  const { data: courses } =
-    courseIds.length
-      ? await admin
-          .from("courses")
-          .select(
-            "id, title, slug, price_ngn, status"
-          )
-          .in("id", courseIds)
-      : { data: [] };
+  if (coursesResult.error) {
+    return NextResponse.json(
+      { error: coursesResult.error.message },
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json({
-    discounts: data ?? [],
-    courses: courses ?? [],
+    discounts: discountsResult.data ?? [],
+    courses: coursesResult.data ?? [],
   });
 }
 
-export async function POST(
-  request: Request
-) {
+export async function POST(request: Request) {
   const auth = await requireAdmin();
 
   if ("error" in auth) {
@@ -343,69 +436,34 @@ export async function POST(
     Number(payload.perStudentLimit ?? 1)
   );
 
-  if (payload.courseId) {
-    const { data: course } =
-      await admin
-        .from("courses")
-        .select(
-          "id, price_ngn, instructor_id, status"
-        )
-        .eq("id", payload.courseId)
-        .maybeSingle();
+  const courseValidation =
+    await validateSelectedCourse({
+      admin,
+      role,
+      userId: user.id,
+      courseId: payload.courseId,
+      discountType: payload.discountType!,
+      discountValue,
+    });
 
-    if (!course) {
-      return NextResponse.json(
-        { error: "Selected course was not found." },
-        { status: 400 }
-      );
-    }
-
-    if (
-      course.status !== "published"
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Discounts can only be assigned to published courses.",
-        },
-        { status: 400 }
-      );
-    }
-
-    if (
-      role === "instructor" &&
-      course.instructor_id !== user.id
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "You can only create discounts for your assigned courses.",
-        },
-        { status: 403 }
-      );
-    }
-
-    if (
-      discountValue >
-        Number(course.price_ngn ?? 0) &&
-      payload.discountType === "fixed"
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Fixed discount cannot exceed the course price.",
-        },
-        { status: 400 }
-      );
-    }
+  if (courseValidation.error) {
+    return NextResponse.json(
+      { error: courseValidation.error },
+      { status:
+          courseValidation.error.includes(
+            "assigned courses"
+          )
+            ? 403
+            : 400,
+      }
+    );
   }
 
-  const { data: existing } =
-    await admin
-      .from("course_discount_codes")
-      .select("id")
-      .eq("code", code)
-      .maybeSingle();
+  const { data: existing } = await admin
+    .from("course_discount_codes")
+    .select("id")
+    .eq("code", code)
+    .maybeSingle();
 
   if (existing) {
     return NextResponse.json(
@@ -417,34 +475,34 @@ export async function POST(
     );
   }
 
-  const { data, error } =
-    await admin
-      .from("course_discount_codes")
-      .insert({
-        code,
-        discount_type: payload.discountType,
-        discount_value: discountValue,
-        course_id:
-          payload.courseId || null,
-        minimum_amount: minimumAmount,
-        maximum_discount:
-          maximumDiscount,
-        starts_at:
-          payload.startsAt || null,
-        expires_at:
-          payload.expiresAt || null,
-        usage_limit: usageLimit,
-        per_student_limit:
-          perStudentLimit,
-        is_active:
-          payload.isActive ?? true,
-        description:
-          payload.description?.trim() ||
-          null,
-        created_by: user.id,
-      })
-      .select()
-      .single();
+  const { data, error } = await admin
+    .from("course_discount_codes")
+    .insert({
+      code,
+      discount_type:
+        payload.discountType,
+      discount_value: discountValue,
+      course_id:
+        payload.courseId || null,
+      minimum_amount: minimumAmount,
+      maximum_discount:
+        maximumDiscount,
+      starts_at:
+        payload.startsAt || null,
+      expires_at:
+        payload.expiresAt || null,
+      usage_limit: usageLimit,
+      per_student_limit:
+        perStudentLimit,
+      is_active:
+        payload.isActive ?? true,
+      description:
+        payload.description?.trim() ||
+        null,
+      created_by: user.id,
+    })
+    .select()
+    .single();
 
   if (error) {
     return NextResponse.json(
@@ -462,9 +520,7 @@ export async function POST(
   );
 }
 
-export async function PATCH(
-  request: Request
-) {
+export async function PATCH(request: Request) {
   const auth = await requireAdmin();
 
   if ("error" in auth) {
@@ -502,14 +558,13 @@ export async function PATCH(
     );
   }
 
-  const { data: existing } =
-    await admin
-      .from("course_discount_codes")
-      .select(
-        "id, code, course_id, usage_count"
-      )
-      .eq("id", payload.id)
-      .maybeSingle();
+  const { data: existing } = await admin
+    .from("course_discount_codes")
+    .select(
+      "id, code, course_id, usage_count"
+    )
+    .eq("id", payload.id)
+    .maybeSingle();
 
   if (!existing) {
     return NextResponse.json(
@@ -558,7 +613,7 @@ export async function PATCH(
       );
     }
 
-    const { data: course } =
+    const { data: existingCourse } =
       await admin
         .from("courses")
         .select("instructor_id")
@@ -569,8 +624,8 @@ export async function PATCH(
         .maybeSingle();
 
     if (
-      !course ||
-      course.instructor_id !== user.id
+      !existingCourse ||
+      existingCourse.instructor_id !== user.id
     ) {
       return NextResponse.json(
         { error: "Access denied." },
@@ -579,50 +634,89 @@ export async function PATCH(
     }
   }
 
-  const { error } =
-    await admin
-      .from("course_discount_codes")
-      .update({
-        code: payload.code!
-          .trim()
-          .toUpperCase(),
-        discount_type:
-          payload.discountType,
-        discount_value: Math.round(
-          Number(payload.discountValue)
+  const discountValue = Math.round(
+    Number(payload.discountValue)
+  );
+
+  const courseValidation =
+    await validateSelectedCourse({
+      admin,
+      role,
+      userId: user.id,
+      courseId: payload.courseId,
+      discountType: payload.discountType!,
+      discountValue,
+    });
+
+  if (courseValidation.error) {
+    return NextResponse.json(
+      { error: courseValidation.error },
+      {
+        status:
+          courseValidation.error.includes(
+            "assigned courses"
+          )
+            ? 403
+            : 400,
+      }
+    );
+  }
+
+  if (
+    role === "instructor" &&
+    existing.course_id !== payload.courseId
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "Instructors cannot move a discount to another course.",
+      },
+      { status: 403 }
+    );
+  }
+
+  const { error } = await admin
+    .from("course_discount_codes")
+    .update({
+      code: payload.code!
+        .trim()
+        .toUpperCase(),
+      discount_type:
+        payload.discountType,
+      discount_value: discountValue,
+      course_id:
+        payload.courseId || null,
+      minimum_amount:
+        normalizeNullableNumber(
+          payload.minimumAmount
         ),
-        course_id:
-          payload.courseId || null,
-        minimum_amount:
-          normalizeNullableNumber(
-            payload.minimumAmount
-          ),
-        maximum_discount:
-          normalizeNullableNumber(
-            payload.maximumDiscount
-          ),
-        starts_at:
-          payload.startsAt || null,
-        expires_at:
-          payload.expiresAt || null,
-        usage_limit:
-          normalizeNullableNumber(
-            payload.usageLimit
-          ),
-        per_student_limit:
-          Math.round(
-            Number(
-              payload.perStudentLimit ?? 1
-            )
-          ),
-        is_active:
-          payload.isActive ?? true,
-        description:
-          payload.description?.trim() ||
-          null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", payload.id);
+      maximum_discount:
+        normalizeNullableNumber(
+          payload.maximumDiscount
+        ),
+      starts_at:
+        payload.startsAt || null,
+      expires_at:
+        payload.expiresAt || null,
+      usage_limit:
+        normalizeNullableNumber(
+          payload.usageLimit
+        ),
+      per_student_limit:
+        Math.round(
+          Number(
+            payload.perStudentLimit ?? 1
+          )
+        ),
+      is_active:
+        payload.isActive ?? true,
+      description:
+        payload.description?.trim() ||
+        null,
+      updated_at:
+        new Date().toISOString(),
+    })
+    .eq("id", payload.id);
 
   if (error) {
     return NextResponse.json(
@@ -636,9 +730,7 @@ export async function PATCH(
   });
 }
 
-export async function DELETE(
-  request: Request
-) {
+export async function DELETE(request: Request) {
   const auth = await requireAdmin();
 
   if ("error" in auth) {
@@ -657,14 +749,13 @@ export async function DELETE(
     );
   }
 
-  const { data: discount } =
-    await admin
-      .from("course_discount_codes")
-      .select(
-        "id, course_id, usage_count"
-      )
-      .eq("id", id)
-      .maybeSingle();
+  const { data: discount } = await admin
+    .from("course_discount_codes")
+    .select(
+      "id, course_id, usage_count"
+    )
+    .eq("id", id)
+    .maybeSingle();
 
   if (!discount) {
     return NextResponse.json(
@@ -694,15 +785,14 @@ export async function DELETE(
       );
     }
 
-    const { data: course } =
-      await admin
-        .from("courses")
-        .select("instructor_id")
-        .eq(
-          "id",
-          discount.course_id
-        )
-        .maybeSingle();
+    const { data: course } = await admin
+      .from("courses")
+      .select("instructor_id")
+      .eq(
+        "id",
+        discount.course_id
+      )
+      .maybeSingle();
 
     if (
       !course ||
@@ -715,11 +805,10 @@ export async function DELETE(
     }
   }
 
-  const { error } =
-    await admin
-      .from("course_discount_codes")
-      .delete()
-      .eq("id", id);
+  const { error } = await admin
+    .from("course_discount_codes")
+    .delete()
+    .eq("id", id);
 
   if (error) {
     return NextResponse.json(
