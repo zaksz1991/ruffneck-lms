@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
+import VerificationQr from "./VerificationQr";
 
 type PageProps = {
   params: Promise<{
@@ -61,9 +62,7 @@ type PracticalTask = {
   skill_id: string | null;
 };
 
-function levelLabel(
-  value: string | null,
-) {
+function levelLabel(value: string | null) {
   if (!value) {
     return "Developing";
   }
@@ -74,19 +73,14 @@ function levelLabel(
   );
 }
 
-function formatDate(
-  value: string | null,
-) {
+function formatDate(value: string | null) {
   if (!value) {
     return "Not available";
   }
 
-  return new Intl.DateTimeFormat(
-    "en-NG",
-    {
-      dateStyle: "medium",
-    },
-  ).format(new Date(value));
+  return new Intl.DateTimeFormat("en-NG", {
+    dateStyle: "medium",
+  }).format(new Date(value));
 }
 
 export default async function PublicVerificationPage({
@@ -94,15 +88,15 @@ export default async function PublicVerificationPage({
 }: PageProps) {
   const { code } = await params;
 
-  const normalizedCode =
-    code.trim().toUpperCase();
+  const normalizedCode = code
+    .trim()
+    .toUpperCase();
 
   if (!normalizedCode) {
     notFound();
   }
 
-  const adminClient =
-    createAdminClient();
+  const adminClient = createAdminClient();
 
   const {
     data: verification,
@@ -118,10 +112,7 @@ export default async function PublicVerificationPage({
     )
     .maybeSingle();
 
-  if (
-    verificationError ||
-    !verification
-  ) {
+  if (verificationError || !verification) {
     notFound();
   }
 
@@ -312,9 +303,7 @@ export default async function PublicVerificationPage({
     courseIds.length > 0
       ? adminClient
           .from("courses")
-          .select(
-            "id,title",
-          )
+          .select("id,title")
           .in("id", courseIds)
       : Promise.resolve({
           data: [],
@@ -376,6 +365,14 @@ export default async function PublicVerificationPage({
     skillProfiles.filter((item) =>
       skillMap.has(item.skill_id),
     );
+
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    "https://ruffneck-lms.vercel.app";
+
+  const verificationUrl =
+    `${siteUrl.replace(/\/$/, "")}/verify/` +
+    verification.verification_code;
 
   return (
     <main className="page-shell">
@@ -445,6 +442,18 @@ export default async function PublicVerificationPage({
               verification.created_at,
             )}
           </p>
+
+          <div
+            style={{
+              marginTop: "1.5rem",
+              display: "flex",
+              justifyContent: "flex-start",
+            }}
+          >
+            <VerificationQr
+              value={verificationUrl}
+            />
+          </div>
         </div>
 
         <section
@@ -460,8 +469,7 @@ export default async function PublicVerificationPage({
             Verified capabilities
           </h2>
 
-          {verifiedSkills.length ===
-          0 ? (
+          {verifiedSkills.length === 0 ? (
             <div className="card">
               <p className="muted">
                 No verified skill evidence is
@@ -479,10 +487,10 @@ export default async function PublicVerificationPage({
               }}
             >
               {verifiedSkills.map(
-                (profile) => {
+                (skillProfile) => {
                   const skill =
                     skillMap.get(
-                      profile.skill_id,
+                      skillProfile.skill_id,
                     );
 
                   if (!skill) {
@@ -492,7 +500,7 @@ export default async function PublicVerificationPage({
                   return (
                     <article
                       key={
-                        profile.skill_id
+                        skillProfile.skill_id
                       }
                       className="card"
                       style={{
@@ -512,7 +520,7 @@ export default async function PublicVerificationPage({
                         Level:{" "}
                         <strong>
                           {levelLabel(
-                            profile.skill_level,
+                            skillProfile.skill_level,
                           )}
                         </strong>
                       </p>
@@ -520,7 +528,7 @@ export default async function PublicVerificationPage({
                       <p>
                         Confidence:{" "}
                         <strong>
-                          {profile.confidence_score ??
+                          {skillProfile.confidence_score ??
                             0}
                           %
                         </strong>
@@ -529,7 +537,7 @@ export default async function PublicVerificationPage({
                       <p>
                         Verified evidence:{" "}
                         <strong>
-                          {profile.evidence_count ??
+                          {skillProfile.evidence_count ??
                             0}
                         </strong>
                       </p>
@@ -554,8 +562,7 @@ export default async function PublicVerificationPage({
             Demonstrated through practical work
           </h2>
 
-          {submissions.length ===
-          0 ? (
+          {submissions.length === 0 ? (
             <p className="muted">
               No public practical evidence is
               currently available.
@@ -674,8 +681,7 @@ export default async function PublicVerificationPage({
             RuffNeck Learn certificates
           </h2>
 
-          {certificates.length ===
-          0 ? (
+          {certificates.length === 0 ? (
             <p className="muted">
               No certificates have been issued
               through this Skill Passport yet.
