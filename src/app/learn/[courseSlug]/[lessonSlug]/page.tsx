@@ -9,6 +9,7 @@ type Course = {
   slug: string;
   category: string | null;
   level: string | null;
+  is_free: boolean;
 };
 
 type Lesson = {
@@ -76,9 +77,7 @@ function formatLevel(level: string | null) {
   return level.charAt(0).toUpperCase() + level.slice(1);
 }
 
-function getResourceLabel(
-  type: Resource["resource_type"]
-) {
+function getResourceLabel(type: Resource["resource_type"]) {
   switch (type) {
     case "pdf":
       return "Open PDF";
@@ -94,9 +93,7 @@ function getResourceLabel(
   }
 }
 
-function getResourceTypeLabel(
-  type: Resource["resource_type"]
-) {
+function getResourceTypeLabel(type: Resource["resource_type"]) {
   switch (type) {
     case "pdf":
       return "PDF";
@@ -129,15 +126,10 @@ function removeDuplicateLeadingHeading(
     "i"
   );
 
-  return html.replace(
-    duplicateHeadingPattern,
-    ""
-  );
+  return html.replace(duplicateHeadingPattern, "");
 }
 
-function isActiveEnrollment(
-  enrollment: Enrollment | null
-) {
+function isActiveEnrollment(enrollment: Enrollment | null) {
   if (!enrollment) {
     return false;
   }
@@ -150,6 +142,21 @@ function isActiveEnrollment(
     enrollment.enrollment_status === "active" ||
     enrollment.enrollment_status === "completed"
   );
+}
+
+function hasPaidAccess(
+  course: Course,
+  enrollment: Enrollment | null
+) {
+  if (!isActiveEnrollment(enrollment)) {
+    return false;
+  }
+
+  if (course.is_free) {
+    return true;
+  }
+
+  return enrollment?.payment_status === "successful";
 }
 
 export default async function LessonPage({
@@ -180,7 +187,7 @@ export default async function LessonPage({
   } = await supabase
     .from("courses")
     .select(
-      "id, title, slug, category, level"
+      "id, title, slug, category, level, is_free"
     )
     .eq("slug", courseSlug)
     .eq("status", "published")
@@ -218,6 +225,9 @@ export default async function LessonPage({
 
   const hasActiveEnrollment =
     isActiveEnrollment(enrollment);
+
+  const hasCourseAccess =
+    hasPaidAccess(course, enrollment);
 
   const {
     data: curriculumData,
@@ -317,15 +327,24 @@ export default async function LessonPage({
     notFound();
   }
 
-  if (
-    !lesson.is_preview &&
-    !hasActiveEnrollment
-  ) {
+  /*
+   * Preview lessons remain publicly viewable to
+   * authenticated users even without enrollment.
+   *
+   * Non-preview lessons require valid course access.
+   *
+   * For free courses, valid active/completed
+   * enrollment is sufficient.
+   *
+   * For paid courses, enrollment must also have
+   * a successful payment status.
+   */
+  if (!lesson.is_preview && !hasCourseAccess) {
     redirect(`/courses/${courseSlug}`);
   }
 
   const { data: completedProgressData } =
-    hasActiveEnrollment
+    hasCourseAccess
       ? await supabase
           .from("lesson_progress")
           .select("lesson_id")
@@ -433,8 +452,6 @@ export default async function LessonPage({
   return (
     <main className="rn-learning-shell">
       <div className="container">
-        {/* TOP BAR */}
-
         <div className="rn-learning-topbar">
           <div className="rn-learning-topbar-copy">
             <Link
@@ -484,11 +501,7 @@ export default async function LessonPage({
           />
         </div>
 
-        {/* LEARNING LAYOUT */}
-
         <div className="rn-learning-layout">
-          {/* SIDEBAR */}
-
           <aside className="rn-learning-sidebar">
             <div className="rn-learning-sidebar-header">
               <span className="rn-eyebrow">
@@ -567,8 +580,6 @@ export default async function LessonPage({
             </Link>
           </aside>
 
-          {/* CONTENT */}
-
           <article className="rn-learning-content">
             <header className="rn-learning-content-header">
               <div className="rn-learning-label-row">
@@ -614,8 +625,6 @@ export default async function LessonPage({
                 complete.
               </p>
             </header>
-
-            {/* LESSON OVERVIEW */}
 
             <section className="rn-learning-overview-panel">
               <div>
@@ -672,8 +681,6 @@ export default async function LessonPage({
               </div>
             </section>
 
-            {/* OPTIONAL VIDEO */}
-
             {lesson.video_url ? (
               <section className="rn-learning-video">
                 <div>
@@ -702,8 +709,6 @@ export default async function LessonPage({
               </section>
             ) : null}
 
-            {/* LESSON MATERIAL */}
-
             <section className="rn-learning-material">
               <div className="rn-learning-section-heading">
                 <span className="rn-eyebrow">
@@ -724,8 +729,6 @@ export default async function LessonPage({
                 }}
               />
             </section>
-
-            {/* PRACTICAL APPLICATION */}
 
             <section className="rn-learning-practice-panel">
               <div>
@@ -772,8 +775,6 @@ export default async function LessonPage({
                 </div>
               </div>
             </section>
-
-            {/* RESOURCES */}
 
             {resources.length > 0 ? (
               <section className="rn-learning-resources">
@@ -831,9 +832,7 @@ export default async function LessonPage({
               </section>
             ) : null}
 
-            {/* COMPLETION */}
-
-            {hasActiveEnrollment ? (
+            {hasCourseAccess ? (
               <section className="rn-learning-completion">
                 <div>
                   <span className="rn-eyebrow">
@@ -893,8 +892,6 @@ export default async function LessonPage({
                 </Link>
               </section>
             ) : null}
-
-            {/* NAVIGATION */}
 
             <nav
               className="rn-learning-navigation"
