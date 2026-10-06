@@ -33,6 +33,61 @@ type ReportResponse = {
   error?: string;
 };
 
+type RawDiscount = {
+  id?: string;
+  code?: string;
+  discount_type?: string | null;
+  discount_value?: number | null;
+};
+
+type RawCourse = {
+  id?: string;
+  title?: string | null;
+  slug?: string | null;
+};
+
+type RawPayment = {
+  id?: string;
+  tx_ref?: string | null;
+  flutterwave_transaction_id?: number | null;
+  status?: string | null;
+};
+
+type RawStudent = {
+  id?: string;
+  display_name?: string | null;
+  full_name?: string | null;
+  email?: string | null;
+};
+
+type RawRedemption = {
+  id?: string;
+  discount_code_id?: string;
+  student_id?: string;
+  course_id?: string;
+  payment_id?: string | null;
+  amount_before_discount?: number | null;
+  discount_amount?: number | null;
+  amount_paid?: number | null;
+  created_at?: string;
+  course_discount_codes?:
+    | RawDiscount
+    | RawDiscount[]
+    | null;
+  courses?: RawCourse | RawCourse[] | null;
+  course_payments?:
+    | RawPayment
+    | RawPayment[]
+    | null;
+  profiles: RawStudent | RawStudent[] | null;
+};
+
+type RawReportResponse = {
+  redemptions?: RawRedemption[];
+  summary?: ReportResponse["summary"];
+  error?: string;
+};
+
 function formatNaira(amount: number) {
   return new Intl.NumberFormat("en-NG", {
     style: "currency",
@@ -48,10 +103,105 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-export default function DiscountRedemptionReport() {
-  const [rows, setRows] = useState<Redemption[]>(
-    []
+function firstObject<T>(
+  value: T | T[] | null | undefined
+): T | null {
+  if (!value) {
+    return null;
+  }
+
+  return Array.isArray(value)
+    ? value[0] ?? null
+    : value;
+}
+
+function studentDisplayName(
+  student: RawStudent | null
+) {
+  if (!student) {
+    return "Unknown student";
+  }
+
+  return (
+    student.display_name?.trim() ||
+    student.full_name?.trim() ||
+    student.email?.trim() ||
+    "Unknown student"
   );
+}
+
+function normaliseRedemption(
+  row: RawRedemption
+): Redemption {
+  const discount = firstObject(
+    row.course_discount_codes
+  );
+
+  const course = firstObject(
+    row.courses
+  );
+
+  const payment = firstObject(
+    row.course_payments
+  );
+
+  const student = firstObject(
+    row.profiles
+  );
+
+  return {
+    id: row.id ?? crypto.randomUUID(),
+    createdAt:
+      row.created_at ??
+      new Date().toISOString(),
+    code: discount?.code ?? "Unknown code",
+    discountType:
+      discount?.discount_type ?? null,
+    discountValue:
+      discount?.discount_value ?? null,
+    courseId:
+      row.course_id ??
+      course?.id ??
+      "",
+    courseTitle:
+      course?.title?.trim() ||
+      "Unknown course",
+    courseSlug:
+      course?.slug ?? null,
+    studentId:
+      row.student_id ??
+      student?.id ??
+      "",
+    studentName:
+      studentDisplayName(student),
+    paymentId:
+      row.payment_id ??
+      payment?.id ??
+      null,
+    txRef:
+      payment?.tx_ref ?? null,
+    flutterwaveTransactionId:
+      payment?.flutterwave_transaction_id ??
+      null,
+    paymentStatus:
+      payment?.status ?? null,
+    amountBeforeDiscount:
+      Number(
+        row.amount_before_discount ?? 0
+      ),
+    discountAmount:
+      Number(
+        row.discount_amount ?? 0
+      ),
+    amountPaid:
+      Number(row.amount_paid ?? 0),
+  };
+}
+
+export default function DiscountRedemptionReport() {
+  const [rows, setRows] = useState<
+    Redemption[]
+  >([]);
 
   const [summary, setSummary] =
     useState<ReportResponse["summary"]>();
@@ -65,6 +215,9 @@ export default function DiscountRedemptionReport() {
   const [selectedCode, setSelectedCode] =
     useState<string | null>(null);
 
+  const [selectedCourse, setSelectedCourse] =
+    useState<string | null>(null);
+
   async function loadReport() {
     setLoading(true);
     setError(null);
@@ -76,15 +229,31 @@ export default function DiscountRedemptionReport() {
         );
 
       const codeId =
-        params.get("codeId");
+        params.get("codeId")?.trim() || null;
+
+      const courseId =
+        params.get("courseId")?.trim() || null;
 
       setSelectedCode(codeId);
+      setSelectedCourse(courseId);
 
-      const endpoint = codeId
-        ? `/api/admin/discounts/redemptions?codeId=${encodeURIComponent(
-            codeId
-          )}`
-        : "/api/admin/discounts/redemptions";
+      const query = new URLSearchParams();
+
+      if (codeId) {
+        query.set("codeId", codeId);
+      }
+
+      if (courseId) {
+        query.set("courseId", courseId);
+      }
+
+      const queryString =
+        query.toString();
+
+      const endpoint =
+        queryString
+          ? `/api/admin/discounts/redemptions?${queryString}`
+          : "/api/admin/discounts/redemptions";
 
       const response = await fetch(
         endpoint,
@@ -94,7 +263,7 @@ export default function DiscountRedemptionReport() {
       );
 
       const data =
-        (await response.json()) as ReportResponse;
+        (await response.json()) as RawReportResponse;
 
       if (!response.ok) {
         throw new Error(
@@ -103,7 +272,11 @@ export default function DiscountRedemptionReport() {
         );
       }
 
-      setRows(data.redemptions ?? []);
+      const normalisedRows = (
+        data.redemptions ?? []
+      ).map(normaliseRedemption);
+
+      setRows(normalisedRows);
       setSummary(data.summary);
     } catch (reportError) {
       setError(
@@ -148,11 +321,16 @@ export default function DiscountRedemptionReport() {
     );
   }
 
+  const hasFilter =
+    Boolean(selectedCode) ||
+    Boolean(selectedCourse);
+
   return (
     <div className="rn-discount-report">
       <section className="rn-discount-report-summary">
         <div className="admin-card">
           <span>Redemptions</span>
+
           <strong>
             {summary?.redemptions ?? 0}
           </strong>
@@ -160,6 +338,7 @@ export default function DiscountRedemptionReport() {
 
         <div className="admin-card">
           <span>Original Value</span>
+
           <strong>
             {formatNaira(
               summary?.originalAmount ?? 0
@@ -169,6 +348,7 @@ export default function DiscountRedemptionReport() {
 
         <div className="admin-card">
           <span>Total Discount</span>
+
           <strong>
             {formatNaira(
               summary?.discountAmount ?? 0
@@ -178,6 +358,7 @@ export default function DiscountRedemptionReport() {
 
         <div className="admin-card">
           <span>Revenue Collected</span>
+
           <strong>
             {formatNaira(
               summary?.amountPaid ?? 0
@@ -186,7 +367,7 @@ export default function DiscountRedemptionReport() {
         </div>
       </section>
 
-      {selectedCode ? (
+      {hasFilter ? (
         <section className="admin-card">
           <div className="rn-discount-report-heading">
             <div>
@@ -195,7 +376,7 @@ export default function DiscountRedemptionReport() {
               </p>
 
               <h2>
-                Code-specific redemptions
+                Filtered Redemptions
               </h2>
             </div>
 
@@ -269,6 +450,7 @@ export default function DiscountRedemptionReport() {
                 <div className="rn-discount-report-values">
                   <div>
                     <span>Original</span>
+
                     <strong>
                       {formatNaira(
                         row.amountBeforeDiscount
@@ -278,6 +460,7 @@ export default function DiscountRedemptionReport() {
 
                   <div>
                     <span>Discount</span>
+
                     <strong>
                       -
                       {formatNaira(
@@ -288,6 +471,7 @@ export default function DiscountRedemptionReport() {
 
                   <div>
                     <span>Paid</span>
+
                     <strong>
                       {formatNaira(
                         row.amountPaid
@@ -297,12 +481,29 @@ export default function DiscountRedemptionReport() {
 
                   <div>
                     <span>Payment</span>
+
                     <strong>
                       {row.paymentStatus ??
                         "Direct enrollment"}
                     </strong>
                   </div>
                 </div>
+
+                {row.discountType ? (
+                  <div className="rn-discount-report-reference">
+                    <span>
+                      Discount type
+                    </span>
+
+                    <code>
+                      {row.discountType}
+                      {row.discountValue !==
+                      null
+                        ? ` · ${row.discountValue}`
+                        : ""}
+                    </code>
+                  </div>
+                ) : null}
 
                 {row.txRef ? (
                   <div className="rn-discount-report-reference">
@@ -312,6 +513,20 @@ export default function DiscountRedemptionReport() {
 
                     <code>
                       {row.txRef}
+                    </code>
+                  </div>
+                ) : null}
+
+                {row.flutterwaveTransactionId ? (
+                  <div className="rn-discount-report-reference">
+                    <span>
+                      Flutterwave transaction ID
+                    </span>
+
+                    <code>
+                      {
+                        row.flutterwaveTransactionId
+                      }
                     </code>
                   </div>
                 ) : null}

@@ -543,6 +543,7 @@ export default function AdminDiscountManager() {
                 <option value="percentage">
                   Percentage
                 </option>
+
                 <option value="fixed">
                   Fixed amount
                 </option>
@@ -720,6 +721,7 @@ export default function AdminDiscountManager() {
                 )
               }
             />
+
             Active
           </label>
 
