@@ -31,6 +31,12 @@ type Task = {
   } | null;
 };
 
+type TaskRow = Omit<Task, "submission">;
+
+type SubmissionRow = NonNullable<
+  Task["submission"]
+>;
+
 export default async function PracticalWorkPage() {
   const supabase = await createClient();
 
@@ -74,7 +80,7 @@ export default async function PracticalWorkPage() {
         .order("title");
 
     courses =
-      (courseData || []) as Course[];
+      (courseData || []) as unknown as Course[];
   }
 
   let tasks: Task[] = [];
@@ -102,16 +108,13 @@ export default async function PracticalWorkPage() {
         .order("sort_order");
 
     const taskRows =
-      (taskData || []) as Omit<
-        Task,
-        "submission"
-      >[];
+      (taskData || []) as unknown as TaskRow[];
 
     const taskIds = taskRows.map(
       (task) => task.id,
     );
 
-    let submissions: Task["submission"][] =
+    let submissions: SubmissionRow[] =
       [];
 
     if (taskIds.length > 0) {
@@ -137,12 +140,16 @@ export default async function PracticalWorkPage() {
         .in("task_id", taskIds);
 
       submissions =
-        (submissionData || []) as Task["submission"][];
+        (submissionData ||
+          []) as unknown as SubmissionRow[];
     }
 
-    const submissionMap = new Map(
+    const submissionMap = new Map<
+      string,
+      SubmissionRow
+    >(
       submissions.map((submission) => [
-        submission?.task_id,
+        submission.task_id,
         submission,
       ]),
     );
@@ -154,13 +161,6 @@ export default async function PracticalWorkPage() {
         null,
     }));
   }
-
-  const courseMap = new Map(
-    courses.map((course) => [
-      course.id,
-      course,
-    ]),
-  );
 
   const groupedTasks = courses.map(
     (course) => ({
