@@ -17644,3 +17644,20 @@ hr {
     font-size: 0.78rem;
   }
 }
+
+/* Sign up — match navigation styling */
+.site-header .nav a[href="/signup"] {
+  color: var(--navy, #0b1e3a) !important;
+  background: transparent !important;
+  text-decoration: none !important;
+}
+
+.site-header .nav a[href="/signup"]:visited {
+  color: var(--navy, #0b1e3a) !important;
+}
+
+.site-header .nav a[href="/signup"]:hover,
+.site-header .nav a[href="/signup"]:focus-visible {
+  color: var(--cyan, #00b4d8) !important;
+  background: #f1f5f9 !important;
+}
