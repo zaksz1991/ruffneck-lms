@@ -17663,10 +17663,5 @@ hr {
 }
 
 .rn-footer-brand {
-  color: #64748b !important;
-}
-
-.rn-footer-brand strong {
   color: var(--navy, #0b1e3a) !important;
-  font-weight: 700;
 }
