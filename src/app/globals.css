@@ -15296,3 +15296,110 @@ main h6 {
     margin-right: auto !important;
   }
 }
+
+/* =========================================================
+   RUFFNECK LEARN — HEADER TYPOGRAPHY FINAL POLISH
+   ADD-ONLY OVERRIDE
+   ========================================================= */
+
+/* Parent RuffNeck Entertainment strip */
+.rn-parent-brand-link strong {
+  display: block;
+  font-family: Inter, Arial, Helvetica, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.rn-parent-brand-link span {
+  display: block;
+  margin-top: 0.2rem;
+  font-family: Inter, Arial, Helvetica, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0.015em;
+}
+
+.rn-parent-brand-visit {
+  font-family: Inter, Arial, Helvetica, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+/* Main RuffNeck Learn brand */
+.site-header .brand-name {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.site-header .brand-name strong {
+  display: block;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+}
+
+.site-header .brand-name span {
+  display: block;
+  max-width: 270px;
+  margin-top: 0.28rem;
+  font-family: Inter, Arial, Helvetica, sans-serif;
+  font-size: 0.68rem;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+}
+
+/* Navigation */
+.site-header .nav > a,
+.site-header .nav .nav-button {
+  font-family: Inter, Arial, Helvetica, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.005em;
+}
+
+/* Keep the official logo visually dominant */
+.site-header .brand-logo {
+  object-fit: contain;
+  display: block;
+}
+
+/* Mobile typography */
+@media (max-width: 768px) {
+  .rn-parent-brand-link strong {
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+  }
+
+  .rn-parent-brand-link span {
+    font-size: 0.65rem;
+  }
+
+  .rn-parent-brand-visit {
+    font-size: 0.65rem;
+  }
+
+  .site-header .brand-name strong {
+    font-size: 1.05rem;
+  }
+
+  .site-header .brand-name span {
+    max-width: 220px;
+    font-size: 0.62rem;
+  }
+
+  .site-header .nav > a,
+  .site-header .nav .nav-button {
+    font-size: 0.78rem;
+  }
+}
