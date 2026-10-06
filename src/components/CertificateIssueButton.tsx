@@ -1,31 +1,35 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+
+type CertificateIssueButtonProps = {
+  courseId: string;
+};
 
 type CertificateIssueResponse = {
-  error?: string;
+  ok?: boolean;
   certificateId?: string;
   certificateNumber?: string;
   alreadyIssued?: boolean;
+  error?: string;
+  stage?: string;
+  details?: string;
 };
 
 export default function CertificateIssueButton({
   courseId,
-}: {
-  courseId: string;
-}) {
-  const router = useRouter();
-
+}: CertificateIssueButtonProps) {
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  async function issueCertificate() {
-    if (loading) {
+  async function handleClaimCertificate() {
+    if (!courseId || loading) {
       return;
     }
 
     setLoading(true);
+    setMessage("");
     setError("");
 
     try {
@@ -35,44 +39,67 @@ export default function CertificateIssueButton({
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Accept: "application/json",
           },
+          credentials: "same-origin",
           body: JSON.stringify({
             courseId,
           }),
         }
       );
 
-      const data =
-        (await response.json()) as CertificateIssueResponse;
+      const rawResponse = await response.text();
 
-      if (!response.ok) {
-        setError(
-          data.error ||
-            "Unable to issue the certificate."
-        );
-        return;
+      let result: CertificateIssueResponse = {};
+
+      if (rawResponse.trim()) {
+        try {
+          result = JSON.parse(
+            rawResponse
+          ) as CertificateIssueResponse;
+        } catch {
+          throw new Error(
+            `The certificate service returned an invalid response (HTTP ${response.status}).`
+          );
+        }
       }
 
-      if (!data.certificateId) {
-        setError(
-          "Certificate was processed, but no certificate ID was returned."
-        );
-        return;
+      if (!response.ok || result.ok === false) {
+        const diagnostic =
+          result.details ||
+          result.error ||
+          `Certificate issuance failed (HTTP ${response.status}).`;
+
+        throw new Error(diagnostic);
       }
 
-      router.push(
+      if (!result.certificateId) {
+        throw new Error(
+          "Certificate issuance completed but no certificate ID was returned."
+        );
+      }
+
+      setMessage(
+        result.alreadyIssued
+          ? "Your certificate has already been issued."
+          : "Certificate issued successfully."
+      );
+
+      window.location.assign(
         `/student/certificates/${encodeURIComponent(
-          data.certificateId
+          result.certificateId
         )}`
       );
-    } catch (requestError) {
+    } catch (claimError) {
       console.error(
-        "Certificate issuance request failed:",
-        requestError
+        "Certificate issuance failed:",
+        claimError
       );
 
       setError(
-        "Unable to connect to the certificate service. Please try again."
+        claimError instanceof Error
+          ? claimError.message
+          : "An unexpected error occurred while issuing the certificate."
       );
     } finally {
       setLoading(false);
@@ -80,12 +107,19 @@ export default function CertificateIssueButton({
   }
 
   return (
-    <div>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        gap: 10,
+      }}
+    >
       <button
         type="button"
-        onClick={issueCertificate}
-        disabled={loading}
         className="rn-button rn-button-primary"
+        onClick={handleClaimCertificate}
+        disabled={loading}
         style={{
           minWidth: 190,
           justifyContent: "center",
@@ -94,15 +128,29 @@ export default function CertificateIssueButton({
         }}
       >
         {loading
-          ? "Verifying Eligibility..."
+          ? "Issuing Certificate..."
           : "Claim Certificate"}
       </button>
+
+      {message ? (
+        <p
+          role="status"
+          style={{
+            margin: 0,
+            fontSize: 14,
+            lineHeight: 1.5,
+          }}
+        >
+          {message}
+        </p>
+      ) : null}
 
       {error ? (
         <p
           role="alert"
           style={{
-            marginTop: 12,
+            margin: 0,
+            maxWidth: 700,
             color: "#b91c1c",
             fontSize: 14,
             lineHeight: 1.5,
