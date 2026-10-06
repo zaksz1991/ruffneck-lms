@@ -156,7 +156,7 @@ function hasPaidAccess(
     return true;
   }
 
-  return enrollment?.payment_status === "successful";
+  return enrollment?.payment_status === "paid";
 }
 
 export default async function LessonPage({
@@ -222,9 +222,6 @@ export default async function LessonPage({
 
   const enrollment =
     enrollmentData as unknown as Enrollment | null;
-
-  const hasActiveEnrollment =
-    isActiveEnrollment(enrollment);
 
   const hasCourseAccess =
     hasPaidAccess(course, enrollment);
@@ -328,16 +325,15 @@ export default async function LessonPage({
   }
 
   /*
-   * Preview lessons remain publicly viewable to
-   * authenticated users even without enrollment.
+   * Preview lessons remain viewable to authenticated
+   * users without enrollment.
    *
    * Non-preview lessons require valid course access.
    *
-   * For free courses, valid active/completed
-   * enrollment is sufficient.
+   * Free courses require an active/completed enrollment.
    *
-   * For paid courses, enrollment must also have
-   * a successful payment status.
+   * Paid courses require an active/completed enrollment
+   * whose enrollment payment_status is "paid".
    */
   if (!lesson.is_preview && !hasCourseAccess) {
     redirect(`/courses/${courseSlug}`);
