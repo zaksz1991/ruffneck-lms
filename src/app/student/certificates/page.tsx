@@ -27,6 +27,53 @@ type Course = {
   title: string;
 };
 
+type CurriculumItem = {
+  course_id: string;
+  lesson_id: string;
+};
+
+type LessonProgress = {
+  course_id: string;
+  lesson_id: string;
+  completed: boolean;
+};
+
+type AssessmentAttempt = {
+  id: string;
+  course_id: string;
+  score: number | null;
+  total_points: number | null;
+  earned_points: number | null;
+  total_questions: number | null;
+  completed_at: string | null;
+  created_at: string;
+};
+
+type CourseProject = {
+  id: string;
+  course_id: string;
+  project_type: string;
+  is_published: boolean;
+};
+
+type ProjectSubmission = {
+  id: string;
+  project_id: string;
+  student_id: string;
+  status: string;
+  score: number | null;
+};
+
+type CertificateCandidate = {
+  course: Course;
+  lessonsComplete: boolean;
+  assessmentComplete: boolean;
+  assessmentPassed: boolean;
+  capstoneAvailable: boolean;
+  capstoneApproved: boolean;
+  eligible: boolean;
+};
+
 function formatDate(value: string) {
   const date = new Date(value);
 
@@ -37,6 +84,44 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-NG", {
     dateStyle: "long",
   }).format(date);
+}
+
+function assessmentPercentage(
+  attempt: AssessmentAttempt | null
+) {
+  if (!attempt) {
+    return null;
+  }
+
+  if (
+    attempt.total_points !== null &&
+    attempt.total_points > 0 &&
+    attempt.earned_points !== null
+  ) {
+    return Math.round(
+      (attempt.earned_points /
+        attempt.total_points) *
+        100
+    );
+  }
+
+  if (
+    attempt.total_questions !== null &&
+    attempt.total_questions > 0 &&
+    attempt.score !== null
+  ) {
+    return Math.round(
+      (attempt.score /
+        attempt.total_questions) *
+        100
+    );
+  }
+
+  if (attempt.score !== null) {
+    return Math.round(attempt.score);
+  }
+
+  return null;
 }
 
 export default async function StudentCertificatesPage() {
@@ -101,10 +186,13 @@ export default async function StudentCertificatesPage() {
   const completedEnrollments =
     (enrollmentData ?? []) as unknown as Enrollment[];
 
-  const completedCourseIds =
-    completedEnrollments.map(
-      (item) => item.course_id
-    );
+  const completedCourseIds = [
+    ...new Set(
+      completedEnrollments.map(
+        (item) => item.course_id
+      )
+    ),
+  ];
 
   const certificateCourseIds = new Set(
     certificates.map(
@@ -112,37 +200,282 @@ export default async function StudentCertificatesPage() {
     )
   );
 
-  const claimableCourseIds =
+  const uncategorizedCourseIds =
     completedCourseIds.filter(
       (courseId) =>
         !certificateCourseIds.has(courseId)
     );
 
   const {
-    data: claimableCourseData,
-    error: claimableCourseError,
+    data: courseData,
+    error: courseError,
   } =
-    claimableCourseIds.length > 0
+    uncategorizedCourseIds.length > 0
       ? await supabase
           .from("courses")
           .select("id, title")
           .eq("status", "published")
-          .in("id", claimableCourseIds)
+          .in(
+            "id",
+            uncategorizedCourseIds
+          )
       : {
           data: [],
           error: null,
         };
 
-  if (claimableCourseError) {
+  if (courseError) {
     console.error(
       "Certificate candidate course lookup failed:",
-      claimableCourseError
+      courseError
     );
   }
 
-  const claimableCourses =
-    (claimableCourseData ??
-      []) as unknown as Course[];
+  const courses =
+    (courseData ?? []) as unknown as Course[];
+
+  const candidateCourseIds = courses.map(
+    (course) => course.id
+  );
+
+  let curriculum: CurriculumItem[] = [];
+  let lessonProgress: LessonProgress[] = [];
+  let assessmentAttempts: AssessmentAttempt[] =
+    [];
+  let projects: CourseProject[] = [];
+  let submissions: ProjectSubmission[] = [];
+
+  if (candidateCourseIds.length > 0) {
+    const [
+      curriculumResult,
+      lessonProgressResult,
+      assessmentResult,
+      projectResult,
+    ] = await Promise.all([
+      supabase
+        .from("course_curriculum")
+        .select("course_id, lesson_id")
+        .in(
+          "course_id",
+          candidateCourseIds
+        )
+        .eq("is_published", true),
+
+      supabase
+        .from("lesson_progress")
+        .select(
+          "course_id, lesson_id, completed"
+        )
+        .eq("student_id", user.id)
+        .in(
+          "course_id",
+          candidateCourseIds
+        ),
+
+      supabase
+        .from("assessment_attempts")
+        .select(
+          [
+            "id",
+            "course_id",
+            "score",
+            "total_points",
+            "earned_points",
+            "total_questions",
+            "completed_at",
+            "created_at",
+          ].join(", ")
+        )
+        .eq("student_id", user.id)
+        .in(
+          "course_id",
+          candidateCourseIds
+        )
+        .not("completed_at", "is", null)
+        .order("created_at", {
+          ascending: false,
+        }),
+
+      supabase
+        .from("course_projects")
+        .select(
+          "id, course_id, project_type, is_published"
+        )
+        .in(
+          "course_id",
+          candidateCourseIds
+        )
+        .eq("project_type", "capstone")
+        .eq("is_published", true),
+    ]);
+
+    if (curriculumResult.error) {
+      console.error(
+        "Certificate curriculum lookup failed:",
+        curriculumResult.error
+      );
+    }
+
+    if (lessonProgressResult.error) {
+      console.error(
+        "Certificate lesson progress lookup failed:",
+        lessonProgressResult.error
+      );
+    }
+
+    if (assessmentResult.error) {
+      console.error(
+        "Certificate assessment lookup failed:",
+        assessmentResult.error
+      );
+    }
+
+    if (projectResult.error) {
+      console.error(
+        "Certificate capstone lookup failed:",
+        projectResult.error
+      );
+    }
+
+    curriculum =
+      (curriculumResult.data ??
+        []) as unknown as CurriculumItem[];
+
+    lessonProgress =
+      (lessonProgressResult.data ??
+        []) as unknown as LessonProgress[];
+
+    assessmentAttempts =
+      (assessmentResult.data ??
+        []) as unknown as AssessmentAttempt[];
+
+    projects =
+      (projectResult.data ??
+        []) as unknown as CourseProject[];
+
+    const capstoneProjectIds = projects.map(
+      (project) => project.id
+    );
+
+    if (capstoneProjectIds.length > 0) {
+      const {
+        data: submissionData,
+        error: submissionError,
+      } = await supabase
+        .from("project_submissions")
+        .select(
+          "id, project_id, student_id, status, score"
+        )
+        .eq("student_id", user.id)
+        .in(
+          "project_id",
+          capstoneProjectIds
+        );
+
+      if (submissionError) {
+        console.error(
+          "Certificate capstone submission lookup failed:",
+          submissionError
+        );
+      }
+
+      submissions =
+        (submissionData ??
+          []) as unknown as ProjectSubmission[];
+    }
+  }
+
+  const certificateCandidates: CertificateCandidate[] =
+    courses.map((course) => {
+      const courseCurriculum =
+        curriculum.filter(
+          (item) =>
+            item.course_id === course.id
+        );
+
+      const completedLessonIds = new Set(
+        lessonProgress
+          .filter(
+            (item) =>
+              item.course_id === course.id &&
+              item.completed
+          )
+          .map((item) => item.lesson_id)
+      );
+
+      const lessonsComplete =
+        courseCurriculum.length > 0 &&
+        courseCurriculum.every((item) =>
+          completedLessonIds.has(
+            item.lesson_id
+          )
+        );
+
+      const latestAssessment =
+        assessmentAttempts.find(
+          (attempt) =>
+            attempt.course_id === course.id
+        ) ?? null;
+
+      const assessmentScore =
+        assessmentPercentage(
+          latestAssessment
+        );
+
+      const assessmentComplete =
+        latestAssessment !== null;
+
+      const assessmentPassed =
+        assessmentScore !== null &&
+        assessmentScore >= 70;
+
+      const courseProjects =
+        projects.filter(
+          (project) =>
+            project.course_id === course.id
+        );
+
+      const capstoneAvailable =
+        courseProjects.length > 0;
+
+      const capstoneProjectIds =
+        new Set(
+          courseProjects.map(
+            (project) => project.id
+          )
+        );
+
+      const capstoneApproved =
+        submissions.some(
+          (submission) =>
+            capstoneProjectIds.has(
+              submission.project_id
+            ) &&
+            submission.status === "approved"
+        );
+
+      const eligible =
+        lessonsComplete &&
+        assessmentComplete &&
+        assessmentPassed &&
+        capstoneAvailable &&
+        capstoneApproved;
+
+      return {
+        course,
+        lessonsComplete,
+        assessmentComplete,
+        assessmentPassed,
+        capstoneAvailable,
+        capstoneApproved,
+        eligible,
+      };
+    });
+
+  const eligibleCandidates =
+    certificateCandidates.filter(
+      (candidate) => candidate.eligible
+    );
 
   return (
     <main className="rn-certificates-page">
@@ -169,48 +502,78 @@ export default async function StudentCertificatesPage() {
           </div>
         </div>
 
-        {claimableCourses.length > 0 ? (
+        {eligibleCandidates.length > 0 ? (
           <section className="rn-certificate-claim-section">
             <div>
               <span className="rn-eyebrow">
-                COMPLETED COURSES
+                CERTIFICATE ELIGIBILITY
               </span>
 
               <h2>
-                Certificate candidates
+                Certificates ready to claim
               </h2>
 
               <p>
-                These courses are recorded as
-                completed. Certificate eligibility
-                is verified when you request the
-                credential.
+                These courses have satisfied the
+                lesson, assessment and approved
+                capstone requirements.
               </p>
             </div>
 
             <div className="rn-certificate-claim-grid">
-              {claimableCourses.map((course) => (
-                <article
-                  key={course.id}
-                  className="rn-certificate-claim-card"
-                >
-                  <span>
-                    COURSE COMPLETED
-                  </span>
+              {eligibleCandidates.map(
+                (candidate) => (
+                  <article
+                    key={candidate.course.id}
+                    className="rn-certificate-claim-card"
+                  >
+                    <span>
+                      ELIGIBLE FOR CERTIFICATE
+                    </span>
 
-                  <h3>{course.title}</h3>
+                    <h3>
+                      {candidate.course.title}
+                    </h3>
 
-                  <p>
-                    Requires completed lessons, a
-                    passing assessment of at least
-                    70%, and an approved capstone.
-                  </p>
+                    <p>
+                      Lessons completed,
+                      assessment passed at 70% or
+                      higher, and capstone
+                      approved.
+                    </p>
 
-                  <CertificateIssueButton
-                    courseId={course.id}
-                  />
-                </article>
-              ))}
+                    <CertificateIssueButton
+                      courseId={
+                        candidate.course.id
+                      }
+                    />
+                  </article>
+                )
+              )}
+            </div>
+          </section>
+        ) : null}
+
+        {certificateCandidates.length > 0 &&
+        eligibleCandidates.length === 0 &&
+        certificates.length === 0 ? (
+          <section className="rn-certificate-claim-section">
+            <div>
+              <span className="rn-eyebrow">
+                CERTIFICATE PROGRESS
+              </span>
+
+              <h2>
+                No certificate is ready to claim
+              </h2>
+
+              <p>
+                Completed course status alone does
+                not issue a certificate. Each
+                certificate requires all published
+                lessons, a passing assessment of at
+                least 70%, and an approved capstone.
+              </p>
             </div>
           </section>
         ) : null}
