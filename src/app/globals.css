@@ -17563,8 +17563,8 @@ hr {
   }
 
   .site-header .brand-logo {
-    width: 130px;
-    height: 50px;
+    width: 150px;
+    height: 100px;
   }
 
   .site-header .brand-name {
@@ -17660,4 +17660,9 @@ hr {
 .site-header .nav a[href="/signup"]:focus-visible {
   color: var(--cyan, #00b4d8) !important;
   background: #f1f5f9 !important;
+}
+/* Homepage hero brand label */
+.rn-home-hero .eyebrow,
+.rn-home-hero .hero-eyebrow {
+  color: var(--navy, #0b1e3a) !important;
 }
