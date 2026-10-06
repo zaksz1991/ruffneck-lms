@@ -174,48 +174,75 @@ export function Header() {
             className="nav"
             aria-label="Main navigation"
           >
-            <Link href="/courses">
+            <Link
+              href="/courses"
+              className="rn-nav-button"
+            >
               Courses
             </Link>
 
             {loading ? null : isAuthenticated ? (
               <>
-                <Link href="/student/courses">
+                <Link
+                  href="/student/courses"
+                  className="rn-nav-button"
+                >
                   My learning
                 </Link>
 
-                <Link href="/student/scan">
+                <Link
+                  href="/student/scan"
+                  className="rn-nav-button"
+                >
                   Scan &amp; Learn
                 </Link>
 
-                <Link href="/student/practical-work">
+                <Link
+                  href="/student/practical-work"
+                  className="rn-nav-button"
+                >
                   Practical Work
                 </Link>
 
-                <Link href="/student/skill-passport">
+                <Link
+                  href="/student/skill-passport"
+                  className="rn-nav-button"
+                >
                   Skill Passport
                 </Link>
 
-                <Link href="/student/ai-drafts">
+                <Link
+                  href="/student/ai-drafts"
+                  className="rn-nav-button"
+                >
                   My AI Drafts
                 </Link>
 
-                <Link href="/student/payments">
+                <Link
+                  href="/student/payments"
+                  className="rn-nav-button"
+                >
                   Payment History
                 </Link>
 
-                <Link href="/student/assessment/results">
+                <Link
+                  href="/student/assessment/results"
+                  className="rn-nav-button"
+                >
                   Assessment Results
                 </Link>
 
-                <Link href="/student/certificates">
+                <Link
+                  href="/student/certificates"
+                  className="rn-nav-button"
+                >
                   Certificates
                 </Link>
 
                 {canAccessAdmin ? (
                   <Link
                     href="/admin/lms"
-                    className="rn-admin-link"
+                    className="rn-nav-button"
                   >
                     Admin
                   </Link>
@@ -223,7 +250,7 @@ export function Header() {
 
                 <button
                   type="button"
-                  className="nav-button"
+                  className="rn-nav-button"
                   onClick={handleSignOut}
                   disabled={signingOut}
                 >
@@ -234,13 +261,16 @@ export function Header() {
               </>
             ) : (
               <>
-                <Link href="/login">
+                <Link
+                  href="/login"
+                  className="rn-nav-button"
+                >
                   Log in
                 </Link>
 
                 <Link
                   href="/signup"
-                  className="rn-signup-link"
+                  className="rn-nav-button"
                 >
                   Sign up
                 </Link>
