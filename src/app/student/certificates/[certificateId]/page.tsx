@@ -105,9 +105,8 @@ export default async function CertificatePage({
     throw new Error("Unable to load certificate.");
   }
 
-  const certificate = certificateData as unknown as
-    | Certificate
-    | null;
+  const certificate =
+    certificateData as unknown as Certificate | null;
 
   if (!certificate) {
     notFound();
@@ -151,13 +150,12 @@ export default async function CertificatePage({
         >
           <div className="rn-certificate-border">
             <div className="rn-certificate-brand">
-              <span aria-hidden="true">
-                RN
-              </span>
-
-              <strong>
-                RuffNeck Learn
-              </strong>
+              <img
+                src="/brand/ruffneck-logo.png"
+                alt="RuffNeck Entertainment"
+                className="rn-certificate-logo"
+              />
+              <strong>RuffNeck Learn</strong>
             </div>
 
             {certificate.is_revoked ? (
@@ -173,73 +171,49 @@ export default async function CertificatePage({
               </span>
             )}
 
-            <h1>
-              Certificate of Completion
-            </h1>
+            <h1>Certificate of Completion</h1>
 
             <p className="rn-certificate-presented">
               This certificate is presented to
             </p>
 
-            <h2>
-              {certificate.holder_name}
-            </h2>
+            <h2>{certificate.holder_name}</h2>
 
             <p className="rn-certificate-completion-text">
-              for successfully completing the
-              RuffNeck Learn course
+              for successfully completing the RuffNeck Learn
+              course
             </p>
 
-            <h3>
-              {certificate.course_title}
-            </h3>
+            <h3>{certificate.course_title}</h3>
 
             <div className="rn-certificate-divider" />
 
             <div className="rn-certificate-details">
               <div>
-                <span>
-                  Certificate Number
-                </span>
-
+                <span>Certificate Number</span>
                 <strong>
                   {certificate.certificate_number}
                 </strong>
               </div>
 
               <div>
-                <span>
-                  Date Issued
-                </span>
-
+                <span>Date Issued</span>
                 <strong>
-                  {formatDate(
-                    certificate.issued_at
-                  )}
+                  {formatDate(certificate.issued_at)}
                 </strong>
               </div>
 
               <div>
-                <span>
-                  Assessment
-                </span>
-
+                <span>Assessment</span>
                 <strong>
-                  {certificate.assessment_score ??
-                    "—"}
-                  %
+                  {certificate.assessment_score ?? "—"}%
                 </strong>
               </div>
 
               <div>
-                <span>
-                  Capstone
-                </span>
-
+                <span>Capstone</span>
                 <strong>
-                  {certificate.capstone_score ??
-                    "—"}
-                  /100
+                  {certificate.capstone_score ?? "—"}/100
                 </strong>
               </div>
             </div>
@@ -301,14 +275,12 @@ export default async function CertificatePage({
 
                     <h4
                       style={{
-                        margin:
-                          "8px 0 10px",
+                        margin: "8px 0 10px",
                         fontSize: 20,
                         color: "#0b1e3a",
                       }}
                     >
-                      Scan to verify this
-                      certificate
+                      Scan to verify this certificate
                     </h4>
 
                     <p
@@ -318,12 +290,10 @@ export default async function CertificatePage({
                         color: "#475569",
                       }}
                     >
-                      Scan the QR code with
-                      a phone camera to open
-                      the official RuffNeck
-                      Learn verification
-                      record for this
-                      certificate.
+                      Scan the QR code with a phone
+                      camera to open the official
+                      RuffNeck Learn verification record
+                      for this certificate.
                     </p>
 
                     <p
@@ -333,8 +303,7 @@ export default async function CertificatePage({
                         fontSize: 13,
                         lineHeight: 1.5,
                         color: "#64748b",
-                        overflowWrap:
-                          "anywhere",
+                        overflowWrap: "anywhere",
                       }}
                     >
                       {verificationUrl}
@@ -352,13 +321,8 @@ export default async function CertificatePage({
             ) : null}
 
             <div className="rn-certificate-footer">
-              <span>
-                RuffNeck Entertainment
-              </span>
-
-              <span>
-                Practical professional learning
-              </span>
+              <span>RuffNeck Entertainment</span>
+              <span>Practical professional learning</span>
             </div>
           </div>
         </article>
