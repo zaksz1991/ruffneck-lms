@@ -20,11 +20,19 @@ type Enrollment = {
     | "active"
     | "completed"
     | "cancelled";
+  payment_status:
+    | "pending"
+    | "paid"
+    | "failed"
+    | "refunded"
+    | "free"
+    | null;
 };
 
 type Course = {
   id: string;
   title: string;
+  is_free: boolean;
 };
 
 type CurriculumItem = {
@@ -172,7 +180,9 @@ export default async function StudentCertificatesPage() {
     error: enrollmentError,
   } = await supabase
     .from("enrollments")
-    .select("course_id, enrollment_status")
+    .select(
+      "course_id, enrollment_status, payment_status"
+    )
     .eq("student_id", user.id)
     .eq("enrollment_status", "completed");
 
@@ -186,22 +196,35 @@ export default async function StudentCertificatesPage() {
   const completedEnrollments =
     (enrollmentData ?? []) as unknown as Enrollment[];
 
-  const completedCourseIds = [
-    ...new Set(
-      completedEnrollments.map(
-        (item) => item.course_id
-      )
-    ),
-  ];
-
   const certificateCourseIds = new Set(
     certificates.map(
       (item) => item.course_id
     )
   );
 
+  /*
+   * Only completed enrollments with valid payment
+   * state can become certificate candidates.
+   *
+   * Free courses require payment_status = "free".
+   * Paid courses require payment_status = "paid".
+   */
+  const eligibleEnrollmentCourseIds = [
+    ...new Set(
+      completedEnrollments
+        .filter(
+          (enrollment) =>
+            enrollment.payment_status === "paid" ||
+            enrollment.payment_status === "free"
+        )
+        .map(
+          (enrollment) => enrollment.course_id
+        )
+    ),
+  ];
+
   const uncategorizedCourseIds =
-    completedCourseIds.filter(
+    eligibleEnrollmentCourseIds.filter(
       (courseId) =>
         !certificateCourseIds.has(courseId)
     );
@@ -213,7 +236,7 @@ export default async function StudentCertificatesPage() {
     uncategorizedCourseIds.length > 0
       ? await supabase
           .from("courses")
-          .select("id, title")
+          .select("id, title, is_free")
           .eq("status", "published")
           .in(
             "id",
@@ -234,9 +257,39 @@ export default async function StudentCertificatesPage() {
   const courses =
     (courseData ?? []) as unknown as Course[];
 
-  const candidateCourseIds = courses.map(
-    (course) => course.id
-  );
+  /*
+   * Final payment-state guard.
+   *
+   * This protects against an inconsistent enrollment
+   * where a paid course somehow has payment_status="free".
+   */
+  const validCertificateCourses =
+    courses.filter((course) => {
+      const enrollment =
+        completedEnrollments.find(
+          (item) =>
+            item.course_id === course.id
+        );
+
+      if (!enrollment) {
+        return false;
+      }
+
+      if (course.is_free) {
+        return (
+          enrollment.payment_status === "free"
+        );
+      }
+
+      return (
+        enrollment.payment_status === "paid"
+      );
+    });
+
+  const candidateCourseIds =
+    validCertificateCourses.map(
+      (course) => course.id
+    );
 
   let curriculum: CurriculumItem[] = [];
   let lessonProgress: LessonProgress[] = [];
@@ -386,7 +439,7 @@ export default async function StudentCertificatesPage() {
   }
 
   const certificateCandidates: CertificateCandidate[] =
-    courses.map((course) => {
+    validCertificateCourses.map((course) => {
       const courseCurriculum =
         curriculum.filter(
           (item) =>
