@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import CertificateIssueButton from "@/components/CertificateIssueButton";
+import CertificateVerification from "./CertificateVerification";
 
 type Certificate = {
   id: string;
@@ -202,13 +203,6 @@ export default async function StudentCertificatesPage() {
     )
   );
 
-  /*
-   * Only completed enrollments with valid payment
-   * state can become certificate candidates.
-   *
-   * Free courses require payment_status = "free".
-   * Paid courses require payment_status = "paid".
-   */
   const eligibleEnrollmentCourseIds = [
     ...new Set(
       completedEnrollments
@@ -257,12 +251,6 @@ export default async function StudentCertificatesPage() {
   const courses =
     (courseData ?? []) as unknown as Course[];
 
-  /*
-   * Final payment-state guard.
-   *
-   * This protects against an inconsistent enrollment
-   * where a paid course somehow has payment_status="free".
-   */
   const validCertificateCourses =
     courses.filter((course) => {
       const enrollment =
@@ -661,68 +649,64 @@ export default async function StudentCertificatesPage() {
             </article>
           ) : (
             <div className="rn-certificate-grid">
-              {certificates.map((certificate) => {
-                const verificationUrl =
-                  `/verify/${encodeURIComponent(
-                    certificate.certificate_number
-                  )}`;
+              {certificates.map((certificate) => (
+                <article
+                  key={certificate.id}
+                  className="rn-certificate-card"
+                >
+                  <span className="rn-eyebrow">
+                    CERTIFICATE OF COMPLETION
+                  </span>
 
-                return (
-                  <article
-                    key={certificate.id}
-                    className="rn-certificate-card"
-                  >
-                    <span className="rn-eyebrow">
-                      CERTIFICATE OF COMPLETION
+                  <h3>
+                    {certificate.course_title}
+                  </h3>
+
+                  <p>
+                    {certificate.certificate_number}
+                  </p>
+
+                  <div className="rn-certificate-card-meta">
+                    <span>
+                      Issued:{" "}
+                      {formatDate(
+                        certificate.issued_at
+                      )}
                     </span>
 
-                    <h3>
-                      {certificate.course_title}
-                    </h3>
+                    <span>
+                      Assessment:{" "}
+                      {certificate.assessment_score ??
+                        "—"}
+                      %
+                    </span>
 
-                    <p>
-                      {certificate.certificate_number}
-                    </p>
+                    <span>
+                      Capstone:{" "}
+                      {certificate.capstone_score ??
+                        "—"}
+                      /100
+                    </span>
+                  </div>
 
-                    <div className="rn-certificate-card-meta">
-                      <span>
-                        Issued:{" "}
-                        {formatDate(
-                          certificate.issued_at
-                        )}
-                      </span>
+                  {certificate.is_revoked ? (
+                    <>
+                      <div className="rn-project-status status-revision_required">
+                        Revoked
+                      </div>
 
-                      <span>
-                        Assessment:{" "}
-                        {certificate.assessment_score ??
-                          "—"}
-                        %
-                      </span>
-
-                      <span>
-                        Capstone:{" "}
-                        {certificate.capstone_score ??
-                          "—"}
-                        /100
-                      </span>
-                    </div>
-
-                    {certificate.is_revoked ? (
-                      <>
-                        <div className="rn-project-status status-revision_required">
-                          Revoked
-                        </div>
-
-                        <Link
-                          href={verificationUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rn-button rn-button-secondary"
-                        >
-                          View Verification
-                        </Link>
-                      </>
-                    ) : (
+                      <CertificateVerification
+                        certificateId={
+                          certificate.id
+                        }
+                        certificateNumber={
+                          certificate.certificate_number
+                        }
+                        isRevoked
+                      />
+                    </>
+                  ) : (
+                    <>
                       <div
                         style={{
                           display: "flex",
@@ -736,20 +720,20 @@ export default async function StudentCertificatesPage() {
                         >
                           View Certificate
                         </Link>
-
-                        <Link
-                          href={verificationUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rn-button rn-button-secondary"
-                        >
-                          Verify
-                        </Link>
                       </div>
-                    )}
-                  </article>
-                );
-              })}
+
+                      <CertificateVerification
+                        certificateId={
+                          certificate.id
+                        }
+                        certificateNumber={
+                          certificate.certificate_number
+                        }
+                      />
+                    </>
+                  )}
+                </article>
+              ))}
             </div>
           )}
         </section>
