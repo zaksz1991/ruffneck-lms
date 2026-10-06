@@ -114,7 +114,7 @@ async function verifyCourseAccess(
   } = await supabase
     .from("enrollments")
     .select(
-      "id, enrollment_status, payment_status"
+      "id, enrollment_status, payment_status, progress_percent"
     )
     .eq("student_id", userId)
     .eq("course_id", courseId)
@@ -135,6 +135,17 @@ async function verifyCourseAccess(
     return {
       error:
         "You must be enrolled in this course before accessing its assessment.",
+      status: 403,
+    };
+  }
+
+  const progressPercent =
+    Number(enrollment.progress_percent) || 0;
+
+  if (progressPercent < 100) {
+    return {
+      error:
+        "Complete all published lessons before accessing the course assessment.",
       status: 403,
     };
   }

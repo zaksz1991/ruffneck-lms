@@ -235,6 +235,12 @@ export default async function AssessmentPage({
                     item.course_id === course.id
                 );
 
+              const progress =
+                enrollment?.progress_percent || 0;
+
+              const assessmentUnlocked =
+                progress >= 100;
+
               return (
                 <article
                   key={course.id}
@@ -262,19 +268,39 @@ export default async function AssessmentPage({
 
                   <div className="rn-assessment-course-meta">
                     <span>
-                      Progress:{" "}
-                      {enrollment
-                        ?.progress_percent || 0}
-                      %
+                      Progress: {progress}%
                     </span>
                   </div>
 
-                  <Link
-                    href={`/student/assessment?course=${course.slug}`}
-                    className="rn-button rn-button-primary"
-                  >
-                    Start Assessment
-                  </Link>
+                  {assessmentUnlocked ? (
+                    <Link
+                      href={`/student/assessment?course=${course.slug}`}
+                      className="rn-button rn-button-primary"
+                    >
+                      Start Assessment
+                    </Link>
+                  ) : (
+                    <div>
+                      <button
+                        type="button"
+                        className="rn-button rn-button-secondary"
+                        disabled
+                        aria-disabled="true"
+                      >
+                        Assessment Locked
+                      </button>
+
+                      <p
+                        style={{
+                          marginTop: 10,
+                          fontSize: 14,
+                        }}
+                      >
+                        Complete all course lessons
+                        to unlock the assessment.
+                      </p>
+                    </div>
+                  )}
                 </article>
               );
             })}
@@ -334,13 +360,117 @@ export default async function AssessmentPage({
     redirect("/student/assessment");
   }
 
-  if (
-    !enrolledCourseIds.includes(
-      selectedCourse.id
-    )
-  ) {
+  const enrollment = enrollments.find(
+    (item) =>
+      item.course_id === selectedCourse.id
+  );
+
+  if (!enrollment) {
     redirect(
       `/courses/${selectedCourse.slug}`
+    );
+  }
+
+  const progress =
+    enrollment.progress_percent || 0;
+
+  /*
+   * Assessment is available only after the
+   * learner has completed the entire course.
+   */
+  if (progress < 100) {
+    return (
+      <main className="rn-assessment-shell">
+        <div className="container">
+          <section className="rn-empty-state">
+            <span className="rn-eyebrow">
+              ASSESSMENT LOCKED
+            </span>
+
+            <h1>
+              Complete the course first
+            </h1>
+
+            <p>
+              The final assessment for{" "}
+              <strong>
+                {selectedCourse.title}
+              </strong>{" "}
+              becomes available after all
+              published lessons are completed.
+            </p>
+
+            <div
+              style={{
+                marginTop: 20,
+                padding: 18,
+                border:
+                  "1px solid rgba(11, 30, 58, 0.12)",
+                borderRadius: 12,
+                background:
+                  "rgba(11, 30, 58, 0.03)",
+              }}
+            >
+              <strong>
+                Course progress: {progress}%
+              </strong>
+
+              <div
+                style={{
+                  marginTop: 10,
+                  height: 8,
+                  borderRadius: 999,
+                  background:
+                    "rgba(11, 30, 58, 0.10)",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      Math.max(0, progress)
+                    )}%`,
+                    height: "100%",
+                    background:
+                      "var(--cyan, #00b4d8)",
+                  }}
+                />
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 10,
+                marginTop: 20,
+              }}
+            >
+              <Link
+                href={`/courses/${selectedCourse.slug}`}
+                className="rn-button rn-button-primary"
+              >
+                Continue Course
+              </Link>
+
+              <Link
+                href="/student/assessment"
+                className="rn-button rn-button-secondary"
+              >
+                All Assessments
+              </Link>
+
+              <Link
+                href="/student/dashboard"
+                className="rn-button rn-button-secondary"
+              >
+                Dashboard
+              </Link>
+            </div>
+          </section>
+        </div>
+      </main>
     );
   }
 
@@ -431,11 +561,6 @@ export default async function AssessmentPage({
     );
   }
 
-  const enrollment = enrollments.find(
-    (item) =>
-      item.course_id === selectedCourse.id
-  );
-
   return (
     <main className="rn-assessment-shell">
       <div className="container">
@@ -491,10 +616,7 @@ export default async function AssessmentPage({
               </span>
 
               <span>
-                Progress:{" "}
-                {enrollment?.progress_percent ||
-                  0}
-                %
+                Progress: {progress}%
               </span>
             </div>
           </div>
