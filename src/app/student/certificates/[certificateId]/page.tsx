@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import CertificatePrintButton from "@/components/CertificatePrintButton";
-import CertificateVerificationLink from "@/components/CertificateVerificationLink";
+import CertificateVerification from "../CertificateVerification";
 
 type Certificate = {
   id: string;
@@ -14,6 +14,14 @@ type Certificate = {
   capstone_score: number | null;
   is_revoked: boolean;
   revoked_reason: string | null;
+};
+
+type CertificateVerificationRecord = {
+  id: string;
+  certificate_id: string;
+  verification_code: string;
+  is_active: boolean;
+  expires_at: string | null;
 };
 
 function formatDate(value: string) {
@@ -28,18 +36,25 @@ function formatDate(value: string) {
   }).format(date);
 }
 
-function buildVerificationUrl(certificateNumber: string) {
+function buildVerificationUrl(
+  verificationCode: string
+) {
   const baseUrl =
     process.env.NEXT_PUBLIC_SITE_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
     "https://ruffneck-lms.vercel.app";
 
-  return `${baseUrl.replace(/\/$/, "")}/verify/${encodeURIComponent(
-    certificateNumber
+  return `${baseUrl.replace(
+    /\/$/,
+    ""
+  )}/verify/certificate/${encodeURIComponent(
+    verificationCode
   )}`;
 }
 
-function buildQrCodeUrl(verificationUrl: string) {
+function buildQrCodeUrl(
+  verificationUrl: string
+) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(
     verificationUrl
   )}`;
@@ -54,7 +69,8 @@ export default async function CertificatePage({
 }) {
   const { certificateId } = await params;
 
-  const normalizedCertificateId = certificateId.trim();
+  const normalizedCertificateId =
+    certificateId.trim();
 
   if (!normalizedCertificateId) {
     notFound();
@@ -102,7 +118,9 @@ export default async function CertificatePage({
       certificateError
     );
 
-    throw new Error("Unable to load certificate.");
+    throw new Error(
+      "Unable to load certificate."
+    );
   }
 
   const certificate =
@@ -112,11 +130,63 @@ export default async function CertificatePage({
     notFound();
   }
 
-  const verificationUrl = buildVerificationUrl(
-    certificate.certificate_number
-  );
+  let verification:
+    | CertificateVerificationRecord
+    | null = null;
 
-  const qrCodeUrl = buildQrCodeUrl(verificationUrl);
+  if (!certificate.is_revoked) {
+    const {
+      data: verificationData,
+      error: verificationError,
+    } = await supabase
+      .from("certificate_verifications")
+      .select(
+        [
+          "id",
+          "certificate_id",
+          "verification_code",
+          "is_active",
+          "expires_at",
+        ].join(", ")
+      )
+      .eq(
+        "certificate_id",
+        certificate.id
+      )
+      .maybeSingle();
+
+    if (verificationError) {
+      console.error(
+        "Certificate verification lookup failed:",
+        verificationError
+      );
+    } else {
+      verification =
+        verificationData as CertificateVerificationRecord | null;
+    }
+  }
+
+  const verificationUrl =
+    verification
+      ? buildVerificationUrl(
+          verification.verification_code
+        )
+      : null;
+
+  const qrCodeUrl =
+    verificationUrl
+      ? buildQrCodeUrl(verificationUrl)
+      : null;
+
+  const verificationIsValid =
+    Boolean(
+      verification &&
+        verification.is_active &&
+        (!verification.expires_at ||
+          new Date(
+            verification.expires_at
+          ).getTime() > Date.now())
+    );
 
   return (
     <main className="rn-certificate-view-page">
@@ -145,7 +215,9 @@ export default async function CertificatePage({
 
         <article
           className={`rn-certificate-document ${
-            certificate.is_revoked ? "is-revoked" : ""
+            certificate.is_revoked
+              ? "is-revoked"
+              : ""
           }`}
         >
           <div className="rn-certificate-border">
@@ -155,7 +227,10 @@ export default async function CertificatePage({
                 alt="RuffNeck Entertainment"
                 className="rn-certificate-logo"
               />
-              <strong>RuffNeck Learn</strong>
+
+              <strong>
+                RuffNeck Learn
+              </strong>
             </div>
 
             {certificate.is_revoked ? (
@@ -171,54 +246,81 @@ export default async function CertificatePage({
               </span>
             )}
 
-            <h1>Certificate of Completion</h1>
+            <h1>
+              Certificate of Completion
+            </h1>
 
             <p className="rn-certificate-presented">
               This certificate is presented to
             </p>
 
-            <h2>{certificate.holder_name}</h2>
+            <h2>
+              {certificate.holder_name}
+            </h2>
 
             <p className="rn-certificate-completion-text">
-              for successfully completing the RuffNeck Learn
-              course
+              for successfully completing the
+              RuffNeck Learn course
             </p>
 
-            <h3>{certificate.course_title}</h3>
+            <h3>
+              {certificate.course_title}
+            </h3>
 
             <div className="rn-certificate-divider" />
 
             <div className="rn-certificate-details">
               <div>
-                <span>Certificate Number</span>
+                <span>
+                  Certificate Number
+                </span>
+
                 <strong>
                   {certificate.certificate_number}
                 </strong>
               </div>
 
               <div>
-                <span>Date Issued</span>
+                <span>
+                  Date Issued
+                </span>
+
                 <strong>
-                  {formatDate(certificate.issued_at)}
+                  {formatDate(
+                    certificate.issued_at
+                  )}
                 </strong>
               </div>
 
               <div>
-                <span>Assessment</span>
+                <span>
+                  Assessment
+                </span>
+
                 <strong>
-                  {certificate.assessment_score ?? "—"}%
+                  {certificate.assessment_score ??
+                    "—"}
+                  %
                 </strong>
               </div>
 
               <div>
-                <span>Capstone</span>
+                <span>
+                  Capstone
+                </span>
+
                 <strong>
-                  {certificate.capstone_score ?? "—"}/100
+                  {certificate.capstone_score ??
+                    "—"}
+                  /100
                 </strong>
               </div>
             </div>
 
-            {!certificate.is_revoked ? (
+            {!certificate.is_revoked &&
+            verification &&
+            verificationUrl &&
+            qrCodeUrl ? (
               <>
                 <div className="rn-certificate-divider" />
 
@@ -227,7 +329,8 @@ export default async function CertificatePage({
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
+                    justifyContent:
+                      "center",
                     gap: 24,
                     flexWrap: "wrap",
                     marginTop: 24,
@@ -235,14 +338,17 @@ export default async function CertificatePage({
                     border:
                       "1px solid rgba(11, 30, 58, 0.12)",
                     borderRadius: 12,
-                    background: "#f8fafc",
+                    background:
+                      "#f8fafc",
                   }}
                 >
                   <div
                     style={{
-                      flex: "0 0 auto",
+                      flex:
+                        "0 0 auto",
                       width: 220,
-                      textAlign: "center",
+                      textAlign:
+                        "center",
                     }}
                   >
                     <img
@@ -254,9 +360,12 @@ export default async function CertificatePage({
                         display: "block",
                         width: 220,
                         height: 220,
-                        maxWidth: "100%",
-                        margin: "0 auto",
-                        background: "#ffffff",
+                        maxWidth:
+                          "100%",
+                        margin:
+                          "0 auto",
+                        background:
+                          "#ffffff",
                         border:
                           "1px solid #e5e7eb",
                       }}
@@ -265,7 +374,8 @@ export default async function CertificatePage({
 
                   <div
                     style={{
-                      flex: "1 1 280px",
+                      flex:
+                        "1 1 280px",
                       minWidth: 240,
                     }}
                   >
@@ -275,25 +385,31 @@ export default async function CertificatePage({
 
                     <h4
                       style={{
-                        margin: "8px 0 10px",
+                        margin:
+                          "8px 0 10px",
                         fontSize: 20,
-                        color: "#0b1e3a",
+                        color:
+                          "#0b1e3a",
                       }}
                     >
-                      Scan to verify this certificate
+                      Scan to verify this
+                      certificate
                     </h4>
 
                     <p
                       style={{
                         margin: 0,
                         lineHeight: 1.6,
-                        color: "#475569",
+                        color:
+                          "#475569",
                       }}
                     >
-                      Scan the QR code with a phone
-                      camera to open the official
-                      RuffNeck Learn verification record
-                      for this certificate.
+                      Scan the QR code
+                      with a phone camera
+                      to open the official
+                      RuffNeck Learn
+                      certificate
+                      verification record.
                     </p>
 
                     <p
@@ -302,12 +418,51 @@ export default async function CertificatePage({
                         marginBottom: 0,
                         fontSize: 13,
                         lineHeight: 1.5,
-                        color: "#64748b",
-                        overflowWrap: "anywhere",
+                        color:
+                          "#64748b",
+                        overflowWrap:
+                          "anywhere",
+                      }}
+                    >
+                      Verification code:{" "}
+                      <strong>
+                        {
+                          verification.verification_code
+                        }
+                      </strong>
+                    </p>
+
+                    <p
+                      style={{
+                        marginTop: 8,
+                        marginBottom: 0,
+                        fontSize: 12,
+                        lineHeight: 1.5,
+                        color:
+                          "#64748b",
+                        overflowWrap:
+                          "anywhere",
                       }}
                     >
                       {verificationUrl}
                     </p>
+
+                    {!verificationIsValid ? (
+                      <p
+                        style={{
+                          marginTop: 10,
+                          marginBottom: 0,
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color:
+                            "#b45309",
+                        }}
+                      >
+                        Verification is
+                        currently inactive
+                        or expired.
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               </>
@@ -321,17 +476,28 @@ export default async function CertificatePage({
             ) : null}
 
             <div className="rn-certificate-footer">
-              <span>RuffNeck Entertainment</span>
-              <span>Practical professional learning</span>
+              <span>
+                RuffNeck Entertainment
+              </span>
+
+              <span>
+                Practical professional learning
+              </span>
             </div>
           </div>
         </article>
 
         {!certificate.is_revoked ? (
           <div className="no-print">
-            <CertificateVerificationLink
+            <CertificateVerification
+              certificateId={
+                certificate.id
+              }
               certificateNumber={
                 certificate.certificate_number
+              }
+              isRevoked={
+                certificate.is_revoked
               }
             />
           </div>
