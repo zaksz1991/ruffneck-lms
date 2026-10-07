@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomBytes } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -41,6 +42,7 @@ type CourseProject = {
 
 type ProjectSubmission = {
   id: string;
+  project_id: string;
   score: number | null;
   status: string;
   reviewed_at: string | null;
@@ -54,6 +56,14 @@ type Profile = {
 type Certificate = {
   id: string;
   certificate_number: string;
+};
+
+type VerificationRecord = {
+  id: string;
+  certificate_id: string;
+  verification_code: string;
+  is_active: boolean;
+  expires_at: string | null;
 };
 
 function getAssessmentPercentage(
@@ -98,11 +108,179 @@ function errorResponse(
   );
 }
 
+/**
+ * Generate a high-entropy public verification code.
+ *
+ * Example:
+ * RNVERIFY-7A9C4F2E8D1B6A03F51C9D27
+ *
+ * The code contains no student information and is safe
+ * to expose publicly as a certificate verification identifier.
+ */
+function generateVerificationCode(): string {
+  return `RNVERIFY-${randomBytes(16)
+    .toString("hex")
+    .toUpperCase()}`;
+}
+
+/**
+ * Make sure an existing certificate has a verification record.
+ *
+ * This is intentionally idempotent:
+ * - existing active verification -> reuse it
+ * - existing inactive verification -> reactivate it
+ * - no verification -> create one
+ */
+async function ensureVerificationRecord(
+  admin: ReturnType<typeof createAdminClient>,
+  certificateId: string
+): Promise<{
+  verification: VerificationRecord | null;
+  error: string | null;
+}> {
+  const {
+    data: existingData,
+    error: existingError,
+  } = await admin
+    .from("certificate_verifications")
+    .select(
+      [
+        "id",
+        "certificate_id",
+        "verification_code",
+        "is_active",
+        "expires_at",
+      ].join(", ")
+    )
+    .eq("certificate_id", certificateId)
+    .maybeSingle();
+
+  if (existingError) {
+    return {
+      verification: null,
+      error: existingError.message,
+    };
+  }
+
+  const existing =
+    existingData as VerificationRecord | null;
+
+  if (existing) {
+    if (!existing.is_active) {
+      const {
+        data: reactivatedData,
+        error: reactivateError,
+      } = await admin
+        .from("certificate_verifications")
+        .update({
+          is_active: true,
+        })
+        .eq("id", existing.id)
+        .select(
+          [
+            "id",
+            "certificate_id",
+            "verification_code",
+            "is_active",
+            "expires_at",
+          ].join(", ")
+        )
+        .single();
+
+      if (reactivateError) {
+        return {
+          verification: null,
+          error: reactivateError.message,
+        };
+      }
+
+      return {
+        verification:
+          reactivatedData as VerificationRecord,
+        error: null,
+      };
+    }
+
+    return {
+      verification: existing,
+      error: null,
+    };
+  }
+
+  /*
+   * Generate a new unique verification code.
+   *
+   * The database should already protect verification codes
+   * with a uniqueness constraint. In the extremely unlikely
+   * event of a collision, retry a few times.
+   */
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const verificationCode =
+      generateVerificationCode();
+
+    const {
+      data: insertedData,
+      error: insertError,
+    } = await admin
+      .from("certificate_verifications")
+      .insert({
+        certificate_id: certificateId,
+        verification_code: verificationCode,
+        is_active: true,
+      })
+      .select(
+        [
+          "id",
+          "certificate_id",
+          "verification_code",
+          "is_active",
+          "expires_at",
+        ].join(", ")
+      )
+      .single();
+
+    if (!insertError && insertedData) {
+      return {
+        verification:
+          insertedData as VerificationRecord,
+        error: null,
+      };
+    }
+
+    /*
+     * 23505 = unique constraint violation.
+     * Retry with another cryptographically random code.
+     */
+    if (insertError?.code === "23505") {
+      continue;
+    }
+
+    return {
+      verification: null,
+      error:
+        insertError?.message ||
+        "Unable to create certificate verification record.",
+    };
+  }
+
+  return {
+    verification: null,
+    error:
+      "Unable to generate a unique certificate verification code.",
+  };
+}
+
 export async function POST(request: Request) {
   let stage = "request validation";
 
   try {
     const supabase = await createClient();
+
+    /*
+     * ---------------------------------------------------------
+     * 1. AUTHENTICATION
+     * ---------------------------------------------------------
+     */
 
     stage = "authentication";
 
@@ -112,11 +290,15 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (authError) {
-      console.error("[certificate] authentication error:", authError);
+      console.error(
+        "[certificate] authentication error:",
+        authError
+      );
 
       return errorResponse(
         stage,
-        authError.message || "Unable to authenticate the user.",
+        authError.message ||
+          "Unable to authenticate the user.",
         401
       );
     }
@@ -128,6 +310,12 @@ export async function POST(request: Request) {
         401
       );
     }
+
+    /*
+     * ---------------------------------------------------------
+     * 2. REQUEST BODY
+     * ---------------------------------------------------------
+     */
 
     stage = "request body";
 
@@ -151,7 +339,7 @@ export async function POST(request: Request) {
 
     /*
      * ---------------------------------------------------------
-     * 1. COURSE
+     * 3. COURSE
      * ---------------------------------------------------------
      */
 
@@ -168,7 +356,10 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (courseError) {
-      console.error("[certificate] course lookup:", courseError);
+      console.error(
+        "[certificate] course lookup:",
+        courseError
+      );
 
       return errorResponse(
         stage,
@@ -189,12 +380,8 @@ export async function POST(request: Request) {
 
     /*
      * ---------------------------------------------------------
-     * 2. ENROLLMENT
+     * 4. ENROLLMENT
      * ---------------------------------------------------------
-     *
-     * Do not require enrollment_status = completed here.
-     * Certificate eligibility is independently verified through
-     * lessons, assessment and capstone approval below.
      */
 
     stage = "enrollment lookup";
@@ -209,7 +396,10 @@ export async function POST(request: Request) {
       )
       .eq("student_id", user.id)
       .eq("course_id", courseId)
-      .in("enrollment_status", ["active", "completed"])
+      .in("enrollment_status", [
+        "active",
+        "completed",
+      ])
       .maybeSingle();
 
     if (enrollmentError) {
@@ -238,7 +428,7 @@ export async function POST(request: Request) {
 
     /*
      * ---------------------------------------------------------
-     * 3. PAYMENT
+     * 5. PAYMENT
      * ---------------------------------------------------------
      */
 
@@ -270,7 +460,7 @@ export async function POST(request: Request) {
 
     /*
      * ---------------------------------------------------------
-     * 4. PUBLISHED CURRICULUM
+     * 6. PUBLISHED CURRICULUM
      * ---------------------------------------------------------
      */
 
@@ -315,7 +505,7 @@ export async function POST(request: Request) {
 
     /*
      * ---------------------------------------------------------
-     * 5. LESSON COMPLETION
+     * 7. LESSON COMPLETION
      * ---------------------------------------------------------
      */
 
@@ -355,7 +545,8 @@ export async function POST(request: Request) {
     );
 
     const incompleteLessons = lessonIds.filter(
-      (lessonId) => !completedLessonIds.has(lessonId)
+      (lessonId) =>
+        !completedLessonIds.has(lessonId)
     );
 
     if (incompleteLessons.length > 0) {
@@ -368,7 +559,7 @@ export async function POST(request: Request) {
 
     /*
      * ---------------------------------------------------------
-     * 6. ASSESSMENT
+     * 8. ASSESSMENT
      * ---------------------------------------------------------
      */
 
@@ -438,11 +629,8 @@ export async function POST(request: Request) {
 
     /*
      * ---------------------------------------------------------
-     * 7. PUBLISHED CAPSTONE
+     * 9. PUBLISHED CAPSTONE
      * ---------------------------------------------------------
-     *
-     * Deliberately do not order by sort_order because that
-     * column has not been established as part of the schema.
      */
 
     stage = "capstone lookup";
@@ -483,11 +671,12 @@ export async function POST(request: Request) {
 
     /*
      * ---------------------------------------------------------
-     * 8. APPROVED CAPSTONE SUBMISSION
+     * 10. APPROVED CAPSTONE SUBMISSION
      * ---------------------------------------------------------
      */
 
-    stage = "capstone submission verification";
+    stage =
+      "capstone submission verification";
 
     const projectIds = projects
       .map((project) => project.id)
@@ -541,7 +730,8 @@ export async function POST(request: Request) {
 
     if (
       capstoneScore !== null &&
-      (capstoneScore < 0 || capstoneScore > 100)
+      (capstoneScore < 0 ||
+        capstoneScore > 100)
     ) {
       return errorResponse(
         stage,
@@ -552,7 +742,7 @@ export async function POST(request: Request) {
 
     /*
      * ---------------------------------------------------------
-     * 9. PROFILE
+     * 11. PROFILE
      * ---------------------------------------------------------
      */
 
@@ -591,8 +781,12 @@ export async function POST(request: Request) {
 
     /*
      * ---------------------------------------------------------
-     * 10. EXISTING CERTIFICATE
+     * 12. EXISTING CERTIFICATE
      * ---------------------------------------------------------
+     *
+     * If the certificate already exists, do not create a
+     * duplicate. Instead, make sure its public verification
+     * record exists.
      */
 
     stage = "existing certificate lookup";
@@ -624,18 +818,43 @@ export async function POST(request: Request) {
       existingCertificateData as Certificate | null;
 
     if (existingCertificate) {
+      stage = "verification record";
+
+      const {
+        verification,
+        error: verificationError,
+      } = await ensureVerificationRecord(
+        admin,
+        existingCertificate.id
+      );
+
+      if (verificationError) {
+        console.error(
+          "[certificate] existing verification:",
+          verificationError
+        );
+
+        return errorResponse(
+          stage,
+          verificationError,
+          500
+        );
+      }
+
       return NextResponse.json({
         ok: true,
         certificateId: existingCertificate.id,
         certificateNumber:
           existingCertificate.certificate_number,
+        verificationCode:
+          verification?.verification_code ?? null,
         alreadyIssued: true,
       });
     }
 
     /*
      * ---------------------------------------------------------
-     * 11. ISSUE CERTIFICATE
+     * 13. ISSUE CERTIFICATE
      * ---------------------------------------------------------
      */
 
@@ -682,9 +901,7 @@ export async function POST(request: Request) {
           .eq("course_id", courseId)
           .maybeSingle();
 
-        if (
-          duplicateLookupError
-        ) {
+        if (duplicateLookupError) {
           console.error(
             "[certificate] duplicate lookup:",
             duplicateLookupError
@@ -698,12 +915,38 @@ export async function POST(request: Request) {
         }
 
         if (duplicateCertificate) {
+          stage = "verification record";
+
+          const {
+            verification,
+            error: verificationError,
+          } = await ensureVerificationRecord(
+            admin,
+            duplicateCertificate.id
+          );
+
+          if (verificationError) {
+            console.error(
+              "[certificate] duplicate verification:",
+              verificationError
+            );
+
+            return errorResponse(
+              stage,
+              verificationError,
+              500
+            );
+          }
+
           return NextResponse.json({
             ok: true,
             certificateId:
               duplicateCertificate.id,
             certificateNumber:
               duplicateCertificate.certificate_number,
+            verificationCode:
+              verification?.verification_code ??
+              null,
             alreadyIssued: true,
           });
         }
@@ -737,6 +980,52 @@ export async function POST(request: Request) {
 
     /*
      * ---------------------------------------------------------
+     * 14. CREATE PUBLIC VERIFICATION RECORD
+     * ---------------------------------------------------------
+     */
+
+    stage = "verification record";
+
+    const {
+      verification,
+      error: verificationError,
+    } = await ensureVerificationRecord(
+      admin,
+      insertedCertificate.id
+    );
+
+    if (verificationError) {
+      console.error(
+        "[certificate] verification creation:",
+        verificationError
+      );
+
+      /*
+       * The certificate itself has already been issued.
+       * Return the certificate ID rather than pretending
+       * certificate issuance failed completely.
+       *
+       * The certificate page can also display the existing
+       * credential while the verification record is repaired.
+       */
+      return NextResponse.json(
+        {
+          ok: true,
+          certificateId:
+            insertedCertificate.id,
+          certificateNumber:
+            insertedCertificate.certificate_number,
+          verificationCode: null,
+          alreadyIssued: false,
+          verificationPending: true,
+          verificationError,
+        },
+        { status: 200 }
+      );
+    }
+
+    /*
+     * ---------------------------------------------------------
      * SUCCESS
      * ---------------------------------------------------------
      */
@@ -746,7 +1035,10 @@ export async function POST(request: Request) {
       certificateId: insertedCertificate.id,
       certificateNumber:
         insertedCertificate.certificate_number,
+      verificationCode:
+        verification?.verification_code ?? null,
       alreadyIssued: false,
+      verificationPending: false,
     });
   } catch (error) {
     console.error(
