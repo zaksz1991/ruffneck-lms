@@ -16,11 +16,7 @@ type Certificate = {
 };
 
 function getBaseUrl() {
-  return (
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    "https://ruffneck-lms.vercel.app"
-  ).replace(/\/$/, "");
+  return "https://ruffneck-lms.vercel.app";
 }
 
 function buildVerificationUrl(
@@ -140,15 +136,13 @@ export async function generateMetadata({
       certificate.certificate_number
     );
 
-  const statusText = certificate.is_revoked
-    ? "This RuffNeck Learn certificate has been revoked."
-    : "This RuffNeck Learn certificate is available for public verification.";
-
   const description =
-    `Official verification of the RuffNeck Learn certificate awarded to ${certificate.holder_name} for completing ${certificate.course_title}. ${statusText}`;
+    `Official verification of the RuffNeck Learn certificate awarded to ${certificate.holder_name} for completing ${certificate.course_title}. This RuffNeck Learn certificate is available for public verification.`;
 
   return {
-    metadataBase: new URL(getBaseUrl()),
+    metadataBase: new URL(
+      "https://ruffneck-lms.vercel.app"
+    ),
 
     title:
       "RuffNeck Learn | Certificate Verification",
