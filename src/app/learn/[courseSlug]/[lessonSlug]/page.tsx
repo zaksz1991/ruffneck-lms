@@ -54,6 +54,17 @@ type Enrollment = {
   payment_status: string | null;
 };
 
+type PracticalApplication = {
+  title: string;
+  introduction: string;
+  steps: {
+    number: string;
+    title: string;
+    description: string;
+  }[];
+  deliverable: string;
+};
+
 function formatDuration(
   minutes: number | null,
   seconds: number | null
@@ -126,10 +137,376 @@ function removeDuplicateLeadingHeading(
     "i"
   );
 
-  return html.replace(duplicateHeadingPattern, "");
+  return html.replace(
+    duplicateHeadingPattern,
+    ""
+  );
 }
 
-function isActiveEnrollment(enrollment: Enrollment | null) {
+/**
+ * Wrap every lesson table in a dedicated responsive
+ * scrolling container.
+ *
+ * This keeps wide tables from expanding the entire
+ * lesson page, especially on phones.
+ */
+function makeTablesResponsive(html: string) {
+  if (!html || !/<table[\s>]/i.test(html)) {
+    return html;
+  }
+
+  return html.replace(
+    /<table\b([^>]*)>([\s\S]*?)<\/table>/gi,
+    (match, attributes, tableContent) => {
+      return `
+        <div class="rn-learning-table-wrap" role="region" aria-label="Scrollable lesson table" tabindex="0">
+          <table${attributes}>${tableContent}</table>
+        </div>
+      `;
+    }
+  );
+}
+
+/**
+ * Generate a practical activity from the lesson topic.
+ *
+ * The lesson template remains consistent across the LMS,
+ * but the actual application changes according to the
+ * subject being taught.
+ */
+function getPracticalApplication(
+  lessonTitle: string,
+  courseTitle: string,
+  category: string | null
+): PracticalApplication {
+  const text = `${lessonTitle} ${courseTitle} ${
+    category ?? ""
+  }`.toLowerCase();
+
+  if (
+    text.includes("prompt") ||
+    text.includes("prompt engineering")
+  ) {
+    return {
+      title:
+        "Build and test a professional prompt",
+      introduction:
+        "Turn the lesson into a usable prompt for a real professional task. Focus on clarity, context, instructions, and the quality of the resulting output.",
+      steps: [
+        {
+          number: "01",
+          title: "Choose a real task",
+          description:
+            "Select a task you actually perform, such as drafting an email, summarising a report, analysing information, or preparing a document.",
+        },
+        {
+          number: "02",
+          title: "Build the prompt",
+          description:
+            "Create a structured prompt that gives the AI clear context, instructions, constraints, and the desired output format.",
+        },
+        {
+          number: "03",
+          title: "Test and improve",
+          description:
+            "Run the prompt, review the result, identify weaknesses, and revise the prompt until the output is useful and professionally appropriate.",
+        },
+      ],
+      deliverable:
+        "Save your final prompt and one example of the improved output.",
+    };
+  }
+
+  if (
+    text.includes("generative ai") ||
+    text.includes("generative artificial intelligence") ||
+    text.includes("what is ai") ||
+    text.includes("ai foundations") ||
+    text.includes("ai foundation")
+  ) {
+    return {
+      title:
+        "Apply AI foundations to a workplace task",
+      introduction:
+        "Connect the concept to an actual professional situation and determine where AI can assist without replacing appropriate human judgement.",
+      steps: [
+        {
+          number: "01",
+          title: "Identify a task",
+          description:
+            "Choose one recurring task from your work, study, business, teaching, administration, or personal productivity.",
+        },
+        {
+          number: "02",
+          title: "Apply AI assistance",
+          description:
+            "Use an appropriate AI tool to assist with the task. Give clear instructions and avoid submitting confidential or sensitive information.",
+        },
+        {
+          number: "03",
+          title: "Evaluate the result",
+          description:
+            "Check the output for accuracy, relevance, missing information, privacy concerns, and whether it genuinely improves the task.",
+        },
+      ],
+      deliverable:
+        "Record the task, the AI-assisted result, and one improvement you would make before using the result professionally.",
+    };
+  }
+
+  if (
+    text.includes("safety") ||
+    text.includes("ethics") ||
+    text.includes("responsible ai") ||
+    text.includes("privacy")
+  ) {
+    return {
+      title:
+        "Apply responsible AI controls",
+      introduction:
+        "Use the lesson to identify risks in a realistic AI-assisted workflow and establish practical controls before using the workflow professionally.",
+      steps: [
+        {
+          number: "01",
+          title: "Identify the risk",
+          description:
+            "Choose an AI task and identify possible privacy, accuracy, bias, security, confidentiality, or misuse risks.",
+        },
+        {
+          number: "02",
+          title: "Apply safeguards",
+          description:
+            "Decide what information can be shared, what must be removed, and where human review is required.",
+        },
+        {
+          number: "03",
+          title: "Review the workflow",
+          description:
+            "Check whether the process produces a useful result while maintaining appropriate professional and ethical controls.",
+        },
+      ],
+      deliverable:
+        "Create a short AI safety checklist for the task you selected.",
+    };
+  }
+
+  if (
+    text.includes("excel") ||
+    text.includes("spreadsheet") ||
+    text.includes("power bi") ||
+    text.includes("data analysis") ||
+    text.includes("data analytics")
+  ) {
+    return {
+      title:
+        "Apply the technique to real data",
+      introduction:
+        "Use the lesson concept on a realistic dataset so that the skill becomes something you can apply in an actual workplace or business situation.",
+      steps: [
+        {
+          number: "01",
+          title: "Prepare the data",
+          description:
+            "Choose a suitable dataset and check its structure, completeness, consistency, and relevant fields.",
+        },
+        {
+          number: "02",
+          title: "Perform the analysis",
+          description:
+            "Apply the technique from this lesson to calculate, organise, analyse, visualise, or interpret the information.",
+        },
+        {
+          number: "03",
+          title: "Interpret the result",
+          description:
+            "Review the output and explain what it means for a manager, colleague, customer, business, or other intended audience.",
+        },
+      ],
+      deliverable:
+        "Produce one useful analysis, calculation, table, chart, or insight based on the lesson.",
+    };
+  }
+
+  if (
+    text.includes("digital marketing") ||
+    text.includes("marketing") ||
+    text.includes("social media") ||
+    text.includes("content creation") ||
+    text.includes("content marketing")
+  ) {
+    return {
+      title:
+        "Apply the concept to a marketing campaign",
+      introduction:
+        "Use the lesson to create one practical component of a professional digital marketing activity.",
+      steps: [
+        {
+          number: "01",
+          title: "Define the objective",
+          description:
+            "Choose a realistic marketing objective and identify the audience you want the activity to reach.",
+        },
+        {
+          number: "02",
+          title: "Create the marketing asset",
+          description:
+            "Apply the lesson to produce an appropriate post, message, campaign element, content idea, audience definition, or marketing workflow.",
+        },
+        {
+          number: "03",
+          title: "Review effectiveness",
+          description:
+            "Check whether the result is clear, relevant to the audience, aligned with the objective, and suitable for publication.",
+        },
+      ],
+      deliverable:
+        "Create one campaign-ready marketing asset and briefly explain its intended audience and objective.",
+    };
+  }
+
+  if (
+    text.includes("teacher") ||
+    text.includes("teaching") ||
+    text.includes("education") ||
+    text.includes("classroom") ||
+    text.includes("lesson plan")
+  ) {
+    return {
+      title:
+        "Apply the concept to a teaching situation",
+      introduction:
+        "Translate the lesson into a practical teaching activity that could be used with learners in a real educational environment.",
+      steps: [
+        {
+          number: "01",
+          title: "Choose a teaching situation",
+          description:
+            "Select a real topic, learner group, classroom challenge, or teaching objective relevant to your context.",
+        },
+        {
+          number: "02",
+          title: "Apply the technique",
+          description:
+            "Use the method from this lesson to design, improve, deliver, or assess the selected teaching activity.",
+        },
+        {
+          number: "03",
+          title: "Review the outcome",
+          description:
+            "Consider whether the activity supports the learning objective and identify what you would improve next time.",
+        },
+      ],
+      deliverable:
+        "Create one practical teaching resource, activity, plan, or assessment aligned with the lesson.",
+    };
+  }
+
+  if (
+    text.includes("record") ||
+    text.includes("records management") ||
+    text.includes("information management") ||
+    text.includes("document management")
+  ) {
+    return {
+      title:
+        "Apply the concept to records management",
+      introduction:
+        "Use the lesson to improve how a real organisation creates, captures, classifies, stores, retrieves, protects, or disposes of information.",
+      steps: [
+        {
+          number: "01",
+          title: "Identify a record",
+          description:
+            "Choose a realistic business, administrative, financial, personnel, customer, or operational record.",
+        },
+        {
+          number: "02",
+          title: "Apply the method",
+          description:
+            "Use the lesson's records or information-management principle to classify, organise, process, protect, or retrieve the record.",
+        },
+        {
+          number: "03",
+          title: "Review the process",
+          description:
+            "Check whether the information is accurate, accessible, appropriately protected, and managed according to its purpose.",
+        },
+      ],
+      deliverable:
+        "Produce a simple record-management example, classification, workflow, register, or control based on the lesson.",
+    };
+  }
+
+  if (
+    text.includes("automation") ||
+    text.includes("workflow") ||
+    text.includes("productivity") ||
+    text.includes("office") ||
+    text.includes("business operations")
+  ) {
+    return {
+      title:
+        "Improve a real professional workflow",
+      introduction:
+        "Identify a repetitive or inefficient task and apply the lesson to make the workflow clearer, faster, more consistent, or easier to manage.",
+      steps: [
+        {
+          number: "01",
+          title: "Map the current task",
+          description:
+            "Write down the main steps currently required to complete the task and identify where time or effort is being lost.",
+        },
+        {
+          number: "02",
+          title: "Apply the lesson",
+          description:
+            "Use the technique from this lesson to improve, simplify, automate, organise, or standardise the workflow.",
+        },
+        {
+          number: "03",
+          title: "Review the improvement",
+          description:
+            "Compare the original and improved workflow and identify the practical benefit, remaining risks, and next improvement.",
+        },
+      ],
+      deliverable:
+        "Create a simple before-and-after workflow showing how the lesson improved the task.",
+    };
+  }
+
+  return {
+    title:
+      `Apply ${lessonTitle} to a real situation`,
+    introduction:
+      "Connect the lesson to an actual professional, business, educational, or personal situation so that the concept becomes a usable skill.",
+    steps: [
+      {
+        number: "01",
+        title: "Identify the concept",
+        description:
+          "Select the most important concept, method, process, or skill from this lesson.",
+      },
+      {
+        number: "02",
+        title: "Apply it to a real situation",
+        description:
+          "Choose a realistic task and use the lesson's concept to produce a practical result.",
+      },
+      {
+        number: "03",
+        title: "Review your result",
+        description:
+          "Check the result for accuracy, usefulness, completeness, and areas that could be improved.",
+      },
+    ],
+    deliverable:
+      "Create one practical example demonstrating how you applied the lesson.",
+  };
+}
+
+function isActiveEnrollment(
+  enrollment: Enrollment | null
+) {
   if (!enrollment) {
     return false;
   }
@@ -198,6 +575,7 @@ export default async function LessonPage({
       "Failed to load course:",
       courseError
     );
+
     throw new Error(
       "Unable to load the course."
     );
@@ -257,6 +635,7 @@ export default async function LessonPage({
       "Failed to load curriculum:",
       curriculumError
     );
+
     throw new Error(
       "Unable to load the course curriculum."
     );
@@ -305,6 +684,7 @@ export default async function LessonPage({
       "Failed to load lesson:",
       lessonError
     );
+
     throw new Error(
       "Unable to load the lesson."
     );
@@ -324,17 +704,6 @@ export default async function LessonPage({
     notFound();
   }
 
-  /*
-   * Preview lessons remain viewable to authenticated
-   * users without enrollment.
-   *
-   * Non-preview lessons require valid course access.
-   *
-   * Free courses require an active/completed enrollment.
-   *
-   * Paid courses require an active/completed enrollment
-   * whose enrollment payment_status is "paid".
-   */
   if (!lesson.is_preview && !hasCourseAccess) {
     redirect(`/courses/${courseSlug}`);
   }
@@ -434,10 +803,22 @@ export default async function LessonPage({
     null
   );
 
-  const lessonContent =
+  const rawLessonContent =
     removeDuplicateLeadingHeading(
       lesson.content_html,
       lesson.title
+    );
+
+  const lessonContent =
+    makeTablesResponsive(
+      rawLessonContent
+    );
+
+  const practicalApplication =
+    getPracticalApplication(
+      lesson.title,
+      course.title,
+      course.category
     );
 
   const progressLabel =
@@ -733,42 +1114,47 @@ export default async function LessonPage({
                 </span>
 
                 <h2>
-                  Put the lesson into practice
+                  {practicalApplication.title}
                 </h2>
 
                 <p>
-                  Before moving on, connect the
-                  lesson to an actual professional
-                  situation. The objective is to
-                  turn the concept into something
-                  you can use.
+                  {practicalApplication.introduction}
                 </p>
               </div>
 
               <div className="rn-learning-practice-grid">
-                <div>
-                  <strong>01</strong>
+                {practicalApplication.steps.map(
+                  (step) => (
+                    <div
+                      key={step.number}
+                      className="rn-learning-practice-step"
+                    >
+                      <strong>
+                        {step.number}
+                      </strong>
 
-                  <span>
-                    Identify the key concept
-                  </span>
-                </div>
+                      <div>
+                        <h3>
+                          {step.title}
+                        </h3>
 
-                <div>
-                  <strong>02</strong>
+                        <p>
+                          {step.description}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
 
-                  <span>
-                    Apply it to a real situation
-                  </span>
-                </div>
+              <div className="rn-learning-practice-deliverable">
+                <span>
+                  LEARNER DELIVERABLE
+                </span>
 
-                <div>
-                  <strong>03</strong>
-
-                  <span>
-                    Review your result
-                  </span>
-                </div>
+                <p>
+                  {practicalApplication.deliverable}
+                </p>
               </div>
             </section>
 

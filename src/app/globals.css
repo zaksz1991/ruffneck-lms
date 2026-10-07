@@ -26501,3 +26501,295 @@ main.page-shell .rn-button {
     animation: none !important;
   }
 }
+
+/* =========================================================
+   RUFFNECK LEARN — LESSON CONTENT REFINEMENT
+   Responsive tables + practical application
+   ========================================================= */
+
+/* Prevent lesson content from creating page-wide overflow. */
+
+.rn-learning-shell,
+.rn-learning-shell .container,
+.rn-learning-layout,
+.rn-learning-content,
+.rn-learning-material,
+.rn-learning-article {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rn-learning-shell {
+  overflow-x: hidden;
+}
+
+/* ---------------------------------------------------------
+   LESSON ARTICLE
+   --------------------------------------------------------- */
+
+.rn-learning-article {
+  width: 100%;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.rn-learning-article img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.rn-learning-article iframe,
+.rn-learning-article video,
+.rn-learning-article embed,
+.rn-learning-article object {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+.rn-learning-article pre {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
+  box-sizing: border-box;
+}
+
+.rn-learning-article code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ---------------------------------------------------------
+   RESPONSIVE LESSON TABLES
+   --------------------------------------------------------- */
+
+.rn-learning-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  margin: 24px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--white);
+  box-shadow: 0 3px 12px rgba(11, 30, 58, 0.04);
+  scrollbar-width: thin;
+}
+
+.rn-learning-table-wrap:focus {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.rn-learning-table-wrap table {
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+  margin: 0;
+  border-collapse: collapse;
+  border-spacing: 0;
+  table-layout: auto;
+}
+
+.rn-learning-table-wrap th,
+.rn-learning-table-wrap td {
+  min-width: 120px;
+  padding: 12px 14px;
+  border-right: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: top;
+  text-align: left;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.rn-learning-table-wrap th {
+  background: #f1f7fa;
+  color: var(--navy);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.rn-learning-table-wrap td {
+  color: var(--text-body);
+  font-size: 0.88rem;
+}
+
+.rn-learning-table-wrap tr:last-child td {
+  border-bottom: 0;
+}
+
+.rn-learning-table-wrap th:last-child,
+.rn-learning-table-wrap td:last-child {
+  border-right: 0;
+}
+
+.rn-learning-table-wrap tbody tr:nth-child(even) {
+  background: #fbfcfd;
+}
+
+.rn-learning-table-wrap tbody tr:hover {
+  background: rgba(0, 180, 216, 0.035);
+}
+
+/* Keep long URLs, identifiers and unbroken strings
+   from making individual cells excessively wide. */
+
+.rn-learning-table-wrap a,
+.rn-learning-table-wrap code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ---------------------------------------------------------
+   PRACTICAL APPLICATION
+   --------------------------------------------------------- */
+
+.rn-learning-practice-panel {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.rn-learning-practice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.rn-learning-practice-step {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--white);
+}
+
+.rn-learning-practice-step > strong {
+  flex: 0 0 auto;
+  color: var(--cyan-dim);
+  font-size: 0.75rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+}
+
+.rn-learning-practice-step > div {
+  min-width: 0;
+}
+
+.rn-learning-practice-step h3 {
+  margin: 0 0 7px;
+  color: var(--navy);
+  font-size: 0.94rem;
+  line-height: 1.35;
+}
+
+.rn-learning-practice-step p {
+  margin: 0;
+  color: var(--text-body);
+  font-size: 0.84rem;
+  line-height: 1.65;
+}
+
+.rn-learning-practice-deliverable {
+  margin-top: 16px;
+  padding: 16px 18px;
+  border-left: 3px solid var(--gold);
+  border-radius: 0 10px 10px 0;
+  background: #fffaf0;
+}
+
+.rn-learning-practice-deliverable > span {
+  display: block;
+  margin-bottom: 6px;
+  color: #8a6500;
+  font-size: 0.67rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+}
+
+.rn-learning-practice-deliverable p {
+  margin: 0;
+  color: var(--text-body);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+/* ---------------------------------------------------------
+   TABLET
+   --------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .rn-learning-practice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rn-learning-practice-step {
+    min-height: 0;
+  }
+}
+
+/* ---------------------------------------------------------
+   MOBILE
+   --------------------------------------------------------- */
+
+@media (max-width: 600px) {
+  .rn-learning-table-wrap {
+    margin: 18px 0;
+    border-radius: 10px;
+  }
+
+  .rn-learning-table-wrap th,
+  .rn-learning-table-wrap td {
+    min-width: 105px;
+    padding: 10px 11px;
+    font-size: 0.78rem;
+  }
+
+  .rn-learning-practice-grid {
+    gap: 10px;
+  }
+
+  .rn-learning-practice-step {
+    padding: 15px;
+    gap: 10px;
+  }
+
+  .rn-learning-practice-step p {
+    font-size: 0.81rem;
+  }
+
+  .rn-learning-practice-deliverable {
+    padding: 14px 15px;
+  }
+}
+
+/* ---------------------------------------------------------
+   VERY SMALL SCREENS
+   --------------------------------------------------------- */
+
+@media (max-width: 380px) {
+  .rn-learning-table-wrap th,
+  .rn-learning-table-wrap td {
+    min-width: 95px;
+    padding: 9px 10px;
+    font-size: 0.75rem;
+  }
+
+  .rn-learning-practice-step {
+    display: block;
+  }
+
+  .rn-learning-practice-step > strong {
+    display: block;
+    margin-bottom: 7px;
+  }
+}
