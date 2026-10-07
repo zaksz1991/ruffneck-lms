@@ -26648,66 +26648,67 @@ main.page-shell .rn-button {
 }
 
 /* =========================================================
-   PRACTICAL APPLICATION — FINAL HORIZONTAL STEP FIX
+   PRACTICAL APPLICATION — CLEAN STEP LAYOUT
    ========================================================= */
 
 .rn-learning-practice-panel .rn-learning-practice-grid {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 18px !important;
-  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+  min-width: 0 !important;
 }
 
-.rn-learning-practice-panel .rn-learning-practice-step {
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: flex-start !important;
-  justify-content: flex-start !important;
-  gap: 14px !important;
+.rn-learning-practice-panel .rn-learning-practice-grid > div {
+  display: grid !important;
+  grid-template-columns: 32px minmax(0, 1fr) !important;
+  align-items: start !important;
+  column-gap: 10px !important;
 
-  width: 100% !important;
   min-width: 0 !important;
+  width: 100% !important;
 
+  padding: 12px !important;
   box-sizing: border-box !important;
 }
 
-.rn-learning-practice-panel .rn-learning-practice-step > strong {
+.rn-learning-practice-panel
+  .rn-learning-practice-grid
+  > div
+  > strong {
   display: block !important;
-  flex: 0 0 38px !important;
 
-  width: 38px !important;
-  min-width: 38px !important;
+  width: 32px !important;
+  min-width: 32px !important;
 
   margin: 0 !important;
   padding: 0 !important;
 
   color: var(--cyan-dim) !important;
-
-  font-size: 0.78rem !important;
+  font-size: 0.76rem !important;
   font-weight: 850 !important;
   line-height: 1.4 !important;
-  letter-spacing: 0.08em !important;
 
-  writing-mode: horizontal-tb !important;
-  text-orientation: mixed !important;
   white-space: nowrap !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
 }
 
 .rn-learning-practice-panel
-  .rn-learning-practice-step
+  .rn-learning-practice-grid
+  > div
   > div {
   display: block !important;
-  flex: 1 1 auto !important;
 
-  width: auto !important;
   min-width: 0 !important;
+  width: auto !important;
 
   margin: 0 !important;
   padding: 0 !important;
 }
 
 .rn-learning-practice-panel
-  .rn-learning-practice-step
+  .rn-learning-practice-grid
+  > div
   h3 {
   display: block !important;
 
@@ -26715,17 +26716,18 @@ main.page-shell .rn-button {
   padding: 0 !important;
 
   color: var(--navy) !important;
-
-  font-size: 0.94rem !important;
+  font-size: 0.92rem !important;
   font-weight: 800 !important;
   line-height: 1.35 !important;
 
   white-space: normal !important;
-  writing-mode: horizontal-tb !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
 }
 
 .rn-learning-practice-panel
-  .rn-learning-practice-step
+  .rn-learning-practice-grid
+  > div
   p {
   display: block !important;
 
@@ -26733,29 +26735,33 @@ main.page-shell .rn-button {
   padding: 0 !important;
 
   color: var(--text-body) !important;
-
-  font-size: 0.84rem !important;
-  line-height: 1.65 !important;
+  font-size: 0.82rem !important;
+  line-height: 1.6 !important;
 
   white-space: normal !important;
-  writing-mode: horizontal-tb !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
 }
 
-@media (max-width: 700px) {
+@media (max-width: 900px) {
   .rn-learning-practice-panel .rn-learning-practice-grid {
-    gap: 16px !important;
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .rn-learning-practice-panel
+    .rn-learning-practice-grid
+    > div {
+    grid-template-columns: 28px minmax(0, 1fr) !important;
+    column-gap: 9px !important;
   }
 
   .rn-learning-practice-panel
-    .rn-learning-practice-step {
-    gap: 12px !important;
-  }
-
-  .rn-learning-practice-panel
-    .rn-learning-practice-step
+    .rn-learning-practice-grid
+    > div
     > strong {
-    flex-basis: 32px !important;
-    width: 32px !important;
-    min-width: 32px !important;
+    width: 28px !important;
+    min-width: 28px !important;
   }
 }
