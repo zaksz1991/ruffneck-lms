@@ -202,23 +202,20 @@ export default async function CertificatePage({
             <div className="rn-certificate-security-pattern" />
 
             <div className="rn-certificate-inner">
+              {/* BRAND HEADER */}
               <header className="rn-certificate-header">
-                <div className="rn-certificate-brand">
-                  <img
-                    src="/brand/ruffneck-logo.png"
-                    alt="RuffNeck Entertainment"
-                    className="rn-certificate-logo"
-                  />
+                <img
+                  src="/brand/ruffneck-logo.png"
+                  alt="RuffNeck Entertainment"
+                  className="rn-certificate-logo"
+                />
 
-                  <div className="rn-certificate-brand-copy">
-                    <span className="rn-certificate-brand-name">
-                      RUFFNECK LEARN
-                    </span>
+                <div className="rn-certificate-learn-name">
+                  RUFFNECK LEARN
+                </div>
 
-                    <span className="rn-certificate-brand-tagline">
-                      AI • Digital Transformation • Business Solutions
-                    </span>
-                  </div>
+                <div className="rn-certificate-tagline">
+                  AI • Digital Transformation • Business Solutions
                 </div>
 
                 <div className="rn-certificate-header-accent">
@@ -228,6 +225,7 @@ export default async function CertificatePage({
                 </div>
               </header>
 
+              {/* MAIN TITLE — ONLY ONE CERTIFICATE OF COMPLETION */}
               {certificate.is_revoked ? (
                 <div
                   className="rn-certificate-revoked"
@@ -235,20 +233,20 @@ export default async function CertificatePage({
                 >
                   REVOKED
                 </div>
-              ) : (
-                <p className="rn-certificate-eyebrow">
-                  CERTIFICATE OF COMPLETION
-                </p>
-              )}
+              ) : null}
 
               <section className="rn-certificate-main">
-                <h1>Certificate of Completion</h1>
+                <h1>
+                  Certificate of Completion
+                </h1>
 
                 <p className="rn-certificate-presented">
                   This Certificate is Proudly Presented to
                 </p>
 
-                <h2>{certificate.holder_name}</h2>
+                <h2>
+                  {certificate.holder_name}
+                </h2>
 
                 <div className="rn-certificate-name-rule">
                   <span />
@@ -258,53 +256,65 @@ export default async function CertificatePage({
                   For successfully completing the
                 </p>
 
-                <h3>{certificate.course_title}</h3>
+                <h3>
+                  {certificate.course_title}
+                </h3>
               </section>
 
+              {/* CREDENTIAL INFORMATION */}
               <section
                 className="rn-certificate-credential-strip"
                 aria-label="Certificate credentials"
               >
                 <div className="rn-certificate-credential">
                   <span>Credential</span>
-                  <strong>Course Completion</strong>
+                  <strong>
+                    Course Completion
+                  </strong>
                 </div>
 
                 <div className="rn-certificate-credential">
                   <span>Date Issued</span>
                   <strong>
-                    {formatDate(certificate.issued_at)}
+                    {formatDate(
+                      certificate.issued_at
+                    )}
                   </strong>
                 </div>
 
                 <div className="rn-certificate-credential">
                   <span>Assessment</span>
                   <strong>
-                    {certificate.assessment_score ?? "—"}%
+                    {certificate.assessment_score ??
+                      "—"}
+                    %
                   </strong>
                 </div>
 
                 <div className="rn-certificate-credential">
                   <span>Capstone</span>
                   <strong>
-                    {certificate.capstone_score ?? "—"}/100
+                    {certificate.capstone_score ??
+                      "—"}
+                    /100
                   </strong>
                 </div>
               </section>
 
               <div className="rn-certificate-number">
-                <span>Certificate No.</span>
+                <span>
+                  Certificate No.
+                </span>
+
                 <strong>
                   {certificate.certificate_number}
                 </strong>
               </div>
 
-              {!certificate.is_revoked &&
-              verification &&
-              verificationUrl &&
-              qrCodeUrl ? (
-                <section className="rn-certificate-authentication">
-                  <div className="rn-certificate-verification-panel">
+              {/* AUTHENTICATION */}
+              <section className="rn-certificate-authentication">
+                <div className="rn-certificate-verification-panel">
+                  {qrCodeUrl ? (
                     <div className="rn-certificate-qr-frame">
                       <img
                         src={qrCodeUrl}
@@ -313,57 +323,85 @@ export default async function CertificatePage({
                         height={150}
                       />
                     </div>
-
-                    <div className="rn-certificate-verification-copy">
-                      <span className="rn-certificate-section-label">
-                        DIGITAL CREDENTIAL
+                  ) : (
+                    <div className="rn-certificate-qr-placeholder">
+                      <span>
+                        DIGITAL
                       </span>
-
-                      <h4>Verify this certificate</h4>
-
-                      <p>
-                        Scan the QR code to access the official
-                        RuffNeck Learn verification record.
-                      </p>
-
-                      <div className="rn-certificate-verification-code">
-                        <span>Verification Code</span>
-                        <strong>
-                          {verification.verification_code}
-                        </strong>
-                      </div>
-
-                      <span
-                        className={`rn-certificate-validity ${
-                          verificationIsValid
-                            ? "is-valid"
-                            : "is-invalid"
-                        }`}
-                      >
-                        <span className="rn-certificate-validity-dot" />
-                        {verificationIsValid
-                          ? "Official credential verification available"
-                          : "Verification inactive or expired"}
-                      </span>
+                      <strong>
+                        CREDENTIAL
+                      </strong>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="rn-certificate-seal-panel">
-                    <img
-                      src="/brand/ruffneck-certificate-seal.png"
-                      alt="RuffNeck Learn Certificate Seal"
-                      className="rn-certificate-seal"
-                    />
+                  <div className="rn-certificate-verification-copy">
+                    <span className="rn-certificate-section-label">
+                      DIGITAL CREDENTIAL
+                    </span>
 
-                    <img
-                      src="/brand/ruffneck-security-stamp.png"
-                      alt=""
-                      aria-hidden="true"
-                      className="rn-certificate-security-stamp"
-                    />
+                    <h4>
+                      Official Verification
+                    </h4>
+
+                    <p>
+                      Scan the QR code to access
+                      the official RuffNeck Learn
+                      certificate verification record.
+                    </p>
+
+                    {verification ? (
+                      <>
+                        <div className="rn-certificate-verification-code">
+                          <span>
+                            Verification Code
+                          </span>
+
+                          <strong>
+                            {
+                              verification.verification_code
+                            }
+                          </strong>
+                        </div>
+
+                        <span
+                          className={`rn-certificate-validity ${
+                            verificationIsValid
+                              ? "is-valid"
+                              : "is-invalid"
+                          }`}
+                        >
+                          <span className="rn-certificate-validity-dot" />
+
+                          {verificationIsValid
+                            ? "Official credential verification available"
+                            : "Verification inactive or expired"}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="rn-certificate-validity is-valid">
+                        <span className="rn-certificate-validity-dot" />
+                        RuffNeck Learn credential
+                      </span>
+                    )}
                   </div>
-                </section>
-              ) : null}
+                </div>
+
+                {/* SEALS ARE NOW INDEPENDENT OF VERIFICATION */}
+                <div className="rn-certificate-seal-panel">
+                  <img
+                    src="/brand/ruffneck-certificate-seal.png"
+                    alt="RuffNeck Learn Certificate Seal"
+                    className="rn-certificate-seal"
+                  />
+
+                  <img
+                    src="/brand/ruffneck-security-stamp.png"
+                    alt=""
+                    aria-hidden="true"
+                    className="rn-certificate-security-stamp"
+                  />
+                </div>
+              </section>
 
               {certificate.is_revoked &&
               certificate.revoked_reason ? (
@@ -372,6 +410,7 @@ export default async function CertificatePage({
                 </div>
               ) : null}
 
+              {/* ISSUER / FOOTER */}
               <footer className="rn-certificate-footer">
                 <div className="rn-certificate-signatory">
                   <div className="rn-certificate-signature-wrap">
@@ -384,9 +423,17 @@ export default async function CertificatePage({
 
                   <div className="rn-certificate-signature-line" />
 
-                  <strong>Hassan Zakariya</strong>
-                  <span>Founder &amp; CEO</span>
-                  <span>RuffNeck Entertainment</span>
+                  <strong>
+                    Hassan Zakariya
+                  </strong>
+
+                  <span>
+                    Founder &amp; CEO
+                  </span>
+
+                  <span>
+                    RuffNeck Entertainment
+                  </span>
                 </div>
 
                 <div className="rn-certificate-institution">
@@ -398,8 +445,14 @@ export default async function CertificatePage({
                   />
 
                   <div>
-                    <strong>RuffNeck Entertainment</strong>
-                    <span>Professional Learning &amp; Digital Skills</span>
+                    <strong>
+                      RuffNeck Entertainment
+                    </strong>
+
+                    <span>
+                      Professional Learning &amp;
+                      Digital Skills
+                    </span>
                   </div>
                 </div>
 
@@ -409,11 +462,14 @@ export default async function CertificatePage({
                   </strong>
 
                   <span>
-                    Issued {formatDate(certificate.issued_at)}
+                    Issued{" "}
+                    {formatDate(
+                      certificate.issued_at
+                    )}
                   </span>
 
                   <span>
-                    RuffNeck Learn
+                    RUFFNECK LEARN
                   </span>
                 </div>
               </footer>
@@ -428,7 +484,9 @@ export default async function CertificatePage({
               certificateNumber={
                 certificate.certificate_number
               }
-              isRevoked={certificate.is_revoked}
+              isRevoked={
+                certificate.is_revoked
+              }
             />
           </div>
         ) : null}
