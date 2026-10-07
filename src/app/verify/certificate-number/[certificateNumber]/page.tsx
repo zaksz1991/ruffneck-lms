@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -21,24 +22,32 @@ type Certificate = {
   revoked_reason: string | null;
 };
 
-function buildVerificationUrl(certificateNumber: string) {
-  const baseUrl =
+function getBaseUrl() {
+  return (
     process.env.NEXT_PUBLIC_SITE_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
-    "https://ruffneck-lms.vercel.app";
+    "https://ruffneck-lms.vercel.app"
+  ).replace(/\/$/, "");
+}
 
-  return `${baseUrl.replace(
-    /\/$/,
-    ""
-  )}/verify/certificate-number/${encodeURIComponent(
+function buildVerificationUrl(
+  certificateNumber: string
+) {
+  return `${getBaseUrl()}/verify/certificate-number/${encodeURIComponent(
     certificateNumber
   )}`;
 }
 
-function buildQrCodeUrl(verificationUrl: string) {
+function buildQrCodeUrl(
+  verificationUrl: string
+) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(
     verificationUrl
   )}`;
+}
+
+function buildSocialImageUrl() {
+  return `${getBaseUrl()}/brand/ruffneck-logo.png`;
 }
 
 export async function generateMetadata({
@@ -47,16 +56,21 @@ export async function generateMetadata({
   params: Promise<{
     certificateNumber: string;
   }>;
-}) {
+}): Promise<Metadata> {
   const { certificateNumber } = await params;
 
   const normalizedCertificateNumber =
     decodeURIComponent(certificateNumber).trim();
 
+  const baseUrl = getBaseUrl();
+
   if (!normalizedCertificateNumber) {
     return {
-      title: "Certificate Verification | RuffNeck Learn",
-      description: "Verify a RuffNeck Learn certificate.",
+      title:
+        "Certificate Verification | RuffNeck Learn",
+      description:
+        "Verify an official RuffNeck Learn certificate.",
+      metadataBase: new URL(baseUrl),
     };
   }
 
@@ -77,23 +91,43 @@ export async function generateMetadata({
     data as unknown as CertificateMetadata | null;
 
   if (!certificate) {
-    const title = `Certificate ${normalizedCertificateNumber} | RuffNeck Learn`;
+    const title =
+      `Certificate ${normalizedCertificateNumber} | RuffNeck Learn`;
+
     const description =
-      "Verify a RuffNeck Learn certificate.";
+      "Verify an official RuffNeck Learn certificate issued by RuffNeck Entertainment.";
 
     return {
+      metadataBase: new URL(baseUrl),
       title,
       description,
+      alternates: {
+        canonical: buildVerificationUrl(
+          normalizedCertificateNumber
+        ),
+      },
       openGraph: {
         title,
         description,
+        url: buildVerificationUrl(
+          normalizedCertificateNumber
+        ),
         type: "website",
         siteName: "RuffNeck Learn",
+        images: [
+          {
+            url: buildSocialImageUrl(),
+            width: 1200,
+            height: 630,
+            alt: "RuffNeck Learn",
+          },
+        ],
       },
       twitter: {
-        card: "summary",
+        card: "summary_large_image",
         title,
         description,
+        images: [buildSocialImageUrl()],
       },
     };
   }
@@ -102,26 +136,55 @@ export async function generateMetadata({
     ? "Revoked"
     : "Verified";
 
-  const title = `${certificate.holder_name} — ${certificate.course_title}`;
+  const title =
+    `${certificate.holder_name} — ${certificate.course_title}`;
 
   const description =
-    `${status} RuffNeck Learn certificate ` +
-    `${certificate.certificate_number}. ` +
+    `${status} RuffNeck Learn certificate ${certificate.certificate_number}. ` +
     "Official certificate verification by RuffNeck Entertainment.";
 
+  const canonicalUrl = buildVerificationUrl(
+    certificate.certificate_number
+  );
+
   return {
+    metadataBase: new URL(baseUrl),
+
     title,
+
     description,
+
+    alternates: {
+      canonical: canonicalUrl,
+    },
+
+    robots: {
+      index: true,
+      follow: true,
+    },
+
     openGraph: {
       title,
       description,
+      url: canonicalUrl,
       type: "website",
       siteName: "RuffNeck Learn",
+      locale: "en_NG",
+      images: [
+        {
+          url: buildSocialImageUrl(),
+          width: 1200,
+          height: 630,
+          alt: `RuffNeck Learn certificate for ${certificate.holder_name}`,
+        },
+      ],
     },
+
     twitter: {
-      card: "summary",
+      card: "summary_large_image",
       title,
       description,
+      images: [buildSocialImageUrl()],
     },
   };
 }
@@ -144,7 +207,10 @@ export default async function CertificateVerificationPage({
 
   const admin = createAdminClient();
 
-  const { data, error } = await admin
+  const {
+    data,
+    error,
+  } = await admin
     .from("course_certificates")
     .select(
       [
@@ -247,7 +313,8 @@ export default async function CertificateVerificationPage({
           <h1
             style={{
               margin: 0,
-              fontSize: "clamp(30px, 5vw, 46px)",
+              fontSize:
+                "clamp(30px, 5vw, 46px)",
               lineHeight: 1.1,
             }}
           >
@@ -270,10 +337,13 @@ export default async function CertificateVerificationPage({
 
         <section
           style={{
-            border: "1px solid var(--border)",
+            border:
+              "1px solid var(--border)",
             borderRadius: 16,
-            background: "var(--surface, #ffffff)",
-            padding: "clamp(24px, 5vw, 48px)",
+            background:
+              "var(--surface, #ffffff)",
+            padding:
+              "clamp(24px, 5vw, 48px)",
             boxShadow:
               "0 12px 35px rgba(11, 30, 58, 0.08)",
           }}
@@ -292,8 +362,10 @@ export default async function CertificateVerificationPage({
                 fontSize: 13,
                 fontWeight: 700,
                 letterSpacing: 2,
-                textTransform: "uppercase",
-                color: "var(--muted, #64748b)",
+                textTransform:
+                  "uppercase",
+                color:
+                  "var(--muted, #64748b)",
                 marginBottom: 12,
               }}
             >
@@ -345,9 +417,11 @@ export default async function CertificateVerificationPage({
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  textTransform: "uppercase",
+                  textTransform:
+                    "uppercase",
                   letterSpacing: 1,
-                  color: "var(--muted, #64748b)",
+                  color:
+                    "var(--muted, #64748b)",
                   marginBottom: 7,
                 }}
               >
@@ -375,9 +449,11 @@ export default async function CertificateVerificationPage({
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  textTransform: "uppercase",
+                  textTransform:
+                    "uppercase",
                   letterSpacing: 1,
-                  color: "var(--muted, #64748b)",
+                  color:
+                    "var(--muted, #64748b)",
                   marginBottom: 7,
                 }}
               >
@@ -399,9 +475,11 @@ export default async function CertificateVerificationPage({
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  textTransform: "uppercase",
+                  textTransform:
+                    "uppercase",
                   letterSpacing: 1,
-                  color: "var(--muted, #64748b)",
+                  color:
+                    "var(--muted, #64748b)",
                   marginBottom: 7,
                 }}
               >
@@ -430,9 +508,11 @@ export default async function CertificateVerificationPage({
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  textTransform: "uppercase",
+                  textTransform:
+                    "uppercase",
                   letterSpacing: 1,
-                  color: "var(--muted, #64748b)",
+                  color:
+                    "var(--muted, #64748b)",
                   marginBottom: 7,
                 }}
               >
@@ -503,7 +583,8 @@ export default async function CertificateVerificationPage({
                   fontSize: 12,
                   fontWeight: 700,
                   letterSpacing: 1,
-                  textTransform: "uppercase",
+                  textTransform:
+                    "uppercase",
                   color: "var(--cyan)",
                   marginBottom: 10,
                 }}
@@ -572,7 +653,8 @@ export default async function CertificateVerificationPage({
                 "1px solid var(--border)",
               textAlign: "center",
               fontSize: 13,
-              color: "var(--muted, #64748b)",
+              color:
+                "var(--muted, #64748b)",
               lineHeight: 1.6,
             }}
           >
