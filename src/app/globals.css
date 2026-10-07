@@ -26648,67 +26648,66 @@ main.page-shell .rn-button {
 }
 
 /* =========================================================
-   PRACTICAL APPLICATION — CLEAN STEP LAYOUT
+   PRACTICAL APPLICATION — FINAL HORIZONTAL STEP FIX
    ========================================================= */
 
 .rn-learning-practice-panel .rn-learning-practice-grid {
-  display: grid !important;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-  gap: 12px !important;
-  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 18px !important;
+  width: 100% !important;
 }
 
-.rn-learning-practice-panel .rn-learning-practice-grid > div {
-  display: grid !important;
-  grid-template-columns: 32px minmax(0, 1fr) !important;
-  align-items: start !important;
-  column-gap: 10px !important;
+.rn-learning-practice-panel .rn-learning-practice-step {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+  gap: 14px !important;
 
-  min-width: 0 !important;
   width: 100% !important;
+  min-width: 0 !important;
 
-  padding: 12px !important;
   box-sizing: border-box !important;
 }
 
-.rn-learning-practice-panel
-  .rn-learning-practice-grid
-  > div
-  > strong {
+.rn-learning-practice-panel .rn-learning-practice-step > strong {
   display: block !important;
+  flex: 0 0 38px !important;
 
-  width: 32px !important;
-  min-width: 32px !important;
+  width: 38px !important;
+  min-width: 38px !important;
 
   margin: 0 !important;
   padding: 0 !important;
 
   color: var(--cyan-dim) !important;
-  font-size: 0.76rem !important;
+
+  font-size: 0.78rem !important;
   font-weight: 850 !important;
   line-height: 1.4 !important;
+  letter-spacing: 0.08em !important;
 
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
   white-space: nowrap !important;
-  overflow-wrap: normal !important;
-  word-break: normal !important;
 }
 
 .rn-learning-practice-panel
-  .rn-learning-practice-grid
-  > div
+  .rn-learning-practice-step
   > div {
   display: block !important;
+  flex: 1 1 auto !important;
 
-  min-width: 0 !important;
   width: auto !important;
+  min-width: 0 !important;
 
   margin: 0 !important;
   padding: 0 !important;
 }
 
 .rn-learning-practice-panel
-  .rn-learning-practice-grid
-  > div
+  .rn-learning-practice-step
   h3 {
   display: block !important;
 
@@ -26716,18 +26715,17 @@ main.page-shell .rn-button {
   padding: 0 !important;
 
   color: var(--navy) !important;
-  font-size: 0.92rem !important;
+
+  font-size: 0.94rem !important;
   font-weight: 800 !important;
   line-height: 1.35 !important;
 
   white-space: normal !important;
-  overflow-wrap: normal !important;
-  word-break: normal !important;
+  writing-mode: horizontal-tb !important;
 }
 
 .rn-learning-practice-panel
-  .rn-learning-practice-grid
-  > div
+  .rn-learning-practice-step
   p {
   display: block !important;
 
@@ -26735,33 +26733,29 @@ main.page-shell .rn-button {
   padding: 0 !important;
 
   color: var(--text-body) !important;
-  font-size: 0.82rem !important;
-  line-height: 1.6 !important;
+
+  font-size: 0.84rem !important;
+  line-height: 1.65 !important;
 
   white-space: normal !important;
-  overflow-wrap: normal !important;
-  word-break: normal !important;
+  writing-mode: horizontal-tb !important;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 700px) {
   .rn-learning-practice-panel .rn-learning-practice-grid {
-    grid-template-columns: 1fr !important;
-  }
-}
-
-@media (max-width: 420px) {
-  .rn-learning-practice-panel
-    .rn-learning-practice-grid
-    > div {
-    grid-template-columns: 28px minmax(0, 1fr) !important;
-    column-gap: 9px !important;
+    gap: 16px !important;
   }
 
   .rn-learning-practice-panel
-    .rn-learning-practice-grid
-    > div
+    .rn-learning-practice-step {
+    gap: 12px !important;
+  }
+
+  .rn-learning-practice-panel
+    .rn-learning-practice-step
     > strong {
-    width: 28px !important;
-    min-width: 28px !important;
+    flex-basis: 32px !important;
+    width: 32px !important;
+    min-width: 32px !important;
   }
 }
