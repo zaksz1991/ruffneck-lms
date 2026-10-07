@@ -26759,3 +26759,176 @@ main.page-shell .rn-button {
     min-width: 32px !important;
   }
 }
+
+/* =========================================================
+   PRACTICAL APPLICATION — FINAL STRUCTURE
+   Fix narrow step column / character wrapping
+   ========================================================= */
+
+.rn-learning-practice-panel {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.rn-learning-practice-panel > div:first-child {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  margin: 0 0 22px !important;
+}
+
+.rn-learning-practice-panel
+  .rn-learning-practice-grid {
+  display: grid !important;
+
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr)) !important;
+
+  gap: 14px !important;
+
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  box-sizing: border-box !important;
+}
+
+.rn-learning-practice-panel
+  .rn-learning-practice-grid
+  > div {
+  display: grid !important;
+
+  grid-template-columns:
+    34px minmax(0, 1fr) !important;
+
+  align-items: start !important;
+
+  gap: 10px !important;
+
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  box-sizing: border-box !important;
+}
+
+.rn-learning-practice-panel
+  .rn-learning-practice-grid
+  > div
+  > strong {
+  display: block !important;
+
+  width: 34px !important;
+  min-width: 34px !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  color: var(--cyan-dim) !important;
+
+  font-size: 0.78rem !important;
+  font-weight: 850 !important;
+  line-height: 1.4 !important;
+
+  white-space: nowrap !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+
+.rn-learning-practice-panel
+  .rn-learning-practice-grid
+  > div
+  > div {
+  display: block !important;
+
+  width: auto !important;
+  min-width: 0 !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.rn-learning-practice-panel
+  .rn-learning-practice-grid
+  h3 {
+  display: block !important;
+
+  margin: 0 0 6px !important;
+  padding: 0 !important;
+
+  color: var(--navy) !important;
+
+  font-size: 0.94rem !important;
+  font-weight: 800 !important;
+  line-height: 1.35 !important;
+
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+
+.rn-learning-practice-panel
+  .rn-learning-practice-grid
+  p {
+  display: block !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  color: var(--text-body) !important;
+
+  font-size: 0.84rem !important;
+  line-height: 1.6 !important;
+
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+
+/* If the current markup uses spans instead of h3/p */
+.rn-learning-practice-panel
+  .rn-learning-practice-grid
+  > div
+  > span {
+  display: block !important;
+
+  min-width: 0 !important;
+
+  color: var(--text-body) !important;
+
+  font-size: 0.84rem !important;
+  line-height: 1.6 !important;
+
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+
+/* Tablet */
+@media (max-width: 900px) {
+  .rn-learning-practice-panel
+    .rn-learning-practice-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Small mobile */
+@media (max-width: 520px) {
+  .rn-learning-practice-panel {
+    padding: 20px !important;
+  }
+
+  .rn-learning-practice-panel
+    .rn-learning-practice-grid {
+    gap: 12px !important;
+  }
+
+  .rn-learning-practice-panel
+    .rn-learning-practice-grid
+    > div {
+    grid-template-columns:
+      32px minmax(0, 1fr) !important;
+  }
+}
