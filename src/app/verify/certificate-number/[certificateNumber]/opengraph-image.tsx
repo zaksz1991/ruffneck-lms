@@ -1,7 +1,6 @@
 import { ImageResponse } from "next/og";
-import { createAdminClient } from "@/lib/supabase/admin";
 
-export const runtime = "nodejs";
+export const runtime = "edge";
 
 export const alt =
   "RuffNeck Learn Certificate Verification";
@@ -13,30 +12,6 @@ export const size = {
 
 export const contentType = "image/png";
 
-type Certificate = {
-  certificate_number: string;
-  holder_name: string;
-  course_title: string;
-  issued_at: string;
-  assessment_score: number | null;
-  capstone_score: number | null;
-  is_revoked: boolean;
-};
-
-function formatDate(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "—";
-  }
-
-  return new Intl.DateTimeFormat("en-NG", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(date);
-}
-
 export default async function Image({
   params,
 }: {
@@ -46,69 +21,9 @@ export default async function Image({
 }) {
   const { certificateNumber } = await params;
 
-  const normalizedCertificateNumber =
-    decodeURIComponent(certificateNumber).trim();
-
-  const admin = createAdminClient();
-
-  const {
-    data,
-    error,
-  } = await admin
-    .from("course_certificates")
-    .select(
-      [
-        "certificate_number",
-        "holder_name",
-        "course_title",
-        "issued_at",
-        "assessment_score",
-        "capstone_score",
-        "is_revoked",
-      ].join(", ")
-    )
-    .eq(
-      "certificate_number",
-      normalizedCertificateNumber
-    )
-    .maybeSingle();
-
-  if (error) {
-    console.error(
-      "Certificate Open Graph lookup failed:",
-      error
-    );
-  }
-
-  const certificate =
-    data as unknown as Certificate | null;
-
-  const holderName =
-    certificate?.holder_name ||
-    "RuffNeck Learn Learner";
-
-  const courseTitle =
-    certificate?.course_title ||
-    "RuffNeck Learn Certificate";
-
-  const certificateNumberText =
-    certificate?.certificate_number ||
-    normalizedCertificateNumber;
-
-  const issuedDate = certificate
-    ? formatDate(certificate.issued_at)
-    : "—";
-
-  const isRevoked =
-    certificate?.is_revoked ?? false;
-
-  const status = isRevoked
-    ? "REVOKED CREDENTIAL"
-    : "VERIFIED CREDENTIAL";
-
-  const statusColor = isRevoked
-    ? "#b91c1c"
-    : "#0086a3";
+  const decodedCertificateNumber = decodeURIComponent(
+    certificateNumber
+  ).trim();
 
   return new ImageResponse(
     (
@@ -125,7 +40,7 @@ export default async function Image({
             "Arial, Helvetica, sans-serif",
         }}
       >
-        {/* Outer certificate frame */}
+        {/* Outer border */}
         <div
           style={{
             position: "absolute",
@@ -133,19 +48,19 @@ export default async function Image({
             top: "22px",
             right: "22px",
             bottom: "22px",
-            border: "2px solid #0b1e3a",
+            border: "3px solid #0b1e3a",
             display: "flex",
           }}
         />
 
-        {/* Inner certificate frame */}
+        {/* Inner border */}
         <div
           style={{
             position: "absolute",
-            left: "32px",
-            top: "32px",
-            right: "32px",
-            bottom: "32px",
+            left: "34px",
+            top: "34px",
+            right: "34px",
+            bottom: "34px",
             border: "1px solid #cbd5e1",
             display: "flex",
           }}
@@ -155,13 +70,13 @@ export default async function Image({
         <div
           style={{
             position: "absolute",
-            right: "-120px",
-            bottom: "-220px",
-            width: "600px",
-            height: "600px",
+            right: "-170px",
+            bottom: "-260px",
+            width: "650px",
+            height: "650px",
             borderRadius: "50%",
             border:
-              "70px solid rgba(0, 180, 216, 0.055)",
+              "80px solid rgba(0, 180, 216, 0.055)",
             display: "flex",
           }}
         />
@@ -170,13 +85,13 @@ export default async function Image({
         <div
           style={{
             position: "absolute",
-            left: "-180px",
-            top: "-230px",
-            width: "520px",
-            height: "520px",
+            left: "-200px",
+            top: "-250px",
+            width: "550px",
+            height: "550px",
             borderRadius: "50%",
             border:
-              "55px solid rgba(251, 191, 36, 0.05)",
+              "60px solid rgba(251, 191, 36, 0.05)",
             display: "flex",
           }}
         />
@@ -185,21 +100,21 @@ export default async function Image({
         <div
           style={{
             position: "absolute",
-            left: "70px",
-            right: "70px",
-            top: "55px",
-            bottom: "55px",
+            left: "75px",
+            right: "75px",
+            top: "60px",
+            bottom: "60px",
             display: "flex",
             flexDirection: "column",
           }}
         >
-          {/* Header */}
+          {/* Brand header */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              paddingBottom: "17px",
+              paddingBottom: "20px",
               borderBottom:
                 "2px solid #00b4d8",
             }}
@@ -212,7 +127,7 @@ export default async function Image({
             >
               <div
                 style={{
-                  fontSize: "32px",
+                  fontSize: "34px",
                   fontWeight: 800,
                   letterSpacing: "3px",
                   color: "#0b1e3a",
@@ -223,10 +138,10 @@ export default async function Image({
 
               <div
                 style={{
-                  marginTop: "6px",
+                  marginTop: "7px",
                   fontSize: "12px",
                   fontWeight: 600,
-                  letterSpacing: "1.6px",
+                  letterSpacing: "1.5px",
                   color: "#475569",
                 }}
               >
@@ -235,62 +150,62 @@ export default async function Image({
               </div>
             </div>
 
-            {/* RN security mark */}
+            {/* RuffNeck identity mark */}
             <div
               style={{
+                width: "86px",
+                height: "86px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                width: "82px",
-                height: "82px",
                 borderRadius: "50%",
                 border:
                   "3px solid #fbbf24",
                 background: "#ffffff",
                 color: "#0b1e3a",
-                fontSize: "19px",
+                fontSize: "20px",
                 fontWeight: 800,
-                letterSpacing: "1px",
+                letterSpacing: "2px",
               }}
             >
               RN
             </div>
           </div>
 
-          {/* Verification status */}
+          {/* Status */}
           <div
             style={{
               display: "flex",
               justifyContent: "center",
-              paddingTop: "22px",
+              marginTop: "27px",
             }}
           >
             <div
               style={{
                 display: "flex",
-                fontSize: "14px",
+                fontSize: "15px",
                 fontWeight: 800,
                 letterSpacing: "4px",
-                color: statusColor,
+                color: "#0086a3",
               }}
             >
-              {status}
+              VERIFIED CREDENTIAL
             </div>
           </div>
 
-          {/* Certificate content */}
+          {/* Main certificate message */}
           <div
             style={{
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               textAlign: "center",
-              paddingTop: "5px",
+              marginTop: "12px",
             }}
           >
             <div
               style={{
-                fontSize: "38px",
+                fontSize: "44px",
                 fontWeight: 800,
                 color: "#0b1e3a",
               }}
@@ -300,72 +215,59 @@ export default async function Image({
 
             <div
               style={{
-                marginTop: "9px",
-                fontSize: "18px",
+                marginTop: "12px",
+                fontSize: "20px",
                 color: "#475569",
               }}
             >
-              This credential is presented to
+              Official RuffNeck Learn credential
             </div>
 
             <div
               style={{
-                marginTop: "4px",
-                fontSize: "36px",
+                marginTop: "24px",
+                fontSize: "16px",
+                fontWeight: 700,
+                letterSpacing: "1.5px",
+                color: "#64748b",
+              }}
+            >
+              PUBLIC CERTIFICATE VERIFICATION
+            </div>
+
+            <div
+              style={{
+                marginTop: "12px",
+                fontSize: "30px",
                 fontWeight: 800,
                 color: "#0b1e3a",
               }}
             >
-              {holderName}
-            </div>
-
-            <div
-              style={{
-                marginTop: "7px",
-                fontSize: "18px",
-                color: "#334155",
-              }}
-            >
-              for successfully completing
-            </div>
-
-            <div
-              style={{
-                marginTop: "4px",
-                fontSize: "25px",
-                fontWeight: 700,
-                color: "#0b1e3a",
-                maxWidth: "920px",
-                textAlign: "center",
-              }}
-            >
-              {courseTitle}
+              {decodedCertificateNumber}
             </div>
           </div>
 
-          {/* Credential footer */}
+          {/* Bottom information */}
           <div
             style={{
               display: "flex",
               alignItems: "flex-end",
               justifyContent: "space-between",
               marginTop: "auto",
-              paddingTop: "16px",
+              paddingTop: "22px",
               borderTop:
                 "1px solid #cbd5e1",
             }}
           >
-            {/* Certificate number */}
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: "5px",
               }}
             >
               <div
                 style={{
-                  fontSize: "10px",
+                  fontSize: "11px",
                   fontWeight: 700,
                   letterSpacing: "1.2px",
                   color: "#64748b",
@@ -376,109 +278,80 @@ export default async function Image({
 
               <div
                 style={{
-                  fontSize: "16px",
+                  marginTop: "6px",
+                  fontSize: "17px",
                   fontWeight: 800,
                   color: "#0b1e3a",
                 }}
               >
-                {certificateNumberText}
+                {decodedCertificateNumber}
               </div>
             </div>
 
-            {/* Date */}
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
-                gap: "5px",
               }}
             >
               <div
                 style={{
-                  fontSize: "10px",
+                  fontSize: "11px",
                   fontWeight: 700,
                   letterSpacing: "1.2px",
                   color: "#64748b",
                 }}
               >
-                DATE ISSUED
+                AUTHENTICATION
               </div>
 
               <div
                 style={{
-                  fontSize: "15px",
-                  fontWeight: 700,
-                  color: "#0b1e3a",
+                  marginTop: "6px",
+                  fontSize: "16px",
+                  fontWeight: 800,
+                  color: "#0086a3",
                 }}
               >
-                {issuedDate}
+                Official Verification
               </div>
             </div>
 
-            {/* Assessment */}
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: "5px",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "10px",
-                  fontWeight: 700,
-                  letterSpacing: "1.2px",
-                  color: "#64748b",
-                }}
-              >
-                ASSESSMENT
-              </div>
-
-              <div
-                style={{
-                  fontSize: "15px",
-                  fontWeight: 700,
-                  color: "#0b1e3a",
-                }}
-              >
-                {certificate?.assessment_score ??
-                  "—"}
-                {certificate?.assessment_score !==
-                null &&
-                certificate?.assessment_score !==
-                  undefined
-                  ? "%"
-                  : ""}
-              </div>
-            </div>
-
-            {/* Verification */}
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "flex-end",
-                gap: "5px",
               }}
             >
               <div
                 style={{
-                  fontSize: "10px",
+                  fontSize: "11px",
                   fontWeight: 700,
                   letterSpacing: "1.2px",
                   color: "#64748b",
                 }}
               >
-                OFFICIAL VERIFICATION
+                ISSUED BY
               </div>
 
               <div
                 style={{
-                  fontSize: "14px",
+                  marginTop: "6px",
+                  fontSize: "16px",
                   fontWeight: 800,
-                  color: "#0086a3",
+                  color: "#0b1e3a",
+                }}
+              >
+                RuffNeck Entertainment
+              </div>
+
+              <div
+                style={{
+                  marginTop: "3px",
+                  fontSize: "12px",
+                  color: "#64748b",
                 }}
               >
                 RuffNeck Learn
