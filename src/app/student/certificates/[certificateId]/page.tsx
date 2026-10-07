@@ -191,16 +191,7 @@ export default async function CertificatePage({
   return (
     <main className="rn-certificate-view-page">
       <div className="container">
-        <div
-          className="rn-certificate-view-actions no-print"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
-            flexWrap: "wrap",
-          }}
-        >
+        <div className="rn-certificate-view-actions no-print">
           <Link
             href="/student/certificates"
             className="rn-learning-back"
@@ -221,268 +212,217 @@ export default async function CertificatePage({
           }`}
         >
           <div className="rn-certificate-border">
-            <div className="rn-certificate-brand">
-              <img
-                src="/brand/ruffneck-logo.png"
-                alt="RuffNeck Entertainment"
-                className="rn-certificate-logo"
-              />
+            <div className="rn-certificate-inner">
+              <header className="rn-certificate-header">
+                <div className="rn-certificate-brand">
+                  <img
+                    src="/brand/ruffneck-logo.png"
+                    alt="RuffNeck Entertainment"
+                    className="rn-certificate-logo"
+                  />
 
-              <strong>
-                RuffNeck Learn
-              </strong>
-            </div>
-
-            {certificate.is_revoked ? (
-              <div
-                className="rn-certificate-revoked"
-                role="alert"
-              >
-                REVOKED
-              </div>
-            ) : (
-              <span className="rn-eyebrow">
-                CERTIFICATE OF COMPLETION
-              </span>
-            )}
-
-            <h1>
-              Certificate of Completion
-            </h1>
-
-            <p className="rn-certificate-presented">
-              This certificate is presented to
-            </p>
-
-            <h2>
-              {certificate.holder_name}
-            </h2>
-
-            <p className="rn-certificate-completion-text">
-              for successfully completing the
-              RuffNeck Learn course
-            </p>
-
-            <h3>
-              {certificate.course_title}
-            </h3>
-
-            <div className="rn-certificate-divider" />
-
-            <div className="rn-certificate-details">
-              <div>
-                <span>
-                  Certificate Number
-                </span>
-
-                <strong>
-                  {certificate.certificate_number}
-                </strong>
-              </div>
-
-              <div>
-                <span>
-                  Date Issued
-                </span>
-
-                <strong>
-                  {formatDate(
-                    certificate.issued_at
-                  )}
-                </strong>
-              </div>
-
-              <div>
-                <span>
-                  Assessment
-                </span>
-
-                <strong>
-                  {certificate.assessment_score ??
-                    "—"}
-                  %
-                </strong>
-              </div>
-
-              <div>
-                <span>
-                  Capstone
-                </span>
-
-                <strong>
-                  {certificate.capstone_score ??
-                    "—"}
-                  /100
-                </strong>
-              </div>
-            </div>
-
-            {!certificate.is_revoked &&
-            verification &&
-            verificationUrl &&
-            qrCodeUrl ? (
-              <>
-                <div className="rn-certificate-divider" />
-
-                <div
-                  className="rn-certificate-verification"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent:
-                      "center",
-                    gap: 24,
-                    flexWrap: "wrap",
-                    marginTop: 24,
-                    padding: 20,
-                    border:
-                      "1px solid rgba(11, 30, 58, 0.12)",
-                    borderRadius: 12,
-                    background:
-                      "#f8fafc",
-                  }}
-                >
-                  <div
-                    style={{
-                      flex:
-                        "0 0 auto",
-                      width: 220,
-                      textAlign:
-                        "center",
-                    }}
-                  >
-                    <img
-                      src={qrCodeUrl}
-                      alt={`QR code for verifying certificate ${certificate.certificate_number}`}
-                      width={220}
-                      height={220}
-                      style={{
-                        display: "block",
-                        width: 220,
-                        height: 220,
-                        maxWidth:
-                          "100%",
-                        margin:
-                          "0 auto",
-                        background:
-                          "#ffffff",
-                        border:
-                          "1px solid #e5e7eb",
-                      }}
-                    />
-                  </div>
-
-                  <div
-                    style={{
-                      flex:
-                        "1 1 280px",
-                      minWidth: 240,
-                    }}
-                  >
-                    <span className="rn-eyebrow">
-                      DIGITAL VERIFICATION
-                    </span>
-
-                    <h4
-                      style={{
-                        margin:
-                          "8px 0 10px",
-                        fontSize: 20,
-                        color:
-                          "#0b1e3a",
-                      }}
-                    >
-                      Scan to verify this
-                      certificate
-                    </h4>
-
-                    <p
-                      style={{
-                        margin: 0,
-                        lineHeight: 1.6,
-                        color:
-                          "#475569",
-                      }}
-                    >
-                      Scan the QR code
-                      with a phone camera
-                      to open the official
+                  <div className="rn-certificate-brand-text">
+                    <strong>
                       RuffNeck Learn
-                      certificate
-                      verification record.
-                    </p>
+                    </strong>
 
-                    <p
-                      style={{
-                        marginTop: 12,
-                        marginBottom: 0,
-                        fontSize: 13,
-                        lineHeight: 1.5,
-                        color:
-                          "#64748b",
-                        overflowWrap:
-                          "anywhere",
-                      }}
-                    >
-                      Verification code:{" "}
-                      <strong>
-                        {
-                          verification.verification_code
-                        }
-                      </strong>
-                    </p>
-
-                    <p
-                      style={{
-                        marginTop: 8,
-                        marginBottom: 0,
-                        fontSize: 12,
-                        lineHeight: 1.5,
-                        color:
-                          "#64748b",
-                        overflowWrap:
-                          "anywhere",
-                      }}
-                    >
-                      {verificationUrl}
-                    </p>
-
-                    {!verificationIsValid ? (
-                      <p
-                        style={{
-                          marginTop: 10,
-                          marginBottom: 0,
-                          fontSize: 13,
-                          fontWeight: 700,
-                          color:
-                            "#b45309",
-                        }}
-                      >
-                        Verification is
-                        currently inactive
-                        or expired.
-                      </p>
-                    ) : null}
+                    <span>
+                      Professional Learning &amp;
+                      Digital Skills
+                    </span>
                   </div>
                 </div>
-              </>
-            ) : null}
 
-            {certificate.is_revoked &&
-            certificate.revoked_reason ? (
-              <div className="rn-certificate-revoked-note">
-                {certificate.revoked_reason}
-              </div>
-            ) : null}
+                <div className="rn-certificate-header-rule" />
+              </header>
 
-            <div className="rn-certificate-footer">
-              <span>
-                RuffNeck Entertainment
-              </span>
+              {certificate.is_revoked ? (
+                <div
+                  className="rn-certificate-revoked"
+                  role="alert"
+                >
+                  REVOKED
+                </div>
+              ) : (
+                <p className="rn-certificate-eyebrow">
+                  CERTIFICATE OF COMPLETION
+                </p>
+              )}
 
-              <span>
-                Practical professional learning
-              </span>
+              <section className="rn-certificate-main">
+                <h1>
+                  Certificate of Completion
+                </h1>
+
+                <p className="rn-certificate-presented">
+                  This certificate is proudly
+                  presented to
+                </p>
+
+                <h2>
+                  {certificate.holder_name}
+                </h2>
+
+                <div className="rn-certificate-name-line" />
+
+                <p className="rn-certificate-completion-text">
+                  for successfully completing the
+                  RuffNeck Learn professional course
+                </p>
+
+                <h3>
+                  {certificate.course_title}
+                </h3>
+              </section>
+
+              <div className="rn-certificate-divider" />
+
+              <section
+                className="rn-certificate-details"
+                aria-label="Certificate details"
+              >
+                <div className="rn-certificate-detail">
+                  <span>
+                    Certificate Number
+                  </span>
+
+                  <strong>
+                    {certificate.certificate_number}
+                  </strong>
+                </div>
+
+                <div className="rn-certificate-detail">
+                  <span>
+                    Date Issued
+                  </span>
+
+                  <strong>
+                    {formatDate(
+                      certificate.issued_at
+                    )}
+                  </strong>
+                </div>
+
+                <div className="rn-certificate-detail">
+                  <span>
+                    Assessment
+                  </span>
+
+                  <strong>
+                    {certificate.assessment_score ??
+                      "—"}
+                    %
+                  </strong>
+                </div>
+
+                <div className="rn-certificate-detail">
+                  <span>
+                    Capstone
+                  </span>
+
+                  <strong>
+                    {certificate.capstone_score ??
+                      "—"}
+                    /100
+                  </strong>
+                </div>
+              </section>
+
+              {!certificate.is_revoked &&
+              verification &&
+              verificationUrl &&
+              qrCodeUrl ? (
+                <>
+                  <div className="rn-certificate-divider" />
+
+                  <section className="rn-certificate-verification">
+                    <div className="rn-certificate-qr">
+                      <img
+                        src={qrCodeUrl}
+                        alt={`QR code for verifying certificate ${certificate.certificate_number}`}
+                        width={180}
+                        height={180}
+                      />
+                    </div>
+
+                    <div className="rn-certificate-verification-content">
+                      <span className="rn-certificate-section-label">
+                        DIGITAL VERIFICATION
+                      </span>
+
+                      <h4>
+                        Verify this certificate
+                      </h4>
+
+                      <p>
+                        Scan the QR code to open
+                        the official RuffNeck Learn
+                        verification record.
+                      </p>
+
+                      <div className="rn-certificate-verification-code">
+                        <span>
+                          Verification Code
+                        </span>
+
+                        <strong>
+                          {
+                            verification.verification_code
+                          }
+                        </strong>
+                      </div>
+
+                      {!verificationIsValid ? (
+                        <p className="rn-certificate-verification-warning">
+                          Verification is currently
+                          inactive or expired.
+                        </p>
+                      ) : null}
+                    </div>
+                  </section>
+                </>
+              ) : null}
+
+              {certificate.is_revoked &&
+              certificate.revoked_reason ? (
+                <div className="rn-certificate-revoked-note">
+                  {certificate.revoked_reason}
+                </div>
+              ) : null}
+
+              <footer className="rn-certificate-footer">
+                <div className="rn-certificate-signature">
+                  <span className="rn-certificate-signature-line" />
+                  <strong>
+                    RuffNeck Entertainment
+                  </strong>
+                  <span>
+                    RuffNeck Learn
+                  </span>
+                </div>
+
+                <div className="rn-certificate-footer-center">
+                  <span>
+                    Professional Learning
+                  </span>
+
+                  <span>
+                    &amp; Digital Skills
+                  </span>
+                </div>
+
+                <div className="rn-certificate-footer-meta">
+                  <strong>
+                    {certificate.certificate_number}
+                  </strong>
+
+                  <span>
+                    Issued {formatDate(
+                      certificate.issued_at
+                    )}
+                  </span>
+                </div>
+              </footer>
             </div>
           </div>
         </article>
@@ -503,12 +443,7 @@ export default async function CertificatePage({
           </div>
         ) : null}
 
-        <div
-          className="rn-assessment-actions no-print"
-          style={{
-            marginTop: 24,
-          }}
-        >
+        <div className="rn-assessment-actions rn-certificate-bottom-actions no-print">
           <Link
             href="/student/certificates"
             className="rn-button rn-button-secondary"
