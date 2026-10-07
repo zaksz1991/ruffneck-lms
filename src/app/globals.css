@@ -26647,149 +26647,85 @@ main.page-shell .rn-button {
   word-break: break-word;
 }
 
-/* ---------------------------------------------------------
-   PRACTICAL APPLICATION
-   --------------------------------------------------------- */
-
-.rn-learning-practice-panel {
-  min-width: 0;
-  overflow: hidden;
-}
+/* =========================================================
+   PRACTICAL APPLICATION — STEP ALIGNMENT FIX
+   ========================================================= */
 
 .rn-learning-practice-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 16px !important;
+  align-items: stretch !important;
 }
 
 .rn-learning-practice-step {
-  min-width: 0;
-  display: flex;
-  align-items: flex-start;
-  gap: 13px;
-  padding: 18px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--white);
+  display: grid !important;
+  grid-template-columns: 38px minmax(0, 1fr) !important;
+  align-items: start !important;
+  column-gap: 12px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
 }
 
 .rn-learning-practice-step > strong {
-  flex: 0 0 auto;
-  color: var(--cyan-dim);
-  font-size: 0.75rem;
-  font-weight: 850;
-  letter-spacing: 0.08em;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  width: 38px !important;
+  min-width: 38px !important;
+  padding-top: 2px !important;
+  box-sizing: border-box !important;
+  color: var(--cyan-dim) !important;
+  font-size: 0.78rem !important;
+  font-weight: 850 !important;
+  line-height: 1.35 !important;
+  letter-spacing: 0.08em !important;
 }
 
 .rn-learning-practice-step > div {
-  min-width: 0;
+  min-width: 0 !important;
+  margin: 0 !important;
 }
 
 .rn-learning-practice-step h3 {
-  margin: 0 0 7px;
-  color: var(--navy);
-  font-size: 0.94rem;
-  line-height: 1.35;
+  margin: 0 0 7px !important;
+  color: var(--navy) !important;
+  font-size: 0.94rem !important;
+  font-weight: 800 !important;
+  line-height: 1.35 !important;
 }
 
 .rn-learning-practice-step p {
-  margin: 0;
-  color: var(--text-body);
-  font-size: 0.84rem;
-  line-height: 1.65;
+  margin: 0 !important;
+  color: var(--text-body) !important;
+  font-size: 0.84rem !important;
+  line-height: 1.65 !important;
 }
 
-.rn-learning-practice-deliverable {
-  margin-top: 16px;
-  padding: 16px 18px;
-  border-left: 3px solid var(--gold);
-  border-radius: 0 10px 10px 0;
-  background: #fffaf0;
-}
-
-.rn-learning-practice-deliverable > span {
-  display: block;
-  margin-bottom: 6px;
-  color: #8a6500;
-  font-size: 0.67rem;
-  font-weight: 850;
-  letter-spacing: 0.1em;
-}
-
-.rn-learning-practice-deliverable p {
-  margin: 0;
-  color: var(--text-body);
-  font-size: 0.88rem;
-  line-height: 1.6;
-}
-
-/* ---------------------------------------------------------
-   TABLET
-   --------------------------------------------------------- */
+/* Tablet/mobile: keep number beside the text,
+   rather than putting it above the text. */
 
 @media (max-width: 900px) {
   .rn-learning-practice-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
   }
 
   .rn-learning-practice-step {
-    min-height: 0;
+    grid-template-columns: 38px minmax(0, 1fr) !important;
+    align-items: start !important;
   }
 }
-
-/* ---------------------------------------------------------
-   MOBILE
-   --------------------------------------------------------- */
-
-@media (max-width: 600px) {
-  .rn-learning-table-wrap {
-    margin: 18px 0;
-    border-radius: 10px;
-  }
-
-  .rn-learning-table-wrap th,
-  .rn-learning-table-wrap td {
-    min-width: 105px;
-    padding: 10px 11px;
-    font-size: 0.78rem;
-  }
-
-  .rn-learning-practice-grid {
-    gap: 10px;
-  }
-
-  .rn-learning-practice-step {
-    padding: 15px;
-    gap: 10px;
-  }
-
-  .rn-learning-practice-step p {
-    font-size: 0.81rem;
-  }
-
-  .rn-learning-practice-deliverable {
-    padding: 14px 15px;
-  }
-}
-
-/* ---------------------------------------------------------
-   VERY SMALL SCREENS
-   --------------------------------------------------------- */
 
 @media (max-width: 380px) {
-  .rn-learning-table-wrap th,
-  .rn-learning-table-wrap td {
-    min-width: 95px;
-    padding: 9px 10px;
-    font-size: 0.75rem;
-  }
-
   .rn-learning-practice-step {
-    display: block;
+    display: grid !important;
+    grid-template-columns: 32px minmax(0, 1fr) !important;
+    column-gap: 10px !important;
   }
 
   .rn-learning-practice-step > strong {
-    display: block;
-    margin-bottom: 7px;
+    width: 32px !important;
+    min-width: 32px !important;
   }
 }
