@@ -26731,79 +26731,84 @@ main.page-shell .rn-button {
 }
 
 /* =========================================================
-   PRACTICAL APPLICATION — STEP TEXT ALIGNMENT ONLY
+   PRACTICAL APPLICATION — STEP ALIGNMENT FIX
    ========================================================= */
 
-/* Restore the original three-column step layout */
-.rn-learning-practice-panel .rn-learning-practice-grid {
+.rn-learning-practice-grid {
   display: grid !important;
   grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   gap: 16px !important;
+  align-items: stretch !important;
+}
+
+.rn-learning-practice-step {
+  display: grid !important;
+  grid-template-columns: 38px minmax(0, 1fr) !important;
+  align-items: start !important;
+  column-gap: 12px !important;
   width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
 }
 
-/* Keep each individual step horizontal */
-.rn-learning-practice-panel .rn-learning-practice-step {
+.rn-learning-practice-step > strong {
   display: flex !important;
-  flex-direction: row !important;
   align-items: flex-start !important;
-  gap: 12px !important;
+  justify-content: center !important;
+  width: 38px !important;
+  min-width: 38px !important;
+  padding-top: 2px !important;
+  box-sizing: border-box !important;
+  color: var(--cyan-dim) !important;
+  font-size: 0.78rem !important;
+  font-weight: 850 !important;
+  line-height: 1.35 !important;
+  letter-spacing: 0.08em !important;
+}
+
+.rn-learning-practice-step > div {
   min-width: 0 !important;
-}
-
-/* Step number */
-.rn-learning-practice-panel
-  .rn-learning-practice-step
-  > strong {
-  display: block !important;
-  flex: 0 0 32px !important;
-
-  width: 32px !important;
-  min-width: 32px !important;
-
   margin: 0 !important;
-  padding: 0 !important;
-
-  writing-mode: horizontal-tb !important;
-  white-space: nowrap !important;
-
-  line-height: 1.4 !important;
 }
 
-/* Text beside the number */
-.rn-learning-practice-panel
-  .rn-learning-practice-step
-  > div {
-  flex: 1 1 auto !important;
-  min-width: 0 !important;
+.rn-learning-practice-step h3 {
+  margin: 0 0 7px !important;
+  color: var(--navy) !important;
+  font-size: 0.94rem !important;
+  font-weight: 800 !important;
+  line-height: 1.35 !important;
+}
 
+.rn-learning-practice-step p {
   margin: 0 !important;
-  padding: 0 !important;
+  color: var(--text-body) !important;
+  font-size: 0.84rem !important;
+  line-height: 1.65 !important;
 }
 
-.rn-learning-practice-panel
-  .rn-learning-practice-step
-  h3 {
-  margin: 0 0 6px !important;
-  padding: 0 !important;
+/* Tablet/mobile: keep number beside the text,
+   rather than putting it above the text. */
 
-  writing-mode: horizontal-tb !important;
-  white-space: normal !important;
-}
-
-.rn-learning-practice-panel
-  .rn-learning-practice-step
-  p {
-  margin: 0 !important;
-  padding: 0 !important;
-
-  writing-mode: horizontal-tb !important;
-  white-space: normal !important;
-}
-
-/* Tablet/mobile: stack the three boxes, not the text */
 @media (max-width: 900px) {
-  .rn-learning-practice-panel .rn-learning-practice-grid {
+  .rn-learning-practice-grid {
     grid-template-columns: 1fr !important;
+  }
+
+  .rn-learning-practice-step {
+    grid-template-columns: 38px minmax(0, 1fr) !important;
+    align-items: start !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .rn-learning-practice-step {
+    display: grid !important;
+    grid-template-columns: 32px minmax(0, 1fr) !important;
+    column-gap: 10px !important;
+  }
+
+  .rn-learning-practice-step > strong {
+    width: 32px !important;
+    min-width: 32px !important;
   }
 }
