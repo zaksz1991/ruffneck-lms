@@ -3,7 +3,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
-export const alt = "RuffNeck Learn Certificate Verification";
+export const alt =
+  "RuffNeck Learn Certificate Verification";
 
 export const size = {
   width: 1200,
@@ -45,9 +46,15 @@ export default async function Image({
 }) {
   const { certificateNumber } = await params;
 
+  const normalizedCertificateNumber =
+    decodeURIComponent(certificateNumber).trim();
+
   const admin = createAdminClient();
 
-  const { data, error } = await admin
+  const {
+    data,
+    error,
+  } = await admin
     .from("course_certificates")
     .select(
       [
@@ -60,7 +67,10 @@ export default async function Image({
         "is_revoked",
       ].join(", ")
     )
-    .eq("certificate_number", certificateNumber)
+    .eq(
+      "certificate_number",
+      normalizedCertificateNumber
+    )
     .maybeSingle();
 
   if (error) {
@@ -74,7 +84,8 @@ export default async function Image({
     data as unknown as Certificate | null;
 
   const holderName =
-    certificate?.holder_name || "RuffNeck Learn Learner";
+    certificate?.holder_name ||
+    "RuffNeck Learn Learner";
 
   const courseTitle =
     certificate?.course_title ||
@@ -82,17 +93,20 @@ export default async function Image({
 
   const certificateNumberText =
     certificate?.certificate_number ||
-    certificateNumber;
+    normalizedCertificateNumber;
 
   const issuedDate = certificate
     ? formatDate(certificate.issued_at)
     : "—";
 
-  const status = certificate?.is_revoked
+  const isRevoked =
+    certificate?.is_revoked ?? false;
+
+  const status = isRevoked
     ? "REVOKED CREDENTIAL"
     : "VERIFIED CREDENTIAL";
 
-  const statusColor = certificate?.is_revoked
+  const statusColor = isRevoked
     ? "#b91c1c"
     : "#0086a3";
 
@@ -107,10 +121,11 @@ export default async function Image({
           overflow: "hidden",
           background: "#f8fafc",
           color: "#0b1e3a",
-          fontFamily: "Arial, Helvetica, sans-serif",
+          fontFamily:
+            "Arial, Helvetica, sans-serif",
         }}
       >
-        {/* Outer corporate frame */}
+        {/* Outer certificate frame */}
         <div
           style={{
             position: "absolute",
@@ -123,7 +138,7 @@ export default async function Image({
           }}
         />
 
-        {/* Inner corporate frame */}
+        {/* Inner certificate frame */}
         <div
           style={{
             position: "absolute",
@@ -136,30 +151,32 @@ export default async function Image({
           }}
         />
 
-        {/* Subtle cyan watermark */}
+        {/* Cyan watermark */}
         <div
           style={{
             position: "absolute",
-            right: "-110px",
-            bottom: "-190px",
-            width: "560px",
-            height: "560px",
+            right: "-120px",
+            bottom: "-220px",
+            width: "600px",
+            height: "600px",
             borderRadius: "50%",
-            border: "65px solid rgba(0, 180, 216, 0.055)",
+            border:
+              "70px solid rgba(0, 180, 216, 0.055)",
             display: "flex",
           }}
         />
 
-        {/* Subtle gold watermark */}
+        {/* Gold watermark */}
         <div
           style={{
             position: "absolute",
             left: "-180px",
-            top: "-210px",
-            width: "500px",
-            height: "500px",
+            top: "-230px",
+            width: "520px",
+            height: "520px",
             borderRadius: "50%",
-            border: "50px solid rgba(251, 191, 36, 0.045)",
+            border:
+              "55px solid rgba(251, 191, 36, 0.05)",
             display: "flex",
           }}
         />
@@ -170,8 +187,8 @@ export default async function Image({
             position: "absolute",
             left: "70px",
             right: "70px",
-            top: "52px",
-            bottom: "52px",
+            top: "55px",
+            bottom: "55px",
             display: "flex",
             flexDirection: "column",
           }}
@@ -183,7 +200,8 @@ export default async function Image({
               alignItems: "center",
               justifyContent: "space-between",
               paddingBottom: "17px",
-              borderBottom: "2px solid #00b4d8",
+              borderBottom:
+                "2px solid #00b4d8",
             }}
           >
             <div
@@ -194,7 +212,7 @@ export default async function Image({
             >
               <div
                 style={{
-                  fontSize: "31px",
+                  fontSize: "32px",
                   fontWeight: 800,
                   letterSpacing: "3px",
                   color: "#0b1e3a",
@@ -212,10 +230,12 @@ export default async function Image({
                   color: "#475569",
                 }}
               >
-                AI • DIGITAL TRANSFORMATION • BUSINESS SOLUTIONS
+                AI • DIGITAL TRANSFORMATION •
+                BUSINESS SOLUTIONS
               </div>
             </div>
 
+            {/* RN security mark */}
             <div
               style={{
                 display: "flex",
@@ -224,10 +244,11 @@ export default async function Image({
                 width: "82px",
                 height: "82px",
                 borderRadius: "50%",
-                border: "3px solid #fbbf24",
+                border:
+                  "3px solid #fbbf24",
                 background: "#ffffff",
                 color: "#0b1e3a",
-                fontSize: "18px",
+                fontSize: "19px",
                 fontWeight: 800,
                 letterSpacing: "1px",
               }}
@@ -241,13 +262,13 @@ export default async function Image({
             style={{
               display: "flex",
               justifyContent: "center",
-              paddingTop: "25px",
+              paddingTop: "22px",
             }}
           >
             <div
               style={{
                 display: "flex",
-                fontSize: "15px",
+                fontSize: "14px",
                 fontWeight: 800,
                 letterSpacing: "4px",
                 color: statusColor,
@@ -257,14 +278,14 @@ export default async function Image({
             </div>
           </div>
 
-          {/* Main certificate information */}
+          {/* Certificate content */}
           <div
             style={{
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               textAlign: "center",
-              paddingTop: "6px",
+              paddingTop: "5px",
             }}
           >
             <div
@@ -279,7 +300,7 @@ export default async function Image({
 
             <div
               style={{
-                marginTop: "10px",
+                marginTop: "9px",
                 fontSize: "18px",
                 color: "#475569",
               }}
@@ -289,8 +310,8 @@ export default async function Image({
 
             <div
               style={{
-                marginTop: "3px",
-                fontSize: "35px",
+                marginTop: "4px",
+                fontSize: "36px",
                 fontWeight: 800,
                 color: "#0b1e3a",
               }}
@@ -300,8 +321,8 @@ export default async function Image({
 
             <div
               style={{
-                marginTop: "6px",
-                fontSize: "19px",
+                marginTop: "7px",
+                fontSize: "18px",
                 color: "#334155",
               }}
             >
@@ -310,7 +331,7 @@ export default async function Image({
 
             <div
               style={{
-                marginTop: "3px",
+                marginTop: "4px",
                 fontSize: "25px",
                 fontWeight: 700,
                 color: "#0b1e3a",
@@ -322,15 +343,16 @@ export default async function Image({
             </div>
           </div>
 
-          {/* Footer credential information */}
+          {/* Credential footer */}
           <div
             style={{
               display: "flex",
               alignItems: "flex-end",
               justifyContent: "space-between",
               marginTop: "auto",
-              paddingTop: "17px",
-              borderTop: "1px solid #cbd5e1",
+              paddingTop: "16px",
+              borderTop:
+                "1px solid #cbd5e1",
             }}
           >
             {/* Certificate number */}
@@ -343,9 +365,9 @@ export default async function Image({
             >
               <div
                 style={{
-                  fontSize: "11px",
+                  fontSize: "10px",
                   fontWeight: 700,
-                  letterSpacing: "1px",
+                  letterSpacing: "1.2px",
                   color: "#64748b",
                 }}
               >
@@ -374,9 +396,9 @@ export default async function Image({
             >
               <div
                 style={{
-                  fontSize: "11px",
+                  fontSize: "10px",
                   fontWeight: 700,
-                  letterSpacing: "1px",
+                  letterSpacing: "1.2px",
                   color: "#64748b",
                 }}
               >
@@ -394,6 +416,44 @@ export default async function Image({
               </div>
             </div>
 
+            {/* Assessment */}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "5px",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  letterSpacing: "1.2px",
+                  color: "#64748b",
+                }}
+              >
+                ASSESSMENT
+              </div>
+
+              <div
+                style={{
+                  fontSize: "15px",
+                  fontWeight: 700,
+                  color: "#0b1e3a",
+                }}
+              >
+                {certificate?.assessment_score ??
+                  "—"}
+                {certificate?.assessment_score !==
+                null &&
+                certificate?.assessment_score !==
+                  undefined
+                  ? "%"
+                  : ""}
+              </div>
+            </div>
+
             {/* Verification */}
             <div
               style={{
@@ -405,9 +465,9 @@ export default async function Image({
             >
               <div
                 style={{
-                  fontSize: "11px",
+                  fontSize: "10px",
                   fontWeight: 700,
-                  letterSpacing: "1px",
+                  letterSpacing: "1.2px",
                   color: "#64748b",
                 }}
               >
@@ -421,7 +481,7 @@ export default async function Image({
                   color: "#0086a3",
                 }}
               >
-                ruffneck-lms.vercel.app
+                RuffNeck Learn
               </div>
             </div>
           </div>

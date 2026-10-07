@@ -30,19 +30,25 @@ function getBaseUrl() {
   ).replace(/\/$/, "");
 }
 
-function buildVerificationUrl(certificateNumber: string) {
+function buildVerificationUrl(
+  certificateNumber: string
+) {
   return `${getBaseUrl()}/verify/certificate-number/${encodeURIComponent(
     certificateNumber
   )}`;
 }
 
-function buildQrCodeUrl(verificationUrl: string) {
+function buildQrCodeUrl(
+  verificationUrl: string
+) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(
     verificationUrl
   )}`;
 }
 
-function buildSocialImageUrl(certificateNumber: string) {
+function buildSocialImageUrl(
+  certificateNumber: string
+) {
   return `${getBaseUrl()}/verify/certificate-number/${encodeURIComponent(
     certificateNumber
   )}/opengraph-image`;
@@ -65,7 +71,10 @@ export async function generateMetadata({
   if (!normalizedCertificateNumber) {
     return {
       metadataBase: new URL(baseUrl),
-      title: "RuffNeck Learn | Certificate Verification",
+      title: {
+        absolute:
+          "RuffNeck Learn | Certificate Verification",
+      },
       description:
         "Official verification of a RuffNeck Learn professional learning certificate.",
       robots: {
@@ -98,30 +107,41 @@ export async function generateMetadata({
   const certificate =
     data as unknown as CertificateMetadata | null;
 
-  if (!certificate) {
-    const title =
-      "RuffNeck Learn | Certificate Verification";
+  const title =
+    "RuffNeck Learn | Certificate Verification";
 
+  if (!certificate) {
     const description =
       "Verify an official RuffNeck Learn certificate issued by RuffNeck Entertainment.";
 
-    const canonicalUrl = buildVerificationUrl(
-      normalizedCertificateNumber
-    );
+    const canonicalUrl =
+      buildVerificationUrl(
+        normalizedCertificateNumber
+      );
+
+    const socialImageUrl =
+      buildSocialImageUrl(
+        normalizedCertificateNumber
+      );
 
     return {
       metadataBase: new URL(baseUrl),
+
       title: {
         absolute: title,
       },
+
       description,
+
       alternates: {
         canonical: canonicalUrl,
       },
+
       robots: {
         index: false,
         follow: false,
       },
+
       openGraph: {
         title,
         description,
@@ -131,49 +151,37 @@ export async function generateMetadata({
         locale: "en_NG",
         images: [
           {
-            url: `${baseUrl}/brand/ruffneck-logo.png`,
+            url: socialImageUrl,
             width: 1200,
             height: 630,
+            type: "image/png",
             alt: "RuffNeck Learn Certificate Verification",
           },
         ],
       },
+
       twitter: {
         card: "summary_large_image",
         title,
         description,
-        images: [`${baseUrl}/brand/ruffneck-logo.png`],
+        images: [socialImageUrl],
       },
     };
   }
-
-  const status = certificate.is_revoked
-    ? "Revoked"
-    : "Verified";
-
-  /*
-   * Keep the social/share title professional.
-   *
-   * LinkedIn was previously displaying:
-   * "ruffneckhassan — AI Literacy for Nigerian Professionals"
-   *
-   * That happened because the previous title was generated directly
-   * from holder_name and course_title.
-   */
-  const title =
-    "RuffNeck Learn | Certificate Verification";
 
   const description = certificate.is_revoked
     ? `This RuffNeck Learn certificate for ${certificate.holder_name} has been revoked.`
     : `Official verification of the RuffNeck Learn certificate awarded to ${certificate.holder_name} for completing ${certificate.course_title}.`;
 
-  const canonicalUrl = buildVerificationUrl(
-    certificate.certificate_number
-  );
+  const canonicalUrl =
+    buildVerificationUrl(
+      certificate.certificate_number
+    );
 
-  const socialImageUrl = buildSocialImageUrl(
-    certificate.certificate_number
-  );
+  const socialImageUrl =
+    buildSocialImageUrl(
+      certificate.certificate_number
+    );
 
   return {
     metadataBase: new URL(baseUrl),
@@ -205,6 +213,7 @@ export async function generateMetadata({
           url: socialImageUrl,
           width: 1200,
           height: 630,
+          type: "image/png",
           alt: `RuffNeck Learn certificate verification for ${certificate.holder_name}`,
         },
       ],
@@ -356,7 +365,8 @@ export default async function CertificateVerificationPage({
               margin: "14px auto 0",
               maxWidth: 680,
               lineHeight: 1.7,
-              color: "var(--muted, #64748b)",
+              color:
+                "var(--muted, #64748b)",
             }}
           >
             This page provides official
@@ -392,7 +402,8 @@ export default async function CertificateVerificationPage({
                 fontSize: 13,
                 fontWeight: 700,
                 letterSpacing: 2,
-                textTransform: "uppercase",
+                textTransform:
+                  "uppercase",
                 color:
                   "var(--muted, #64748b)",
                 marginBottom: 12,
