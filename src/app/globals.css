@@ -23642,3 +23642,961 @@ main.page-shell .rn-button {
     padding-top: 10px !important;
   }
 }
+
+/* =========================================================
+   RUFFNECK LEARN CERTIFICATE — FINAL PROFESSIONAL LAYOUT
+   ========================================================= */
+
+.rn-certificate-view-page {
+  padding: 34px 0 60px;
+  background:
+    radial-gradient(
+      circle at 15% 10%,
+      rgba(0, 180, 216, 0.05),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 85% 90%,
+      rgba(251, 191, 36, 0.06),
+      transparent 30%
+    ),
+    #f4f7fb;
+}
+
+.rn-certificate-document {
+  width: 100%;
+  max-width: 1180px;
+  margin: 22px auto 0;
+  background: #ffffff;
+  box-shadow:
+    0 24px 70px rgba(11, 30, 58, 0.16),
+    0 4px 18px rgba(11, 30, 58, 0.08);
+}
+
+.rn-certificate-border {
+  position: relative;
+  margin: 10px;
+  overflow: hidden;
+
+  border: 2px solid #0b1e3a;
+  background: #ffffff;
+}
+
+.rn-certificate-border::before {
+  content: "";
+  position: absolute;
+  inset: 7px;
+
+  border: 1px solid #c89419;
+
+  pointer-events: none;
+  z-index: 3;
+}
+
+.rn-certificate-border::after {
+  content: "";
+  position: absolute;
+  inset: 13px;
+
+  border: 1px solid rgba(0, 180, 216, 0.28);
+
+  pointer-events: none;
+  z-index: 3;
+}
+
+.rn-certificate-security-pattern {
+  position: absolute;
+  inset: 0;
+
+  background-image: url("/brand/ruffneck-border-background.png");
+  background-repeat: repeat;
+  background-position: center;
+  background-size: 520px auto;
+
+  opacity: 0.055;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.rn-certificate-inner {
+  position: relative;
+  z-index: 2;
+
+  padding: 48px 64px 42px;
+}
+
+/* ---------------------------------------------------------
+   HEADER
+   --------------------------------------------------------- */
+
+.rn-certificate-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+
+  padding-bottom: 22px;
+}
+
+.rn-certificate-logo {
+  width: 235px !important;
+  height: auto !important;
+  max-width: 60% !important;
+  object-fit: contain;
+  margin: 0 auto;
+}
+
+.rn-certificate-learn-name {
+  margin-top: 10px;
+
+  color: #0b1e3a;
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.rn-certificate-tagline {
+  margin-top: 8px;
+
+  color: #526174;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.rn-certificate-header-accent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 210px;
+  height: 4px;
+
+  margin-top: 17px;
+}
+
+.rn-certificate-header-accent span {
+  display: block;
+  height: 4px;
+}
+
+.rn-certificate-header-accent span:nth-child(1) {
+  width: 70px;
+  background: #0b1e3a;
+}
+
+.rn-certificate-header-accent span:nth-child(2) {
+  width: 70px;
+  background: #00b4d8;
+}
+
+.rn-certificate-header-accent span:nth-child(3) {
+  width: 70px;
+  background: #fbbf24;
+}
+
+/* ---------------------------------------------------------
+   MAIN TITLE
+   --------------------------------------------------------- */
+
+.rn-certificate-main {
+  padding: 16px 0 20px;
+  text-align: center;
+}
+
+.rn-certificate-main h1 {
+  margin: 0;
+
+  color: #0b1e3a;
+  font-size: clamp(34px, 4vw, 52px);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.rn-certificate-presented {
+  margin: 20px 0 8px;
+
+  color: #667085;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.rn-certificate-main h2 {
+  margin: 0;
+
+  color: #0b1e3a;
+  font-size: clamp(34px, 4.3vw, 54px);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+}
+
+.rn-certificate-name-rule {
+  display: flex;
+  justify-content: center;
+
+  margin: 13px auto 17px;
+}
+
+.rn-certificate-name-rule span {
+  display: block;
+
+  width: min(440px, 70%);
+  height: 2px;
+
+  background: linear-gradient(
+    90deg,
+    transparent,
+    #fbbf24 20%,
+    #0b1e3a 50%,
+    #fbbf24 80%,
+    transparent
+  );
+}
+
+.rn-certificate-completion-text {
+  margin: 0 0 7px;
+
+  color: #526174;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.rn-certificate-main h3 {
+  max-width: 850px;
+  margin: 0 auto;
+
+  color: #12345a;
+  font-size: clamp(23px, 2.5vw, 32px);
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+/* ---------------------------------------------------------
+   CREDENTIAL STRIP
+   --------------------------------------------------------- */
+
+.rn-certificate-credential-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+
+  margin-top: 18px;
+
+  border-top: 1px solid #d8e0e9;
+  border-bottom: 1px solid #d8e0e9;
+
+  background: rgba(248, 250, 252, 0.9);
+}
+
+.rn-certificate-credential {
+  min-width: 0;
+  padding: 13px 15px;
+
+  text-align: center;
+  border-right: 1px solid #d8e0e9;
+}
+
+.rn-certificate-credential:last-child {
+  border-right: 0;
+}
+
+.rn-certificate-credential span {
+  display: block;
+
+  margin-bottom: 4px;
+
+  color: #667085;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.rn-certificate-credential strong {
+  display: block;
+
+  color: #0b1e3a;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+/* ---------------------------------------------------------
+   CERTIFICATE NUMBER
+   --------------------------------------------------------- */
+
+.rn-certificate-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  margin: 17px 0 5px;
+
+  text-align: center;
+}
+
+.rn-certificate-number span {
+  color: #667085;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.rn-certificate-number strong {
+  color: #0b1e3a;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+/* ---------------------------------------------------------
+   QR / SEAL / SECURITY STAMP
+   --------------------------------------------------------- */
+
+.rn-certificate-authentication {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
+  align-items: center;
+
+  min-height: 245px;
+  margin-top: 20px;
+  padding: 20px 28px;
+
+  border-top: 1px solid #d8e0e9;
+  border-bottom: 1px solid #d8e0e9;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(11, 30, 58, 0.025),
+      rgba(0, 180, 216, 0.025)
+    );
+}
+
+.rn-certificate-qr-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 0;
+  text-align: center;
+}
+
+.rn-certificate-qr-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 180px;
+  height: 180px;
+  padding: 7px;
+
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+
+  box-shadow:
+    0 7px 18px rgba(11, 30, 58, 0.09),
+    0 0 0 5px rgba(255, 255, 255, 0.9);
+}
+
+.rn-certificate-qr-image {
+  display: block !important;
+
+  width: 166px !important;
+  height: 166px !important;
+  max-width: none !important;
+
+  object-fit: contain;
+}
+
+.rn-certificate-qr-title {
+  display: block;
+
+  margin-top: 11px;
+
+  color: #0b1e3a;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+}
+
+.rn-certificate-qr-code {
+  display: block;
+
+  margin-top: 4px;
+
+  color: #667085;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+
+.rn-certificate-qr-unavailable {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  width: 180px;
+  height: 180px;
+
+  border: 1px dashed #94a3b8;
+  border-radius: 10px;
+
+  background: #f8fafc;
+}
+
+.rn-certificate-qr-unavailable strong {
+  color: #0b1e3a;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+}
+
+.rn-certificate-qr-unavailable span {
+  margin-top: 5px;
+
+  color: #667085;
+  font-size: 10px;
+}
+
+.rn-certificate-authentication-branding {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 34px;
+
+  min-width: 0;
+}
+
+.rn-certificate-seal {
+  display: block !important;
+
+  width: 170px !important;
+  height: 170px !important;
+  max-width: none !important;
+
+  object-fit: contain;
+
+  filter: drop-shadow(
+    0 8px 12px rgba(11, 30, 58, 0.15)
+  );
+}
+
+.rn-certificate-security-stamp {
+  display: block !important;
+
+  width: 110px !important;
+  height: 110px !important;
+  max-width: none !important;
+
+  object-fit: contain;
+
+  opacity: 0.92;
+
+  filter: drop-shadow(
+    0 5px 9px rgba(11, 30, 58, 0.12)
+  );
+}
+
+.rn-certificate-validity {
+  position: absolute;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  margin-top: 205px;
+
+  color: #475467;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.rn-certificate-validity.is-valid {
+  color: #166534;
+}
+
+.rn-certificate-validity.is-invalid {
+  color: #b45309;
+}
+
+.rn-certificate-validity-dot {
+  width: 7px;
+  height: 7px;
+
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ---------------------------------------------------------
+   SIGNATURE / FOOTER
+   --------------------------------------------------------- */
+
+.rn-certificate-footer {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr 1fr;
+  align-items: end;
+  gap: 35px;
+
+  margin-top: 26px;
+  padding-top: 24px;
+
+  border-top: 1px solid #d8e0e9;
+}
+
+.rn-certificate-signatory {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.rn-certificate-signature-wrap {
+  display: flex;
+  align-items: flex-end;
+
+  width: 330px;
+  height: 94px;
+
+  margin-bottom: 3px;
+}
+
+.rn-certificate-signature-image {
+  display: block !important;
+
+  width: 300px !important;
+  height: 85px !important;
+  max-width: none !important;
+
+  object-fit: contain;
+  object-position: left bottom;
+}
+
+.rn-certificate-signature-line {
+  display: block;
+
+  width: 310px;
+  height: 1px;
+
+  margin-bottom: 7px;
+
+  background: #0b1e3a;
+}
+
+.rn-certificate-signatory strong {
+  color: #0b1e3a;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.rn-certificate-signatory > span {
+  color: #526174;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.rn-certificate-institution {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+
+  min-width: 0;
+}
+
+.rn-certificate-company-stamp {
+  display: block !important;
+
+  width: 82px !important;
+  height: 82px !important;
+  max-width: none !important;
+
+  object-fit: contain;
+  flex: 0 0 auto;
+
+  opacity: 0.9;
+}
+
+.rn-certificate-institution-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+
+  min-width: 0;
+}
+
+.rn-certificate-institution-copy strong {
+  color: #0b1e3a;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.rn-certificate-institution-copy span {
+  color: #667085;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.rn-certificate-footer-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+
+  text-align: right;
+}
+
+.rn-certificate-footer-meta strong {
+  color: #0b1e3a;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.rn-certificate-footer-meta span {
+  color: #667085;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.rn-certificate-footer-meta span:last-child {
+  color: #00b4d8;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+}
+
+/* ---------------------------------------------------------
+   REVOKED STATE
+   --------------------------------------------------------- */
+
+.rn-certificate-revoked {
+  width: fit-content;
+  margin: 15px auto;
+
+  padding: 7px 18px;
+
+  border: 1px solid #fecaca;
+  border-radius: 999px;
+
+  background: #fef2f2;
+  color: #b91c1c;
+
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+.rn-certificate-revoked-note {
+  margin: 18px 0;
+  padding: 12px 16px;
+
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+
+  background: #fef2f2;
+  color: #991b1b;
+
+  font-size: 12px;
+}
+
+/* ---------------------------------------------------------
+   REMOVE OLD CERTIFICATE ELEMENTS
+   --------------------------------------------------------- */
+
+.rn-certificate-document .rn-certificate-eyebrow,
+.rn-certificate-document .rn-certificate-brand-text,
+.rn-certificate-document .rn-certificate-header-rule,
+.rn-certificate-document .rn-certificate-divider,
+.rn-certificate-document .rn-certificate-verification,
+.rn-certificate-document .rn-certificate-verification-content {
+  display: none !important;
+}
+
+/* ---------------------------------------------------------
+   RESPONSIVE
+   --------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .rn-certificate-inner {
+    padding: 38px 38px 34px;
+  }
+
+  .rn-certificate-authentication {
+    grid-template-columns: 1fr;
+    gap: 26px;
+  }
+
+  .rn-certificate-authentication-branding {
+    padding-bottom: 12px;
+  }
+
+  .rn-certificate-validity {
+    position: static;
+    margin-top: 8px;
+  }
+
+  .rn-certificate-footer {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .rn-certificate-footer-meta {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .rn-certificate-institution {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 700px) {
+  .rn-certificate-view-page {
+    padding: 18px 0 35px;
+  }
+
+  .rn-certificate-border {
+    margin: 5px;
+  }
+
+  .rn-certificate-inner {
+    padding: 30px 22px 28px;
+  }
+
+  .rn-certificate-logo {
+    width: 180px !important;
+  }
+
+  .rn-certificate-learn-name {
+    font-size: 20px;
+    letter-spacing: 0.12em;
+  }
+
+  .rn-certificate-tagline {
+    font-size: 8px;
+    letter-spacing: 0.09em;
+  }
+
+  .rn-certificate-main h1 {
+    font-size: 29px;
+  }
+
+  .rn-certificate-main h2 {
+    font-size: 34px;
+  }
+
+  .rn-certificate-main h3 {
+    font-size: 22px;
+  }
+
+  .rn-certificate-credential-strip {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .rn-certificate-credential:nth-child(2) {
+    border-right: 0;
+  }
+
+  .rn-certificate-credential:nth-child(-n + 2) {
+    border-bottom: 1px solid #d8e0e9;
+  }
+
+  .rn-certificate-number {
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .rn-certificate-authentication-branding {
+    gap: 18px;
+  }
+
+  .rn-certificate-seal {
+    width: 130px !important;
+    height: 130px !important;
+  }
+
+  .rn-certificate-security-stamp {
+    width: 90px !important;
+    height: 90px !important;
+  }
+
+  .rn-certificate-footer {
+    grid-template-columns: 1fr;
+    gap: 25px;
+  }
+
+  .rn-certificate-signature-wrap {
+    width: 100%;
+    height: 88px;
+  }
+
+  .rn-certificate-signature-image {
+    width: 285px !important;
+    height: 82px !important;
+  }
+
+  .rn-certificate-signature-line {
+    width: 285px;
+  }
+
+  .rn-certificate-institution {
+    justify-content: flex-start;
+  }
+}
+
+/* ---------------------------------------------------------
+   PRINT / A4 LANDSCAPE
+   --------------------------------------------------------- */
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .no-print,
+  .site-header,
+  .rn-parent-brand,
+  .rn-footer,
+  .rn-certificate-view-actions {
+    display: none !important;
+  }
+
+  .rn-certificate-view-page {
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .rn-certificate-view-page .container {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+  }
+
+  .rn-certificate-document {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+
+    box-shadow: none !important;
+  }
+
+  .rn-certificate-border {
+    margin: 0 !important;
+  }
+
+  .rn-certificate-inner {
+    padding: 25px 40px 24px !important;
+  }
+
+  .rn-certificate-logo {
+    width: 180px !important;
+  }
+
+  .rn-certificate-learn-name {
+    font-size: 19px !important;
+  }
+
+  .rn-certificate-tagline {
+    font-size: 8px !important;
+  }
+
+  .rn-certificate-main {
+    padding: 8px 0 12px !important;
+  }
+
+  .rn-certificate-main h1 {
+    font-size: 34px !important;
+  }
+
+  .rn-certificate-main h2 {
+    font-size: 38px !important;
+  }
+
+  .rn-certificate-main h3 {
+    font-size: 22px !important;
+  }
+
+  .rn-certificate-credential-strip {
+    margin-top: 8px !important;
+  }
+
+  .rn-certificate-credential {
+    padding: 8px !important;
+  }
+
+  .rn-certificate-number {
+    margin: 9px 0 3px !important;
+  }
+
+  .rn-certificate-authentication {
+    min-height: 175px !important;
+    margin-top: 10px !important;
+    padding: 10px 18px !important;
+  }
+
+  .rn-certificate-qr-frame {
+    width: 125px !important;
+    height: 125px !important;
+  }
+
+  .rn-certificate-qr-image {
+    width: 113px !important;
+    height: 113px !important;
+  }
+
+  .rn-certificate-seal {
+    width: 120px !important;
+    height: 120px !important;
+  }
+
+  .rn-certificate-security-stamp {
+    width: 78px !important;
+    height: 78px !important;
+  }
+
+  .rn-certificate-footer {
+    margin-top: 12px !important;
+    padding-top: 12px !important;
+    gap: 20px !important;
+  }
+
+  .rn-certificate-signature-wrap {
+    width: 270px !important;
+    height: 67px !important;
+  }
+
+  .rn-certificate-signature-image {
+    width: 255px !important;
+    height: 65px !important;
+  }
+
+  .rn-certificate-signature-line {
+    width: 270px !important;
+  }
+
+  .rn-certificate-company-stamp {
+    width: 62px !important;
+    height: 62px !important;
+  }
+}
