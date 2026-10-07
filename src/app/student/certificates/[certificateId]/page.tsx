@@ -28,6 +28,12 @@ function formatDate(value: string) {
   }).format(date);
 }
 
+/**
+ * Canonical public certificate verification URL.
+ *
+ * This must remain consistent with:
+ * /src/app/verify/certificate-number/[certificateNumber]/page.tsx
+ */
 function buildVerificationUrl(certificateNumber: string) {
   const baseUrl =
     process.env.NEXT_PUBLIC_SITE_URL ||
@@ -37,7 +43,9 @@ function buildVerificationUrl(certificateNumber: string) {
   return `${baseUrl.replace(
     /\/$/,
     ""
-  )}/verify/${encodeURIComponent(certificateNumber)}`;
+  )}/verify/certificate-number/${encodeURIComponent(
+    certificateNumber
+  )}`;
 }
 
 function buildQrCodeUrl(verificationUrl: string) {
@@ -113,7 +121,12 @@ export default async function CertificatePage({
     notFound();
   }
 
-  const verificationUrl = `/verify/${encodeURIComponent(
+  /**
+   * Canonical verification path.
+   *
+   * Do not use /verify/{certificateNumber}.
+   */
+  const verificationUrl = `/verify/certificate-number/${encodeURIComponent(
     certificate.certificate_number
   )}`;
 
@@ -154,15 +167,11 @@ export default async function CertificatePage({
           }`}
         >
           <div className="rn-certificate-border">
-            {/* New transparent RuffNeck watermark.
-                This is separate from the existing border background. */}
             <div
               className="rn-certificate-watermark"
               aria-hidden="true"
             />
 
-            {/* Existing border/background layer.
-                ruffneck-border-background.png remains unchanged. */}
             <div
               className="rn-certificate-security-pattern"
               aria-hidden="true"

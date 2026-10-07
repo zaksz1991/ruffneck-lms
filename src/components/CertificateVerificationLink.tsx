@@ -12,7 +12,7 @@ export default function CertificateVerificationLink({
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
 
-  const verificationPath = `/verify/${encodeURIComponent(
+  const verificationPath = `/verify/certificate-number/${encodeURIComponent(
     certificateNumber
   )}`;
 
@@ -44,9 +44,7 @@ export default function CertificateVerificationLink({
   async function shareCertificate() {
     const url = getVerificationUrl();
 
-    if (
-      typeof navigator.share !== "function"
-    ) {
+    if (typeof navigator.share !== "function") {
       await copyVerificationLink();
       return;
     }
@@ -55,10 +53,8 @@ export default function CertificateVerificationLink({
 
     try {
       await navigator.share({
-        title:
-          "RuffNeck Learn Certificate Verification",
-        text:
-          `Verify RuffNeck Learn certificate ${certificateNumber}.`,
+        title: "RuffNeck Learn Certificate Verification",
+        text: `Verify RuffNeck Learn certificate ${certificateNumber}.`,
         url,
       });
     } catch (error) {
@@ -87,8 +83,7 @@ export default function CertificateVerificationLink({
         padding: 16,
         border: "1px solid var(--border)",
         borderRadius: 10,
-        background:
-          "rgba(0, 180, 216, 0.04)",
+        background: "rgba(0, 180, 216, 0.04)",
       }}
     >
       <div
@@ -111,9 +106,8 @@ export default function CertificateVerificationLink({
           lineHeight: 1.6,
         }}
       >
-        Anyone can verify this credential using
-        its public RuffNeck Learn verification
-        page.
+        Anyone can verify this credential using its
+        public RuffNeck Learn verification page.
       </p>
 
       <div
@@ -150,14 +144,10 @@ export default function CertificateVerificationLink({
           className="rn-button rn-button-secondary"
           style={{
             opacity: sharing ? 0.7 : 1,
-            cursor: sharing
-              ? "wait"
-              : "pointer",
+            cursor: sharing ? "wait" : "pointer",
           }}
         >
-          {sharing
-            ? "Sharing..."
-            : "Share Certificate"}
+          {sharing ? "Sharing..." : "Share Certificate"}
         </button>
       </div>
     </div>
