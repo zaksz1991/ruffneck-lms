@@ -143,13 +143,6 @@ function removeDuplicateLeadingHeading(
   );
 }
 
-/**
- * Wrap every lesson table in a dedicated responsive
- * scrolling container.
- *
- * This keeps wide tables from expanding the entire
- * lesson page, especially on phones.
- */
 function makeTablesResponsive(html: string) {
   if (!html || !/<table[\s>]/i.test(html)) {
     return html;
@@ -157,7 +150,7 @@ function makeTablesResponsive(html: string) {
 
   return html.replace(
     /<table\b([^>]*)>([\s\S]*?)<\/table>/gi,
-    (match, attributes, tableContent) => {
+    (_match, attributes, tableContent) => {
       return `
         <div class="rn-learning-table-wrap" role="region" aria-label="Scrollable lesson table" tabindex="0">
           <table${attributes}>${tableContent}</table>
@@ -167,13 +160,6 @@ function makeTablesResponsive(html: string) {
   );
 }
 
-/**
- * Generate a practical activity from the lesson topic.
- *
- * The lesson template remains consistent across the LMS,
- * but the actual application changes according to the
- * subject being taught.
- */
 function getPracticalApplication(
   lessonTitle: string,
   courseTitle: string,
@@ -1108,7 +1094,7 @@ export default async function LessonPage({
             </section>
 
             <section className="rn-learning-practice-panel">
-              <div>
+              <div className="rn-learning-practice-intro">
                 <span className="rn-eyebrow">
                   PRACTICAL APPLICATION
                 </span>
@@ -1125,24 +1111,22 @@ export default async function LessonPage({
               <div className="rn-learning-practice-grid">
                 {practicalApplication.steps.map(
                   (step) => (
-                    <div
+                    <article
                       key={step.number}
                       className="rn-learning-practice-step"
                     >
-                      <strong>
+                      <span className="rn-practice-number">
                         {step.number}
-                      </strong>
+                      </span>
 
-                      <div>
-                        <h3>
-                          {step.title}
-                        </h3>
+                      <section className="rn-practice-step-content">
+                        <h3>{step.title}</h3>
 
                         <p>
                           {step.description}
                         </p>
-                      </div>
-                    </div>
+                      </section>
+                    </article>
                   )
                 )}
               </div>
