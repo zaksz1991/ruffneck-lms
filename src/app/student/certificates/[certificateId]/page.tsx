@@ -28,12 +28,6 @@ function formatDate(value: string) {
   }).format(date);
 }
 
-/**
- * Canonical public certificate verification URL.
- *
- * This must remain consistent with:
- * /src/app/verify/certificate-number/[certificateNumber]/page.tsx
- */
 function buildVerificationUrl(certificateNumber: string) {
   const baseUrl =
     process.env.NEXT_PUBLIC_SITE_URL ||
@@ -62,7 +56,6 @@ export default async function CertificatePage({
   }>;
 }) {
   const { certificateId } = await params;
-
   const normalizedCertificateId = certificateId.trim();
 
   if (!normalizedCertificateId) {
@@ -121,23 +114,567 @@ export default async function CertificatePage({
     notFound();
   }
 
-  /**
-   * Canonical verification path.
-   *
-   * Do not use /verify/{certificateNumber}.
-   */
-  const verificationUrl = `/verify/certificate-number/${encodeURIComponent(
-    certificate.certificate_number
-  )}`;
+  const verificationUrl =
+    `/verify/certificate-number/${encodeURIComponent(
+      certificate.certificate_number
+    )}`;
 
   const fullVerificationUrl = buildVerificationUrl(
     certificate.certificate_number
   );
 
-  const qrCodeUrl = buildQrCodeUrl(fullVerificationUrl);
+  const qrCodeUrl = buildQrCodeUrl(
+    fullVerificationUrl
+  );
 
   return (
-    <main className="rn-certificate-view-page">
+    <main className="rn-certificate-view-page rn-certificate-single-page">
+      <style>{`
+        /*
+         * Certificate-only print rules.
+         * These rules do not alter the global site stylesheet.
+         */
+
+        @page {
+          size: A4 landscape;
+          margin: 0;
+        }
+
+        @media print {
+          html,
+          body {
+            width: 297mm !important;
+            height: 210mm !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            background: #ffffff !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+
+          body * {
+            visibility: hidden !important;
+          }
+
+          .rn-certificate-single-page,
+          .rn-certificate-single-page * {
+            visibility: visible !important;
+          }
+
+          .rn-certificate-single-page {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 297mm !important;
+            height: 210mm !important;
+            min-height: 0 !important;
+            max-height: 210mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            background: #ffffff !important;
+          }
+
+          .rn-certificate-single-page > .container {
+            width: 297mm !important;
+            max-width: none !important;
+            height: 210mm !important;
+            min-height: 0 !important;
+            max-height: 210mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+          }
+
+          .rn-certificate-single-page .no-print,
+          .rn-certificate-single-page
+            .rn-certificate-view-actions,
+          .rn-certificate-single-page
+            .rn-certificate-bottom-actions {
+            display: none !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-document {
+            position: relative !important;
+            display: block !important;
+            width: 297mm !important;
+            height: 210mm !important;
+            min-width: 0 !important;
+            min-height: 0 !important;
+            max-width: none !important;
+            max-height: 210mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            page-break-before: avoid !important;
+            page-break-after: avoid !important;
+            page-break-inside: avoid !important;
+            break-before: avoid-page !important;
+            break-after: avoid-page !important;
+            break-inside: avoid-page !important;
+            background: #ffffff !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-border {
+            position: absolute !important;
+            inset: 0 !important;
+            display: block !important;
+            width: 297mm !important;
+            height: 210mm !important;
+            min-height: 0 !important;
+            max-height: 210mm !important;
+            margin: 0 !important;
+            padding: 5mm !important;
+            overflow: hidden !important;
+            box-sizing: border-box !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid-page !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-watermark,
+          .rn-certificate-single-page
+            .rn-certificate-security-pattern {
+            position: absolute !important;
+            inset: 0 !important;
+            pointer-events: none !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-inner {
+            position: relative !important;
+            display: flex !important;
+            flex-direction: column !important;
+            width: 100% !important;
+            height: 100% !important;
+            min-height: 0 !important;
+            max-height: 100% !important;
+            margin: 0 !important;
+            padding: 2mm 5mm !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+            gap: 0 !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid-page !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-header {
+            flex: 0 0 auto !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 1mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            text-align: center !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-logo {
+            display: block !important;
+            width: auto !important;
+            height: 17mm !important;
+            max-width: 48mm !important;
+            max-height: 17mm !important;
+            object-fit: contain !important;
+            margin: 0 auto !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-learn-name {
+            margin: 0 !important;
+            font-size: 12pt !important;
+            line-height: 1.1 !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-tagline {
+            margin: 0 !important;
+            font-size: 7pt !important;
+            line-height: 1.2 !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-header-accent {
+            margin: 1mm 0 !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-main {
+            flex: 1 1 auto !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 1mm 0 !important;
+            text-align: center !important;
+            gap: 1mm !important;
+            overflow: hidden !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-eyebrow {
+            margin: 0 !important;
+            font-size: 8pt !important;
+            line-height: 1.2 !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-main h1 {
+            margin: 0 !important;
+            font-size: 23pt !important;
+            line-height: 1.12 !important;
+            break-after: avoid !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-presented,
+          .rn-certificate-single-page
+            .rn-certificate-completion-text {
+            margin: 0 !important;
+            font-size: 9pt !important;
+            line-height: 1.25 !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-main h2 {
+            max-width: 100% !important;
+            margin: 1mm 0 !important;
+            font-size: 25pt !important;
+            line-height: 1.12 !important;
+            overflow-wrap: anywhere !important;
+            break-after: avoid !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-name-rule {
+            margin: 0 !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-main h3 {
+            max-width: 100% !important;
+            margin: 1mm 0 0 !important;
+            font-size: 15pt !important;
+            line-height: 1.2 !important;
+            overflow-wrap: anywhere !important;
+            break-before: avoid !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-credential-strip {
+            flex: 0 0 auto !important;
+            display: grid !important;
+            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            gap: 3mm !important;
+            width: 100% !important;
+            margin: 1mm 0 !important;
+            padding: 2mm 0 !important;
+            box-sizing: border-box !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid-page !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-credential {
+            min-width: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            text-align: center !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-credential span {
+            display: block !important;
+            margin: 0 0 1mm !important;
+            font-size: 7pt !important;
+            line-height: 1.2 !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-credential strong {
+            display: block !important;
+            font-size: 8pt !important;
+            line-height: 1.2 !important;
+            overflow-wrap: anywhere !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-number {
+            flex: 0 0 auto !important;
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: center !important;
+            flex-wrap: wrap !important;
+            gap: 2mm !important;
+            margin: 1mm 0 !important;
+            padding: 0 !important;
+            font-size: 8pt !important;
+            line-height: 1.2 !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid-page !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-authentication {
+            flex: 0 0 auto !important;
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 4mm !important;
+            min-height: 0 !important;
+            margin: 1mm 0 !important;
+            padding: 0 !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid-page !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-qr-panel {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            gap: 3mm !important;
+            min-width: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-qr-frame {
+            flex: 0 0 auto !important;
+            width: 25mm !important;
+            height: 25mm !important;
+            min-width: 25mm !important;
+            min-height: 25mm !important;
+            margin: 0 !important;
+            padding: 1mm !important;
+            box-sizing: border-box !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-qr-image {
+            display: block !important;
+            width: 100% !important;
+            height: 100% !important;
+            max-width: none !important;
+            max-height: none !important;
+            object-fit: contain !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-qr-copy {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 1mm !important;
+            min-width: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-qr-copy strong {
+            font-size: 8pt !important;
+            line-height: 1.2 !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-qr-copy span,
+          .rn-certificate-single-page
+            .rn-certificate-qr-copy small {
+            font-size: 7pt !important;
+            line-height: 1.2 !important;
+            overflow-wrap: anywhere !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-authentication-branding {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: flex-end !important;
+            gap: 4mm !important;
+            min-width: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-seal {
+            display: block !important;
+            width: 25mm !important;
+            height: 25mm !important;
+            max-width: 25mm !important;
+            max-height: 25mm !important;
+            object-fit: contain !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-security-stamp {
+            display: block !important;
+            width: 22mm !important;
+            height: 22mm !important;
+            max-width: 22mm !important;
+            max-height: 22mm !important;
+            object-fit: contain !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-footer {
+            flex: 0 0 auto !important;
+            display: grid !important;
+            grid-template-columns: 1fr 1fr 1fr !important;
+            align-items: end !important;
+            gap: 4mm !important;
+            width: 100% !important;
+            min-height: 0 !important;
+            margin: 1mm 0 0 !important;
+            padding: 2mm 0 0 !important;
+            box-sizing: border-box !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid-page !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-signatory,
+          .rn-certificate-single-page
+            .rn-certificate-institution,
+          .rn-certificate-single-page
+            .rn-certificate-footer-meta {
+            min-width: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-signatory {
+            text-align: left !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-signature-wrap {
+            height: 12mm !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-signature-image {
+            display: block !important;
+            width: auto !important;
+            height: 11mm !important;
+            max-width: 48mm !important;
+            max-height: 11mm !important;
+            object-fit: contain !important;
+            object-position: left bottom !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-signature-line {
+            margin: 0 0 1mm !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-signatory strong {
+            display: block !important;
+            font-size: 9pt !important;
+            line-height: 1.2 !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-signatory span {
+            display: block !important;
+            font-size: 7pt !important;
+            line-height: 1.2 !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-institution {
+            text-align: center !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-company-stamp {
+            display: block !important;
+            width: 18mm !important;
+            height: 18mm !important;
+            max-width: 18mm !important;
+            max-height: 18mm !important;
+            margin: 0 auto 1mm !important;
+            object-fit: contain !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-institution-copy strong,
+          .rn-certificate-single-page
+            .rn-certificate-institution-copy span {
+            display: block !important;
+            font-size: 7pt !important;
+            line-height: 1.2 !important;
+            overflow-wrap: anywhere !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-footer-meta {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: flex-end !important;
+            gap: 1mm !important;
+            text-align: right !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-footer-meta strong,
+          .rn-certificate-single-page
+            .rn-certificate-footer-meta span {
+            font-size: 7pt !important;
+            line-height: 1.2 !important;
+            overflow-wrap: anywhere !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-revoked {
+            flex: 0 0 auto !important;
+            margin: 1mm 0 !important;
+            font-size: 10pt !important;
+            line-height: 1.2 !important;
+          }
+
+          .rn-certificate-single-page
+            .rn-certificate-revoked-note {
+            flex: 0 0 auto !important;
+            margin: 1mm 0 !important;
+            font-size: 8pt !important;
+            line-height: 1.2 !important;
+          }
+
+          .rn-certificate-single-page
+            img {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+      `}</style>
+
       <div className="container">
         <div className="rn-certificate-view-actions no-print">
           <Link
@@ -374,8 +911,7 @@ export default async function CertificatePage({
                   </strong>
 
                   <span>
-                    Issued{" "}
-                    {formatDate(certificate.issued_at)}
+                    Issued {formatDate(certificate.issued_at)}
                   </span>
 
                   <span>RUFFNECK LEARN</span>
