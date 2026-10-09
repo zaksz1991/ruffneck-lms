@@ -19,7 +19,9 @@ type Certificate = {
 function formatDate(value: string) {
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
 
   return new Intl.DateTimeFormat("en-NG", {
     day: "2-digit",
@@ -43,7 +45,7 @@ function qrCodeUrl(certificateNumber: string) {
 
   const target = `${siteUrl}${verificationPath(certificateNumber)}`;
 
-  return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&format=png&margin=5&data=${encodeURIComponent(
+  return `https://api.qrserver.com/v1/create-qr-code/?size=400x400&format=png&margin=8&data=${encodeURIComponent(
     target
   )}`;
 }
@@ -55,7 +57,9 @@ export default async function CertificatePage({
 }) {
   const { certificateId } = await params;
 
-  if (!certificateId?.trim()) notFound();
+  if (!certificateId?.trim()) {
+    notFound();
+  }
 
   const supabase = await createClient();
 
@@ -85,77 +89,102 @@ export default async function CertificatePage({
     throw new Error("Unable to load certificate.");
   }
 
-  if (!data) notFound();
+  if (!data) {
+    notFound();
+  }
 
   const certificate = data as Certificate;
   const isRevoked = Boolean(certificate.is_revoked);
 
   return (
-    <main className="modern-cert-page">
+    <main className="rn-certificate-page">
       <style>{`
-        .modern-cert-page {
-          --mc-navy: #102641;
-          --mc-ink: #172b42;
-          --mc-gold: #b78b3d;
-          --mc-muted: #677586;
-          padding: 28px 18px 44px;
-          color: var(--mc-ink);
+        .rn-certificate-page {
+          --cert-navy: #102541;
+          --cert-deep: #09172b;
+          --cert-gold: #c39a4c;
+          --cert-gold-dark: #8a682c;
+          --cert-ink: #1a2b40;
+          --cert-muted: #647286;
+          --cert-paper: #fffdf8;
+
+          min-height: 100vh;
+          padding: 30px 24px 48px;
+          color: var(--cert-ink);
+          background:
+            radial-gradient(
+              ellipse at 50% 0%,
+              rgba(195, 154, 76, 0.08),
+              transparent 48%
+            ),
+            #f0f3f7;
         }
 
-        .modern-cert-page *,
-        .modern-cert-page *::before,
-        .modern-cert-page *::after {
+        .rn-certificate-page *,
+        .rn-certificate-page *::before,
+        .rn-certificate-page *::after {
           box-sizing: border-box;
         }
 
-        .modern-cert-page .mc-shell {
+        .rn-certificate-page .cert-shell {
           width: 100%;
-          max-width: 1220px;
+          max-width: 1440px;
           margin: 0 auto;
         }
 
-        .modern-cert-page .mc-toolbar {
+        .rn-certificate-page .cert-toolbar {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 12px;
+          gap: 16px;
           flex-wrap: wrap;
-          margin-bottom: 20px;
+          margin-bottom: 22px;
         }
 
-        .modern-cert-page .mc-back {
-          color: var(--mc-ink);
+        .rn-certificate-page .cert-back {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          color: var(--cert-navy);
           font-size: 14px;
-          font-weight: 700;
+          font-weight: 750;
           text-decoration: none;
         }
 
-        .modern-cert-page .mc-back:hover {
-          color: var(--mc-gold);
+        .rn-certificate-page .cert-back:hover {
+          color: var(--cert-gold-dark);
         }
 
-        .modern-cert-page .mc-toolbar-actions {
+        .rn-certificate-page .cert-actions {
           display: flex;
           align-items: center;
-          gap: 10px;
           flex-wrap: wrap;
+          gap: 10px;
         }
 
-        .modern-cert-page .mc-paper {
+        .rn-certificate-page .cert-paper {
           position: relative;
           isolation: isolate;
           width: 100%;
           aspect-ratio: 297 / 210;
           overflow: hidden;
-          background: #f9f7f0;
-          color: var(--mc-ink);
-          border: 1px solid #c9ac6c;
-          box-shadow: 0 24px 70px rgba(16, 38, 65, 0.15);
+          background: var(--cert-paper);
+          color: var(--cert-ink);
+          border: 1px solid #c6a15d;
+          box-shadow:
+            0 30px 80px rgba(9, 23, 43, 0.15),
+            0 4px 12px rgba(9, 23, 43, 0.06);
         }
 
-        .modern-cert-page .mc-border {
+        /*
+         * Keep the original RuffNeck border artwork visible.
+         * The paper and content layers do not cover it with an
+         * opaque wash.
+         */
+
+        .rn-certificate-page .cert-border-art {
           position: absolute;
-          z-index: -3;
+          z-index: 0;
           inset: 0;
           display: block;
           width: 100%;
@@ -164,29 +193,30 @@ export default async function CertificatePage({
           pointer-events: none;
         }
 
-        .modern-cert-page .mc-paper-wash {
+        .rn-certificate-page .cert-inner-frame {
           position: absolute;
-          z-index: -2;
-          inset: 2.5%;
-          background: rgba(250, 248, 241, 0.48);
+          z-index: 1;
+          inset: 5.2%;
+          border: 1px solid rgba(179, 139, 63, 0.48);
           pointer-events: none;
         }
 
-        .modern-cert-page .mc-watermark {
+        .rn-certificate-page .cert-watermark {
           position: absolute;
-          z-index: -1;
-          right: 7%;
-          top: 26%;
-          width: 27%;
-          max-height: 44%;
+          z-index: 1;
+          top: 28%;
+          left: 34%;
+          width: 32%;
+          height: 40%;
           object-fit: contain;
           opacity: 0.045;
           pointer-events: none;
         }
 
-        .modern-cert-page .mc-content {
+        .rn-certificate-page .cert-content {
           position: absolute;
-          inset: 5.5% 7%;
+          z-index: 2;
+          inset: 8% 9%;
           display: grid;
           grid-template-rows: auto minmax(0, 1fr) auto;
           min-width: 0;
@@ -195,249 +225,260 @@ export default async function CertificatePage({
 
         /* Brand header */
 
-        .modern-cert-page .mc-header {
+        .rn-certificate-page .cert-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 20px;
-          padding-bottom: 2.1%;
-          border-bottom: 1px solid rgba(183, 139, 61, 0.72);
+          gap: 24px;
+          min-width: 0;
+          padding-bottom: 2.2%;
+          border-bottom: 1px solid rgba(179, 139, 63, 0.78);
         }
 
-        .modern-cert-page .mc-brand {
+        .rn-certificate-page .cert-brand {
           display: flex;
           align-items: center;
-          gap: 18px;
+          gap: 22px;
           min-width: 0;
         }
 
-        .modern-cert-page .mc-logo {
+        .rn-certificate-page .cert-logo {
           display: block;
-          width: clamp(135px, 18%, 220px);
-          height: auto;
-          max-height: 70px;
-          object-fit: contain;
           flex: 0 1 auto;
+          width: clamp(150px, 20vw, 265px);
+          height: auto;
+          max-height: 82px;
+          object-fit: contain;
+          object-position: left center;
         }
 
-        .modern-cert-page .mc-brand-copy {
+        .rn-certificate-page .cert-brand-copy {
           min-width: 0;
         }
 
-        .modern-cert-page .mc-brand-name {
+        .rn-certificate-page .cert-brand-name {
           margin: 0;
-          color: var(--mc-navy);
-          font-size: clamp(15px, 1.55vw, 22px);
-          font-weight: 850;
+          color: var(--cert-navy);
+          font-size: clamp(17px, 1.65vw, 25px);
+          font-weight: 900;
           letter-spacing: 0.13em;
           line-height: 1.15;
         }
 
-        .modern-cert-page .mc-tagline {
-          margin-top: 6px;
-          color: #77613a;
-          font-size: clamp(7px, 0.68vw, 10px);
-          font-weight: 750;
-          letter-spacing: 0.08em;
-          line-height: 1.4;
+        .rn-certificate-page .cert-tagline {
+          margin-top: 7px;
+          color: var(--cert-gold-dark);
+          font-size: clamp(8px, 0.72vw, 11px);
+          font-weight: 800;
+          letter-spacing: 0.09em;
+          line-height: 1.5;
           text-transform: uppercase;
         }
 
-        .modern-cert-page .mc-header-label {
+        .rn-certificate-page .cert-header-mark {
           flex: 0 0 auto;
-          padding-left: 18px;
-          border-left: 2px solid var(--mc-gold);
+          padding-left: 20px;
+          border-left: 2px solid var(--cert-gold);
           text-align: right;
         }
 
-        .modern-cert-page .mc-header-label strong {
+        .rn-certificate-page .cert-header-mark strong {
           display: block;
-          color: var(--mc-navy);
-          font-size: clamp(8px, 0.75vw, 11px);
-          letter-spacing: 0.14em;
-          line-height: 1.4;
+          color: var(--cert-navy);
+          font-size: clamp(9px, 0.8vw, 12px);
+          font-weight: 900;
+          letter-spacing: 0.12em;
+          line-height: 1.5;
           text-transform: uppercase;
         }
 
-        .modern-cert-page .mc-header-label span {
+        .rn-certificate-page .cert-header-mark span {
           display: block;
-          margin-top: 4px;
-          color: var(--mc-muted);
-          font-size: clamp(8px, 0.68vw, 10px);
-        }
-
-        /* Main certificate content */
-
-        .modern-cert-page .mc-main {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) 23%;
-          align-items: center;
-          gap: 4%;
-          min-height: 0;
-          padding: 2.2% 0;
-        }
-
-        .modern-cert-page .mc-copy {
-          min-width: 0;
-        }
-
-        .modern-cert-page .mc-eyebrow {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin: 0 0 9px;
-          color: #8a672d;
-          font-size: clamp(8px, 0.75vw, 11px);
-          font-weight: 850;
-          letter-spacing: 0.22em;
-          line-height: 1.35;
-          text-transform: uppercase;
-        }
-
-        .modern-cert-page .mc-eyebrow::before {
-          display: block;
-          width: 25px;
-          height: 2px;
-          background: var(--mc-gold);
-          content: "";
-          flex: 0 0 auto;
-        }
-
-        .modern-cert-page .mc-title {
-          margin: 0;
-          color: var(--mc-navy);
+          margin-top: 5px;
+          color: var(--cert-muted);
           font-family: Georgia, "Times New Roman", serif;
-          font-size: clamp(27px, 3.2vw, 46px);
-          font-weight: 500;
-          letter-spacing: -0.035em;
-          line-height: 1.05;
-          text-wrap: balance;
-        }
-
-        .modern-cert-page .mc-presented {
-          margin: 2.4% 0 0.6%;
-          color: var(--mc-muted);
-          font-family: Georgia, "Times New Roman", serif;
-          font-size: clamp(10px, 0.95vw, 14px);
+          font-size: clamp(9px, 0.8vw, 12px);
           font-style: italic;
         }
 
-        .modern-cert-page .mc-recipient {
-          margin: 0;
-          color: #173656;
-          font-family: Georgia, "Times New Roman", serif;
-          font-size: clamp(27px, 3.55vw, 52px);
-          font-weight: 700;
-          letter-spacing: -0.025em;
-          line-height: 1.1;
-          overflow-wrap: anywhere;
-          text-wrap: balance;
-        }
+        /* Main certificate */
 
-        .modern-cert-page .mc-recipient-underline {
-          width: 44%;
-          height: 2px;
-          margin-top: 1.4%;
-          background: linear-gradient(
-            90deg,
-            var(--mc-gold),
-            rgba(183, 139, 61, 0.08)
-          );
-        }
-
-        .modern-cert-page .mc-completion {
-          margin: 1.5% 0 0.5%;
-          color: #596779;
-          font-size: clamp(9px, 0.83vw, 12px);
-          line-height: 1.4;
-        }
-
-        .modern-cert-page .mc-course {
-          margin: 0;
-          color: var(--mc-navy);
-          font-size: clamp(14px, 1.55vw, 23px);
-          font-weight: 800;
-          line-height: 1.22;
-          overflow-wrap: anywhere;
-          text-wrap: balance;
-        }
-
-        .modern-cert-page .mc-revoked {
-          display: inline-block;
-          margin-top: 10px;
-          padding: 6px 12px;
-          border: 1px solid #b91c1c;
-          color: #991b1b;
-          background: rgba(255, 255, 255, 0.92);
-          font-size: 10px;
-          font-weight: 900;
-          letter-spacing: 0.18em;
-        }
-
-        /* Credential summary */
-
-        .modern-cert-page .mc-side {
-          align-self: stretch;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          gap: 15px;
+        .rn-certificate-page .cert-main {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 23%;
+          align-items: center;
+          gap: 5%;
           min-width: 0;
-          padding: 5% 0 5% 12%;
-          border-left: 1px solid rgba(183, 139, 61, 0.62);
+          min-height: 0;
+          padding: 2.5% 0;
         }
 
-        .modern-cert-page .mc-side-heading {
-          margin: 0 0 3px;
-          color: #8a672d;
-          font-size: clamp(8px, 0.68vw, 10px);
-          font-weight: 850;
-          letter-spacing: 0.17em;
+        .rn-certificate-page .cert-main-copy {
+          min-width: 0;
+        }
+
+        .rn-certificate-page .cert-eyebrow {
+          display: flex;
+          align-items: center;
+          gap: 11px;
+          margin: 0 0 10px;
+          color: var(--cert-gold-dark);
+          font-size: clamp(9px, 0.8vw, 12px);
+          font-weight: 900;
+          letter-spacing: 0.23em;
           line-height: 1.4;
           text-transform: uppercase;
         }
 
-        .modern-cert-page .mc-fact {
+        .rn-certificate-page .cert-eyebrow::before {
+          width: 30px;
+          height: 2px;
+          flex: 0 0 auto;
+          background: var(--cert-gold);
+          content: "";
+        }
+
+        .rn-certificate-page .cert-title {
+          margin: 0;
+          color: var(--cert-navy);
+          font-family: Georgia, "Times New Roman", serif;
+          font-size: clamp(31px, 3.35vw, 50px);
+          font-weight: 500;
+          letter-spacing: -0.045em;
+          line-height: 1.02;
+          text-wrap: balance;
+        }
+
+        .rn-certificate-page .cert-presented {
+          margin: 2.5% 0 0.5%;
+          color: var(--cert-muted);
+          font-family: Georgia, "Times New Roman", serif;
+          font-size: clamp(11px, 1vw, 15px);
+          font-style: italic;
+          line-height: 1.4;
+        }
+
+        .rn-certificate-page .cert-recipient {
+          max-width: 100%;
+          margin: 0;
+          color: #173c63;
+          font-family: Georgia, "Times New Roman", serif;
+          font-size: clamp(30px, 3.7vw, 55px);
+          font-weight: 700;
+          letter-spacing: -0.035em;
+          line-height: 1.06;
+          overflow-wrap: anywhere;
+          text-wrap: balance;
+        }
+
+        .rn-certificate-page .cert-recipient-rule {
+          width: 48%;
+          max-width: 280px;
+          height: 2px;
+          margin-top: 1.6%;
+          background: linear-gradient(
+            90deg,
+            var(--cert-gold),
+            rgba(195, 154, 76, 0.08)
+          );
+        }
+
+        .rn-certificate-page .cert-completion {
+          margin: 1.6% 0 0.5%;
+          color: #58677a;
+          font-size: clamp(10px, 0.85vw, 13px);
+          line-height: 1.5;
+        }
+
+        .rn-certificate-page .cert-course {
+          max-width: 100%;
+          margin: 0;
+          color: var(--cert-navy);
+          font-size: clamp(15px, 1.55vw, 23px);
+          font-weight: 850;
+          line-height: 1.28;
+          overflow-wrap: anywhere;
+          text-wrap: pretty;
+        }
+
+        .rn-certificate-page .cert-revoked-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 12px;
+          padding: 7px 12px;
+          border: 1px solid #b91c1c;
+          background: #fff1f2;
+          color: #991b1b;
+          font-size: 10px;
+          font-weight: 900;
+          letter-spacing: 0.16em;
+        }
+
+        /* Credential details */
+
+        .rn-certificate-page .cert-record {
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          gap: 17px;
+          align-self: stretch;
+          min-width: 0;
+          padding: 5% 0 5% 12%;
+          border-left: 1px solid rgba(179, 139, 63, 0.7);
+        }
+
+        .rn-certificate-page .cert-record-heading {
+          margin: 0;
+          color: var(--cert-gold-dark);
+          font-size: clamp(8px, 0.72vw, 11px);
+          font-weight: 900;
+          letter-spacing: 0.15em;
+          line-height: 1.5;
+          text-transform: uppercase;
+        }
+
+        .rn-certificate-page .cert-record-item {
           min-width: 0;
         }
 
-        .modern-cert-page .mc-fact-label {
+        .rn-certificate-page .cert-record-label {
           display: block;
           margin-bottom: 5px;
-          color: var(--mc-muted);
-          font-size: clamp(8px, 0.68vw, 10px);
+          color: var(--cert-muted);
+          font-size: clamp(8px, 0.7vw, 10px);
           font-weight: 650;
-          line-height: 1.25;
+          line-height: 1.35;
         }
 
-        .modern-cert-page .mc-fact-value {
+        .rn-certificate-page .cert-record-value {
           display: block;
-          color: var(--mc-navy);
-          font-size: clamp(11px, 1vw, 14px);
+          color: var(--cert-navy);
+          font-size: clamp(11px, 1vw, 15px);
           font-weight: 850;
-          line-height: 1.3;
+          line-height: 1.35;
           overflow-wrap: anywhere;
         }
 
-        .modern-cert-page .mc-side-rule {
-          width: 34px;
+        .rn-certificate-page .cert-record-rule {
+          width: 32px;
           height: 2px;
-          background: var(--mc-gold);
+          background: var(--cert-gold);
         }
 
         /* Authentication footer */
 
-        .modern-cert-page .mc-footer {
+        .rn-certificate-page .cert-footer {
           display: grid;
           grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
           align-items: center;
-          gap: 18px;
+          gap: 20px;
           min-width: 0;
-          padding-top: 1.7%;
-          border-top: 1px solid rgba(183, 139, 61, 0.72);
+          padding-top: 2%;
+          border-top: 1px solid rgba(179, 139, 63, 0.78);
         }
 
-        .modern-cert-page .mc-signatory {
+        .rn-certificate-page .cert-signatory {
           display: flex;
           flex-direction: column;
           align-items: flex-start;
@@ -445,189 +486,208 @@ export default async function CertificatePage({
           min-width: 0;
         }
 
-        .modern-cert-page .mc-signature {
+        .rn-certificate-page .cert-signature {
           display: block;
           width: auto;
-          max-width: 145px;
-          height: 34px;
+          max-width: 160px;
+          height: 37px;
           object-fit: contain;
           object-position: left bottom;
         }
 
-        .modern-cert-page .mc-signature-line {
+        .rn-certificate-page .cert-signature-line {
           width: 100%;
-          max-width: 180px;
-          margin: 3px 0 5px;
-          border-top: 1px solid #9b8458;
+          max-width: 185px;
+          margin: 4px 0 5px;
+          border-top: 1px solid #9c8457;
         }
 
-        .modern-cert-page .mc-signatory-name {
-          color: var(--mc-navy);
-          font-size: clamp(9px, 0.82vw, 12px);
-          font-weight: 850;
-          line-height: 1.3;
-        }
-
-        .modern-cert-page .mc-signatory-role {
-          margin-top: 3px;
-          color: var(--mc-muted);
-          font-size: clamp(7px, 0.62vw, 9px);
+        .rn-certificate-page .cert-signatory-name {
+          color: var(--cert-navy);
+          font-size: clamp(10px, 0.85vw, 13px);
+          font-weight: 900;
           line-height: 1.35;
         }
 
-        .modern-cert-page .mc-seals {
+        .rn-certificate-page .cert-signatory-role {
+          margin-top: 3px;
+          color: var(--cert-muted);
+          font-size: clamp(8px, 0.67vw, 10px);
+          line-height: 1.4;
+        }
+
+        .rn-certificate-page .cert-authenticity {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 9px;
+          gap: 10px;
         }
 
-        .modern-cert-page .mc-seal {
+        .rn-certificate-page .cert-seal {
           display: block;
-          width: clamp(43px, 5.1vw, 70px);
-          height: clamp(43px, 5.1vw, 70px);
+          width: clamp(48px, 5.4vw, 76px);
+          height: clamp(48px, 5.4vw, 76px);
           object-fit: contain;
         }
 
-        .modern-cert-page .mc-stamp {
+        .rn-certificate-page .cert-stamp {
           display: block;
-          width: clamp(39px, 4.5vw, 61px);
-          height: clamp(39px, 4.5vw, 61px);
+          width: clamp(42px, 4.7vw, 65px);
+          height: clamp(42px, 4.7vw, 65px);
           object-fit: contain;
         }
 
-        .modern-cert-page .mc-verification {
+        .rn-certificate-page .cert-verification {
           display: flex;
           align-items: center;
           justify-content: flex-end;
-          gap: 10px;
+          gap: 11px;
           min-width: 0;
         }
 
-        .modern-cert-page .mc-qr {
+        .rn-certificate-page .cert-qr {
           display: block;
           flex: 0 0 auto;
-          width: clamp(54px, 5.5vw, 76px);
-          height: clamp(54px, 5.5vw, 76px);
+          width: clamp(58px, 5.9vw, 82px);
+          height: clamp(58px, 5.9vw, 82px);
           padding: 3px;
-          border: 1px solid #c9ac6c;
-          background: white;
+          border: 1px solid #c5a15d;
+          background: #fff;
           object-fit: contain;
         }
 
-        .modern-cert-page .mc-verify-copy {
+        .rn-certificate-page .cert-verify-copy {
           min-width: 0;
         }
 
-        .modern-cert-page .mc-verify-title {
+        .rn-certificate-page .cert-verify-title {
           display: block;
           margin-bottom: 5px;
-          color: var(--mc-navy);
-          font-size: clamp(8px, 0.72vw, 10px);
+          color: var(--cert-navy);
+          font-size: clamp(8px, 0.74vw, 11px);
           font-weight: 900;
           letter-spacing: 0.09em;
-          line-height: 1.3;
+          line-height: 1.35;
         }
 
-        .modern-cert-page .mc-verify-copy p {
+        .rn-certificate-page .cert-verify-description {
           margin: 0;
-          color: var(--mc-muted);
-          font-size: clamp(7px, 0.62vw, 9px);
+          color: var(--cert-muted);
+          font-size: clamp(7px, 0.64vw, 9px);
+          line-height: 1.45;
+        }
+
+        .rn-certificate-page .cert-number {
+          margin-top: 6px;
+          color: var(--cert-gold-dark);
+          font-size: clamp(7px, 0.64vw, 9px);
+          font-weight: 900;
           line-height: 1.4;
           overflow-wrap: anywhere;
         }
 
-        .modern-cert-page .mc-cert-number {
-          margin-top: 6px;
-          color: #72572c;
-          font-size: clamp(7px, 0.62vw, 9px);
-          font-weight: 850;
-          line-height: 1.35;
-          overflow-wrap: anywhere;
-        }
-
-        .modern-cert-page .mc-revoked-note {
-          margin: 12px 0 0;
-          padding: 12px 14px;
+        .rn-certificate-page .cert-revoked-note {
+          margin-top: 12px;
+          padding: 13px 16px;
           border: 1px solid #fecaca;
           background: #fff1f2;
           color: #991b1b;
           font-size: 13px;
+          line-height: 1.5;
         }
 
-        .modern-cert-page .mc-bottom-actions {
+        .rn-certificate-page .cert-bottom-actions {
           display: flex;
+          align-items: center;
           justify-content: space-between;
           flex-wrap: wrap;
           gap: 12px;
-          margin-top: 20px;
+          margin-top: 22px;
         }
 
-        /* Responsive on-screen view */
+        /* Mobile screen layout */
 
-        @media (max-width: 760px) {
-          .modern-cert-page {
-            padding: 18px 10px 32px;
+        @media screen and (max-width: 760px) {
+          .rn-certificate-page {
+            padding: 16px 10px 30px;
           }
 
-          .modern-cert-page .mc-paper {
+          .rn-certificate-page .cert-toolbar {
+            align-items: flex-start;
+            margin-bottom: 16px;
+          }
+
+          .rn-certificate-page .cert-actions {
+            width: 100%;
+          }
+
+          .rn-certificate-page .cert-paper {
             aspect-ratio: auto;
             min-height: 0;
           }
 
-          .modern-cert-page .mc-content {
+          .rn-certificate-page .cert-border-art {
+            object-fit: cover;
+          }
+
+          .rn-certificate-page .cert-inner-frame {
+            inset: 10px;
+          }
+
+          .rn-certificate-page .cert-content {
             position: relative;
             inset: auto;
             display: flex;
             flex-direction: column;
-            gap: 24px;
-            padding: 30px 7%;
+            gap: 25px;
+            padding: 34px 8%;
           }
 
-          .modern-cert-page .mc-header {
+          .rn-certificate-page .cert-header {
             flex-direction: column;
-            align-items: center;
-            gap: 15px;
-            padding-bottom: 18px;
+            gap: 16px;
+            padding-bottom: 20px;
           }
 
-          .modern-cert-page .mc-brand {
+          .rn-certificate-page .cert-brand {
             flex-direction: column;
-            gap: 10px;
+            gap: 12px;
+            width: 100%;
           }
 
-          .modern-cert-page .mc-logo {
-            width: 190px;
-            max-height: 75px;
+          .rn-certificate-page .cert-logo {
+            width: min(100%, 230px);
+            max-height: 90px;
+            object-position: center;
           }
 
-          .modern-cert-page .mc-brand-copy {
+          .rn-certificate-page .cert-brand-copy {
             text-align: center;
           }
 
-          .modern-cert-page .mc-brand-name {
-            font-size: 19px;
+          .rn-certificate-page .cert-brand-name {
+            font-size: 20px;
           }
 
-          .modern-cert-page .mc-tagline {
+          .rn-certificate-page .cert-tagline {
             font-size: 9px;
           }
 
-          .modern-cert-page .mc-header-label {
+          .rn-certificate-page .cert-header-mark {
             padding: 0;
             border: 0;
             text-align: center;
           }
 
-          .modern-cert-page .mc-header-label strong {
+          .rn-certificate-page .cert-header-mark strong {
             font-size: 10px;
           }
 
-          .modern-cert-page .mc-header-label span {
-            font-size: 10px;
+          .rn-certificate-page .cert-header-mark span {
+            font-size: 11px;
           }
 
-          .modern-cert-page .mc-main {
+          .rn-certificate-page .cert-main {
             display: flex;
             flex-direction: column;
             align-items: stretch;
@@ -635,95 +695,115 @@ export default async function CertificatePage({
             padding: 0;
           }
 
-          .modern-cert-page .mc-eyebrow {
+          .rn-certificate-page .cert-eyebrow {
             font-size: 9px;
           }
 
-          .modern-cert-page .mc-title {
-            font-size: clamp(28px, 8vw, 40px);
+          .rn-certificate-page .cert-title {
+            font-size: clamp(29px, 8vw, 43px);
           }
 
-          .modern-cert-page .mc-presented {
-            margin-top: 18px;
+          .rn-certificate-page .cert-presented {
+            margin-top: 19px;
             font-size: 12px;
           }
 
-          .modern-cert-page .mc-recipient {
-            font-size: clamp(28px, 8vw, 42px);
+          .rn-certificate-page .cert-recipient {
+            font-size: clamp(29px, 8vw, 43px);
           }
 
-          .modern-cert-page .mc-completion {
-            margin-top: 15px;
+          .rn-certificate-page .cert-completion {
+            margin-top: 16px;
             font-size: 11px;
           }
 
-          .modern-cert-page .mc-course {
+          .rn-certificate-page .cert-course {
             font-size: clamp(17px, 5vw, 25px);
           }
 
-          .modern-cert-page .mc-side {
+          .rn-certificate-page .cert-record {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 18px 12px;
+            gap: 18px 14px;
             padding: 20px 0;
-            border-top: 1px solid rgba(183, 139, 61, 0.62);
-            border-bottom: 1px solid rgba(183, 139, 61, 0.62);
+            border-top: 1px solid rgba(179, 139, 63, 0.7);
+            border-right: 0;
+            border-bottom: 1px solid rgba(179, 139, 63, 0.7);
             border-left: 0;
           }
 
-          .modern-cert-page .mc-side-heading {
+          .rn-certificate-page .cert-record-heading {
             grid-column: 1 / -1;
             font-size: 10px;
           }
 
-          .modern-cert-page .mc-fact-label {
+          .rn-certificate-page .cert-record-label {
             font-size: 10px;
           }
 
-          .modern-cert-page .mc-fact-value {
+          .rn-certificate-page .cert-record-value {
             font-size: 13px;
           }
 
-          .modern-cert-page .mc-footer {
-            grid-template-columns: 1fr;
+          .rn-certificate-page .cert-footer {
+            grid-template-columns: minmax(0, 1fr);
             gap: 22px;
             padding-top: 22px;
           }
 
-          .modern-cert-page .mc-signatory {
+          .rn-certificate-page .cert-signatory {
             align-items: center;
             text-align: center;
           }
 
-          .modern-cert-page .mc-signature-line {
-            margin-left: auto;
+          .rn-certificate-page .cert-signature {
+            max-width: 180px;
+            object-position: center bottom;
+          }
+
+          .rn-certificate-page .cert-signature-line {
             margin-right: auto;
+            margin-left: auto;
           }
 
-          .modern-cert-page .mc-seals {
-            order: 2;
+          .rn-certificate-page .cert-authenticity {
+            gap: 14px;
           }
 
-          .modern-cert-page .mc-verification {
+          .rn-certificate-page .cert-seal {
+            width: 66px;
+            height: 66px;
+          }
+
+          .rn-certificate-page .cert-stamp {
+            width: 58px;
+            height: 58px;
+          }
+
+          .rn-certificate-page .cert-verification {
             justify-content: center;
           }
 
-          .modern-cert-page .mc-qr {
+          .rn-certificate-page .cert-qr {
             width: 76px;
             height: 76px;
           }
 
-          .modern-cert-page .mc-verify-title {
+          .rn-certificate-page .cert-verify-title {
             font-size: 10px;
           }
 
-          .modern-cert-page .mc-verify-copy p,
-          .modern-cert-page .mc-cert-number {
+          .rn-certificate-page .cert-verify-description,
+          .rn-certificate-page .cert-number {
             font-size: 9px;
+          }
+
+          .rn-certificate-page .cert-bottom-actions {
+            justify-content: flex-start;
           }
         }
 
-        /* One-page A4 landscape printing */
+        /* A4 landscape print layout */
 
         @page {
           size: A4 landscape;
@@ -735,11 +815,12 @@ export default async function CertificatePage({
           body {
             width: 297mm !important;
             height: 210mm !important;
+            min-width: 0 !important;
             min-height: 0 !important;
             margin: 0 !important;
             padding: 0 !important;
             overflow: hidden !important;
-            background: white !important;
+            background: #ffffff !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
@@ -748,24 +829,25 @@ export default async function CertificatePage({
             visibility: hidden !important;
           }
 
-          .modern-cert-page,
-          .modern-cert-page * {
+          .rn-certificate-page,
+          .rn-certificate-page * {
             visibility: visible !important;
           }
 
-          .modern-cert-page {
-            position: absolute !important;
+          .rn-certificate-page {
+            position: fixed !important;
             top: 0 !important;
             left: 0 !important;
             width: 297mm !important;
             height: 210mm !important;
+            min-height: 0 !important;
             margin: 0 !important;
             padding: 0 !important;
             overflow: hidden !important;
-            background: white !important;
+            background: #ffffff !important;
           }
 
-          .modern-cert-page .mc-shell {
+          .rn-certificate-page .cert-shell {
             width: 297mm !important;
             max-width: none !important;
             height: 210mm !important;
@@ -773,13 +855,13 @@ export default async function CertificatePage({
             padding: 0 !important;
           }
 
-          .modern-cert-page .mc-toolbar,
-          .modern-cert-page .mc-bottom-actions,
-          .modern-cert-page .no-print {
+          .rn-certificate-page .cert-toolbar,
+          .rn-certificate-page .cert-bottom-actions,
+          .rn-certificate-page .no-print {
             display: none !important;
           }
 
-          .modern-cert-page .mc-paper {
+          .rn-certificate-page .cert-paper {
             position: relative !important;
             width: 297mm !important;
             height: 210mm !important;
@@ -791,215 +873,248 @@ export default async function CertificatePage({
             overflow: hidden !important;
             border: 0 !important;
             box-shadow: none !important;
-            page-break-before: avoid !important;
-            page-break-after: avoid !important;
-            page-break-inside: avoid !important;
             break-before: avoid-page !important;
             break-after: avoid-page !important;
             break-inside: avoid-page !important;
+            page-break-before: avoid !important;
+            page-break-after: avoid !important;
+            page-break-inside: avoid !important;
           }
 
-          .modern-cert-page .mc-border {
+          .rn-certificate-page .cert-border-art {
             position: absolute !important;
+            z-index: 0 !important;
             inset: 0 !important;
+            display: block !important;
             width: 297mm !important;
             height: 210mm !important;
             object-fit: fill !important;
+            opacity: 1 !important;
           }
 
-          .modern-cert-page .mc-paper-wash {
+          .rn-certificate-page .cert-inner-frame {
             position: absolute !important;
-            inset: 2.5% !important;
-            background: rgba(250, 248, 241, 0.48) !important;
+            z-index: 1 !important;
+            inset: 5.2% !important;
+            border: 1px solid rgba(179, 139, 63, 0.48) !important;
           }
 
-          .modern-cert-page .mc-watermark {
+          .rn-certificate-page .cert-watermark {
             position: absolute !important;
-            right: 7% !important;
-            top: 26% !important;
-            width: 27% !important;
-            max-height: 44% !important;
+            z-index: 1 !important;
+            top: 28% !important;
+            left: 34% !important;
+            width: 32% !important;
+            height: 40% !important;
             opacity: 0.045 !important;
           }
 
-          .modern-cert-page .mc-content {
+          .rn-certificate-page .cert-content {
             position: absolute !important;
-            inset: 11mm 20mm !important;
+            z-index: 2 !important;
+            inset: 16mm 21mm !important;
             display: grid !important;
-            grid-template-rows: auto minmax(0, 1fr) auto !important;
+            grid-template-rows: 24mm minmax(0, 1fr) 31mm !important;
             width: auto !important;
             height: auto !important;
+            min-width: 0 !important;
             min-height: 0 !important;
             max-height: none !important;
+            margin: 0 !important;
             padding: 0 !important;
             gap: 0 !important;
-            overflow: visible !important;
+            overflow: hidden !important;
           }
 
-          .modern-cert-page .mc-header {
+          .rn-certificate-page .cert-header {
             display: flex !important;
             flex-direction: row !important;
             align-items: center !important;
             justify-content: space-between !important;
             gap: 5mm !important;
-            padding-bottom: 2.5mm !important;
+            min-height: 0 !important;
+            padding-bottom: 3mm !important;
           }
 
-          .modern-cert-page .mc-brand {
+          .rn-certificate-page .cert-brand {
+            display: flex !important;
             flex-direction: row !important;
+            align-items: center !important;
             gap: 5mm !important;
+            min-width: 0 !important;
           }
 
-          .modern-cert-page .mc-logo {
-            width: 44mm !important;
-            max-width: 44mm !important;
-            height: 16mm !important;
-            max-height: 16mm !important;
+          .rn-certificate-page .cert-logo {
+            flex: 0 1 auto !important;
+            width: 48mm !important;
+            max-width: 48mm !important;
+            height: 18mm !important;
+            max-height: 18mm !important;
             object-fit: contain !important;
+            object-position: left center !important;
           }
 
-          .modern-cert-page .mc-brand-name {
+          .rn-certificate-page .cert-brand-name {
             font-size: 15pt !important;
             line-height: 1.1 !important;
           }
 
-          .modern-cert-page .mc-tagline {
-            margin-top: 1.5mm !important;
+          .rn-certificate-page .cert-tagline {
+            margin-top: 1.3mm !important;
             font-size: 6.5pt !important;
-            line-height: 1.2 !important;
+            line-height: 1.25 !important;
           }
 
-          .modern-cert-page .mc-header-label {
+          .rn-certificate-page .cert-header-mark {
             padding-left: 4mm !important;
-            border-left: 0.5mm solid var(--mc-gold) !important;
+            border-left: 0.5mm solid var(--cert-gold) !important;
             text-align: right !important;
           }
 
-          .modern-cert-page .mc-header-label strong {
+          .rn-certificate-page .cert-header-mark strong {
             font-size: 7pt !important;
+            line-height: 1.35 !important;
           }
 
-          .modern-cert-page .mc-header-label span {
+          .rn-certificate-page .cert-header-mark span {
             margin-top: 1mm !important;
             font-size: 7pt !important;
+            line-height: 1.3 !important;
           }
 
-          .modern-cert-page .mc-main {
+          .rn-certificate-page .cert-main {
             display: grid !important;
-            grid-template-columns: minmax(0, 1fr) 52mm !important;
+            grid-template-columns: minmax(0, 1fr) 48mm !important;
             align-items: center !important;
             gap: 8mm !important;
+            min-width: 0 !important;
             min-height: 0 !important;
             padding: 3mm 0 !important;
-            overflow: visible !important;
+            overflow: hidden !important;
           }
 
-          .modern-cert-page .mc-eyebrow {
+          .rn-certificate-page .cert-main-copy {
+            min-width: 0 !important;
+            max-height: 100% !important;
+            overflow: hidden !important;
+          }
+
+          .rn-certificate-page .cert-eyebrow {
             gap: 2mm !important;
             margin: 0 0 2mm !important;
             font-size: 7pt !important;
-            letter-spacing: 0.2em !important;
-            line-height: 1.15 !important;
+            letter-spacing: 0.19em !important;
+            line-height: 1.2 !important;
           }
 
-          .modern-cert-page .mc-eyebrow::before {
+          .rn-certificate-page .cert-eyebrow::before {
             width: 6mm !important;
             height: 0.5mm !important;
           }
 
-          .modern-cert-page .mc-title {
+          .rn-certificate-page .cert-title {
             margin: 0 !important;
             font-size: 27pt !important;
-            line-height: 1.06 !important;
+            line-height: 1.04 !important;
           }
 
-          .modern-cert-page .mc-presented {
-            margin: 3mm 0 1mm !important;
+          .rn-certificate-page .cert-presented {
+            margin: 2.5mm 0 1mm !important;
             font-size: 9pt !important;
-            line-height: 1.15 !important;
+            line-height: 1.2 !important;
           }
 
-          .modern-cert-page .mc-recipient {
+          .rn-certificate-page .cert-recipient {
             margin: 0 !important;
-            font-size: 33pt !important;
+            font-size: 32pt !important;
             line-height: 1.08 !important;
+            overflow-wrap: anywhere !important;
           }
 
-          .modern-cert-page .mc-recipient-underline {
-            width: 65mm !important;
+          .rn-certificate-page .cert-recipient-rule {
+            width: 58mm !important;
             height: 0.5mm !important;
             margin-top: 2mm !important;
           }
 
-          .modern-cert-page .mc-completion {
+          .rn-certificate-page .cert-completion {
             margin: 2mm 0 1mm !important;
             font-size: 8pt !important;
-            line-height: 1.15 !important;
+            line-height: 1.2 !important;
           }
 
-          .modern-cert-page .mc-course {
+          .rn-certificate-page .cert-course {
             margin: 0 !important;
-            font-size: 15pt !important;
-            line-height: 1.15 !important;
+            font-size: 14pt !important;
+            line-height: 1.2 !important;
+            overflow-wrap: anywhere !important;
           }
 
-          .modern-cert-page .mc-revoked {
+          .rn-certificate-page .cert-revoked-badge {
             margin-top: 2mm !important;
             padding: 1mm 3mm !important;
             font-size: 7pt !important;
           }
 
-          .modern-cert-page .mc-side {
+          .rn-certificate-page .cert-record {
             display: flex !important;
             flex-direction: column !important;
             justify-content: center !important;
             gap: 3mm !important;
+            align-self: stretch !important;
             min-width: 0 !important;
+            min-height: 0 !important;
             padding: 3mm 0 3mm 5mm !important;
             border-top: 0 !important;
             border-right: 0 !important;
             border-bottom: 0 !important;
-            border-left: 0.3mm solid rgba(183, 139, 61, 0.72) !important;
+            border-left: 0.3mm solid rgba(179, 139, 63, 0.7) !important;
+            overflow: hidden !important;
           }
 
-          .modern-cert-page .mc-side-heading {
+          .rn-certificate-page .cert-record-heading {
             margin: 0 0 0.5mm !important;
             font-size: 6.5pt !important;
-            line-height: 1.2 !important;
+            line-height: 1.25 !important;
           }
 
-          .modern-cert-page .mc-fact-label {
+          .rn-certificate-page .cert-record-label {
             margin-bottom: 0.8mm !important;
             font-size: 7pt !important;
-            line-height: 1.15 !important;
-          }
-
-          .modern-cert-page .mc-fact-value {
-            font-size: 9pt !important;
             line-height: 1.2 !important;
           }
 
-          .modern-cert-page .mc-side-rule {
+          .rn-certificate-page .cert-record-value {
+            font-size: 9pt !important;
+            line-height: 1.25 !important;
+          }
+
+          .rn-certificate-page .cert-record-rule {
             width: 8mm !important;
             height: 0.5mm !important;
           }
 
-          .modern-cert-page .mc-footer {
+          .rn-certificate-page .cert-footer {
             display: grid !important;
             grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
             align-items: center !important;
             gap: 4mm !important;
+            min-width: 0 !important;
             min-height: 0 !important;
             padding-top: 2.5mm !important;
+            overflow: hidden !important;
           }
 
-          .modern-cert-page .mc-signatory {
+          .rn-certificate-page .cert-signatory {
             display: flex !important;
+            flex-direction: column !important;
             align-items: flex-start !important;
+            justify-content: center !important;
+            min-width: 0 !important;
             text-align: left !important;
           }
 
-          .modern-cert-page .mc-signature {
+          .rn-certificate-page .cert-signature {
             width: auto !important;
             max-width: 36mm !important;
             height: 8mm !important;
@@ -1007,42 +1122,42 @@ export default async function CertificatePage({
             object-position: left bottom !important;
           }
 
-          .modern-cert-page .mc-signature-line {
+          .rn-certificate-page .cert-signature-line {
             width: 48mm !important;
             max-width: 48mm !important;
             margin: 0.8mm 0 1mm !important;
-            border-top: 0.3mm solid #9b8458 !important;
+            border-top: 0.3mm solid #9c8457 !important;
           }
 
-          .modern-cert-page .mc-signatory-name {
+          .rn-certificate-page .cert-signatory-name {
             font-size: 8pt !important;
-            line-height: 1.15 !important;
+            line-height: 1.2 !important;
           }
 
-          .modern-cert-page .mc-signatory-role {
+          .rn-certificate-page .cert-signatory-role {
             margin-top: 0.5mm !important;
             font-size: 6.5pt !important;
             line-height: 1.2 !important;
           }
 
-          .modern-cert-page .mc-seals {
+          .rn-certificate-page .cert-authenticity {
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
             gap: 2mm !important;
           }
 
-          .modern-cert-page .mc-seal {
+          .rn-certificate-page .cert-seal {
             width: 17mm !important;
             height: 17mm !important;
           }
 
-          .modern-cert-page .mc-stamp {
+          .rn-certificate-page .cert-stamp {
             width: 15mm !important;
             height: 15mm !important;
           }
 
-          .modern-cert-page .mc-verification {
+          .rn-certificate-page .cert-verification {
             display: flex !important;
             align-items: center !important;
             justify-content: flex-end !important;
@@ -1050,49 +1165,51 @@ export default async function CertificatePage({
             min-width: 0 !important;
           }
 
-          .modern-cert-page .mc-qr {
+          .rn-certificate-page .cert-qr {
             width: 17mm !important;
             height: 17mm !important;
             padding: 0.6mm !important;
           }
 
-          .modern-cert-page .mc-verify-title {
+          .rn-certificate-page .cert-verify-title {
             margin-bottom: 0.8mm !important;
             font-size: 6.5pt !important;
-            line-height: 1.15 !important;
-          }
-
-          .modern-cert-page .mc-verify-copy p {
-            font-size: 6pt !important;
             line-height: 1.2 !important;
           }
 
-          .modern-cert-page .mc-cert-number {
-            margin-top: 1mm !important;
-            font-size: 5.5pt !important;
-            line-height: 1.15 !important;
+          .rn-certificate-page .cert-verify-description {
+            font-size: 6pt !important;
+            line-height: 1.25 !important;
           }
 
-          .modern-cert-page .mc-revoked-note {
+          .rn-certificate-page .cert-number {
+            margin-top: 1mm !important;
+            font-size: 5.5pt !important;
+            line-height: 1.2 !important;
+          }
+
+          .rn-certificate-page .cert-revoked-note {
             margin-top: 2mm !important;
             padding: 2mm !important;
             font-size: 8pt !important;
+            line-height: 1.3 !important;
           }
 
-          .modern-cert-page img {
+          .rn-certificate-page img {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
         }
       `}</style>
 
-      <div className="mc-shell">
-        <nav className="mc-toolbar no-print">
-          <Link href="/student/certificates" className="mc-back">
-            ← My Certificates
+      <div className="cert-shell">
+        <nav className="cert-toolbar no-print" aria-label="Certificate actions">
+          <Link href="/student/certificates" className="cert-back">
+            <span aria-hidden="true">←</span>
+            <span>My Certificates</span>
           </Link>
 
-          <div className="mc-toolbar-actions">
+          <div className="cert-actions">
             <Link
               href={verificationPath(certificate.certificate_number)}
               className="rn-button rn-button-secondary"
@@ -1105,120 +1222,110 @@ export default async function CertificatePage({
         </nav>
 
         <article
-          className="mc-paper"
+          className="cert-paper"
           aria-label="RuffNeck Learn certificate of completion"
         >
           <img
             src="/brand/ruffneck-border-background.png"
             alt=""
             aria-hidden="true"
-            className="mc-border"
+            className="cert-border-art"
           />
 
-          <div className="mc-paper-wash" aria-hidden="true" />
+          <div className="cert-inner-frame" aria-hidden="true" />
 
           <img
             src="/brand/transparent-ruffneck-background.png"
             alt=""
             aria-hidden="true"
-            className="mc-watermark"
+            className="cert-watermark"
           />
 
-          <div className="mc-content">
-            <header className="mc-header">
-              <div className="mc-brand">
+          <div className="cert-content">
+            <header className="cert-header">
+              <div className="cert-brand">
                 <img
                   src="/brand/ruffneck-logo.png"
                   alt="RuffNeck Entertainment"
-                  className="mc-logo"
+                  className="cert-logo"
                 />
 
-                <div className="mc-brand-copy">
-                  <p className="mc-brand-name">RUFFNECK LEARN</p>
-                  <div className="mc-tagline">
+                <div className="cert-brand-copy">
+                  <p className="cert-brand-name">RUFFNECK LEARN</p>
+                  <div className="cert-tagline">
                     AI • Digital Transformation • Business Solutions
                   </div>
                 </div>
               </div>
 
-              <div className="mc-header-label">
+              <div className="cert-header-mark">
                 <strong>Professional Credential</strong>
                 <span>Certificate of Achievement</span>
               </div>
             </header>
 
-            <section className="mc-main">
-              <div className="mc-copy">
-                <p className="mc-eyebrow">
-                  Learning achievement
-                </p>
+            <section className="cert-main">
+              <div className="cert-main-copy">
+                <p className="cert-eyebrow">Learning Achievement</p>
 
-                <h1 className="mc-title">
+                <h1 className="cert-title">
                   Certificate
                   <br />
                   of Completion
                 </h1>
 
                 {isRevoked && (
-                  <div className="mc-revoked" role="alert">
-                    REVOKED
+                  <div className="cert-revoked-badge" role="alert">
+                    CERTIFICATE REVOKED
                   </div>
                 )}
 
-                <p className="mc-presented">
+                <p className="cert-presented">
                   This certificate is awarded to
                 </p>
 
-                <h2 className="mc-recipient">
+                <h2 className="cert-recipient">
                   {certificate.holder_name}
                 </h2>
 
                 <div
-                  className="mc-recipient-underline"
+                  className="cert-recipient-rule"
                   aria-hidden="true"
                 />
 
-                <p className="mc-completion">
+                <p className="cert-completion">
                   In recognition of successfully completing
                 </p>
 
-                <h3 className="mc-course">
-                  {certificate.course_title}
-                </h3>
+                <h3 className="cert-course">{certificate.course_title}</h3>
               </div>
 
-              <aside className="mc-side">
-                <p className="mc-side-heading">
-                  Credential record
-                </p>
+              <aside className="cert-record" aria-label="Credential record">
+                <p className="cert-record-heading">Credential Record</p>
 
-                <div className="mc-fact">
-                  <span className="mc-fact-label">
-                    Date issued
-                  </span>
-                  <strong className="mc-fact-value">
+                <div className="cert-record-item">
+                  <span className="cert-record-label">Date issued</span>
+                  <strong className="cert-record-value">
                     {formatDate(certificate.issued_at)}
                   </strong>
                 </div>
 
-                <div className="mc-side-rule" aria-hidden="true" />
+                <div className="cert-record-rule" aria-hidden="true" />
 
-                <div className="mc-fact">
-                  <span className="mc-fact-label">
+                <div className="cert-record-item">
+                  <span className="cert-record-label">
                     Assessment score
                   </span>
-                  <strong className="mc-fact-value">
+                  <strong className="cert-record-value">
                     {certificate.assessment_score == null
                       ? "—"
                       : `${certificate.assessment_score}%`}
                   </strong>
                 </div>
 
-                <div className="mc-fact">
-                  <span className="mc-fact-label">
-                    Capstone score
-                  </span>
-                  <strong className="mc-fact-value">
+                <div className="cert-record-item">
+                  <span className="cert-record-label">Capstone score</span>
+                  <strong className="cert-record-value">
                     {certificate.capstone_score == null
                       ? "—"
                       : `${certificate.capstone_score}/100`}
@@ -1228,76 +1335,76 @@ export default async function CertificatePage({
             </section>
 
             {!isRevoked ? (
-              <footer className="mc-footer">
-                <div className="mc-signatory">
+              <footer className="cert-footer">
+                <div className="cert-signatory">
                   <img
                     src="/brand/founder-signature.png"
                     alt="Hassan Zakariya signature"
-                    className="mc-signature"
+                    className="cert-signature"
                   />
 
                   <div
-                    className="mc-signature-line"
+                    className="cert-signature-line"
                     aria-hidden="true"
                   />
 
-                  <strong className="mc-signatory-name">
+                  <strong className="cert-signatory-name">
                     Hassan Zakariya
                   </strong>
 
-                  <span className="mc-signatory-role">
+                  <span className="cert-signatory-role">
                     Founder &amp; CEO · RuffNeck Entertainment
                   </span>
                 </div>
 
-                <div className="mc-seals">
+                <div className="cert-authenticity" aria-label="Official seals">
                   <img
                     src="/brand/ruffneck-certificate-seal.png"
-                    alt="Certificate seal"
-                    className="mc-seal"
+                    alt="RuffNeck certificate seal"
+                    className="cert-seal"
                   />
 
                   <img
                     src="/brand/ruffneck-company-stamp.png"
-                    alt="Company stamp"
-                    className="mc-stamp"
+                    alt="RuffNeck company stamp"
+                    className="cert-stamp"
                   />
 
                   <img
                     src="/brand/ruffneck-security-stamp.png"
-                    alt="Security stamp"
-                    className="mc-stamp"
+                    alt="RuffNeck security stamp"
+                    className="cert-stamp"
                   />
                 </div>
 
-                <div className="mc-verification">
+                <div className="cert-verification">
                   <img
                     src={qrCodeUrl(certificate.certificate_number)}
                     alt={`QR code for certificate ${certificate.certificate_number}`}
-                    width={180}
-                    height={180}
-                    className="mc-qr"
+                    width={400}
+                    height={400}
+                    className="cert-qr"
                   />
 
-                  <div className="mc-verify-copy">
-                    <strong className="mc-verify-title">
+                  <div className="cert-verify-copy">
+                    <strong className="cert-verify-title">
                       VERIFY CREDENTIAL
                     </strong>
 
-                    <p>
+                    <p className="cert-verify-description">
                       Scan to check the
                       <br />
                       official certificate record.
                     </p>
 
-                    <div className="mc-cert-number">
+                    <div className="cert-number">
                       No. {certificate.certificate_number}
                     </div>
                   </div>
                 </div>
               </footer>
             ) : (
-              <div className="mc-revoked-note" role="alert">
+              <div className="cert-revoked-note" role="alert">
                 {certificate.revoked_reason ||
                   "This certificate has been revoked and is no longer valid."}
               </div>
@@ -1313,7 +1420,7 @@ export default async function CertificatePage({
           </div>
         )}
 
-        <div className="mc-bottom-actions no-print">
+        <div className="cert-bottom-actions no-print">
           <Link
             href="/student/certificates"
             className="rn-button rn-button-secondary"
