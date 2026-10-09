@@ -130,11 +130,6 @@ export default async function CertificatePage({
   return (
     <main className="rn-certificate-view-page rn-certificate-single-page">
       <style>{`
-        /*
-         * Certificate-only print rules.
-         * These rules do not alter the global site stylesheet.
-         */
-
         @page {
           size: A4 landscape;
           margin: 0;
@@ -144,12 +139,12 @@ export default async function CertificatePage({
           html,
           body {
             width: 297mm !important;
-            height: 210mm !important;
+            height: auto !important;
             min-height: 0 !important;
             margin: 0 !important;
             padding: 0 !important;
-            overflow: hidden !important;
             background: #ffffff !important;
+            overflow: visible !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
@@ -168,24 +163,24 @@ export default async function CertificatePage({
             top: 0 !important;
             left: 0 !important;
             width: 297mm !important;
-            height: 210mm !important;
+            height: auto !important;
             min-height: 0 !important;
-            max-height: 210mm !important;
+            max-height: none !important;
             margin: 0 !important;
             padding: 0 !important;
-            overflow: hidden !important;
+            overflow: visible !important;
             background: #ffffff !important;
           }
 
           .rn-certificate-single-page > .container {
             width: 297mm !important;
             max-width: none !important;
-            height: 210mm !important;
+            height: auto !important;
             min-height: 0 !important;
-            max-height: 210mm !important;
+            max-height: none !important;
             margin: 0 !important;
             padding: 0 !important;
-            overflow: hidden !important;
+            overflow: visible !important;
           }
 
           .rn-certificate-single-page .no-print,
@@ -201,14 +196,15 @@ export default async function CertificatePage({
             position: relative !important;
             display: block !important;
             width: 297mm !important;
-            height: 210mm !important;
+            height: 190mm !important;
             min-width: 0 !important;
             min-height: 0 !important;
             max-width: none !important;
-            max-height: 210mm !important;
+            max-height: none !important;
             margin: 0 !important;
             padding: 0 !important;
-            overflow: hidden !important;
+            overflow: visible !important;
+            box-sizing: border-box !important;
             border: 0 !important;
             border-radius: 0 !important;
             box-shadow: none !important;
@@ -218,22 +214,21 @@ export default async function CertificatePage({
             break-before: avoid-page !important;
             break-after: avoid-page !important;
             break-inside: avoid-page !important;
-            background: #ffffff !important;
+            transform: none !important;
           }
 
           .rn-certificate-single-page
             .rn-certificate-border {
-            position: absolute !important;
-            inset: 0 !important;
+            position: relative !important;
             display: block !important;
             width: 297mm !important;
-            height: 210mm !important;
+            height: 190mm !important;
             min-height: 0 !important;
-            max-height: 210mm !important;
+            max-height: none !important;
             margin: 0 !important;
-            padding: 5mm !important;
-            overflow: hidden !important;
+            padding: 4mm !important;
             box-sizing: border-box !important;
+            overflow: visible !important;
             border-radius: 0 !important;
             box-shadow: none !important;
             page-break-inside: avoid !important;
@@ -259,11 +254,11 @@ export default async function CertificatePage({
             width: 100% !important;
             height: 100% !important;
             min-height: 0 !important;
-            max-height: 100% !important;
+            max-height: none !important;
             margin: 0 !important;
-            padding: 2mm 5mm !important;
+            padding: 1mm 4mm !important;
             box-sizing: border-box !important;
-            overflow: hidden !important;
+            overflow: visible !important;
             gap: 0 !important;
             page-break-inside: avoid !important;
             break-inside: avoid-page !important;
@@ -276,7 +271,7 @@ export default async function CertificatePage({
             flex-direction: column !important;
             align-items: center !important;
             justify-content: center !important;
-            gap: 1mm !important;
+            gap: 0.5mm !important;
             margin: 0 !important;
             padding: 0 !important;
             text-align: center !important;
@@ -286,9 +281,9 @@ export default async function CertificatePage({
             .rn-certificate-logo {
             display: block !important;
             width: auto !important;
-            height: 17mm !important;
-            max-width: 48mm !important;
-            max-height: 17mm !important;
+            height: 13mm !important;
+            max-width: 42mm !important;
+            max-height: 13mm !important;
             object-fit: contain !important;
             margin: 0 auto !important;
           }
@@ -296,50 +291,49 @@ export default async function CertificatePage({
           .rn-certificate-single-page
             .rn-certificate-learn-name {
             margin: 0 !important;
-            font-size: 12pt !important;
+            font-size: 10pt !important;
             line-height: 1.1 !important;
           }
 
           .rn-certificate-single-page
             .rn-certificate-tagline {
             margin: 0 !important;
-            font-size: 7pt !important;
-            line-height: 1.2 !important;
+            font-size: 6pt !important;
+            line-height: 1.1 !important;
           }
 
           .rn-certificate-single-page
             .rn-certificate-header-accent {
-            margin: 1mm 0 !important;
+            margin: 0.5mm 0 !important;
           }
 
           .rn-certificate-single-page
             .rn-certificate-main {
-            flex: 1 1 auto !important;
+            flex: 1 1 0 !important;
             display: flex !important;
             flex-direction: column !important;
             align-items: center !important;
             justify-content: center !important;
             min-height: 0 !important;
             margin: 0 !important;
-            padding: 1mm 0 !important;
+            padding: 0.5mm 0 !important;
+            gap: 0.5mm !important;
+            overflow: visible !important;
             text-align: center !important;
-            gap: 1mm !important;
-            overflow: hidden !important;
           }
 
           .rn-certificate-single-page
             .rn-certificate-eyebrow {
             margin: 0 !important;
-            font-size: 8pt !important;
-            line-height: 1.2 !important;
+            font-size: 7pt !important;
+            line-height: 1.1 !important;
           }
 
           .rn-certificate-single-page
             .rn-certificate-main h1 {
             margin: 0 !important;
-            font-size: 23pt !important;
-            line-height: 1.12 !important;
-            break-after: avoid !important;
+            font-size: 19pt !important;
+            line-height: 1.1 !important;
           }
 
           .rn-certificate-single-page
@@ -347,18 +341,17 @@ export default async function CertificatePage({
           .rn-certificate-single-page
             .rn-certificate-completion-text {
             margin: 0 !important;
-            font-size: 9pt !important;
-            line-height: 1.25 !important;
+            font-size: 8pt !important;
+            line-height: 1.15 !important;
           }
 
           .rn-certificate-single-page
             .rn-certificate-main h2 {
             max-width: 100% !important;
-            margin: 1mm 0 !important;
-            font-size: 25pt !important;
-            line-height: 1.12 !important;
+            margin: 0.5mm 0 !important;
+            font-size: 22pt !important;
+            line-height: 1.1 !important;
             overflow-wrap: anywhere !important;
-            break-after: avoid !important;
           }
 
           .rn-certificate-single-page
@@ -369,11 +362,10 @@ export default async function CertificatePage({
           .rn-certificate-single-page
             .rn-certificate-main h3 {
             max-width: 100% !important;
-            margin: 1mm 0 0 !important;
-            font-size: 15pt !important;
-            line-height: 1.2 !important;
+            margin: 0.5mm 0 0 !important;
+            font-size: 12pt !important;
+            line-height: 1.15 !important;
             overflow-wrap: anywhere !important;
-            break-before: avoid !important;
           }
 
           .rn-certificate-single-page
@@ -381,10 +373,10 @@ export default async function CertificatePage({
             flex: 0 0 auto !important;
             display: grid !important;
             grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-            gap: 3mm !important;
+            gap: 2mm !important;
             width: 100% !important;
-            margin: 1mm 0 !important;
-            padding: 2mm 0 !important;
+            margin: 0.5mm 0 !important;
+            padding: 1mm 0 !important;
             box-sizing: border-box !important;
             page-break-inside: avoid !important;
             break-inside: avoid-page !important;
@@ -401,16 +393,16 @@ export default async function CertificatePage({
           .rn-certificate-single-page
             .rn-certificate-credential span {
             display: block !important;
-            margin: 0 0 1mm !important;
-            font-size: 7pt !important;
-            line-height: 1.2 !important;
+            margin: 0 0 0.5mm !important;
+            font-size: 6pt !important;
+            line-height: 1.1 !important;
           }
 
           .rn-certificate-single-page
             .rn-certificate-credential strong {
             display: block !important;
-            font-size: 8pt !important;
-            line-height: 1.2 !important;
+            font-size: 7pt !important;
+            line-height: 1.1 !important;
             overflow-wrap: anywhere !important;
           }
 
@@ -422,11 +414,11 @@ export default async function CertificatePage({
             align-items: center !important;
             justify-content: center !important;
             flex-wrap: wrap !important;
-            gap: 2mm !important;
-            margin: 1mm 0 !important;
+            gap: 1.5mm !important;
+            margin: 0.5mm 0 !important;
             padding: 0 !important;
-            font-size: 8pt !important;
-            line-height: 1.2 !important;
+            font-size: 7pt !important;
+            line-height: 1.1 !important;
             page-break-inside: avoid !important;
             break-inside: avoid-page !important;
           }
@@ -438,9 +430,9 @@ export default async function CertificatePage({
             flex-direction: row !important;
             align-items: center !important;
             justify-content: space-between !important;
-            gap: 4mm !important;
+            gap: 3mm !important;
             min-height: 0 !important;
-            margin: 1mm 0 !important;
+            margin: 0.5mm 0 !important;
             padding: 0 !important;
             page-break-inside: avoid !important;
             break-inside: avoid-page !important;
@@ -451,7 +443,7 @@ export default async function CertificatePage({
             display: flex !important;
             flex-direction: row !important;
             align-items: center !important;
-            gap: 3mm !important;
+            gap: 2mm !important;
             min-width: 0 !important;
             margin: 0 !important;
             padding: 0 !important;
@@ -460,12 +452,12 @@ export default async function CertificatePage({
           .rn-certificate-single-page
             .rn-certificate-qr-frame {
             flex: 0 0 auto !important;
-            width: 25mm !important;
-            height: 25mm !important;
-            min-width: 25mm !important;
-            min-height: 25mm !important;
+            width: 20mm !important;
+            height: 20mm !important;
+            min-width: 20mm !important;
+            min-height: 20mm !important;
             margin: 0 !important;
-            padding: 1mm !important;
+            padding: 0.5mm !important;
             box-sizing: border-box !important;
           }
 
@@ -484,7 +476,7 @@ export default async function CertificatePage({
             display: flex !important;
             flex-direction: column !important;
             align-items: flex-start !important;
-            gap: 1mm !important;
+            gap: 0.5mm !important;
             min-width: 0 !important;
             margin: 0 !important;
             padding: 0 !important;
@@ -492,16 +484,16 @@ export default async function CertificatePage({
 
           .rn-certificate-single-page
             .rn-certificate-qr-copy strong {
-            font-size: 8pt !important;
-            line-height: 1.2 !important;
+            font-size: 7pt !important;
+            line-height: 1.1 !important;
           }
 
           .rn-certificate-single-page
             .rn-certificate-qr-copy span,
           .rn-certificate-single-page
             .rn-certificate-qr-copy small {
-            font-size: 7pt !important;
-            line-height: 1.2 !important;
+            font-size: 6pt !important;
+            line-height: 1.1 !important;
             overflow-wrap: anywhere !important;
           }
 
@@ -511,7 +503,7 @@ export default async function CertificatePage({
             flex-direction: row !important;
             align-items: center !important;
             justify-content: flex-end !important;
-            gap: 4mm !important;
+            gap: 3mm !important;
             min-width: 0 !important;
             margin: 0 !important;
             padding: 0 !important;
@@ -520,20 +512,20 @@ export default async function CertificatePage({
           .rn-certificate-single-page
             .rn-certificate-seal {
             display: block !important;
-            width: 25mm !important;
-            height: 25mm !important;
-            max-width: 25mm !important;
-            max-height: 25mm !important;
+            width: 20mm !important;
+            height: 20mm !important;
+            max-width: 20mm !important;
+            max-height: 20mm !important;
             object-fit: contain !important;
           }
 
           .rn-certificate-single-page
             .rn-certificate-security-stamp {
             display: block !important;
-            width: 22mm !important;
-            height: 22mm !important;
-            max-width: 22mm !important;
-            max-height: 22mm !important;
+            width: 18mm !important;
+            height: 18mm !important;
+            max-width: 18mm !important;
+            max-height: 18mm !important;
             object-fit: contain !important;
           }
 
@@ -543,11 +535,11 @@ export default async function CertificatePage({
             display: grid !important;
             grid-template-columns: 1fr 1fr 1fr !important;
             align-items: end !important;
-            gap: 4mm !important;
+            gap: 3mm !important;
             width: 100% !important;
             min-height: 0 !important;
-            margin: 1mm 0 0 !important;
-            padding: 2mm 0 0 !important;
+            margin: 0.5mm 0 0 !important;
+            padding: 1mm 0 0 !important;
             box-sizing: border-box !important;
             page-break-inside: avoid !important;
             break-inside: avoid-page !important;
@@ -571,7 +563,7 @@ export default async function CertificatePage({
 
           .rn-certificate-single-page
             .rn-certificate-signature-wrap {
-            height: 12mm !important;
+            height: 9mm !important;
             min-height: 0 !important;
             margin: 0 !important;
             padding: 0 !important;
@@ -581,30 +573,30 @@ export default async function CertificatePage({
             .rn-certificate-signature-image {
             display: block !important;
             width: auto !important;
-            height: 11mm !important;
-            max-width: 48mm !important;
-            max-height: 11mm !important;
+            height: 8mm !important;
+            max-width: 42mm !important;
+            max-height: 8mm !important;
             object-fit: contain !important;
             object-position: left bottom !important;
           }
 
           .rn-certificate-single-page
             .rn-certificate-signature-line {
-            margin: 0 0 1mm !important;
+            margin: 0 0 0.5mm !important;
           }
 
           .rn-certificate-single-page
             .rn-certificate-signatory strong {
             display: block !important;
-            font-size: 9pt !important;
-            line-height: 1.2 !important;
+            font-size: 8pt !important;
+            line-height: 1.1 !important;
           }
 
           .rn-certificate-single-page
             .rn-certificate-signatory span {
             display: block !important;
-            font-size: 7pt !important;
-            line-height: 1.2 !important;
+            font-size: 6pt !important;
+            line-height: 1.1 !important;
           }
 
           .rn-certificate-single-page
@@ -615,11 +607,11 @@ export default async function CertificatePage({
           .rn-certificate-single-page
             .rn-certificate-company-stamp {
             display: block !important;
-            width: 18mm !important;
-            height: 18mm !important;
-            max-width: 18mm !important;
-            max-height: 18mm !important;
-            margin: 0 auto 1mm !important;
+            width: 14mm !important;
+            height: 14mm !important;
+            max-width: 14mm !important;
+            max-height: 14mm !important;
+            margin: 0 auto 0.5mm !important;
             object-fit: contain !important;
           }
 
@@ -628,8 +620,8 @@ export default async function CertificatePage({
           .rn-certificate-single-page
             .rn-certificate-institution-copy span {
             display: block !important;
-            font-size: 7pt !important;
-            line-height: 1.2 !important;
+            font-size: 6pt !important;
+            line-height: 1.1 !important;
             overflow-wrap: anywhere !important;
           }
 
@@ -638,7 +630,7 @@ export default async function CertificatePage({
             display: flex !important;
             flex-direction: column !important;
             align-items: flex-end !important;
-            gap: 1mm !important;
+            gap: 0.5mm !important;
             text-align: right !important;
           }
 
@@ -646,29 +638,28 @@ export default async function CertificatePage({
             .rn-certificate-footer-meta strong,
           .rn-certificate-single-page
             .rn-certificate-footer-meta span {
-            font-size: 7pt !important;
-            line-height: 1.2 !important;
+            font-size: 6pt !important;
+            line-height: 1.1 !important;
             overflow-wrap: anywhere !important;
           }
 
           .rn-certificate-single-page
             .rn-certificate-revoked {
             flex: 0 0 auto !important;
-            margin: 1mm 0 !important;
-            font-size: 10pt !important;
-            line-height: 1.2 !important;
+            margin: 0.5mm 0 !important;
+            font-size: 8pt !important;
+            line-height: 1.1 !important;
           }
 
           .rn-certificate-single-page
             .rn-certificate-revoked-note {
             flex: 0 0 auto !important;
-            margin: 1mm 0 !important;
-            font-size: 8pt !important;
-            line-height: 1.2 !important;
+            margin: 0.5mm 0 !important;
+            font-size: 7pt !important;
+            line-height: 1.1 !important;
           }
 
-          .rn-certificate-single-page
-            img {
+          .rn-certificate-single-page img {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
