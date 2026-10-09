@@ -29,11 +29,7 @@ function formatDate(value: string) {
 }
 
 function formatScore(value: number | null) {
-  if (value === null || value === undefined) {
-    return "Not recorded";
-  }
-
-  return `${value}%`;
+  return value == null ? "Not recorded" : `${value}%`;
 }
 
 function getVerificationUrl(certificateNumber: string) {
@@ -86,48 +82,41 @@ export default async function CertificatePage({ params }: PageProps) {
   }
 
   const certificate = data as Certificate;
+  const revoked = certificate.is_revoked;
+  const issuedDate = formatDate(certificate.issued_at);
   const verificationUrl = getVerificationUrl(
     certificate.certificate_number
   );
   const qrUrl = getQrUrl(verificationUrl);
-  const issuedDate = formatDate(certificate.issued_at);
-  const revoked = certificate.is_revoked;
 
   return (
     <main className="certificate-page">
       <style>{`
-        :root {
-          --cert-navy: #071a35;
-          --cert-navy-2: #102c52;
-          --cert-gold: #c18a25;
-          --cert-gold-light: #e7c66f;
-          --cert-ink: #152541;
-          --cert-muted: #66758b;
-          --cert-paper: #fffefa;
-        }
-
         .certificate-page {
+          --navy: #0b1e3a;
+          --navy-light: #18385e;
+          --gold: #c79a43;
+          --gold-light: #ead6a5;
+          --ink: #24334a;
+          --muted: #64748b;
           min-height: 100vh;
-          padding: 28px 22px 48px;
-          background:
-            radial-gradient(ellipse at 10% 0%, rgba(193,138,37,.08), transparent 32%),
-            #f1f4f8;
-          color: var(--cert-ink);
+          padding: 26px 20px 42px;
+          color: var(--ink);
+          background: #f0f3f7;
           font-family: Arial, Helvetica, sans-serif;
         }
 
         .certificate-toolbar {
-          width: min(1200px, 100%);
-          margin: 0 auto 22px;
+          width: min(1180px, 100%);
+          margin: 0 auto 20px;
           display: flex;
-          align-items: center;
           justify-content: space-between;
-          gap: 16px;
+          align-items: center;
+          gap: 12px;
           flex-wrap: wrap;
         }
 
-        .certificate-toolbar-left,
-        .certificate-toolbar-right {
+        .certificate-toolbar-group {
           display: flex;
           align-items: center;
           gap: 10px;
@@ -137,94 +126,85 @@ export default async function CertificatePage({ params }: PageProps) {
         .certificate-toolbar a,
         .certificate-toolbar button {
           min-height: 42px;
+          padding: 10px 15px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 8px;
-          border: 1px solid #d8e0ea;
-          border-radius: 8px;
-          padding: 10px 15px;
-          background: white;
-          color: var(--cert-navy);
+          border: 1px solid #d4dce7;
+          border-radius: 7px;
+          background: #fff;
+          color: var(--navy);
           font-size: 13px;
           font-weight: 700;
           text-decoration: none;
-          cursor: pointer;
         }
 
-        .certificate-toolbar a:hover,
-        .certificate-toolbar button:hover {
-          border-color: var(--cert-gold);
-          background: #fffdf7;
+        .certificate-toolbar a:hover {
+          border-color: var(--gold);
         }
 
-        .certificate-toolbar .toolbar-primary {
-          border-color: var(--cert-navy);
-          background: var(--cert-navy);
+        .certificate-toolbar .certificate-primary-action {
+          background: var(--navy);
           color: white;
-        }
-
-        .certificate-toolbar .toolbar-primary:hover {
-          background: var(--cert-navy-2);
+          border-color: var(--navy);
         }
 
         .certificate-paper {
           position: relative;
           isolation: isolate;
-          width: min(1200px, 100%);
+          width: min(1180px, 100%);
           aspect-ratio: 297 / 210;
-          min-height: 570px;
           margin: 0 auto;
           overflow: hidden;
-          background: var(--cert-paper);
-          box-shadow: 0 22px 65px rgba(7,26,53,.16);
-          color: var(--cert-ink);
+          background: #fffefa;
+          box-shadow: 0 16px 45px rgba(11, 30, 58, 0.16);
           container-type: inline-size;
         }
 
-        .certificate-paper::before {
-          content: "";
+        /*
+          Keep the background, border, watermark, and content in
+          separate positive stacking layers. No negative z-index.
+        */
+        .certificate-border {
           position: absolute;
-          z-index: -2;
-          inset: 0;
-          background:
-            radial-gradient(ellipse at 50% 45%, rgba(255,255,255,.2), rgba(255,254,250,.96) 65%),
-            #fffefa;
-        }
-
-        .certificate-border-art {
-          position: absolute;
-          z-index: 5;
+          z-index: 0;
           inset: 0;
           width: 100%;
           height: 100%;
           object-fit: fill;
+          opacity: 1;
           pointer-events: none;
-          opacity: .92;
+        }
+
+        .certificate-paper-background {
+          position: absolute;
+          z-index: 0;
+          inset: 2%;
+          background: rgba(255, 254, 250, 0.88);
+          pointer-events: none;
         }
 
         .certificate-watermark {
           position: absolute;
-          z-index: -1;
-          left: 50%;
+          z-index: 1;
           top: 48%;
-          width: 47%;
-          height: 65%;
+          left: 48%;
+          width: 43%;
+          height: 64%;
           transform: translate(-50%, -50%);
           object-fit: contain;
-          opacity: .075;
+          opacity: 0.10;
           pointer-events: none;
-          filter: saturate(.75);
         }
 
-        .certificate-content {
+        .certificate-layout {
           position: absolute;
           z-index: 2;
-          inset: 4.6% 4.4% 5.8%;
+          inset: 5.5% 5% 6%;
           display: grid;
-          grid-template-columns: 19% 1fr 19%;
-          grid-template-rows: 20% 1fr 23%;
-          column-gap: 2.2%;
+          grid-template-columns: 18% minmax(0, 1fr) 18%;
+          grid-template-rows: 21% minmax(0, 1fr) 23%;
+          column-gap: 2%;
           min-width: 0;
         }
 
@@ -234,74 +214,77 @@ export default async function CertificatePage({ params }: PageProps) {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 2.4%;
+          gap: 2.5%;
           min-width: 0;
           padding: 0 1%;
         }
 
         .certificate-logo {
-          width: 20%;
-          max-width: 180px;
-          max-height: 100%;
+          display: block;
+          width: 22%;
+          max-width: 165px;
+          max-height: 92%;
           object-fit: contain;
           flex-shrink: 0;
         }
 
-        .certificate-brand-copy {
+        .certificate-brand {
           min-width: 0;
-          text-align: left;
+          text-align: center;
         }
 
         .certificate-brand-name {
           margin: 0;
-          color: var(--cert-navy);
-          font-size: clamp(20px, 3.3cqw, 43px);
+          color: var(--navy);
+          font-size: clamp(20px, 3.15cqw, 38px);
           font-weight: 900;
-          line-height: .98;
-          letter-spacing: .055em;
+          line-height: 1;
+          letter-spacing: 0.11em;
           white-space: nowrap;
         }
 
-        .certificate-brand-subtitle {
-          margin-top: 5px;
-          color: #214d85;
-          font-size: clamp(9px, 1.25cqw, 15px);
+        .certificate-brand-learn {
+          margin-top: 4px;
+          color: #a77824;
+          font-size: clamp(10px, 1.25cqw, 15px);
           font-weight: 800;
-          letter-spacing: .42em;
-          text-align: center;
+          letter-spacing: 0.45em;
         }
 
         .certificate-brand-rule {
-          width: 70%;
           height: 2px;
-          margin: 8px auto 6px;
-          background: linear-gradient(90deg, transparent, var(--cert-gold), transparent);
+          width: 82%;
+          margin: 7px auto 6px;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            var(--gold),
+            transparent
+          );
         }
 
         .certificate-tagline {
-          color: #526176;
-          font-size: clamp(6px, .77cqw, 9px);
+          color: #536176;
+          font-size: clamp(6px, 0.75cqw, 9px);
           font-weight: 700;
-          letter-spacing: .13em;
-          text-align: center;
+          letter-spacing: 0.09em;
           white-space: nowrap;
         }
 
-        .certificate-medal-column {
+        .certificate-left-seal {
           grid-column: 1;
           grid-row: 2;
           display: flex;
           align-items: center;
           justify-content: center;
           min-width: 0;
-          padding: 2%;
+          padding: 5%;
         }
 
         .certificate-medal {
           width: 100%;
-          max-height: 88%;
+          max-height: 85%;
           object-fit: contain;
-          filter: drop-shadow(0 7px 5px rgba(7,26,53,.15));
         }
 
         .certificate-main {
@@ -309,30 +292,30 @@ export default async function CertificatePage({ params }: PageProps) {
           grid-row: 2;
           display: flex;
           flex-direction: column;
-          align-items: center;
           justify-content: center;
+          align-items: center;
           min-width: 0;
           padding: 0 1%;
           text-align: center;
         }
 
-        .certificate-overline {
-          margin: 0 0 2px;
-          color: var(--cert-gold);
-          font-size: clamp(7px, .8cqw, 10px);
+        .certificate-kicker {
+          margin: 0 0 4px;
+          color: #a77824;
+          font-size: clamp(7px, 0.8cqw, 10px);
           font-weight: 800;
-          letter-spacing: .28em;
+          letter-spacing: 0.2em;
           text-transform: uppercase;
         }
 
         .certificate-title {
           margin: 0;
-          color: var(--cert-navy);
+          color: var(--navy);
           font-family: Georgia, "Times New Roman", serif;
-          font-size: clamp(25px, 4.25cqw, 54px);
+          font-size: clamp(27px, 4.1cqw, 49px);
           font-weight: 700;
-          line-height: .98;
-          letter-spacing: .065em;
+          line-height: 1;
+          letter-spacing: 0.045em;
           white-space: nowrap;
         }
 
@@ -340,87 +323,91 @@ export default async function CertificatePage({ params }: PageProps) {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 12px;
-          width: 100%;
-          margin: 6px 0 10px;
-          color: #a87519;
-          font-size: clamp(9px, 1.25cqw, 15px);
+          gap: 10px;
+          margin: 7px 0 12px;
+          color: #a77824;
+          font-size: clamp(8px, 1.05cqw, 13px);
           font-weight: 800;
-          letter-spacing: .36em;
+          letter-spacing: 0.3em;
           white-space: nowrap;
         }
 
         .certificate-title-subtitle::before,
         .certificate-title-subtitle::after {
           content: "";
+          width: 35px;
           height: 1px;
-          width: 13%;
-          background: var(--cert-gold);
+          background: var(--gold);
         }
 
-        .certificate-this-is {
-          margin: 0 0 2px;
-          color: #364a68;
-          font-size: clamp(7px, .83cqw, 10px);
-          font-weight: 800;
-          letter-spacing: .23em;
+        .certificate-recipient-intro {
+          margin: 0 0 3px;
+          color: #48566c;
+          font-size: clamp(8px, 0.83cqw, 10px);
+          letter-spacing: 0.1em;
           text-transform: uppercase;
         }
 
         .certificate-recipient {
           max-width: 100%;
           margin: 0;
-          color: var(--cert-navy);
+          color: var(--navy);
           font-family: "Brush Script MT", "Segoe Script", cursive;
-          font-size: clamp(29px, 4.35cqw, 55px);
+          font-size: clamp(29px, 4.1cqw, 49px);
           font-weight: 500;
-          line-height: 1.1;
+          line-height: 1.15;
           overflow-wrap: anywhere;
         }
 
         .certificate-recipient-rule {
-          width: 92%;
+          width: 90%;
           height: 1px;
           margin: 7px 0 8px;
-          background: linear-gradient(90deg, transparent, var(--cert-gold), transparent);
+          background: linear-gradient(
+            90deg,
+            transparent,
+            var(--gold),
+            transparent
+          );
         }
 
         .certificate-recognition {
-          margin: 0 0 5px;
-          color: #344761;
-          font-size: clamp(7px, .84cqw, 10px);
+          max-width: 95%;
+          margin: 0 0 6px;
+          color: #48566c;
+          font-size: clamp(7px, 0.78cqw, 9px);
           line-height: 1.45;
         }
 
         .certificate-course-title {
           max-width: 100%;
           margin: 0;
-          color: var(--cert-navy);
+          color: var(--navy);
           font-family: Georgia, "Times New Roman", serif;
-          font-size: clamp(12px, 1.65cqw, 21px);
+          font-size: clamp(12px, 1.55cqw, 19px);
           font-weight: 800;
-          line-height: 1.18;
+          line-height: 1.2;
           text-transform: uppercase;
           overflow-wrap: anywhere;
         }
 
         .certificate-course-label {
-          margin-top: 3px;
-          color: #a87519;
-          font-size: clamp(7px, .9cqw, 11px);
+          margin-top: 4px;
+          color: #a77824;
+          font-size: clamp(7px, 0.78cqw, 9px);
           font-weight: 800;
-          letter-spacing: .35em;
+          letter-spacing: 0.22em;
         }
 
         .certificate-achievement {
           max-width: 95%;
           margin: 7px 0 0;
-          color: #485a70;
-          font-size: clamp(7px, .78cqw, 9px);
-          line-height: 1.45;
+          color: #59677a;
+          font-size: clamp(7px, 0.72cqw, 9px);
+          line-height: 1.4;
         }
 
-        .certificate-details {
+        .certificate-right-panel {
           grid-column: 3;
           grid-row: 1 / 3;
           display: flex;
@@ -428,8 +415,8 @@ export default async function CertificatePage({ params }: PageProps) {
           align-items: center;
           justify-content: center;
           min-width: 0;
-          padding: 9% 4% 5%;
-          border-left: 1px solid rgba(193,138,37,.75);
+          padding: 9% 4% 3%;
+          border-left: 1px solid rgba(199, 154, 67, 0.85);
           text-align: center;
         }
 
@@ -437,10 +424,10 @@ export default async function CertificatePage({ params }: PageProps) {
           display: flex;
           align-items: center;
           justify-content: center;
-          width: min(74%, 115px);
+          width: min(76%, 104px);
           aspect-ratio: 1;
-          padding: 5px;
-          border: 1px solid var(--cert-gold);
+          padding: 4px;
+          border: 1px solid var(--gold);
           background: white;
         }
 
@@ -451,55 +438,54 @@ export default async function CertificatePage({ params }: PageProps) {
           object-fit: contain;
         }
 
-        .certificate-verify-title {
-          margin: 8px 0 3px;
-          color: var(--cert-navy);
-          font-size: clamp(7px, .8cqw, 10px);
+        .certificate-verify-heading {
+          margin: 7px 0 3px;
+          color: var(--navy);
+          font-size: clamp(7px, 0.72cqw, 9px);
           font-weight: 900;
-          letter-spacing: .08em;
+          letter-spacing: 0.05em;
         }
 
         .certificate-verify-copy {
           margin: 0;
-          color: #617087;
-          font-size: clamp(6px, .68cqw, 8px);
-          line-height: 1.35;
-          overflow-wrap: anywhere;
+          color: var(--muted);
+          font-size: clamp(6px, 0.62cqw, 8px);
+          line-height: 1.4;
         }
 
         .certificate-number-label {
           width: 100%;
-          margin-top: 10px;
+          margin-top: 9px;
           padding: 5px 3px;
-          background: var(--cert-navy);
+          background: var(--navy);
           color: white;
-          font-size: clamp(6px, .68cqw, 8px);
+          font-size: clamp(6px, 0.61cqw, 8px);
           font-weight: 800;
-          letter-spacing: .08em;
+          letter-spacing: 0.06em;
         }
 
         .certificate-number {
           margin: 5px 0 0;
-          color: var(--cert-navy);
-          font-size: clamp(7px, .86cqw, 10px);
-          font-weight: 900;
+          color: var(--navy);
+          font-size: clamp(7px, 0.73cqw, 9px);
+          font-weight: 800;
           overflow-wrap: anywhere;
         }
 
-        .certificate-detail-divider {
+        .certificate-record-divider {
           width: 100%;
           height: 1px;
-          margin: 9px 0 7px;
-          background: rgba(193,138,37,.7);
+          margin: 8px 0 6px;
+          background: var(--gold-light);
         }
 
         .certificate-record-heading {
           width: 100%;
-          margin: 0 0 6px;
-          color: var(--cert-navy);
-          font-size: clamp(6px, .7cqw, 9px);
+          margin: 0 0 5px;
+          color: var(--navy);
+          font-size: clamp(6px, 0.65cqw, 8px);
           font-weight: 900;
-          letter-spacing: .1em;
+          letter-spacing: 0.08em;
           text-align: left;
         }
 
@@ -507,236 +493,203 @@ export default async function CertificatePage({ params }: PageProps) {
           width: 100%;
           display: flex;
           align-items: flex-start;
-          gap: 7px;
-          margin: 3px 0;
+          gap: 5px;
+          margin: 4px 0;
           text-align: left;
         }
 
-        .certificate-record-symbol {
-          width: 17px;
-          flex: 0 0 17px;
-          color: var(--cert-gold);
-          font-size: 15px;
-          line-height: 1;
+        .certificate-record-icon {
+          flex: 0 0 15px;
+          color: #b17c22;
+          font-size: 12px;
+          font-weight: 900;
           text-align: center;
         }
 
         .certificate-record-copy {
           min-width: 0;
-          color: #647187;
-          font-size: clamp(6px, .65cqw, 8px);
+          color: #5c6b80;
+          font-size: clamp(6px, 0.59cqw, 7px);
           line-height: 1.35;
           overflow-wrap: anywhere;
         }
 
         .certificate-record-copy strong {
           display: block;
-          color: var(--cert-navy);
-          font-size: clamp(6px, .7cqw, 9px);
+          color: var(--navy);
+          font-size: clamp(6px, 0.65cqw, 8px);
         }
 
-        .certificate-bottom {
+        .certificate-footer {
           grid-column: 1 / 4;
           grid-row: 3;
           display: grid;
-          grid-template-columns: 1fr 1.15fr 1fr;
+          grid-template-columns: 1fr 1.1fr 1fr;
           align-items: end;
           gap: 2%;
           min-width: 0;
           padding: 0 1% 1%;
         }
 
-        .certificate-signature-block {
+        .certificate-signature {
           min-width: 0;
           text-align: center;
         }
 
         .certificate-signature-image {
           display: block;
-          width: 65%;
-          height: 32px;
-          margin: 0 auto -1px;
+          width: 62%;
+          height: 30px;
+          margin: 0 auto;
           object-fit: contain;
           object-position: center bottom;
         }
 
+        .certificate-signature-space {
+          height: 30px;
+        }
+
         .certificate-signature-line {
-          width: 94%;
+          width: 92%;
           height: 1px;
           margin: 0 auto 4px;
-          background: var(--cert-gold);
+          background: var(--gold);
         }
 
         .certificate-signature-name {
           margin: 0;
-          color: var(--cert-navy);
-          font-size: clamp(7px, .82cqw, 10px);
+          color: var(--navy);
+          font-size: clamp(7px, 0.73cqw, 9px);
           font-weight: 900;
-          letter-spacing: .03em;
         }
 
         .certificate-signature-role {
           margin: 3px 0 0;
-          color: #a87519;
-          font-size: clamp(6px, .67cqw, 8px);
-          line-height: 1.35;
-          letter-spacing: .04em;
+          color: #9b722c;
+          font-size: clamp(6px, 0.61cqw, 7px);
+          line-height: 1.3;
         }
 
-        .certificate-seals {
+        .certificate-official-seals {
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 5%;
           min-width: 0;
-          padding-bottom: 2px;
         }
 
-        .certificate-seal {
-          width: 28%;
-          max-width: 86px;
-          max-height: 85px;
+        .certificate-official-seal {
+          display: block;
+          width: 27%;
+          max-width: 76px;
+          max-height: 72px;
           object-fit: contain;
         }
 
-        .certificate-stamp {
+        .certificate-revoked-overlay {
           position: absolute;
-          z-index: 3;
-          right: 5%;
-          bottom: 16%;
-          width: 7%;
-          max-width: 80px;
-          opacity: .88;
-          object-fit: contain;
-          pointer-events: none;
-        }
-
-        .certificate-revoked {
-          position: absolute;
-          z-index: 8;
-          top: 43%;
+          z-index: 5;
+          top: 44%;
           left: 50%;
-          width: 70%;
-          transform: translate(-50%, -50%) rotate(-8deg);
-          padding: 12px 20px;
+          width: 72%;
+          transform: translate(-50%, -50%) rotate(-7deg);
+          padding: 10px;
           border: 4px solid #a51d2d;
-          background: rgba(255,255,255,.93);
+          background: rgba(255, 255, 255, 0.96);
           color: #a51d2d;
-          font-size: clamp(22px, 4cqw, 48px);
+          font-size: clamp(22px, 4cqw, 46px);
           font-weight: 900;
-          letter-spacing: .15em;
+          letter-spacing: 0.14em;
           text-align: center;
-          text-transform: uppercase;
-          pointer-events: none;
         }
 
         .certificate-revoked-reason {
           position: absolute;
-          z-index: 9;
+          z-index: 6;
+          top: 56%;
           left: 50%;
-          top: 55%;
           width: 65%;
           transform: translateX(-50%);
           padding: 8px 12px;
-          background: rgba(255,255,255,.94);
+          background: rgba(255, 255, 255, 0.97);
           color: #84202b;
-          font-size: clamp(8px, .95cqw, 12px);
+          font-size: 11px;
           text-align: center;
         }
 
         .certificate-revoked-notice {
-          width: min(1200px, 100%);
+          width: min(1180px, 100%);
           margin: 14px auto 0;
-          padding: 12px 16px;
+          padding: 12px 15px;
           border: 1px solid #efb4ba;
-          border-radius: 8px;
+          border-radius: 7px;
           background: #fff4f4;
           color: #8b1d2b;
           font-size: 13px;
           line-height: 1.5;
         }
 
+        .certificate-verification-component {
+          display: flex;
+          justify-content: center;
+          margin: 16px auto 0;
+        }
+
         .certificate-after-paper {
-          width: min(1200px, 100%);
-          margin: 18px auto 0;
-          color: #68768a;
+          width: min(1180px, 100%);
+          margin: 16px auto 0;
+          color: #66758a;
           font-size: 12px;
-          line-height: 1.6;
+          line-height: 1.7;
           text-align: center;
         }
 
         .certificate-after-paper a {
-          color: var(--cert-navy);
+          color: var(--navy);
           font-weight: 700;
-          text-decoration: underline;
           text-underline-offset: 3px;
         }
 
-        .certificate-verification-component {
-          display: flex;
-          justify-content: center;
-          margin: 14px auto 0;
-        }
-
-        @media (max-width: 760px) {
+        @media (max-width: 700px) {
           .certificate-page {
-            padding: 14px 10px 28px;
-          }
-
-          .certificate-toolbar {
-            margin-bottom: 14px;
-          }
-
-          .certificate-toolbar a,
-          .certificate-toolbar button {
-            min-height: 38px;
-            padding: 8px 10px;
-            font-size: 12px;
+            padding: 12px 8px 25px;
           }
 
           .certificate-paper {
             aspect-ratio: auto;
             min-height: 0;
-            overflow: hidden;
-            padding-bottom: 0;
           }
 
-          .certificate-border-art {
+          .certificate-border {
             object-fit: fill;
           }
 
-          .certificate-content {
+          .certificate-layout {
             position: relative;
             inset: auto;
             display: flex;
             flex-direction: column;
-            gap: 18px;
-            padding: 8% 7% 9%;
+            gap: 17px;
+            padding: 9% 8%;
           }
 
           .certificate-header {
-            display: flex;
             justify-content: center;
+            padding: 8px 0;
             gap: 12px;
-            padding: 5px 0 10px;
           }
 
           .certificate-logo {
-            width: 24%;
-            max-width: 105px;
+            width: 25%;
+            max-width: 100px;
           }
 
           .certificate-brand-name {
-            font-size: clamp(18px, 5.2vw, 28px);
+            font-size: clamp(18px, 5vw, 28px);
           }
 
-          .certificate-brand-subtitle {
+          .certificate-brand-learn {
             font-size: 10px;
-            letter-spacing: .25em;
-          }
-
-          .certificate-brand-rule {
-            margin: 6px auto 5px;
           }
 
           .certificate-tagline {
@@ -744,36 +697,25 @@ export default async function CertificatePage({ params }: PageProps) {
             white-space: normal;
           }
 
-          .certificate-medal-column {
+          .certificate-left-seal {
             display: none;
           }
 
           .certificate-main {
-            order: 2;
-            padding: 10px 0;
-          }
-
-          .certificate-overline {
-            font-size: 9px;
+            padding: 15px 0;
           }
 
           .certificate-title {
-            font-size: clamp(27px, 7.8vw, 43px);
+            font-size: clamp(27px, 7vw, 42px);
             white-space: normal;
           }
 
           .certificate-title-subtitle {
-            font-size: 11px;
-            letter-spacing: .22em;
-          }
-
-          .certificate-this-is {
-            margin-top: 5px;
-            font-size: 9px;
+            font-size: 10px;
           }
 
           .certificate-recipient {
-            font-size: clamp(31px, 8vw, 45px);
+            font-size: clamp(30px, 8vw, 46px);
           }
 
           .certificate-recognition {
@@ -781,29 +723,24 @@ export default async function CertificatePage({ params }: PageProps) {
           }
 
           .certificate-course-title {
-            font-size: clamp(16px, 4.5vw, 23px);
-          }
-
-          .certificate-course-label {
-            font-size: 10px;
+            font-size: clamp(15px, 4.3vw, 23px);
           }
 
           .certificate-achievement {
             font-size: 10px;
           }
 
-          .certificate-details {
-            order: 3;
+          .certificate-right-panel {
             border-left: 0;
-            border-top: 1px solid rgba(193,138,37,.75);
-            padding: 18px 4% 10px;
+            border-top: 1px solid var(--gold);
+            padding: 18px 6% 10px;
           }
 
           .certificate-qr-frame {
-            width: 100px;
+            width: 110px;
           }
 
-          .certificate-verify-title {
+          .certificate-verify-heading {
             font-size: 10px;
           }
 
@@ -812,7 +749,7 @@ export default async function CertificatePage({ params }: PageProps) {
           }
 
           .certificate-number-label {
-            max-width: 270px;
+            max-width: 280px;
             font-size: 9px;
           }
 
@@ -825,7 +762,7 @@ export default async function CertificatePage({ params }: PageProps) {
           }
 
           .certificate-record-row {
-            max-width: 270px;
+            max-width: 280px;
           }
 
           .certificate-record-copy,
@@ -833,16 +770,22 @@ export default async function CertificatePage({ params }: PageProps) {
             font-size: 10px;
           }
 
-          .certificate-bottom {
-            order: 4;
+          .certificate-footer {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 18px 10px;
-            padding-top: 12px;
+            gap: 20px 10px;
+            padding-top: 10px;
           }
 
-          .certificate-signature-image {
-            height: 30px;
+          .certificate-official-seals {
+            grid-column: 1 / 3;
+            grid-row: 1;
+            padding-bottom: 8px;
+          }
+
+          .certificate-official-seal {
+            width: 24%;
+            max-height: 70px;
           }
 
           .certificate-signature-name {
@@ -853,30 +796,8 @@ export default async function CertificatePage({ params }: PageProps) {
             font-size: 8px;
           }
 
-          .certificate-seals {
-            grid-column: 1 / 3;
-            grid-row: 1;
-            padding-bottom: 12px;
-          }
-
-          .certificate-seal {
-            width: 24%;
-            max-height: 75px;
-          }
-
-          .certificate-stamp {
-            display: none;
-          }
-
-          .certificate-revoked {
-            position: absolute;
-            top: 50%;
-            font-size: 25px;
-          }
-
-          .certificate-revoked-reason {
-            top: 57%;
-            font-size: 10px;
+          .certificate-revoked-overlay {
+            font-size: 24px;
           }
         }
 
@@ -894,7 +815,7 @@ export default async function CertificatePage({ params }: PageProps) {
             margin: 0 !important;
             padding: 0 !important;
             overflow: hidden !important;
-            background: white !important;
+            background: #fff !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
@@ -916,12 +837,12 @@ export default async function CertificatePage({ params }: PageProps) {
             margin: 0 !important;
             padding: 0 !important;
             overflow: hidden !important;
-            background: white !important;
+            background: #fff !important;
           }
 
           .certificate-toolbar,
-          .certificate-after-paper,
           .certificate-verification-component,
+          .certificate-after-paper,
           .certificate-revoked-notice {
             display: none !important;
           }
@@ -930,29 +851,40 @@ export default async function CertificatePage({ params }: PageProps) {
             position: absolute !important;
             top: 0 !important;
             left: 0 !important;
-            display: block !important;
             width: 297mm !important;
             height: 210mm !important;
             min-height: 0 !important;
             max-height: 210mm !important;
             aspect-ratio: auto !important;
             margin: 0 !important;
-            padding: 0 !important;
             overflow: hidden !important;
             box-shadow: none !important;
             break-inside: avoid !important;
             page-break-inside: avoid !important;
-            page-break-after: avoid !important;
             page-break-before: avoid !important;
+            page-break-after: avoid !important;
           }
 
-          .certificate-content {
+          .certificate-border {
+            z-index: 0 !important;
+          }
+
+          .certificate-paper-background {
+            z-index: 0 !important;
+          }
+
+          .certificate-watermark {
+            z-index: 1 !important;
+            opacity: 0.10 !important;
+          }
+
+          .certificate-layout {
             position: absolute !important;
-            inset: 4.6% 4.4% 5.8% !important;
+            inset: 5.5% 5% 6% !important;
             display: grid !important;
-            grid-template-columns: 19% 1fr 19% !important;
-            grid-template-rows: 20% 1fr 23% !important;
-            column-gap: 2.2% !important;
+            grid-template-columns: 18% minmax(0, 1fr) 18% !important;
+            grid-template-rows: 21% minmax(0, 1fr) 23% !important;
+            column-gap: 2% !important;
             gap: initial !important;
             padding: 0 !important;
           }
@@ -961,27 +893,9 @@ export default async function CertificatePage({ params }: PageProps) {
             grid-column: 1 / 3 !important;
             grid-row: 1 !important;
             display: flex !important;
-            padding: 0 1% !important;
           }
 
-          .certificate-logo {
-            width: 20% !important;
-            max-width: 180px !important;
-          }
-
-          .certificate-brand-name {
-            font-size: 3.3cqw !important;
-          }
-
-          .certificate-brand-subtitle {
-            font-size: 1.25cqw !important;
-          }
-
-          .certificate-tagline {
-            font-size: .77cqw !important;
-          }
-
-          .certificate-medal-column {
+          .certificate-left-seal {
             display: flex !important;
             grid-column: 1 !important;
             grid-row: 2 !important;
@@ -994,111 +908,63 @@ export default async function CertificatePage({ params }: PageProps) {
           }
 
           .certificate-title {
-            font-size: 4.25cqw !important;
+            font-size: 4.1cqw !important;
             white-space: nowrap !important;
           }
 
           .certificate-recipient {
-            font-size: 4.35cqw !important;
+            font-size: 4.1cqw !important;
           }
 
           .certificate-course-title {
-            font-size: 1.65cqw !important;
+            font-size: 1.55cqw !important;
           }
 
-          .certificate-details {
+          .certificate-right-panel {
             grid-column: 3 !important;
             grid-row: 1 / 3 !important;
-            border-left: 1px solid rgba(193,138,37,.75) !important;
+            border-left: 1px solid rgba(199, 154, 67, 0.85) !important;
             border-top: 0 !important;
-            padding: 9% 4% 5% !important;
+            padding: 9% 4% 3% !important;
           }
 
-          .certificate-qr-frame {
-            width: min(74%, 115px) !important;
-          }
-
-          .certificate-verify-title {
-            font-size: .8cqw !important;
-          }
-
-          .certificate-verify-copy {
-            font-size: .68cqw !important;
-          }
-
-          .certificate-number-label {
-            font-size: .68cqw !important;
-          }
-
-          .certificate-number {
-            font-size: .86cqw !important;
-          }
-
-          .certificate-record-heading {
-            font-size: .7cqw !important;
-          }
-
-          .certificate-record-copy {
-            font-size: .65cqw !important;
-          }
-
-          .certificate-record-copy strong {
-            font-size: .7cqw !important;
-          }
-
-          .certificate-bottom {
+          .certificate-footer {
             grid-column: 1 / 4 !important;
             grid-row: 3 !important;
             display: grid !important;
-            grid-template-columns: 1fr 1.15fr 1fr !important;
+            grid-template-columns: 1fr 1.1fr 1fr !important;
             gap: 2% !important;
             padding: 0 1% 1% !important;
           }
 
-          .certificate-seals {
+          .certificate-official-seals {
             grid-column: auto !important;
             grid-row: auto !important;
           }
 
-          .certificate-seal {
-            width: 28% !important;
-            max-width: 86px !important;
-            max-height: 85px !important;
+          .certificate-official-seal {
+            width: 27% !important;
+            max-width: 76px !important;
+            max-height: 72px !important;
           }
 
-          .certificate-signature-image {
-            height: 32px !important;
-          }
-
-          .certificate-stamp {
-            display: block !important;
-          }
-
-          .certificate-watermark {
-            opacity: .075 !important;
-          }
-
-          .certificate-border-art {
-            opacity: .92 !important;
-          }
-
-          .certificate-revoked {
+          .certificate-revoked-overlay {
             font-size: 4cqw !important;
           }
         }
       `}</style>
 
       <div className="certificate-toolbar">
-        <div className="certificate-toolbar-left">
+        <div className="certificate-toolbar-group">
           <Link href="/student/certificates">
             ← My Certificates
           </Link>
         </div>
 
-        <div className="certificate-toolbar-right">
+        <div className="certificate-toolbar-group">
           {!revoked && (
             <Link
-              className="toolbar-primary"
+              className="certificate-primary-action"
               href={`/verify/certificate-number/${encodeURIComponent(
                 certificate.certificate_number
               )}`}
@@ -1118,11 +984,13 @@ export default async function CertificatePage({ params }: PageProps) {
         aria-label="Certificate of completion"
       >
         <img
-          className="certificate-border-art"
+          className="certificate-border"
           src="/brand/ruffneck-border-background.png"
           alt=""
           aria-hidden="true"
         />
+
+        <div className="certificate-paper-background" />
 
         <img
           className="certificate-watermark"
@@ -1131,20 +999,20 @@ export default async function CertificatePage({ params }: PageProps) {
           aria-hidden="true"
         />
 
-        <div className="certificate-content">
+        <div className="certificate-layout">
           <header className="certificate-header">
             <img
               className="certificate-logo"
               src="/brand/ruffneck-logo.png"
-              alt="RuffNeck Entertainment"
+              alt="RuffNeck Entertainment logo"
             />
 
-            <div className="certificate-brand-copy">
+            <div className="certificate-brand">
               <h1 className="certificate-brand-name">
                 RUFFNECK
               </h1>
 
-              <div className="certificate-brand-subtitle">
+              <div className="certificate-brand-learn">
                 LEARN
               </div>
 
@@ -1156,16 +1024,18 @@ export default async function CertificatePage({ params }: PageProps) {
             </div>
           </header>
 
-          <aside className="certificate-medal-column">
-            <img
-              className="certificate-medal"
-              src="/brand/ruffneck-certificate-seal.png"
-              alt="RuffNeck certificate seal"
-            />
+          <aside className="certificate-left-seal">
+            {!revoked && (
+              <img
+                className="certificate-medal"
+                src="/brand/ruffneck-certificate-seal.png"
+                alt="RuffNeck certificate seal"
+              />
+            )}
           </aside>
 
           <section className="certificate-main">
-            <p className="certificate-overline">
+            <p className="certificate-kicker">
               RuffNeck Learn · Professional Development
             </p>
 
@@ -1177,8 +1047,8 @@ export default async function CertificatePage({ params }: PageProps) {
               OF COMPLETION
             </div>
 
-            <p className="certificate-this-is">
-              This is to certify that
+            <p className="certificate-recipient-intro">
+              This certificate is proudly presented to
             </p>
 
             <p className="certificate-recipient">
@@ -1188,8 +1058,8 @@ export default async function CertificatePage({ params }: PageProps) {
             <div className="certificate-recipient-rule" />
 
             <p className="certificate-recognition">
-              has successfully completed the learning requirements for
-              the following course and is recognized for this achievement.
+              for successfully completing the learning requirements
+              for the following course:
             </p>
 
             <h3 className="certificate-course-title">
@@ -1202,28 +1072,27 @@ export default async function CertificatePage({ params }: PageProps) {
 
             <p className="certificate-achievement">
               Awarded in recognition of demonstrated learning,
-              professional development, and commitment to practical
-              skills.
+              professional development, and commitment to practical skills.
             </p>
           </section>
 
-          <aside className="certificate-details">
+          <aside className="certificate-right-panel">
             {!revoked ? (
               <>
                 <div className="certificate-qr-frame">
                   <img
                     className="certificate-qr"
                     src={qrUrl}
-                    alt="Scan to verify this certificate"
+                    alt="QR code for certificate verification"
                   />
                 </div>
 
-                <p className="certificate-verify-title">
+                <p className="certificate-verify-heading">
                   VERIFY CREDENTIAL
                 </p>
 
                 <p className="certificate-verify-copy">
-                  Scan to view the official certificate record.
+                  Scan the code to access the official verification record.
                 </p>
               </>
             ) : (
@@ -1232,21 +1101,20 @@ export default async function CertificatePage({ params }: PageProps) {
                   <span
                     style={{
                       color: "#a51d2d",
+                      fontWeight: 900,
                       fontSize: 12,
-                      fontWeight: 800,
-                      textAlign: "center",
                     }}
                   >
-                    NOT VALID
+                    REVOKED
                   </span>
                 </div>
 
-                <p className="certificate-verify-title">
-                  CREDENTIAL REVOKED
+                <p className="certificate-verify-heading">
+                  INVALID CREDENTIAL
                 </p>
 
                 <p className="certificate-verify-copy">
-                  This certificate is no longer valid.
+                  This certificate has been revoked.
                 </p>
               </>
             )}
@@ -1259,20 +1127,14 @@ export default async function CertificatePage({ params }: PageProps) {
               {certificate.certificate_number}
             </p>
 
-            <div className="certificate-detail-divider" />
+            <div className="certificate-record-divider" />
 
             <p className="certificate-record-heading">
-              CREDENTIAL RECORD
+              CERTIFICATE RECORD
             </p>
 
             <div className="certificate-record-row">
-              <span
-                className="certificate-record-symbol"
-                aria-hidden="true"
-              >
-                ◷
-              </span>
-
+              <span className="certificate-record-icon">D</span>
               <div className="certificate-record-copy">
                 <strong>Date issued</strong>
                 {issuedDate}
@@ -1280,13 +1142,7 @@ export default async function CertificatePage({ params }: PageProps) {
             </div>
 
             <div className="certificate-record-row">
-              <span
-                className="certificate-record-symbol"
-                aria-hidden="true"
-              >
-                ✓
-              </span>
-
+              <span className="certificate-record-icon">A</span>
               <div className="certificate-record-copy">
                 <strong>Assessment score</strong>
                 {formatScore(certificate.assessment_score)}
@@ -1294,13 +1150,7 @@ export default async function CertificatePage({ params }: PageProps) {
             </div>
 
             <div className="certificate-record-row">
-              <span
-                className="certificate-record-symbol"
-                aria-hidden="true"
-              >
-                ★
-              </span>
-
+              <span className="certificate-record-icon">C</span>
               <div className="certificate-record-copy">
                 <strong>Capstone score</strong>
                 {formatScore(certificate.capstone_score)}
@@ -1308,14 +1158,13 @@ export default async function CertificatePage({ params }: PageProps) {
             </div>
           </aside>
 
-          <footer className="certificate-bottom">
-            <div className="certificate-signature-block">
+          <footer className="certificate-footer">
+            <div className="certificate-signature">
               {!revoked && (
                 <img
                   className="certificate-signature-image"
                   src="/brand/founder-signature.png"
-                  alt=""
-                  aria-hidden="true"
+                  alt="Authorised signature"
                 />
               )}
 
@@ -1330,32 +1179,32 @@ export default async function CertificatePage({ params }: PageProps) {
               </p>
             </div>
 
-            <div className="certificate-seals">
+            <div className="certificate-official-seals">
               {!revoked && (
                 <>
                   <img
-                    className="certificate-seal"
+                    className="certificate-official-seal"
                     src="/brand/ruffneck-certificate-seal.png"
                     alt="Certificate seal"
                   />
 
                   <img
-                    className="certificate-seal"
+                    className="certificate-official-seal"
                     src="/brand/ruffneck-company-stamp.png"
-                    alt="RuffNeck company stamp"
+                    alt="Company stamp"
                   />
 
                   <img
-                    className="certificate-seal"
+                    className="certificate-official-seal"
                     src="/brand/ruffneck-security-stamp.png"
-                    alt="Certificate security stamp"
+                    alt="Security stamp"
                   />
                 </>
               )}
             </div>
 
-            <div className="certificate-signature-block">
-              <div style={{ height: 32 }} />
+            <div className="certificate-signature">
+              <div className="certificate-signature-space" />
 
               <div className="certificate-signature-line" />
 
@@ -1372,7 +1221,7 @@ export default async function CertificatePage({ params }: PageProps) {
 
         {revoked && (
           <>
-            <div className="certificate-revoked">
+            <div className="certificate-revoked-overlay">
               REVOKED
             </div>
 
