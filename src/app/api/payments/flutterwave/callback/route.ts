@@ -5,6 +5,8 @@ import {
 } from "@/lib/flutterwave";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+export const runtime = "nodejs";
+
 type PaymentRecord = {
   id: string;
   student_id: string;
@@ -30,185 +32,217 @@ type EnrollmentRecord = {
   enrolled_at: string | null;
 };
 
+type FlutterwaveVerification = {
+  id: number;
+  txRef: string;
+  amount: number;
+  currency: string;
+  status: string;
+  flwRef: string | null;
+};
+
+const PAYMENT_COLUMNS = [
+  "id",
+  "student_id",
+  "course_id",
+  "course_slug",
+  "tx_ref",
+  "flutterwave_transaction_id",
+  "amount",
+  "currency",
+  "status",
+  "original_amount",
+  "discount_code_id",
+  "discount_amount",
+].join(", ");
+
+const ENROLLMENT_COLUMNS =
+  "id, student_id, course_id, payment_status, enrollment_status, progress_percent, enrolled_at";
+
 function redirectToCourse(
   request: Request,
   slug: string,
-  result: "success" | "failed"
+  result: "success" | "failed",
 ) {
-  const url = new URL(`/courses/${slug}`, request.url);
+  const url = new URL(
+    `/courses/${encodeURIComponent(slug)}`,
+    request.url,
+  );
 
   url.searchParams.set("payment", result);
 
   return NextResponse.redirect(url);
 }
 
+async function getPaymentByReference(txRef: string) {
+  const admin = createAdminClient();
+
+  const { data, error } = await admin
+    .from("course_payments")
+    .select(PAYMENT_COLUMNS)
+    .eq("tx_ref", txRef)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+
+  return data as PaymentRecord | null;
+}
+
 async function activateEnrollment(
-  payment: PaymentRecord
+  payment: PaymentRecord,
 ): Promise<EnrollmentRecord> {
   const admin = createAdminClient();
 
-  const {
-    data: existingEnrollment,
-    error: existingError,
-  } = await admin
-    .from("enrollments")
-    .select(
-      "id, student_id, course_id, payment_status, enrollment_status, progress_percent, enrolled_at"
-    )
-    .eq("student_id", payment.student_id)
-    .eq("course_id", payment.course_id)
-    .maybeSingle<EnrollmentRecord>();
+  const { data: existing, error: lookupError } =
+    await admin
+      .from("enrollments")
+      .select(ENROLLMENT_COLUMNS)
+      .eq("student_id", payment.student_id)
+      .eq("course_id", payment.course_id)
+      .maybeSingle();
 
-  if (existingError) {
-    throw new Error(existingError.message);
-  }
+  if (lookupError) throw new Error(lookupError.message);
 
-  if (existingEnrollment) {
-    const nextStatus =
-      existingEnrollment.enrollment_status === "completed"
-        ? "completed"
-        : "active";
+  if (existing) {
+    const enrollment = existing as EnrollmentRecord;
 
-    const {
-      data,
-      error,
-    } = await admin
+    if (
+      enrollment.payment_status === "paid" &&
+      ["active", "completed"].includes(
+        enrollment.enrollment_status,
+      )
+    ) {
+      return enrollment;
+    }
+
+    const { data, error } = await admin
       .from("enrollments")
       .update({
         payment_status: "paid",
-        enrollment_status: nextStatus,
+        enrollment_status:
+          enrollment.enrollment_status === "completed"
+            ? "completed"
+            : "active",
       })
-      .eq("id", existingEnrollment.id)
-      .select(
-        "id, student_id, course_id, payment_status, enrollment_status, progress_percent, enrolled_at"
-      )
-      .single<EnrollmentRecord>();
+      .eq("id", enrollment.id)
+      .select(ENROLLMENT_COLUMNS)
+      .single();
 
-    if (error) {
-      throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
 
-    return data;
+    return data as EnrollmentRecord;
   }
 
-  const {
-    data,
-    error,
-  } = await admin
-    .from("enrollments")
-    .insert({
-      student_id: payment.student_id,
-      course_id: payment.course_id,
-      payment_status: "paid",
-      enrollment_status: "active",
-      progress_percent: 0,
-    })
-    .select(
-      "id, student_id, course_id, payment_status, enrollment_status, progress_percent, enrolled_at"
-    )
-    .single<EnrollmentRecord>();
-
-  if (!error && data) {
-    return data;
-  }
-
-  if (error?.code === "23505") {
-    const {
-      data: concurrentEnrollment,
-      error: concurrentLookupError,
-    } = await admin
+  const { data: created, error: insertError } =
+    await admin
       .from("enrollments")
-      .select(
-        "id, student_id, course_id, payment_status, enrollment_status, progress_percent, enrolled_at"
-      )
+      .insert({
+        student_id: payment.student_id,
+        course_id: payment.course_id,
+        payment_status: "paid",
+        enrollment_status: "active",
+        progress_percent: 0,
+      })
+      .select(ENROLLMENT_COLUMNS)
+      .single();
+
+  if (!insertError && created) {
+    return created as EnrollmentRecord;
+  }
+
+  if (insertError?.code !== "23505") {
+    throw new Error(
+      insertError?.message ??
+        "Enrollment could not be created.",
+    );
+  }
+
+  // Another callback may have inserted the enrollment concurrently.
+  const { data: concurrent, error: concurrentError } =
+    await admin
+      .from("enrollments")
+      .select(ENROLLMENT_COLUMNS)
       .eq("student_id", payment.student_id)
       .eq("course_id", payment.course_id)
-      .maybeSingle<EnrollmentRecord>();
+      .maybeSingle();
 
-    if (concurrentLookupError || !concurrentEnrollment) {
-      throw new Error(
-        concurrentLookupError?.message ||
-          "Payment succeeded but the enrollment could not be created."
-      );
-    }
-
-    if (
-      concurrentEnrollment.payment_status !== "paid" ||
-      concurrentEnrollment.enrollment_status === "pending"
-    ) {
-      const nextStatus =
-        concurrentEnrollment.enrollment_status === "completed"
-          ? "completed"
-          : "active";
-
-      const {
-        data: updatedConcurrentEnrollment,
-        error: updateConcurrentError,
-      } = await admin
-        .from("enrollments")
-        .update({
-          payment_status: "paid",
-          enrollment_status: nextStatus,
-        })
-        .eq("id", concurrentEnrollment.id)
-        .select(
-          "id, student_id, course_id, payment_status, enrollment_status, progress_percent, enrolled_at"
-        )
-        .single<EnrollmentRecord>();
-
-      if (updateConcurrentError) {
-        throw new Error(updateConcurrentError.message);
-      }
-
-      return updatedConcurrentEnrollment;
-    }
-
-    return concurrentEnrollment;
+  if (concurrentError || !concurrent) {
+    throw new Error(
+      concurrentError?.message ??
+        "Enrollment could not be recovered.",
+    );
   }
 
-  throw new Error(
-    error?.message ||
-      "Payment succeeded but the enrollment could not be created."
-  );
+  const enrollment = concurrent as EnrollmentRecord;
+
+  if (
+    enrollment.payment_status === "paid" &&
+    ["active", "completed"].includes(
+      enrollment.enrollment_status,
+    )
+  ) {
+    return enrollment;
+  }
+
+  const { data: updated, error: updateError } =
+    await admin
+      .from("enrollments")
+      .update({
+        payment_status: "paid",
+        enrollment_status:
+          enrollment.enrollment_status === "completed"
+            ? "completed"
+            : "active",
+      })
+      .eq("id", enrollment.id)
+      .select(ENROLLMENT_COLUMNS)
+      .single();
+
+  if (updateError) throw new Error(updateError.message);
+
+  return updated as EnrollmentRecord;
 }
 
 async function markPaymentSuccessful(
   payment: PaymentRecord,
-  verificationId: number
-) {
+  verification: FlutterwaveVerification,
+): Promise<PaymentRecord> {
   const admin = createAdminClient();
   const now = new Date().toISOString();
 
-  const {
-    error,
-  } = await admin
+  const { data, error } = await admin
     .from("course_payments")
     .update({
       status: "successful",
-      flutterwave_transaction_id: verificationId,
+      flutterwave_transaction_id:
+        verification.id > 0
+          ? verification.id
+          : payment.flutterwave_transaction_id,
       verified_at: now,
       updated_at: now,
     })
-    .eq("id", payment.id);
+    .eq("id", payment.id)
+    .neq("status", "successful")
+    .select(PAYMENT_COLUMNS)
+    .maybeSingle();
 
-  if (error) {
+  if (error) throw new Error(error.message);
+
+  if (data) return data as PaymentRecord;
+
+  const latest = await getPaymentByReference(payment.tx_ref);
+
+  if (!latest || latest.status !== "successful") {
     throw new Error(
-      `Payment verification succeeded, but the payment record could not be updated: ${error.message}`
+      "The successful payment status could not be confirmed.",
     );
   }
+
+  return latest;
 }
 
-/**
- * Records a successful coupon redemption exactly once.
- *
- * The unique index on:
- *   (discount_code_id, student_id)
- *
- * prevents repeated Flutterwave callbacks from creating duplicate
- * redemption records or incrementing usage more than once.
- */
 async function recordDiscountRedemption(
-  payment: PaymentRecord
+  payment: PaymentRecord,
 ) {
   if (
     !payment.discount_code_id ||
@@ -219,173 +253,92 @@ async function recordDiscountRedemption(
 
   const admin = createAdminClient();
 
-  const {
-    data: existingRedemption,
-    error: existingRedemptionError,
-  } = await admin
-    .from("course_discount_redemptions")
-    .select("id")
-    .eq(
-      "discount_code_id",
-      payment.discount_code_id
-    )
-    .eq("student_id", payment.student_id)
-    .maybeSingle<{ id: string }>();
-
-  if (existingRedemptionError) {
-    throw new Error(
-      `Unable to check discount redemption: ${existingRedemptionError.message}`
-    );
-  }
-
-  if (existingRedemption) {
-    return;
-  }
-
   const originalAmount =
     payment.original_amount ??
     payment.amount + payment.discount_amount;
 
-  const {
-    data: redemption,
-    error: redemptionError,
-  } = await admin
-    .from("course_discount_redemptions")
-    .insert({
-      discount_code_id:
-        payment.discount_code_id,
-      student_id: payment.student_id,
-      course_id: payment.course_id,
-      payment_id: payment.id,
-      amount_before_discount: originalAmount,
-      discount_amount: payment.discount_amount,
-      amount_paid: payment.amount,
-    })
-    .select("id")
-    .single<{ id: string }>();
-
-  if (!redemptionError && redemption) {
-    const {
-      data: discount,
-      error: discountLookupError,
-    } = await admin
-      .from("course_discount_codes")
-      .select("usage_count, usage_limit")
-      .eq(
-        "id",
-        payment.discount_code_id
-      )
-      .single<{
-        usage_count: number;
-        usage_limit: number | null;
-      }>();
-
-    if (discountLookupError || !discount) {
-      throw new Error(
-        discountLookupError?.message ||
-          "Discount redemption was recorded but the discount code could not be updated."
-      );
-    }
-
-    const nextUsageCount =
-      discount.usage_count + 1;
-
-    const {
-      error: usageUpdateError,
-    } = await admin
-      .from("course_discount_codes")
-      .update({
-        usage_count: nextUsageCount,
-        updated_at: new Date().toISOString(),
-      })
-      .eq(
-        "id",
-        payment.discount_code_id
-      );
-
-    if (usageUpdateError) {
-      throw new Error(
-        `Discount redemption was recorded but usage count could not be updated: ${usageUpdateError.message}`
-      );
-    }
-
-    return;
-  }
-
-  /*
-   * Another callback may have inserted the redemption
-   * between our existence check and insert.
-   *
-   * The unique constraint makes that safe.
-   */
-  if (redemptionError?.code === "23505") {
-    return;
-  }
-
-  throw new Error(
-    redemptionError?.message ||
-      "The discount redemption could not be recorded."
+  const { error } = await admin.rpc(
+    "record_discount_redemption",
+    {
+      p_discount_code_id: payment.discount_code_id,
+      p_student_id: payment.student_id,
+      p_course_id: payment.course_id,
+      p_payment_id: payment.id,
+      p_amount_before_discount: Math.round(originalAmount),
+      p_discount_amount: Math.round(payment.discount_amount),
+      p_amount_paid: Math.round(payment.amount),
+    },
   );
+
+  if (error) {
+    throw new Error(
+      `Discount redemption processing failed: ${error.message}`,
+    );
+  }
 }
 
-async function fulfilPayment(
+async function verifyPayment(
   payment: PaymentRecord,
-  transactionId: string | null
-) {
+  transactionId: string | null,
+): Promise<FlutterwaveVerification> {
   const verification = transactionId
-    ? await verifyFlutterwaveTransaction(
-        transactionId
-      )
-    : await verifyFlutterwaveByReference(
-        payment.tx_ref
-      );
+    ? await verifyFlutterwaveTransaction(transactionId)
+    : await verifyFlutterwaveByReference(payment.tx_ref);
 
-  if (verification.status !== "successful") {
+  if (
+    verification.status.trim().toLowerCase() !==
+    "successful"
+  ) {
     throw new Error(
-      "Flutterwave has not marked this transaction as successful."
+      "Flutterwave has not confirmed a successful payment.",
     );
   }
 
   if (verification.txRef !== payment.tx_ref) {
     throw new Error(
-      "Flutterwave transaction reference does not match the payment record."
+      "Flutterwave transaction reference mismatch.",
     );
   }
 
   if (
-    verification.currency.toUpperCase() !==
-    payment.currency.toUpperCase()
+    verification.currency.trim().toUpperCase() !==
+    payment.currency.trim().toUpperCase()
   ) {
-    throw new Error(
-      "Flutterwave payment currency does not match the course price."
-    );
+    throw new Error("Flutterwave transaction currency mismatch.");
   }
 
-  if (verification.amount < payment.amount) {
-    throw new Error(
-      "The Flutterwave payment amount is less than the required course price."
-    );
+  const expected = Number(payment.amount);
+  const received = Number(verification.amount);
+
+  if (
+    !Number.isFinite(expected) ||
+    expected <= 0 ||
+    !Number.isFinite(received) ||
+    received < expected
+  ) {
+    throw new Error("Flutterwave transaction amount mismatch.");
   }
 
-  /*
-   * Mark the verified payment first.
-   */
-  await markPaymentSuccessful(
+  return verification;
+}
+
+async function fulfilPayment(
+  payment: PaymentRecord,
+  transactionId: string | null,
+) {
+  const verification = await verifyPayment(
     payment,
-    verification.id
+    transactionId,
   );
 
-  /*
-   * Grant course access.
-   */
-  const enrollment =
-    await activateEnrollment(payment);
+  const updatedPayment = await markPaymentSuccessful(
+    payment,
+    verification,
+  );
 
-  /*
-   * Record coupon redemption only after
-   * the payment and enrollment are successful.
-   */
-  await recordDiscountRedemption(payment);
+  const enrollment = await activateEnrollment(updatedPayment);
+
+  await recordDiscountRedemption(updatedPayment);
 
   return enrollment;
 }
@@ -393,75 +346,41 @@ async function fulfilPayment(
 export async function GET(request: Request) {
   const url = new URL(request.url);
 
-  const status =
-    url.searchParams
-      .get("status")
-      ?.trim()
-      .toLowerCase();
+  const callbackStatus =
+    url.searchParams.get("status")?.trim().toLowerCase() ?? "";
 
-  const txRef =
-    url.searchParams
-      .get("tx_ref")
-      ?.trim() || "";
+  const txRef = url.searchParams.get("tx_ref")?.trim() ?? "";
 
   const transactionId =
-    url.searchParams
-      .get("transaction_id")
-      ?.trim() || "";
+    url.searchParams.get("transaction_id")?.trim() ?? "";
 
   if (!txRef) {
     return NextResponse.redirect(
-      new URL(
-        "/courses?payment=failed",
-        request.url
-      )
+      new URL("/courses?payment=failed", request.url),
     );
   }
 
-  const admin = createAdminClient();
+  let payment: PaymentRecord | null;
 
-  const {
-    data: payment,
-    error: paymentError,
-  } = await admin
-    .from("course_payments")
-    .select(
-      [
-        "id",
-        "student_id",
-        "course_id",
-        "course_slug",
-        "tx_ref",
-        "flutterwave_transaction_id",
-        "amount",
-        "currency",
-        "status",
-        "original_amount",
-        "discount_code_id",
-        "discount_amount",
-      ].join(", ")
-    )
-    .eq("tx_ref", txRef)
-    .maybeSingle<PaymentRecord>();
-
-  if (paymentError || !payment) {
-    console.error(
-      "Flutterwave callback payment lookup failed:",
-      paymentError
-    );
+  try {
+    payment = await getPaymentByReference(txRef);
+  } catch (error) {
+    console.error("Payment lookup failed:", error);
 
     return NextResponse.redirect(
-      new URL(
-        "/courses?payment=failed",
-        request.url
-      )
+      new URL("/courses?payment=failed", request.url),
+    );
+  }
+
+  if (!payment) {
+    return NextResponse.redirect(
+      new URL("/courses?payment=failed", request.url),
     );
   }
 
   /*
-   * An already-successful payment must still have:
-   * 1. paid enrollment
-   * 2. discount redemption, where applicable
+   * Reprocess successful payments to recover enrollment or
+   * discount work interrupted by a previous callback.
    */
   if (payment.status === "successful") {
     try {
@@ -471,69 +390,85 @@ export async function GET(request: Request) {
       return redirectToCourse(
         request,
         payment.course_slug,
-        "success"
+        "success",
       );
     } catch (error) {
       console.error(
-        "Successful Flutterwave payment could not complete fulfilment:",
-        error
+        "Successful payment recovery failed:",
+        error,
       );
 
       return redirectToCourse(
         request,
         payment.course_slug,
-        "failed"
+        "failed",
       );
     }
   }
 
-  if (status !== "successful") {
-    await admin
-      .from("course_payments")
-      .update({
-        status: "failed",
-        updated_at:
-          new Date().toISOString(),
-      })
-      .eq("id", payment.id);
-
-    return redirectToCourse(
-      request,
-      payment.course_slug,
-      "failed"
-    );
-  }
-
+  /*
+   * The callback status is not authoritative. Verify the transaction
+   * with Flutterwave even if the callback says something else.
+   */
   try {
-    await fulfilPayment(
-      payment,
-      transactionId || null
-    );
+    await fulfilPayment(payment, transactionId || null);
 
     return redirectToCourse(
       request,
       payment.course_slug,
-      "success"
+      "success",
     );
   } catch (error) {
-    console.error(
-      "Flutterwave callback verification failed:",
-      error
+    console.error("Flutterwave callback processing failed:", error);
+
+    /*
+     * Do not overwrite the payment as failed here. Verification may
+     * be temporarily unavailable, or a concurrent callback may have
+     * completed the payment. Leave it retryable.
+     */
+    const latest = await getPaymentByReference(txRef).catch(
+      () => null,
     );
+
+    if (latest?.status === "successful") {
+      try {
+        await activateEnrollment(latest);
+        await recordDiscountRedemption(latest);
+
+        return redirectToCourse(
+          request,
+          latest.course_slug,
+          "success",
+        );
+      } catch (recoveryError) {
+        console.error(
+          "Payment fulfilment recovery failed:",
+          recoveryError,
+        );
+      }
+    }
+
+    const admin = createAdminClient();
 
     await admin
       .from("course_payments")
       .update({
-        status: "failed",
-        updated_at:
-          new Date().toISOString(),
+        status: "pending",
+        updated_at: new Date().toISOString(),
       })
-      .eq("id", payment.id);
+      .eq("id", payment.id)
+      .neq("status", "successful");
+
+    /*
+     * Keep the existing callback status variable read so its presence
+     * is explicit, but never use it as proof of payment.
+     */
+    void callbackStatus;
 
     return redirectToCourse(
       request,
       payment.course_slug,
-      "failed"
+      "failed",
     );
   }
 }
