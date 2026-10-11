@@ -28084,3 +28084,182 @@ main {
     padding: 21px;
   }
 }
+
+/* RUFFNECK LEARN — HOMEPAGE HERO UPGRADE */
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(52px, 7vw, 92px) 0;
+  background:
+    radial-gradient(
+      circle at 90% 10%,
+      rgba(0, 180, 216, 0.12),
+      transparent 35%
+    ),
+    linear-gradient(135deg, #f8fbff 0%, #eef5fc 100%);
+}
+
+.hero .hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  align-items: center;
+  gap: clamp(32px, 5vw, 72px);
+}
+
+.hero .rn-brand-kicker {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 8px 14px;
+  border: 1px solid rgba(0, 180, 216, 0.3);
+  border-radius: 999px;
+  background: #e8faff;
+  color: #075985;
+  font-size: 0.82rem;
+  font-weight: 750;
+  letter-spacing: 0.035em;
+}
+
+.hero .hero-grid h1 {
+  max-width: 680px;
+  margin: 0 0 22px;
+  color: #0b1e3a;
+  font-size: clamp(2.5rem, 5vw, 4.25rem);
+  font-weight: 850;
+  line-height: 1.08;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
+}
+
+.hero .hero-grid > div:first-child > p {
+  max-width: 570px;
+  margin: 0;
+  color: #526176;
+  font-size: clamp(1rem, 1.5vw, 1.15rem);
+  line-height: 1.85;
+}
+
+.hero .hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 30px;
+}
+
+.hero .hero-actions .btn {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  padding: 13px 21px;
+  border-radius: 11px;
+  font-weight: 750;
+  text-decoration: none;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.hero .hero-actions .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(11, 30, 58, 0.13);
+}
+
+.hero .rn-hero-brand-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #dce6f1;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 22px 55px rgba(11, 30, 58, 0.12);
+}
+
+.hero .rn-learn-banner {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.hero .rn-hero-brand-copy {
+  padding: 24px 26px 27px;
+}
+
+.hero .rn-hero-brand-copy strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #0b1e3a;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+.hero .rn-hero-brand-copy p {
+  margin: 0 0 12px;
+  color: #526176;
+  font-size: 0.96rem;
+  line-height: 1.7;
+}
+
+.hero .rn-hero-brand-copy span {
+  color: #007f9e;
+  font-size: 0.85rem;
+  font-weight: 750;
+}
+
+@media (max-width: 900px) {
+  .hero .hero-grid {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+
+  .hero .hero-grid h1 {
+    max-width: 750px;
+  }
+
+  .hero .rn-hero-brand-card {
+    width: 100%;
+    max-width: 680px;
+  }
+}
+
+@media (max-width: 600px) {
+  .hero {
+    padding: 42px 0;
+  }
+
+  .hero .hero-grid {
+    gap: 28px;
+  }
+
+  .hero .hero-grid h1 {
+    font-size: clamp(2.2rem, 10vw, 3.2rem);
+    letter-spacing: -0.045em;
+  }
+
+  .hero .hero-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .hero .hero-actions .btn {
+    width: 100%;
+  }
+
+  .hero .rn-hero-brand-card {
+    border-radius: 16px;
+  }
+
+  .hero .rn-hero-brand-copy {
+    padding: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero .hero-actions .btn {
+    transition: none;
+  }
+}
