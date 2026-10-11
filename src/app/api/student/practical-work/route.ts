@@ -166,38 +166,18 @@ function bytesStartWith(
   );
 }
 
-function bytesContain(
-  bytes: Uint8Array,
-  signature: number[],
-) {
-  if (signature.length === 0 || bytes.length < signature.length) {
-    return false;
-  }
-
-  outer: for (
-    let index = 0;
-    index <= bytes.length - signature.length;
-    index++
-  ) {
-    for (let offset = 0; offset < signature.length; offset++) {
-      if (bytes[index + offset] !== signature[offset]) {
-        continue outer;
-      }
-    }
-
-    return true;
-  }
-
-  return false;
-}
-
 async function validateFileSignature(file: File) {
-  const buffer = await file.slice(0, Math.min(file.size, 8192)).arrayBuffer();
+  const buffer = await file
+    .slice(0, Math.min(file.size, 8192))
+    .arrayBuffer();
+
   const bytes = new Uint8Array(buffer);
   const type = file.type.toLowerCase();
 
   if (type === "application/pdf") {
-    return bytesStartWith(bytes, [0x25, 0x50, 0x44, 0x46, 0x2d]);
+    return bytesStartWith(bytes, [
+      0x25, 0x50, 0x44, 0x46, 0x2d,
+    ]);
   }
 
   if (type === "image/jpeg") {
@@ -206,7 +186,8 @@ async function validateFileSignature(file: File) {
 
   if (type === "image/png") {
     return bytesStartWith(bytes, [
-      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+      0x89, 0x50, 0x4e, 0x47,
+      0x0d, 0x0a, 0x1a, 0x0a,
     ]);
   }
 
@@ -228,7 +209,9 @@ async function validateFileSignature(file: File) {
     type === "application/vnd.ms-excel" ||
     type === "application/vnd.ms-powerpoint"
   ) {
-    return bytesStartWith(bytes, [0x50, 0x4b, 0x03, 0x04]);
+    return bytesStartWith(bytes, [
+      0x50, 0x4b, 0x03, 0x04,
+    ]);
   }
 
   if (type === "text/plain" || type === "text/csv") {
@@ -303,7 +286,11 @@ export async function GET() {
       .in("enrollment_status", ["active", "completed"]);
 
     if (enrollmentError) {
-      console.error("Practical work enrollment error:", enrollmentError);
+      console.error(
+        "Practical work enrollment error:",
+        enrollmentError,
+      );
+
       return jsonError("Unable to load your course access.", 500);
     }
 
@@ -390,7 +377,8 @@ export async function GET() {
         );
       }
 
-      submissions = (submissionData ?? []) as unknown as PracticalSubmission[];
+      submissions = (submissionData ??
+        []) as unknown as PracticalSubmission[];
     }
 
     const submissionMap = new Map<string, PracticalSubmission>();
@@ -536,7 +524,11 @@ export async function POST(request: Request) {
         );
       }
 
-      if (!ALLOWED_FILE_TYPES.has(evidenceFile.type.toLowerCase())) {
+      if (
+        !ALLOWED_FILE_TYPES.has(
+          evidenceFile.type.toLowerCase(),
+        )
+      ) {
         return jsonError(
           "Unsupported file type. Upload PDF, Word, Excel, PowerPoint, CSV, TXT, JPG, PNG, or WEBP.",
           400,
@@ -552,7 +544,8 @@ export async function POST(request: Request) {
         );
       }
 
-      const validSignature = await validateFileSignature(evidenceFile);
+      const validSignature =
+        await validateFileSignature(evidenceFile);
 
       if (!validSignature) {
         return jsonError(
@@ -600,7 +593,10 @@ export async function POST(request: Request) {
 
     if (
       evidenceFile &&
-      !submissionTypeAllowsFile(task.submission_type, evidenceFile)
+      !submissionTypeAllowsFile(
+        task.submission_type,
+        evidenceFile,
+      )
     ) {
       return jsonError(
         `This task expects ${task.submission_type} evidence. The selected file is not compatible with that submission type.`,
@@ -716,7 +712,10 @@ export async function POST(request: Request) {
         });
 
       if (uploadError) {
-        console.error("Practical evidence upload error:", uploadError);
+        console.error(
+          "Practical evidence upload error:",
+          uploadError,
+        );
 
         return jsonError(
           "Unable to upload your evidence file. Please try again.",
@@ -733,9 +732,6 @@ export async function POST(request: Request) {
 
     const now = new Date().toISOString();
 
-    let saveQuery = supabase
-      .from("student_practical_task_submissions");
-
     const submissionPayload = {
       task_id: task.id,
       student_id: user.id,
@@ -751,49 +747,51 @@ export async function POST(request: Request) {
       evidence_file_size: evidenceSize,
     };
 
-    /*
-     * Update an existing row by its primary key. If no row exists,
-     * insert a new one. This avoids an upsert silently overwriting
-     * reviewer fields on an existing submission.
-     *
-     * A database-level unique constraint on (task_id, student_id)
-     * is still required to prevent concurrent duplicate inserts.
-     */
-    if (existingSubmission) {
-      saveQuery = saveQuery.update(submissionPayload).eq(
-        "id",
-        existingSubmission.id,
-      );
-    } else {
-      saveQuery = saveQuery.insert(submissionPayload);
-    }
+    const selectFields = `
+      id,
+      task_id,
+      student_id,
+      submission_text,
+      status,
+      score,
+      reviewer_feedback,
+      submitted_at,
+      reviewed_at,
+      evidence_file_path,
+      evidence_file_name,
+      evidence_file_type,
+      evidence_file_size,
+      evidence_recorded_at
+    `;
+
+    const saveResult = existingSubmission
+      ? await supabase
+          .from("student_practical_task_submissions")
+          .update(submissionPayload)
+          .eq("id", existingSubmission.id)
+          .select(selectFields)
+          .single()
+      : await supabase
+          .from("student_practical_task_submissions")
+          .insert(submissionPayload)
+          .select(selectFields)
+          .single();
 
     const {
       data: savedData,
       error: saveError,
-    } = await saveQuery
-      .select(`
-        id,
-        task_id,
-        student_id,
-        submission_text,
-        status,
-        score,
-        reviewer_feedback,
-        submitted_at,
-        reviewed_at,
-        evidence_file_path,
-        evidence_file_name,
-        evidence_file_type,
-        evidence_file_size,
-        evidence_recorded_at
-      `)
-      .single();
+    } = saveResult;
 
     if (saveError || !savedData) {
-      console.error("Practical submission save error:", saveError);
+      console.error(
+        "Practical submission save error:",
+        saveError,
+      );
 
-      await removeUploadedFile(supabase, uploadedFilePath);
+      await removeUploadedFile(
+        supabase,
+        uploadedFilePath,
+      );
 
       if (saveError?.code === "23505") {
         return jsonError(
