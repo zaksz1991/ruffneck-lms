@@ -74,7 +74,9 @@ function redirectToCourse(
   return NextResponse.redirect(url);
 }
 
-async function getPaymentByReference(txRef: string) {
+async function getPaymentByReference(
+  txRef: string,
+): Promise<PaymentRecord | null> {
   const admin = createAdminClient();
 
   const { data, error } = await admin
@@ -83,7 +85,9 @@ async function getPaymentByReference(txRef: string) {
     .eq("tx_ref", txRef)
     .maybeSingle();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    throw new Error(error.message);
+  }
 
   return data as PaymentRecord | null;
 }
@@ -93,15 +97,16 @@ async function activateEnrollment(
 ): Promise<EnrollmentRecord> {
   const admin = createAdminClient();
 
-  const { data: existing, error: lookupError } =
-    await admin
-      .from("enrollments")
-      .select(ENROLLMENT_COLUMNS)
-      .eq("student_id", payment.student_id)
-      .eq("course_id", payment.course_id)
-      .maybeSingle();
+  const { data: existing, error: lookupError } = await admin
+    .from("enrollments")
+    .select(ENROLLMENT_COLUMNS)
+    .eq("student_id", payment.student_id)
+    .eq("course_id", payment.course_id)
+    .maybeSingle();
 
-  if (lookupError) throw new Error(lookupError.message);
+  if (lookupError) {
+    throw new Error(lookupError.message);
+  }
 
   if (existing) {
     const enrollment = existing as EnrollmentRecord;
@@ -128,23 +133,24 @@ async function activateEnrollment(
       .select(ENROLLMENT_COLUMNS)
       .single();
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      throw new Error(error.message);
+    }
 
     return data as EnrollmentRecord;
   }
 
-  const { data: created, error: insertError } =
-    await admin
-      .from("enrollments")
-      .insert({
-        student_id: payment.student_id,
-        course_id: payment.course_id,
-        payment_status: "paid",
-        enrollment_status: "active",
-        progress_percent: 0,
-      })
-      .select(ENROLLMENT_COLUMNS)
-      .single();
+  const { data: created, error: insertError } = await admin
+    .from("enrollments")
+    .insert({
+      student_id: payment.student_id,
+      course_id: payment.course_id,
+      payment_status: "paid",
+      enrollment_status: "active",
+      progress_percent: 0,
+    })
+    .select(ENROLLMENT_COLUMNS)
+    .single();
 
   if (!insertError && created) {
     return created as EnrollmentRecord;
@@ -184,21 +190,22 @@ async function activateEnrollment(
     return enrollment;
   }
 
-  const { data: updated, error: updateError } =
-    await admin
-      .from("enrollments")
-      .update({
-        payment_status: "paid",
-        enrollment_status:
-          enrollment.enrollment_status === "completed"
-            ? "completed"
-            : "active",
-      })
-      .eq("id", enrollment.id)
-      .select(ENROLLMENT_COLUMNS)
-      .single();
+  const { data: updated, error: updateError } = await admin
+    .from("enrollments")
+    .update({
+      payment_status: "paid",
+      enrollment_status:
+        enrollment.enrollment_status === "completed"
+          ? "completed"
+          : "active",
+    })
+    .eq("id", enrollment.id)
+    .select(ENROLLMENT_COLUMNS)
+    .single();
 
-  if (updateError) throw new Error(updateError.message);
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
 
   return updated as EnrollmentRecord;
 }
@@ -226,9 +233,13 @@ async function markPaymentSuccessful(
     .select(PAYMENT_COLUMNS)
     .maybeSingle();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    throw new Error(error.message);
+  }
 
-  if (data) return data as PaymentRecord;
+  if (data) {
+    return data as PaymentRecord;
+  }
 
   const latest = await getPaymentByReference(payment.tx_ref);
 
@@ -243,7 +254,7 @@ async function markPaymentSuccessful(
 
 async function recordDiscountRedemption(
   payment: PaymentRecord,
-) {
+): Promise<void> {
   if (
     !payment.discount_code_id ||
     payment.discount_amount <= 0
@@ -286,8 +297,7 @@ async function verifyPayment(
     : await verifyFlutterwaveByReference(payment.tx_ref);
 
   if (
-    verification.status.trim().toLowerCase() !==
-    "successful"
+    verification.status.trim().toLowerCase() !== "successful"
   ) {
     throw new Error(
       "Flutterwave has not confirmed a successful payment.",
@@ -304,19 +314,24 @@ async function verifyPayment(
     verification.currency.trim().toUpperCase() !==
     payment.currency.trim().toUpperCase()
   ) {
-    throw new Error("Flutterwave transaction currency mismatch.");
+    throw new Error(
+      "Flutterwave transaction currency mismatch.",
+    );
   }
 
   const expected = Number(payment.amount);
   const received = Number(verification.amount);
 
+  // Require the exact expected amount, not an overpayment.
   if (
     !Number.isFinite(expected) ||
     expected <= 0 ||
     !Number.isFinite(received) ||
-    received < expected
+    received !== expected
   ) {
-    throw new Error("Flutterwave transaction amount mismatch.");
+    throw new Error(
+      "Flutterwave transaction amount mismatch.",
+    );
   }
 
   return verification;
@@ -325,7 +340,7 @@ async function verifyPayment(
 async function fulfilPayment(
   payment: PaymentRecord,
   transactionId: string | null,
-) {
+): Promise<void> {
   const verification = await verifyPayment(
     payment,
     transactionId,
@@ -336,18 +351,12 @@ async function fulfilPayment(
     verification,
   );
 
-  const enrollment = await activateEnrollment(updatedPayment);
-
+  await activateEnrollment(updatedPayment);
   await recordDiscountRedemption(updatedPayment);
-
-  return enrollment;
 }
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-
-  const callbackStatus =
-    url.searchParams.get("status")?.trim().toLowerCase() ?? "";
 
   const txRef = url.searchParams.get("tx_ref")?.trim() ?? "";
 
@@ -379,8 +388,8 @@ export async function GET(request: Request) {
   }
 
   /*
-   * Reprocess successful payments to recover enrollment or
-   * discount work interrupted by a previous callback.
+   * Recover enrollment and discount processing for payments
+   * already confirmed as successful in the database.
    */
   if (payment.status === "successful") {
     try {
@@ -406,10 +415,6 @@ export async function GET(request: Request) {
     }
   }
 
-  /*
-   * The callback status is not authoritative. Verify the transaction
-   * with Flutterwave even if the callback says something else.
-   */
   try {
     await fulfilPayment(payment, transactionId || null);
 
@@ -419,12 +424,14 @@ export async function GET(request: Request) {
       "success",
     );
   } catch (error) {
-    console.error("Flutterwave callback processing failed:", error);
+    console.error(
+      "Flutterwave callback processing failed:",
+      error,
+    );
 
     /*
-     * Do not overwrite the payment as failed here. Verification may
-     * be temporarily unavailable, or a concurrent callback may have
-     * completed the payment. Leave it retryable.
+     * Preserve successful status if a concurrent callback finished
+     * while this request was processing.
      */
     const latest = await getPaymentByReference(txRef).catch(
       () => null,
@@ -448,23 +455,10 @@ export async function GET(request: Request) {
       }
     }
 
-    const admin = createAdminClient();
-
-    await admin
-      .from("course_payments")
-      .update({
-        status: "pending",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", payment.id)
-      .neq("status", "successful");
-
     /*
-     * Keep the existing callback status variable read so its presence
-     * is explicit, but never use it as proof of payment.
+     * Do not mark the payment failed based solely on a callback.
+     * Verification or network errors may be temporary.
      */
-    void callbackStatus;
-
     return redirectToCourse(
       request,
       payment.course_slug,
