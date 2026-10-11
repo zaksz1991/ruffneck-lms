@@ -462,9 +462,7 @@ export async function POST(request: Request) {
     }
 
     /*
-     * Verify non-terminal events too. Do not mark a payment failed
-     * solely because the webhook payload says failed: a delayed
-     * or out-of-order event must not override Flutterwave's status.
+     * Verify the transaction directly with Flutterwave.
      */
     let verification: FlutterwaveVerification;
 
@@ -560,9 +558,8 @@ export async function POST(request: Request) {
     }
 
     /*
-     * Both values are in the same currency unit according to the
-     * existing verification helper. Do not assume all currencies
-     * use two decimal places.
+     * Require the verified amount to match the recorded payment
+     * amount exactly, including any applied discount.
      */
     const expectedAmount = Number(payment.amount);
     const receivedAmount = Number(verification.amount);
@@ -571,7 +568,7 @@ export async function POST(request: Request) {
       !Number.isFinite(expectedAmount) ||
       expectedAmount <= 0 ||
       !Number.isFinite(receivedAmount) ||
-      receivedAmount < expectedAmount
+      receivedAmount !== expectedAmount
     ) {
       console.error("Flutterwave transaction amount mismatch.", {
         paymentId: payment.id,
