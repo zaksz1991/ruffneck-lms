@@ -89,7 +89,11 @@ async function getPaymentByReference(
     throw new Error(error.message);
   }
 
-  return data as PaymentRecord | null;
+  if (!data || "error" in data) {
+    return null;
+  }
+
+  return data as unknown as PaymentRecord;
 }
 
 async function activateEnrollment(
@@ -108,8 +112,8 @@ async function activateEnrollment(
     throw new Error(lookupError.message);
   }
 
-  if (existing) {
-    const enrollment = existing as EnrollmentRecord;
+  if (existing && !("error" in existing)) {
+    const enrollment = existing as unknown as EnrollmentRecord;
 
     if (
       enrollment.payment_status === "paid" &&
@@ -137,7 +141,11 @@ async function activateEnrollment(
       throw new Error(error.message);
     }
 
-    return data as EnrollmentRecord;
+    if (!data || "error" in data) {
+      throw new Error("Updated enrollment could not be retrieved.");
+    }
+
+    return data as unknown as EnrollmentRecord;
   }
 
   const { data: created, error: insertError } = await admin
@@ -152,8 +160,8 @@ async function activateEnrollment(
     .select(ENROLLMENT_COLUMNS)
     .single();
 
-  if (!insertError && created) {
-    return created as EnrollmentRecord;
+  if (!insertError && created && !("error" in created)) {
+    return created as unknown as EnrollmentRecord;
   }
 
   if (insertError?.code !== "23505") {
@@ -172,14 +180,18 @@ async function activateEnrollment(
       .eq("course_id", payment.course_id)
       .maybeSingle();
 
-  if (concurrentError || !concurrent) {
+  if (
+    concurrentError ||
+    !concurrent ||
+    "error" in concurrent
+  ) {
     throw new Error(
       concurrentError?.message ??
         "Enrollment could not be recovered.",
     );
   }
 
-  const enrollment = concurrent as EnrollmentRecord;
+  const enrollment = concurrent as unknown as EnrollmentRecord;
 
   if (
     enrollment.payment_status === "paid" &&
@@ -207,7 +219,11 @@ async function activateEnrollment(
     throw new Error(updateError.message);
   }
 
-  return updated as EnrollmentRecord;
+  if (!updated || "error" in updated) {
+    throw new Error("Updated enrollment could not be retrieved.");
+  }
+
+  return updated as unknown as EnrollmentRecord;
 }
 
 async function markPaymentSuccessful(
@@ -237,8 +253,8 @@ async function markPaymentSuccessful(
     throw new Error(error.message);
   }
 
-  if (data) {
-    return data as PaymentRecord;
+  if (data && !("error" in data)) {
+    return data as unknown as PaymentRecord;
   }
 
   const latest = await getPaymentByReference(payment.tx_ref);
