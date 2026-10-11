@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 type FlutterwaveCreatePaymentResponse = {
   status?: string;
   message?: string;
@@ -20,34 +22,74 @@ type FlutterwaveVerifyResponse = {
   };
 };
 
+export type FlutterwaveVerifiedTransaction = {
+  id: number;
+  txRef: string;
+  amount: number;
+  chargedAmount: number | null;
+  currency: string;
+  status: string;
+  flwRef: string | null;
+};
+
 function getSecretKey(): string {
   const secretKey =
     process.env.FLW_SECRET_KEY ??
     process.env.FLUTTERWAVE_SECRET_KEY;
 
-  if (!secretKey) {
+  if (!secretKey?.trim()) {
     throw new Error(
       "Flutterwave secret key is not configured."
     );
   }
 
-  return secretKey;
+  return secretKey.trim();
 }
 
 function getApiHeaders() {
   return {
     Authorization: `Bearer ${getSecretKey()}`,
-    "Content-Type":
-      "application/json",
+    "Content-Type": "application/json",
   };
 }
 
+async function readFlutterwaveResponse<T>(
+  response: Response,
+  fallbackMessage: string
+): Promise<T> {
+  let data: unknown;
+
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error(
+      "Flutterwave returned an invalid response."
+    );
+  }
+
+  if (
+    !response.ok ||
+    !data ||
+    typeof data !== "object"
+  ) {
+    const message =
+      data &&
+      typeof data === "object" &&
+      "message" in data &&
+      typeof data.message === "string"
+        ? data.message
+        : fallbackMessage;
+
+    throw new Error(message);
+  }
+
+  return data as T;
+}
+
 export function createTransactionReference(): string {
-  const random =
-    crypto
-      .randomUUID()
-      .replace(/-/g, "")
-      .slice(0, 12);
+  const random = randomUUID()
+    .replace(/-/g, "")
+    .slice(0, 12);
 
   return `RNL-${Date.now()}-${random}`;
 }
@@ -67,112 +109,79 @@ export async function createFlutterwavePayment(
     courseTitle: string;
     studentId: string;
   }
-): Promise<{
-  link: string;
-}> {
-  const response =
-    await fetch(
-      "https://api.flutterwave.com/v3/payments",
-      {
-        method: "POST",
-        headers:
-          getApiHeaders(),
-        body: JSON.stringify({
-          amount:
-            params.amount,
-
-          currency:
-            params.currency,
-
-          tx_ref:
-            params.txRef,
-
-          redirect_url:
-            params.redirectUrl,
-
-          customer:
-            params.customer,
-
-          customizations: {
-            title:
-              "RuffNeck Learn",
-            description:
-              `Course enrollment: ${params.courseTitle}`,
-          },
-
-          meta: {
-            source:
-              "ruffneck-learn",
-            course_id:
-              params.courseId,
-            student_id:
-              params.studentId,
-          },
-        }),
-        cache: "no-store",
-      }
+): Promise<{ link: string }> {
+  if (
+    !Number.isFinite(params.amount) ||
+    params.amount <= 0
+  ) {
+    throw new Error(
+      "Payment amount must be greater than zero."
     );
-
-  const data =
-    (await response.json()) as FlutterwaveCreatePaymentResponse;
+  }
 
   if (
-    !response.ok ||
-    data.status !==
-      "success" ||
-    !data.data?.link
+    !params.currency.trim() ||
+    !params.txRef.trim() ||
+    !params.redirectUrl.trim() ||
+    !params.customer.email.trim()
+  ) {
+    throw new Error(
+      "Required payment details are missing."
+    );
+  }
+
+  const response = await fetch(
+    "https://api.flutterwave.com/v3/payments",
+    {
+      method: "POST",
+      headers: getApiHeaders(),
+      body: JSON.stringify({
+        amount: params.amount,
+        currency: params.currency,
+        tx_ref: params.txRef,
+        redirect_url: params.redirectUrl,
+        customer: params.customer,
+        customizations: {
+          title: "RuffNeck Learn",
+          description: `Course enrollment: ${params.courseTitle}`,
+        },
+        meta: {
+          source: "ruffneck-learn",
+          course_id: params.courseId,
+          student_id: params.studentId,
+        },
+      }),
+      cache: "no-store",
+    }
+  );
+
+  const data =
+    await readFlutterwaveResponse<FlutterwaveCreatePaymentResponse>(
+      response,
+      "Flutterwave could not create the payment checkout."
+    );
+
+  if (
+    data.status !== "success" ||
+    typeof data.data?.link !== "string" ||
+    !data.data.link.trim()
   ) {
     throw new Error(
       data.message ||
-        "Flutterwave could not create the payment checkout."
+        "Flutterwave did not return a checkout link."
     );
   }
 
   return {
-    link:
-      data.data.link,
+    link: data.data.link,
   };
 }
 
-export async function verifyFlutterwaveTransaction(
-  transactionId: string
-): Promise<{
-  id: number;
-  txRef: string;
-  amount: number;
-  currency: string;
-  status: string;
-  flwRef: string | null;
-}> {
-  const cleanId =
-    transactionId.trim();
-
-  if (!/^\d+$/.test(cleanId)) {
-    throw new Error(
-      "Invalid Flutterwave transaction ID."
-    );
-  }
-
-  const response =
-    await fetch(
-      `https://api.flutterwave.com/v3/transactions/${encodeURIComponent(
-        cleanId
-      )}/verify`,
-      {
-        method: "GET",
-        headers:
-          getApiHeaders(),
-        cache: "no-store",
-      }
-    );
-
-  const data =
-    (await response.json()) as FlutterwaveVerifyResponse;
-
+function parseVerifiedTransaction(
+  data: FlutterwaveVerifyResponse
+): FlutterwaveVerifiedTransaction {
   if (
-    !response.ok ||
-    data.status !==
-      "success" ||
+    data.status !== "success" ||
     !data.data
   ) {
     throw new Error(
@@ -181,37 +190,45 @@ export async function verifyFlutterwaveTransaction(
     );
   }
 
-  const id =
-    Number(data.data.id);
+  const transaction = data.data;
 
-  const amount =
-    Number(data.data.amount);
+  const id = Number(transaction.id);
+  const amount = Number(transaction.amount);
 
-  const currency =
-    typeof data.data.currency ===
-    "string"
-      ? data.data.currency
-      : "";
+  const chargedAmount =
+    transaction.charged_amount == null
+      ? null
+      : Number(transaction.charged_amount);
 
   const txRef =
-    typeof data.data.tx_ref ===
-    "string"
-      ? data.data.tx_ref
+    typeof transaction.tx_ref === "string"
+      ? transaction.tx_ref
+      : "";
+
+  const currency =
+    typeof transaction.currency === "string"
+      ? transaction.currency
       : "";
 
   const status =
-    typeof data.data.status ===
-    "string"
-      ? data.data.status
+    typeof transaction.status === "string"
+      ? transaction.status
       : "";
 
   if (
-    !Number.isFinite(id) ||
+    !Number.isSafeInteger(id) ||
+    id <= 0 ||
     !Number.isFinite(amount) ||
-    !txRef
+    amount < 0 ||
+    (chargedAmount !== null &&
+      (!Number.isFinite(chargedAmount) ||
+        chargedAmount < 0)) ||
+    !txRef ||
+    !currency ||
+    !status
   ) {
     throw new Error(
-      "Flutterwave returned an incomplete transaction."
+      "Flutterwave returned an incomplete or invalid transaction."
     );
   }
 
@@ -219,91 +236,90 @@ export async function verifyFlutterwaveTransaction(
     id,
     txRef,
     amount,
+    chargedAmount,
     currency,
     status,
     flwRef:
-      typeof data.data.flw_ref ===
-      "string"
-        ? data.data.flw_ref
+      typeof transaction.flw_ref === "string"
+        ? transaction.flw_ref
         : null,
   };
 }
 
-export async function verifyFlutterwaveByReference(
-  txRef: string
-) {
-  const response =
-    await fetch(
-      `https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${encodeURIComponent(
-        txRef
-      )}`,
-      {
-        method: "GET",
-        headers:
-          getApiHeaders(),
-        cache: "no-store",
-      }
+export async function verifyFlutterwaveTransaction(
+  transactionId: string
+): Promise<FlutterwaveVerifiedTransaction> {
+  const cleanId = transactionId.trim();
+
+  if (!/^\d+$/.test(cleanId)) {
+    throw new Error(
+      "Invalid Flutterwave transaction ID."
     );
+  }
+
+  const response = await fetch(
+    `https://api.flutterwave.com/v3/transactions/${encodeURIComponent(
+      cleanId
+    )}/verify`,
+    {
+      method: "GET",
+      headers: getApiHeaders(),
+      cache: "no-store",
+    }
+  );
 
   const data =
-    (await response.json()) as FlutterwaveVerifyResponse;
+    await readFlutterwaveResponse<FlutterwaveVerifyResponse>(
+      response,
+      "Flutterwave transaction verification failed."
+    );
 
-  if (
-    !response.ok ||
-    data.status !==
-      "success" ||
-    !data.data
-  ) {
+  const verified = parseVerifiedTransaction(data);
+
+  if (String(verified.id) !== cleanId) {
     throw new Error(
-      data.message ||
-        "Flutterwave transaction verification failed."
+      "Flutterwave returned a different transaction ID."
     );
   }
 
-  const id =
-    Number(data.data.id);
+  return verified;
+}
 
-  const amount =
-    Number(data.data.amount);
+export async function verifyFlutterwaveByReference(
+  txRef: string
+): Promise<FlutterwaveVerifiedTransaction> {
+  const cleanTxRef = txRef.trim();
 
-  const currency =
-    typeof data.data.currency ===
-    "string"
-      ? data.data.currency
-      : "";
-
-  const verifiedTxRef =
-    typeof data.data.tx_ref ===
-    "string"
-      ? data.data.tx_ref
-      : "";
-
-  const status =
-    typeof data.data.status ===
-    "string"
-      ? data.data.status
-      : "";
-
-  if (
-    !Number.isFinite(id) ||
-    !Number.isFinite(amount) ||
-    !verifiedTxRef
-  ) {
+  if (!cleanTxRef) {
     throw new Error(
-      "Flutterwave returned an incomplete transaction."
+      "Transaction reference is required."
     );
   }
 
-  return {
-    id,
-    txRef: verifiedTxRef,
-    amount,
-    currency,
-    status,
-    flwRef:
-      typeof data.data.flw_ref ===
-      "string"
-        ? data.data.flw_ref
-        : null,
-  };
+  const response = await fetch(
+    `https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${encodeURIComponent(
+      cleanTxRef
+    )}`,
+    {
+      method: "GET",
+      headers: getApiHeaders(),
+      cache: "no-store",
+    }
+  );
+
+  const data =
+    await readFlutterwaveResponse<FlutterwaveVerifyResponse>(
+      response,
+      "Flutterwave transaction verification failed."
+    );
+
+  const verified = parseVerifiedTransaction(data);
+
+  if (verified.txRef !== cleanTxRef) {
+    throw new Error(
+      "Flutterwave transaction reference does not match."
+    );
+  }
+
+  return verified;
 }
