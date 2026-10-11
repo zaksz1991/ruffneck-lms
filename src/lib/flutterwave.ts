@@ -32,6 +32,9 @@ export type FlutterwaveVerifiedTransaction = {
   flwRef: string | null;
 };
 
+const FLUTTERWAVE_API_BASE =
+  "https://api.flutterwave.com/v3";
+
 function getSecretKey(): string {
   const secretKey =
     process.env.FLW_SECRET_KEY ??
@@ -46,10 +49,11 @@ function getSecretKey(): string {
   return secretKey.trim();
 }
 
-function getApiHeaders() {
+function getApiHeaders(): HeadersInit {
   return {
     Authorization: `Bearer ${getSecretKey()}`,
     "Content-Type": "application/json",
+    Accept: "application/json",
   };
 }
 
@@ -80,18 +84,30 @@ async function readFlutterwaveResponse<T>(
         ? data.message
         : fallbackMessage;
 
-    throw new Error(message);
+    throw new Error(
+      `${fallbackMessage} ${message}`.trim()
+    );
   }
 
   return data as T;
 }
 
-export function createTransactionReference(): string {
-  const random = randomUUID()
-    .replace(/-/g, "")
-    .slice(0, 12);
+function isValidAmount(value: number): boolean {
+  return (
+    Number.isFinite(value) &&
+    value >= 0 &&
+    Number.isSafeInteger(Math.round(value * 100))
+  );
+}
 
-  return `RNL-${Date.now()}-${random}`;
+function normalizeCurrency(currency: string): string {
+  return currency.trim().toUpperCase();
+}
+
+export function createTransactionReference(): string {
+  return `RNL-${Date.now()}-${randomUUID()
+    .replace(/-/g, "")
+    .slice(0, 12)}`;
 }
 
 export async function createFlutterwavePayment(
@@ -120,27 +136,72 @@ export async function createFlutterwavePayment(
   }
 
   if (
-    !params.currency.trim() ||
-    !params.txRef.trim() ||
-    !params.redirectUrl.trim() ||
-    !params.customer.email.trim()
+    !Number.isSafeInteger(
+      Math.round(params.amount * 100)
+    )
+  ) {
+    throw new Error("Invalid payment amount.");
+  }
+
+  const currency = normalizeCurrency(params.currency);
+  const txRef = params.txRef.trim();
+  const redirectUrl = params.redirectUrl.trim();
+  const email = params.customer.email.trim();
+
+  if (
+    !/^[A-Z]{3}$/.test(currency) ||
+    !txRef ||
+    !redirectUrl ||
+    !email ||
+    !params.courseId.trim() ||
+    !params.studentId.trim()
   ) {
     throw new Error(
-      "Required payment details are missing."
+      "Required payment details are missing or invalid."
+    );
+  }
+
+  let parsedRedirectUrl: URL;
+
+  try {
+    parsedRedirectUrl = new URL(redirectUrl);
+  } catch {
+    throw new Error(
+      "The Flutterwave redirect URL is invalid."
+    );
+  }
+
+  if (
+    parsedRedirectUrl.protocol !== "https:" &&
+    parsedRedirectUrl.hostname !== "localhost"
+  ) {
+    throw new Error(
+      "The payment redirect URL must use HTTPS."
     );
   }
 
   const response = await fetch(
-    "https://api.flutterwave.com/v3/payments",
+    `${FLUTTERWAVE_API_BASE}/payments`,
     {
       method: "POST",
       headers: getApiHeaders(),
       body: JSON.stringify({
         amount: params.amount,
-        currency: params.currency,
-        tx_ref: params.txRef,
-        redirect_url: params.redirectUrl,
-        customer: params.customer,
+        currency,
+        tx_ref: txRef,
+        redirect_url: redirectUrl,
+        customer: {
+          email,
+          ...(params.customer.name?.trim()
+            ? { name: params.customer.name.trim() }
+            : {}),
+          ...(params.customer.phone_number?.trim()
+            ? {
+                phone_number:
+                  params.customer.phone_number.trim(),
+              }
+            : {}),
+        },
         customizations: {
           title: "RuffNeck Learn",
           description: `Course enrollment: ${params.courseTitle}`,
@@ -172,8 +233,27 @@ export async function createFlutterwavePayment(
     );
   }
 
+  let checkoutUrl: URL;
+
+  try {
+    checkoutUrl = new URL(data.data.link);
+  } catch {
+    throw new Error(
+      "Flutterwave returned an invalid checkout URL."
+    );
+  }
+
+  if (
+    checkoutUrl.protocol !== "https:" ||
+    checkoutUrl.hostname !== "checkout.flutterwave.com"
+  ) {
+    throw new Error(
+      "Flutterwave returned an unexpected checkout URL."
+    );
+  }
+
   return {
-    link: data.data.link,
+    link: checkoutUrl.toString(),
   };
 }
 
@@ -182,7 +262,8 @@ function parseVerifiedTransaction(
 ): FlutterwaveVerifiedTransaction {
   if (
     data.status !== "success" ||
-    !data.data
+    !data.data ||
+    typeof data.data !== "object"
   ) {
     throw new Error(
       data.message ||
@@ -202,29 +283,27 @@ function parseVerifiedTransaction(
 
   const txRef =
     typeof transaction.tx_ref === "string"
-      ? transaction.tx_ref
+      ? transaction.tx_ref.trim()
       : "";
 
   const currency =
     typeof transaction.currency === "string"
-      ? transaction.currency
+      ? normalizeCurrency(transaction.currency)
       : "";
 
   const status =
     typeof transaction.status === "string"
-      ? transaction.status
+      ? transaction.status.trim().toLowerCase()
       : "";
 
   if (
     !Number.isSafeInteger(id) ||
     id <= 0 ||
-    !Number.isFinite(amount) ||
-    amount < 0 ||
+    !isValidAmount(amount) ||
     (chargedAmount !== null &&
-      (!Number.isFinite(chargedAmount) ||
-        chargedAmount < 0)) ||
+      !isValidAmount(chargedAmount)) ||
     !txRef ||
-    !currency ||
+    !/^[A-Z]{3}$/.test(currency) ||
     !status
   ) {
     throw new Error(
@@ -240,8 +319,9 @@ function parseVerifiedTransaction(
     currency,
     status,
     flwRef:
-      typeof transaction.flw_ref === "string"
-        ? transaction.flw_ref
+      typeof transaction.flw_ref === "string" &&
+      transaction.flw_ref.trim()
+        ? transaction.flw_ref.trim()
         : null,
   };
 }
@@ -257,8 +337,19 @@ export async function verifyFlutterwaveTransaction(
     );
   }
 
+  const numericId = Number(cleanId);
+
+  if (
+    !Number.isSafeInteger(numericId) ||
+    numericId <= 0
+  ) {
+    throw new Error(
+      "Invalid Flutterwave transaction ID."
+    );
+  }
+
   const response = await fetch(
-    `https://api.flutterwave.com/v3/transactions/${encodeURIComponent(
+    `${FLUTTERWAVE_API_BASE}/transactions/${encodeURIComponent(
       cleanId
     )}/verify`,
     {
@@ -276,7 +367,7 @@ export async function verifyFlutterwaveTransaction(
 
   const verified = parseVerifiedTransaction(data);
 
-  if (String(verified.id) !== cleanId) {
+  if (verified.id !== numericId) {
     throw new Error(
       "Flutterwave returned a different transaction ID."
     );
@@ -297,7 +388,7 @@ export async function verifyFlutterwaveByReference(
   }
 
   const response = await fetch(
-    `https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${encodeURIComponent(
+    `${FLUTTERWAVE_API_BASE}/transactions/verify_by_reference?tx_ref=${encodeURIComponent(
       cleanTxRef
     )}`,
     {
