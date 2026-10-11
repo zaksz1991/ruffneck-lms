@@ -6,11 +6,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-type Role =
-  | "student"
-  | "instructor"
-  | "admin"
-  | null;
+type Role = "student" | "instructor" | "admin" | null;
 
 export function Header() {
   const pathname = usePathname();
@@ -25,44 +21,47 @@ export function Header() {
     let mounted = true;
 
     async function loadUser() {
-      const supabase = createClient();
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        if (!mounted) return;
 
-      if (!mounted) {
-        return;
-      }
+        if (!user) {
+          setRole(null);
+          setLoading(false);
+          return;
+        }
 
-      if (!user) {
-        setRole(null);
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (!mounted) return;
+
+        const nextRole: Role =
+          profile?.role === "admin" ||
+          profile?.role === "instructor" ||
+          profile?.role === "student"
+            ? profile.role
+            : "student";
+
+        setRole(nextRole);
         setLoading(false);
-        return;
+      } catch {
+        if (mounted) {
+          setRole(null);
+          setLoading(false);
+        }
       }
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (!mounted) {
-        return;
-      }
-
-      const profileRole =
-        profile?.role === "admin" ||
-        profile?.role === "instructor" ||
-        profile?.role === "student"
-          ? profile.role
-          : "student";
-
-      setRole(profileRole);
-      setLoading(false);
     }
 
-    loadUser();
+    setLoading(true);
+    void loadUser();
 
     return () => {
       mounted = false;
@@ -70,24 +69,18 @@ export function Header() {
   }, [pathname]);
 
   const isAuthenticated = role !== null;
-
   const canAccessAdmin =
-    role === "admin" ||
-    role === "instructor";
+    role === "admin" || role === "instructor";
 
   async function handleSignOut() {
-    if (signingOut) {
-      return;
-    }
+    if (signingOut) return;
 
     setSigningOut(true);
     setSignOutError("");
 
     try {
       const supabase = createClient();
-
-      const { error } =
-        await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
 
       if (error) {
         setSignOutError(error.message);
@@ -96,16 +89,14 @@ export function Header() {
       }
 
       setRole(null);
-
       router.replace("/");
       router.refresh();
-    } catch (error) {
+    } catch (error: unknown) {
       setSignOutError(
         error instanceof Error
           ? error.message
-          : "Unable to sign out.",
+          : "Unable to sign out."
       );
-
       setSigningOut(false);
     }
   }
@@ -118,13 +109,9 @@ export function Header() {
             href="https://ruffneck-entertainment.vercel.app/"
             className="rn-parent-brand-link"
           >
-            <strong>
-              RUFFNECK ENTERTAINMENT
-            </strong>
-
+            <strong>RUFFNECK ENTERTAINMENT</strong>
             <span>
-              Practical AI &amp; digital systems
-              for Nigerian professionals
+              Practical AI &amp; digital systems for Nigerian professionals
             </span>
           </Link>
 
@@ -155,45 +142,26 @@ export function Header() {
               />
             </Link>
 
-            <Link
-              href="/"
-              className="brand-name"
-            >
-              <strong>
-                RuffNeck Learn
-              </strong>
-
+            <Link href="/" className="brand-name rn-brand-copy">
+              <strong>RuffNeck Learn</strong>
               <span>
-                Practical AI &amp; digital systems
-                for Nigerian professionals
+                Practical AI &amp; digital systems for Nigerian professionals
               </span>
             </Link>
           </div>
 
-          <nav
-            className="nav"
-            aria-label="Main navigation"
-          >
-            <Link
-              href="/courses"
-              className="rn-nav-button"
-            >
+          <nav className="nav" aria-label="Main navigation">
+            <Link href="/courses" className="rn-nav-button rn-nav-courses">
               Courses
             </Link>
 
-            {loading ? null : isAuthenticated ? (
+            {!loading && isAuthenticated && (
               <>
-                <Link
-                  href="/student/courses"
-                  className="rn-nav-button"
-                >
+                <Link href="/student/courses" className="rn-nav-button">
                   My learning
                 </Link>
 
-                <Link
-                  href="/student/scan"
-                  className="rn-nav-button"
-                >
+                <Link href="/student/scan" className="rn-nav-button">
                   Scan &amp; Learn
                 </Link>
 
@@ -206,25 +174,9 @@ export function Header() {
 
                 <Link
                   href="/student/labs"
-                  className="rn-nav-button"
-                  style={{
-                    backgroundColor: "#e0f7fc",
-                    color: "#0b1e3a",
-                    border: "1px solid #00b4d8",
-                    borderRadius: "9px",
-                    fontWeight: 750,
-                    textDecoration: "none",
-                    padding: "8px 12px",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "6px",
-                    whiteSpace: "nowrap",
-                    boxShadow: "0 2px 6px rgba(0, 180, 216, 0.15)",
-                  }}
+                  className="rn-nav-button rn-nav-labs"
                 >
-                  <span aria-hidden="true">✦</span>
-                  Practical Labs
+                  ✦ Practical Labs
                 </Link>
 
                 <Link
@@ -234,17 +186,11 @@ export function Header() {
                   Skill Passport
                 </Link>
 
-                <Link
-                  href="/student/ai-drafts"
-                  className="rn-nav-button"
-                >
+                <Link href="/student/ai-drafts" className="rn-nav-button">
                   My AI Drafts
                 </Link>
 
-                <Link
-                  href="/student/payments"
-                  className="rn-nav-button"
-                >
+                <Link href="/student/payments" className="rn-nav-button">
                   Payment History
                 </Link>
 
@@ -262,40 +208,34 @@ export function Header() {
                   Certificates
                 </Link>
 
-                {canAccessAdmin ? (
+                {canAccessAdmin && (
                   <Link
                     href="/admin/lms"
-                    className="rn-nav-button"
+                    className="rn-nav-button rn-nav-admin"
                   >
                     Admin
                   </Link>
-                ) : null}
+                )}
 
                 <button
                   type="button"
-                  className="rn-nav-button"
+                  className="rn-nav-button rn-nav-signout"
                   onClick={handleSignOut}
                   disabled={signingOut}
                 >
-                  {signingOut
-                    ? "Signing out..."
-                    : "Sign out"}
+                  {signingOut ? "Signing out..." : "Sign out"}
                 </button>
               </>
-            ) : (
+            )}
+
+            {!loading && !isAuthenticated && (
               <>
-                <Link
-                  href="/login"
-                  className="rn-nav-button"
-                >
+                <Link href="/login" className="rn-nav-button rn-nav-login">
                   Log in
                 </Link>
 
-                <Link
-                  href="/signup"
-                  className="rn-nav-button"
-                >
-                  Sign up
+                <Link href="/signup" className="rn-nav-button rn-nav-signup">
+                  Sign up →
                 </Link>
               </>
             )}
@@ -304,19 +244,7 @@ export function Header() {
       </header>
 
       {signOutError && (
-        <div
-          role="alert"
-          style={{
-            maxWidth: 1200,
-            margin: "10px auto",
-            padding: "10px 16px",
-            color: "#991b1b",
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
-            borderRadius: 8,
-            fontSize: 14,
-          }}
-        >
+        <div role="alert" className="rn-header-error">
           Sign out failed: {signOutError}
         </div>
       )}
