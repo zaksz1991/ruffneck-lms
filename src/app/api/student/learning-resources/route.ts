@@ -20,18 +20,78 @@ const TYPES = [
 
 type ResourceType = (typeof TYPES)[number];
 
+type ResourceRecord = Record<string, unknown>;
+
 const SELECT_FIELDS =
   "id,title,url,description,resource_type,course_title,topic,is_favorite,created_at,updated_at,file_path,file_name,file_size,mime_type";
 
-const ALLOWED_FILES: Record<string, string> = {
-  pdf: "application/pdf",
-  doc: "application/msword",
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  txt: "text/plain",
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
+const ALLOWED_FILES: Record<
+  string,
+  { mime: string; signature: (bytes: Uint8Array) => boolean }
+> = {
+  pdf: {
+    mime: "application/pdf",
+    signature: (bytes) =>
+      bytes.length >= 5 &&
+      bytes[0] === 0x25 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x44 &&
+      bytes[3] === 0x46 &&
+      bytes[4] === 0x2d,
+  },
+  png: {
+    mime: "image/png",
+    signature: (bytes) =>
+      bytes.length >= 8 &&
+      bytes[0] === 0x89 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x4e &&
+      bytes[3] === 0x47 &&
+      bytes[4] === 0x0d &&
+      bytes[5] === 0x0a &&
+      bytes[6] === 0x1a &&
+      bytes[7] === 0x0a,
+  },
+  jpg: {
+    mime: "image/jpeg",
+    signature: (bytes) =>
+      bytes.length >= 3 &&
+      bytes[0] === 0xff &&
+      bytes[1] === 0xd8 &&
+      bytes[2] === 0xff,
+  },
+  jpeg: {
+    mime: "image/jpeg",
+    signature: (bytes) =>
+      bytes.length >= 3 &&
+      bytes[0] === 0xff &&
+      bytes[1] === 0xd8 &&
+      bytes[2] === 0xff,
+  },
+  txt: {
+    mime: "text/plain",
+    signature: (bytes) => {
+      for (const byte of bytes) {
+        if (
+          byte === 0 ||
+          (byte < 32 &&
+            byte !== 9 &&
+            byte !== 10 &&
+            byte !== 12 &&
+            byte !== 13)
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    },
+  },
 };
+
+function jsonError(message: string, status: number) {
+  return NextResponse.json({ error: message }, { status });
+}
 
 function cleanText(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
@@ -70,8 +130,11 @@ function validUrl(value: unknown): string | null {
   }
 }
 
-function jsonError(message: string, status: number) {
-  return NextResponse.json({ error: message }, { status });
+function isResourceType(value: unknown): value is ResourceType {
+  return (
+    typeof value === "string" &&
+    TYPES.includes(value as ResourceType)
+  );
 }
 
 async function session() {
@@ -103,28 +166,45 @@ function sanitizeFilename(filename: string): string {
       .replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-zA-Z0-9._-]/g, "_")
       .replace(/\.{2,}/g, ".")
+      .replace(/^\.+/, "")
       .slice(0, 150) || "document"
   );
 }
 
-function validUpload(file: File): boolean {
+async function validUpload(file: File): Promise<{
+  valid: boolean;
+  mime: string | null;
+}> {
   if (file.size <= 0 || file.size > MAX_FILE_SIZE) {
-    return false;
+    return { valid: false, mime: null };
   }
 
   const extension = getFileExtension(file.name);
-  const expectedMime = ALLOWED_FILES[extension];
+  const config = ALLOWED_FILES[extension];
 
-  if (!expectedMime || file.type !== expectedMime) {
-    return false;
+  if (!config) {
+    return { valid: false, mime: null };
   }
 
-  return true;
+  // Browser-provided MIME type must agree with the extension.
+  if (file.type && file.type !== config.mime) {
+    return { valid: false, mime: null };
+  }
+
+  const bytes = new Uint8Array(
+    await file.slice(0, 16).arrayBuffer(),
+  );
+
+  if (!config.signature(bytes)) {
+    return { valid: false, mime: null };
+  }
+
+  return { valid: true, mime: config.mime };
 }
 
 async function attachDownloadLinks(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  resources: Record<string, unknown>[],
+  resources: ResourceRecord[],
 ) {
   return Promise.all(
     resources.map(async (resource) => {
@@ -134,6 +214,19 @@ async function attachDownloadLinks(
           : null;
 
       if (!filePath) {
+        return {
+          ...resource,
+          download_url: null,
+        };
+      }
+
+      // Only generate links for paths belonging to this user.
+      const prefix =
+        typeof resource.user_id === "string"
+          ? `${resource.user_id}/`
+          : null;
+
+      if (!prefix || !filePath.startsWith(prefix)) {
         return {
           ...resource,
           download_url: null,
@@ -160,10 +253,22 @@ async function attachDownloadLinks(
 async function removeStoredFile(
   supabase: Awaited<ReturnType<typeof createClient>>,
   path: string | null,
-) {
-  if (!path) return;
+): Promise<boolean> {
+  if (!path) return true;
 
-  await supabase.storage.from(BUCKET).remove([path]);
+  const { error } = await supabase.storage
+    .from(BUCKET)
+    .remove([path]);
+
+  return !error;
+}
+
+async function readJson(request: NextRequest): Promise<unknown> {
+  try {
+    return await request.json();
+  } catch {
+    return null;
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -201,10 +306,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (
-      type !== "all" &&
-      TYPES.includes(type as ResourceType)
-    ) {
+    if (type !== "all" && isResourceType(type)) {
       query = query.eq("resource_type", type);
     }
 
@@ -216,7 +318,7 @@ export async function GET(request: NextRequest) {
 
     const resources = await attachDownloadLinks(
       supabase,
-      (data ?? []) as Record<string, unknown>[],
+      (data ?? []) as ResourceRecord[],
     );
 
     return NextResponse.json({ resources });
@@ -241,7 +343,6 @@ export async function POST(request: NextRequest) {
 
     const contentType = request.headers.get("content-type") ?? "";
 
-    // Document upload.
     if (contentType.includes("multipart/form-data")) {
       const form = await request.formData();
 
@@ -260,9 +361,8 @@ export async function POST(request: NextRequest) {
       const requestedType = form.get("resource_type");
 
       const resourceType: ResourceType =
-        typeof requestedType === "string" &&
-        TYPES.includes(requestedType as ResourceType)
-          ? (requestedType as ResourceType)
+        isResourceType(requestedType)
+          ? requestedType
           : "document";
 
       if (!(file instanceof File)) {
@@ -284,9 +384,11 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if (!validUpload(file)) {
+      const validation = await validUpload(file);
+
+      if (!validation.valid || !validation.mime) {
         return jsonError(
-          "Upload a valid PDF, DOC, DOCX, TXT, PNG, or JPEG file no larger than 10 MB.",
+          "Upload a valid PDF, TXT, PNG, or JPEG file no larger than 10 MB. The file contents must match the extension.",
           400,
         );
       }
@@ -297,7 +399,7 @@ export async function POST(request: NextRequest) {
       const { error: uploadError } = await supabase.storage
         .from(BUCKET)
         .upload(path, file, {
-          contentType: ALLOWED_FILES[getFileExtension(file.name)],
+          contentType: validation.mime,
           upsert: false,
         });
 
@@ -321,50 +423,59 @@ export async function POST(request: NextRequest) {
           file_path: path,
           file_name: file.name.slice(0, 255),
           file_size: file.size,
-          mime_type: ALLOWED_FILES[getFileExtension(file.name)],
+          mime_type: validation.mime,
         })
         .select(SELECT_FIELDS)
         .single();
 
       if (error) {
-        await removeStoredFile(supabase, path);
+        const removed = await removeStoredFile(supabase, path);
 
-        return jsonError(
-          "Could not save the uploaded document record. Confirm the database migration has been applied.",
-          500,
+        return NextResponse.json(
+          {
+            error: removed
+              ? "Could not save the uploaded document record. Confirm the database migration has been applied."
+              : "Could not save the document record, and storage cleanup failed. Administrator review is required.",
+          },
+          { status: 500 },
         );
       }
 
       const [resource] = await attachDownloadLinks(
         supabase,
-        [data as Record<string, unknown>],
+        [
+          {
+            ...(data as ResourceRecord),
+            user_id: user.id,
+          },
+        ],
       );
 
       return NextResponse.json({ resource }, { status: 201 });
     }
 
-    // Existing save-link functionality.
-    const body = await request.json();
+    const body = await readJson(request);
 
-    const title = cleanText(body.title, MAX_TITLE);
-    const url = validUrl(body.url);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return jsonError("A valid JSON resource is required.", 400);
+    }
+
+    const input = body as Record<string, unknown>;
+    const title = cleanText(input.title, MAX_TITLE);
+    const url = validUrl(input.url);
 
     const description = optionalText(
-      body.description,
+      input.description,
       MAX_DESCRIPTION,
     );
 
-    const courseTitle = optionalText(
-      body.course_title,
-      180,
-    );
+    const courseTitle = optionalText(input.course_title, 180);
+    const topic = optionalText(input.topic, 120);
 
-    const topic = optionalText(body.topic, 120);
-
-    const resourceType: ResourceType = TYPES.includes(
-      body.resource_type,
+    const resourceType: ResourceType = isResourceType(
+      input.resource_type,
     )
-      ? body.resource_type
+      ? input.resource_type
       : "other";
 
     if (
@@ -423,20 +534,26 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    const body = await readJson(request);
 
-    if (typeof body.id !== "string" || !body.id) {
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return jsonError("A valid update request is required.", 400);
+    }
+
+    const input = body as Record<string, unknown>;
+
+    if (typeof input.id !== "string" || !input.id.trim()) {
       return jsonError("Resource ID is required.", 400);
     }
 
     const update: Record<string, unknown> = {};
 
-    if (typeof body.is_favorite === "boolean") {
-      update.is_favorite = body.is_favorite;
+    if (typeof input.is_favorite === "boolean") {
+      update.is_favorite = input.is_favorite;
     }
 
-    if (typeof body.title === "string") {
-      const value = cleanText(body.title, MAX_TITLE);
+    if (typeof input.title === "string") {
+      const value = cleanText(input.title, MAX_TITLE);
 
       if (!value) {
         return jsonError("Title is invalid.", 400);
@@ -445,80 +562,73 @@ export async function PATCH(request: NextRequest) {
       update.title = value;
     }
 
-    if (typeof body.url === "string") {
-      const value = validUrl(body.url);
+    if (typeof input.url === "string") {
+      const value = validUrl(input.url);
 
       if (!value) {
-        return jsonError(
-          "URL must use HTTP or HTTPS.",
-          400,
-        );
+        return jsonError("URL must use HTTP or HTTPS.", 400);
       }
 
       update.url = value;
     }
 
-    if (typeof body.description === "string") {
-      if (body.description.length > MAX_DESCRIPTION) {
+    if (typeof input.description === "string") {
+      if (input.description.length > MAX_DESCRIPTION) {
         return jsonError("Description is too long.", 400);
       }
 
-      update.description = body.description.trim() || null;
+      update.description = input.description.trim() || null;
     }
 
-    if (typeof body.topic === "string") {
-      if (body.topic.length > 120) {
+    if (typeof input.topic === "string") {
+      if (input.topic.length > 120) {
         return jsonError("Topic is too long.", 400);
       }
 
-      update.topic = body.topic.trim() || null;
+      update.topic = input.topic.trim() || null;
     }
 
-    if (typeof body.course_title === "string") {
-      if (body.course_title.length > 180) {
+    if (typeof input.course_title === "string") {
+      if (input.course_title.length > 180) {
         return jsonError("Course title is too long.", 400);
       }
 
       update.course_title =
-        body.course_title.trim() || null;
+        input.course_title.trim() || null;
     }
 
-    if (body.resource_type !== undefined) {
-      if (!TYPES.includes(body.resource_type)) {
-        return jsonError(
-          "Invalid resource type.",
-          400,
-        );
+    if (input.resource_type !== undefined) {
+      if (!isResourceType(input.resource_type)) {
+        return jsonError("Invalid resource type.", 400);
       }
 
-      update.resource_type = body.resource_type;
+      update.resource_type = input.resource_type;
     }
 
     if (!Object.keys(update).length) {
-      return jsonError(
-        "No valid fields supplied.",
-        400,
-      );
+      return jsonError("No valid fields supplied.", 400);
     }
 
     const { data, error } = await supabase
       .from(TABLE)
       .update(update)
-      .eq("id", body.id)
+      .eq("id", input.id.trim())
       .eq("user_id", user.id)
       .select(SELECT_FIELDS)
       .single();
 
-    if (error) {
-      return jsonError(
-        "Could not update resource.",
-        500,
-      );
+    if (error || !data) {
+      return jsonError("Could not update resource.", 404);
     }
 
     const [resource] = await attachDownloadLinks(
       supabase,
-      [data as Record<string, unknown>],
+      [
+        {
+          ...(data as ResourceRecord),
+          user_id: user.id,
+        },
+      ],
     );
 
     return NextResponse.json({ resource });
@@ -538,13 +648,10 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const id = request.nextUrl.searchParams.get("id");
+    const id = request.nextUrl.searchParams.get("id")?.trim();
 
     if (!id) {
-      return jsonError(
-        "Resource ID is required.",
-        400,
-      );
+      return jsonError("Resource ID is required.", 400);
     }
 
     const { data: resource, error: lookupError } = await supabase
@@ -555,14 +662,34 @@ export async function DELETE(request: NextRequest) {
       .maybeSingle();
 
     if (lookupError) {
-      return jsonError(
-        "Could not find the resource.",
-        500,
-      );
+      return jsonError("Could not find the resource.", 500);
     }
 
     if (!resource) {
       return jsonError("Resource not found.", 404);
+    }
+
+    // Reject unexpected paths before performing storage operations.
+    const filePath =
+      typeof resource.file_path === "string"
+        ? resource.file_path
+        : null;
+
+    if (filePath && !filePath.startsWith(`${user.id}/`)) {
+      return jsonError("Resource file ownership could not be verified.", 403);
+    }
+
+    // Remove the database row only after storage cleanup succeeds.
+    // This avoids orphaning the file when storage deletion fails.
+    if (filePath) {
+      const removed = await removeStoredFile(supabase, filePath);
+
+      if (!removed) {
+        return jsonError(
+          "Could not remove the stored file. The resource was not deleted.",
+          500,
+        );
+      }
     }
 
     const { error: deleteError } = await supabase
@@ -573,22 +700,15 @@ export async function DELETE(request: NextRequest) {
 
     if (deleteError) {
       return jsonError(
-        "Could not delete resource.",
+        "The file was removed, but the resource record could not be deleted. Administrator review may be required.",
         500,
-      );
-    }
-
-    if (resource.file_path) {
-      await removeStoredFile(
-        supabase,
-        resource.file_path,
       );
     }
 
     return NextResponse.json({ success: true });
   } catch {
     return jsonError(
-      "Unexpected error while deleting resource.",
+      "Unexpected error while deleting resources.",
       500,
     );
   }
