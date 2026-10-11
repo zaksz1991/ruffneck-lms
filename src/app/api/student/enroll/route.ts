@@ -28,8 +28,20 @@ type DiscountCode = {
   expires_at: string | null;
   usage_limit: number | null;
   usage_count: number;
-  per_student_limit: number;
+  per_student_limit: number | null;
   is_active: boolean;
+};
+
+type ExistingPayment = {
+  id: string;
+  tx_ref: string;
+  checkout_url: string | null;
+  status: string;
+  amount: number;
+  currency: string;
+  original_amount: number | null;
+  discount_code_id: string | null;
+  discount_amount: number | null;
 };
 
 function makeTxRef() {
@@ -46,9 +58,7 @@ function calculateDiscount(
 ): number {
   let amount =
     discount.discount_type === "percentage"
-      ? Math.floor(
-          (price * discount.discount_value) / 100,
-        )
+      ? Math.floor((price * discount.discount_value) / 100)
       : Math.floor(discount.discount_value);
 
   if (
@@ -64,6 +74,10 @@ function calculateDiscount(
   return Math.max(0, Math.min(price, amount));
 }
 
+function isValidDate(value: string | null): boolean {
+  return value === null || Number.isFinite(new Date(value).getTime());
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -74,20 +88,16 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return jsonError(
-        "You must be logged in to enroll.",
-        401,
-      );
+      return jsonError("You must be logged in to enroll.", 401);
     }
 
     const admin = createAdminClient();
 
-    const { data: profile, error: profileError } =
-      await admin
-        .from("profiles")
-        .select("full_name, email, phone, role")
-        .eq("id", user.id)
-        .maybeSingle();
+    const { data: profile, error: profileError } = await admin
+      .from("profiles")
+      .select("full_name, email, phone, role")
+      .eq("id", user.id)
+      .maybeSingle();
 
     if (profileError) {
       console.error("Profile lookup error:", profileError);
@@ -96,9 +106,7 @@ export async function POST(request: Request) {
 
     if (
       profile?.role &&
-      !["student", "admin", "instructor"].includes(
-        profile.role,
-      )
+      !["student", "admin", "instructor"].includes(profile.role)
     ) {
       return jsonError(
         "Your account is not permitted to enroll.",
@@ -137,9 +145,7 @@ export async function POST(request: Request) {
           : "";
 
     if (!courseId && !courseSlug) {
-      return jsonError(
-        "Course ID or course slug is required.",
-      );
+      return jsonError("Course ID or course slug is required.");
     }
 
     if (
@@ -156,14 +162,9 @@ export async function POST(request: Request) {
         "id, title, slug, price_ngn, currency, is_free, status",
       );
 
-    const { data: courseData, error: courseError } =
-      courseId
-        ? await courseQuery
-            .eq("id", courseId)
-            .maybeSingle()
-        : await courseQuery
-            .eq("slug", courseSlug)
-            .maybeSingle();
+    const { data: courseData, error: courseError } = courseId
+      ? await courseQuery.eq("id", courseId).maybeSingle()
+      : await courseQuery.eq("slug", courseSlug).maybeSingle();
 
     if (courseError) {
       console.error("Course lookup error:", courseError);
@@ -193,15 +194,8 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (enrollmentError) {
-      console.error(
-        "Enrollment lookup error:",
-        enrollmentError,
-      );
-
-      return jsonError(
-        "Unable to verify your enrollment.",
-        500,
-      );
+      console.error("Enrollment lookup error:", enrollmentError);
+      return jsonError("Unable to verify your enrollment.", 500);
     }
 
     if (
@@ -223,18 +217,13 @@ export async function POST(request: Request) {
       Boolean(course.is_free) ||
       Number(course.price_ngn ?? 0) <= 0;
 
-    const originalAmount = isFree
-      ? 0
-      : Number(course.price_ngn);
+    const originalAmount = isFree ? 0 : Number(course.price_ngn);
 
     if (
       !isFree &&
-      (!Number.isFinite(originalAmount) ||
-        originalAmount <= 0)
+      (!Number.isFinite(originalAmount) || originalAmount <= 0)
     ) {
-      return jsonError(
-        "This paid course has an invalid price.",
-      );
+      return jsonError("This paid course has an invalid price.");
     }
 
     let discount: DiscountCode | null = null;
@@ -247,23 +236,17 @@ export async function POST(request: Request) {
         );
       }
 
-      const {
-        data: discountData,
-        error: discountError,
-      } = await admin
-        .from("course_discount_codes")
-        .select(
-          "id, code, discount_type, discount_value, course_id, minimum_amount, maximum_discount, starts_at, expires_at, usage_limit, usage_count, per_student_limit, is_active",
-        )
-        .eq("code", discountCodeInput)
-        .maybeSingle();
+      const { data: discountData, error: discountError } =
+        await admin
+          .from("course_discount_codes")
+          .select(
+            "id, code, discount_type, discount_value, course_id, minimum_amount, maximum_discount, starts_at, expires_at, usage_limit, usage_count, per_student_limit, is_active",
+          )
+          .eq("code", discountCodeInput)
+          .maybeSingle();
 
       if (discountError) {
-        console.error(
-          "Discount lookup error:",
-          discountError,
-        );
-
+        console.error("Discount lookup error:", discountError);
         return jsonError(
           "Unable to verify the discount code.",
           500,
@@ -273,8 +256,15 @@ export async function POST(request: Request) {
       discount = discountData as DiscountCode | null;
 
       if (!discount || !discount.is_active) {
+        return jsonError("Invalid or inactive discount code.");
+      }
+
+      if (
+        !isValidDate(discount.starts_at) ||
+        !isValidDate(discount.expires_at)
+      ) {
         return jsonError(
-          "Invalid or inactive discount code.",
+          "This discount code has invalid date settings.",
         );
       }
 
@@ -315,6 +305,9 @@ export async function POST(request: Request) {
       }
 
       if (
+        !["percentage", "fixed"].includes(
+          discount.discount_type,
+        ) ||
         !Number.isFinite(discount.discount_value) ||
         discount.discount_value <= 0 ||
         (discount.discount_type === "percentage" &&
@@ -322,16 +315,6 @@ export async function POST(request: Request) {
       ) {
         return jsonError(
           "This discount code has an invalid discount value.",
-        );
-      }
-
-      if (
-        !["percentage", "fixed"].includes(
-          discount.discount_type,
-        )
-      ) {
-        return jsonError(
-          "This discount type is not supported.",
         );
       }
 
@@ -349,10 +332,7 @@ export async function POST(request: Request) {
         error: redemptionError,
       } = await admin
         .from("course_discount_redemptions")
-        .select("id", {
-          count: "exact",
-          head: true,
-        })
+        .select("id", { count: "exact", head: true })
         .eq("discount_code_id", discount.id)
         .eq("student_id", user.id);
 
@@ -361,7 +341,6 @@ export async function POST(request: Request) {
           "Discount usage lookup error:",
           redemptionError,
         );
-
         return jsonError(
           "Unable to verify discount usage.",
           500,
@@ -369,8 +348,8 @@ export async function POST(request: Request) {
       }
 
       if (
-        (count ?? 0) >=
-        Math.max(0, discount.per_student_limit)
+        discount.per_student_limit !== null &&
+        (count ?? 0) >= discount.per_student_limit
       ) {
         return jsonError(
           "You have reached the usage limit for this discount code.",
@@ -389,8 +368,7 @@ export async function POST(request: Request) {
     );
 
     /*
-     * Free enrollments and fully discounted enrollments
-     * do not require a Flutterwave checkout.
+     * Free and fully discounted enrollments bypass checkout.
      */
     if (isFree || finalAmount === 0) {
       let enrollmentId: string;
@@ -400,8 +378,7 @@ export async function POST(request: Request) {
           .from("enrollments")
           .update({
             enrollment_status:
-              existingEnrollment.enrollment_status ===
-              "completed"
+              existingEnrollment.enrollment_status === "completed"
                 ? "completed"
                 : "active",
             payment_status: isFree ? "free" : "paid",
@@ -451,9 +428,7 @@ export async function POST(request: Request) {
             p_student_id: user.id,
             p_course_id: course.id,
             p_payment_id: null,
-            p_amount_before_discount: Math.round(
-              originalAmount,
-            ),
+            p_amount_before_discount: Math.round(originalAmount),
             p_discount_amount: Math.round(discountAmount),
             p_amount_paid: 0,
           },
@@ -487,8 +462,12 @@ export async function POST(request: Request) {
     const amount = finalAmount;
     const currency = course.currency || "NGN";
 
+    /*
+     * Check for existing pending transactions before creating a
+     * new Flutterwave checkout.
+     */
     const {
-      data: existingPayments,
+      data: existingPaymentsData,
       error: existingPaymentError,
     } = await admin
       .from("course_payments")
@@ -506,24 +485,24 @@ export async function POST(request: Request) {
         "Existing payment lookup error:",
         existingPaymentError,
       );
-
       return jsonError(
         "Unable to check existing payments.",
         500,
       );
     }
 
-    const matchingPayment = existingPayments?.find(
+    const existingPayments =
+      (existingPaymentsData ?? []) as ExistingPayment[];
+
+    const matchingPayment = existingPayments.find(
       (payment) =>
         Boolean(payment.checkout_url) &&
         Number(payment.amount) === amount &&
         payment.currency === currency &&
-        Number(payment.original_amount) ===
-          originalAmount &&
+        Number(payment.original_amount) === originalAmount &&
         (payment.discount_code_id ?? null) ===
           (discount?.id ?? null) &&
-        Number(payment.discount_amount ?? 0) ===
-          discountAmount,
+        Number(payment.discount_amount ?? 0) === discountAmount,
     );
 
     if (matchingPayment?.checkout_url) {
@@ -539,6 +518,22 @@ export async function POST(request: Request) {
         discountAmount,
         finalAmount,
       });
+    }
+
+    /*
+     * Never create a second pending payment for the same course.
+     * The existing checkout may still be payable at Flutterwave.
+     */
+    if (existingPayments.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "You already have a pending payment for this course with different payment details. Complete or resolve that payment before changing the discount code.",
+          code: "PENDING_PAYMENT_CONFLICT",
+          courseSlug: course.slug,
+        },
+        { status: 409 },
+      );
     }
 
     const customerName =
@@ -562,37 +557,31 @@ export async function POST(request: Request) {
 
     const txRef = makeTxRef();
 
-    const flutterwavePayment =
-      await createFlutterwavePayment({
-        amount,
-        currency,
-        txRef,
-        redirectUrl:
-          `${siteUrl}/api/payments/flutterwave/callback`,
-        customer: {
-          email: customerEmail,
-          name: customerName,
-          phone_number:
-            profile?.phone ||
-            user.user_metadata?.phone ||
-            undefined,
-        },
-        courseId: course.id,
-        courseTitle: course.title,
-        studentId: user.id,
-      });
+    const flutterwavePayment = await createFlutterwavePayment({
+      amount,
+      currency,
+      txRef,
+      redirectUrl: `${siteUrl}/api/payments/flutterwave/callback`,
+      customer: {
+        email: customerEmail,
+        name: customerName,
+        phone_number:
+          profile?.phone ||
+          user.user_metadata?.phone ||
+          undefined,
+      },
+      courseId: course.id,
+      courseTitle: course.title,
+      studentId: user.id,
+    });
 
     const checkoutUrl = flutterwavePayment.link;
 
-    if (
-      !checkoutUrl ||
-      !/^https:\/\//i.test(checkoutUrl)
-    ) {
+    if (!checkoutUrl || !/^https:\/\//i.test(checkoutUrl)) {
       console.error(
         "Invalid Flutterwave checkout URL:",
         flutterwavePayment,
       );
-
       return jsonError(
         "Flutterwave did not return a valid checkout URL.",
         502,
@@ -622,10 +611,22 @@ export async function POST(request: Request) {
       .single();
 
     if (paymentError) {
-      console.error(
-        "Course payment insert error:",
-        paymentError,
-      );
+      console.error("Course payment insert error:", paymentError);
+
+      /*
+       * Another concurrent request may have created a pending
+       * payment after our initial lookup. Do not create a duplicate.
+       */
+      if (paymentError.code === "23505") {
+        return NextResponse.json(
+          {
+            error:
+              "A payment for this course is already being created. Refresh and try again.",
+            code: "PENDING_PAYMENT_CONFLICT",
+          },
+          { status: 409 },
+        );
+      }
 
       return jsonError(
         "Unable to create the payment record. Please retry.",
