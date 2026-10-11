@@ -27853,3 +27853,83 @@ main section {
     transform: none;
   }
 }
+
+/* RUFFNECK LEARN — HOMEPAGE POLISH */
+
+/* Improve homepage typography and spacing */
+body {
+  text-rendering: optimizeLegibility;
+}
+
+.rn-courses-page,
+main {
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Featured course cards */
+.rn-course-catalogue-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 6px 24px rgba(11, 30, 58, 0.06);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.rn-course-catalogue-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 32px rgba(11, 30, 58, 0.12);
+}
+
+/* Keep course labels readable and separated */
+.rn-course-catalogue-card span,
+.rn-course-catalogue-card .badge,
+.rn-course-catalogue-card [class*="badge"],
+.rn-course-catalogue-card [class*="tag"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 6px 8px 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #edf7fb;
+  color: #164766;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+/* Course titles */
+.rn-course-catalogue-card h2,
+.rn-course-catalogue-card h3 {
+  color: #0b1e3a;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+/* Course descriptions */
+.rn-course-catalogue-card p {
+  color: #526174;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+/* Course buttons */
+.rn-course-catalogue-card a {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Mobile spacing */
+@media (max-width: 640px) {
+  .rn-course-catalogue-card h2,
+  .rn-course-catalogue-card h3 {
+    font-size: 18px;
+  }
+
+  .rn-course-catalogue-card p {
+    font-size: 14px;
+  }
+}
