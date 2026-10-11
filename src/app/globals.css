@@ -26932,3 +26932,261 @@ main.page-shell .rn-button {
       32px minmax(0, 1fr) !important;
   }
 }
+
+/* RuffNeck Learn tagline */
+.brand-name span,
+.rn-parent-brand-link span {
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.6;
+  letter-spacing: 0.15px;
+  color: #26384d;
+}
+
+.rn-parent-brand-link span {
+  color: #e2edf8;
+}
+
+/* Header navigation buttons */
+.nav .rn-nav-button {
+  background-color: #edf3f9;
+  color: #0b1e3a;
+  border: 1px solid #cbd8e6;
+  border-radius: 8px;
+  font-weight: 700;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.nav .rn-nav-button:hover {
+  background-color: #d8f6fc;
+  color: #0b1e3a;
+  border-color: #00b4d8;
+}
+
+/* Courses */
+.nav .rn-nav-button[href="/courses"] {
+  background-color: #0b1e3a;
+  color: #ffffff;
+  border-color: #0b1e3a;
+}
+
+/* Login */
+.nav .rn-nav-button[href="/login"] {
+  background-color: #ffffff;
+  color: #0b1e3a;
+  border-color: #0b1e3a;
+}
+
+/* Sign up */
+.nav .rn-nav-button[href="/signup"] {
+  background-color: #fbbf24;
+  color: #0b1e3a;
+  border-color: #fbbf24;
+  font-weight: 800;
+}
+
+/* Practical Labs */
+.nav .rn-nav-button[href="/student/labs"] {
+  background-color: #dff8fc;
+  color: #0b1e3a;
+  border-color: #00b4d8;
+}
+
+/* Sign out */
+.nav button.rn-nav-button {
+  background-color: #fef2f2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+.nav button.rn-nav-button:hover {
+  background-color: #fee2e2;
+  border-color: #dc2626;
+}
+
+/* Mobile readability */
+@media (max-width: 600px) {
+  .brand-name span,
+  .rn-parent-brand-link span {
+    font-size: 12px;
+  }
+
+  .nav .rn-nav-button {
+    font-size: 12px;
+  }
+}
+
+/* =========================================
+   RUFFNECK LEARN — MODERN COURSE DESIGN
+   ========================================= */
+
+:root {
+  --rn-navy: #0b1e3a;
+  --rn-cyan: #00b4d8;
+  --rn-gold: #fbbf24;
+  --rn-text: #172b46;
+  --rn-muted: #64748b;
+  --rn-border: #e2e8f0;
+  --rn-surface: #ffffff;
+  --rn-background: #f5f8fc;
+}
+
+/* Page background and typography */
+body {
+  color: var(--rn-text);
+  font-family: "Segoe UI", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  color: var(--rn-text);
+}
+
+/* Course page headings */
+main h1,
+main h2 {
+  color: var(--rn-navy);
+  font-weight: 800;
+  letter-spacing: -0.7px;
+  line-height: 1.2;
+}
+
+main h1 {
+  font-size: clamp(28px, 4vw, 42px);
+}
+
+main h2 {
+  font-size: clamp(22px, 3vw, 30px);
+}
+
+main h3 {
+  color: var(--rn-navy);
+  font-weight: 750;
+  letter-spacing: -0.3px;
+}
+
+/* Course cards — common semantic elements */
+main article,
+main [class*="course-card"],
+main [class*="CourseCard"] {
+  border: 1px solid var(--rn-border);
+  border-radius: 16px;
+  background: var(--rn-surface);
+  box-shadow: 0 4px 18px rgba(11, 30, 58, 0.045);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+main article:hover,
+main [class*="course-card"]:hover,
+main [class*="CourseCard"]:hover {
+  transform: translateY(-3px);
+  border-color: #a5e8f4;
+  box-shadow: 0 12px 30px rgba(11, 30, 58, 0.09);
+}
+
+/* Course descriptions */
+main p {
+  line-height: 1.75;
+}
+
+main article p,
+main [class*="course-card"] p,
+main [class*="CourseCard"] p {
+  color: var(--rn-muted);
+  font-size: 14px;
+}
+
+/* Course action buttons */
+main a[href*="/courses/"],
+main a[href*="/learn/"] {
+  text-underline-offset: 4px;
+}
+
+main a[href*="/courses/"]:not([class*="text-"]),
+main a[href*="/learn/"]:not([class*="text-"]) {
+  text-decoration-thickness: 1px;
+}
+
+/* Form and action buttons */
+main button,
+main a[class*="button"],
+main a[class*="btn"] {
+  border-radius: 9px;
+  font-weight: 700;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+main button:focus-visible,
+main a:focus-visible {
+  outline: 3px solid var(--rn-cyan);
+  outline-offset: 3px;
+}
+
+/* Course information badges */
+main [class*="badge"],
+main [class*="Badge"] {
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1px;
+}
+
+/* Course grids */
+main [class*="grid"] {
+  gap: 22px;
+}
+
+/* Course images */
+main article img,
+main [class*="course-card"] img,
+main [class*="CourseCard"] img {
+  border-radius: 12px;
+}
+
+/* Course content panels */
+main section {
+  margin-bottom: 28px;
+}
+
+/* Mobile layout */
+@media (max-width: 640px) {
+  main h1 {
+    font-size: 29px;
+  }
+
+  main h2 {
+    font-size: 23px;
+  }
+
+  main [class*="grid"] {
+    gap: 14px;
+  }
+
+  main article,
+  main [class*="course-card"],
+  main [class*="CourseCard"] {
+    border-radius: 12px;
+  }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  main article,
+  main [class*="course-card"],
+  main [class*="CourseCard"] {
+    transition: none;
+  }
+
+  main article:hover,
+  main [class*="course-card"]:hover,
+  main [class*="CourseCard"]:hover {
+    transform: none;
+  }
+}
