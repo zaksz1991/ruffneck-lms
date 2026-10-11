@@ -205,6 +205,29 @@ export function Header() {
                 </Link>
 
                 <Link
+                  href="/student/labs"
+                  className="rn-nav-button"
+                  style={{
+                    backgroundColor: "#e0f7fc",
+                    color: "#0b1e3a",
+                    border: "1px solid #00b4d8",
+                    borderRadius: "9px",
+                    fontWeight: 750,
+                    textDecoration: "none",
+                    padding: "8px 12px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    whiteSpace: "nowrap",
+                    boxShadow: "0 2px 6px rgba(0, 180, 216, 0.15)",
+                  }}
+                >
+                  <span aria-hidden="true">✦</span>
+                  Practical Labs
+                </Link>
+
+                <Link
                   href="/student/skill-passport"
                   className="rn-nav-button"
                 >
