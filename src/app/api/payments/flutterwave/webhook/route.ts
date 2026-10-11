@@ -122,9 +122,7 @@ function getNumber(value: unknown) {
       ? Number(value)
       : Number.NaN;
 
-  return Number.isFinite(number)
-    ? number
-    : 0;
+  return Number.isFinite(number) ? number : 0;
 }
 
 async function getPaymentByReference(
@@ -137,9 +135,7 @@ async function getPaymentByReference(
     .eq("tx_ref", txRef)
     .maybeSingle();
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 
   return data as unknown as PaymentRecord | null;
 }
@@ -155,12 +151,9 @@ async function createOrActivateEnrollment(
     .eq("course_id", payment.course_id)
     .maybeSingle();
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 
-  const existing =
-    data as unknown as EnrollmentRecord | null;
+  const existing = data as EnrollmentRecord | null;
 
   if (existing) {
     if (
@@ -181,11 +174,9 @@ async function createOrActivateEnrollment(
         .select(ENROLLMENT_COLUMNS)
         .single();
 
-    if (updateError) {
-      throw new Error(updateError.message);
-    }
+    if (updateError) throw new Error(updateError.message);
 
-    return updated as unknown as EnrollmentRecord;
+    return updated as EnrollmentRecord;
   }
 
   const { data: created, error: createError } =
@@ -201,18 +192,13 @@ async function createOrActivateEnrollment(
       .select(ENROLLMENT_COLUMNS)
       .single();
 
-  if (!createError) {
-    return created as unknown as EnrollmentRecord;
-  }
+  if (!createError) return created as EnrollmentRecord;
 
   if (createError.code !== "23505") {
     throw new Error(createError.message);
   }
 
-  /*
-   * A concurrent webhook may have created the enrollment.
-   * Read it again, then ensure it is active and paid.
-   */
+  // Recover an enrollment created by a concurrent request.
   const { data: retry, error: retryError } =
     await admin
       .from("enrollments")
@@ -228,8 +214,7 @@ async function createOrActivateEnrollment(
     );
   }
 
-  const enrollment =
-    retry as unknown as EnrollmentRecord;
+  const enrollment = retry as EnrollmentRecord;
 
   if (
     enrollment.enrollment_status === "active" &&
@@ -249,11 +234,9 @@ async function createOrActivateEnrollment(
       .select(ENROLLMENT_COLUMNS)
       .single();
 
-  if (activateError) {
-    throw new Error(activateError.message);
-  }
+  if (activateError) throw new Error(activateError.message);
 
-  return activated as unknown as EnrollmentRecord;
+  return activated as EnrollmentRecord;
 }
 
 async function markPaymentSuccessful(
@@ -263,9 +246,6 @@ async function markPaymentSuccessful(
 ): Promise<PaymentRecord> {
   const now = new Date().toISOString();
 
-  /*
-   * Do not overwrite a transaction ID with an invalid value.
-   */
   const transactionId =
     verification.id > 0
       ? verification.id
@@ -284,22 +264,11 @@ async function markPaymentSuccessful(
     .select(PAYMENT_COLUMNS)
     .maybeSingle();
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 
-  if (data) {
-    return data as unknown as PaymentRecord;
-  }
+  if (data) return data as unknown as PaymentRecord;
 
-  /*
-   * Another request may have completed the payment first.
-   * Re-read instead of blindly repeating the update.
-   */
-  const latest = await getPaymentByReference(
-    admin,
-    payment.tx_ref,
-  );
+  const latest = await getPaymentByReference(admin, payment.tx_ref);
 
   if (!latest || latest.status !== "successful") {
     throw new Error(
@@ -310,14 +279,6 @@ async function markPaymentSuccessful(
   return latest;
 }
 
-/**
- * Records a discount redemption once.
- *
- * The unique database constraint on
- * (discount_code_id, student_id) is the final duplicate
- * protection. Usage counts must be incremented atomically
- * in the database to prevent lost updates.
- */
 async function recordDiscountRedemption(
   admin: ReturnType<typeof createAdminClient>,
   payment: PaymentRecord,
@@ -329,74 +290,26 @@ async function recordDiscountRedemption(
     return;
   }
 
-  const { data: existing, error: existingError } =
-    await admin
-      .from("course_discount_redemptions")
-      .select("id")
-      .eq("discount_code_id", payment.discount_code_id)
-      .eq("student_id", payment.student_id)
-      .maybeSingle();
-
-  if (existingError) {
-    throw new Error(
-      `Unable to check discount redemption: ${existingError.message}`,
-    );
-  }
-
-  if (existing) {
-    return;
-  }
-
   const originalAmount =
     payment.original_amount ??
     payment.amount + payment.discount_amount;
 
-  const { error: insertError } = await admin
-    .from("course_discount_redemptions")
-    .insert({
-      discount_code_id: payment.discount_code_id,
-      student_id: payment.student_id,
-      course_id: payment.course_id,
-      payment_id: payment.id,
-      amount_before_discount: originalAmount,
-      discount_amount: payment.discount_amount,
-      amount_paid: payment.amount,
-    });
-
-  if (insertError) {
-    if (insertError.code === "23505") {
-      /*
-       * Another request already inserted this redemption.
-       * Do not increment the counter again.
-       */
-      return;
-    }
-
-    throw new Error(
-      `Unable to record discount redemption: ${insertError.message}`,
-    );
-  }
-
-  /*
-   * Important: do not increment usage_count using a
-   * read-then-write operation here. Concurrent updates
-   * can overwrite each other. Use a database RPC that
-   * atomically increments usage_count and handles the
-   * redemption in one transaction.
-   *
-   * The redemption is persisted above, so the RPC should
-   * be designed to reconcile recorded redemptions safely.
-   */
-  const { error: rpcError } = await admin.rpc(
-    "increment_discount_usage",
+  const { error } = await admin.rpc(
+    "record_discount_redemption",
     {
       p_discount_code_id: payment.discount_code_id,
+      p_student_id: payment.student_id,
+      p_course_id: payment.course_id,
+      p_payment_id: payment.id,
+      p_amount_before_discount: Math.round(originalAmount),
+      p_discount_amount: Math.round(payment.discount_amount),
+      p_amount_paid: Math.round(payment.amount),
     },
   );
 
-  if (rpcError) {
+  if (error) {
     throw new Error(
-      `Redemption was recorded but discount usage could not be updated: ${rpcError.message}`,
+      `Unable to record discount redemption: ${error.message}`,
     );
   }
 }
@@ -419,9 +332,7 @@ export async function POST(request: Request) {
   const secret = getWebhookSecret();
 
   if (!secret) {
-    console.error(
-      "Flutterwave webhook hash is not configured.",
-    );
+    console.error("Flutterwave webhook hash is not configured.");
 
     return jsonResponse(
       { error: "Webhook configuration error." },
@@ -429,17 +340,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const providedHash = getWebhookHash(request);
-
-  if (!constantTimeEqual(providedHash, secret)) {
+  if (!constantTimeEqual(getWebhookHash(request), secret)) {
     return jsonResponse(
       { error: "Invalid webhook signature." },
       401,
     );
   }
 
-  const contentLength =
-    request.headers.get("content-length");
+  const contentLength = request.headers.get("content-length");
 
   if (
     contentLength &&
@@ -496,14 +404,13 @@ export async function POST(request: Request) {
   }
 
   try {
-    const payload =
-      body as Record<string, unknown>;
+    const payload = body as Record<string, unknown>;
 
     const data =
       typeof payload.data === "object" &&
       payload.data !== null &&
       !Array.isArray(payload.data)
-        ? payload.data as Record<string, unknown>
+        ? (payload.data as Record<string, unknown>)
         : payload;
 
     const txRef =
@@ -526,16 +433,9 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
-    const payment = await getPaymentByReference(
-      admin,
-      txRef,
-    );
+    const payment = await getPaymentByReference(admin, txRef);
 
     if (!payment) {
-      /*
-       * A webhook for an unknown reference must not grant
-       * access. Acknowledge it to avoid endless retries.
-       */
       return jsonResponse({
         success: true,
         ignored: true,
@@ -544,8 +444,8 @@ export async function POST(request: Request) {
     }
 
     /*
-     * A previously successful payment can still need
-     * enrollment recovery after a partial failure.
+     * Successful payments can be retried to repair incomplete
+     * enrollment or discount-redemption processing.
      */
     if (payment.status === "successful") {
       const enrollment = await fulfillSuccessfulPayment(
@@ -562,59 +462,22 @@ export async function POST(request: Request) {
     }
 
     /*
-     * Never trust the webhook's reported status alone.
-     * Verify successful payments directly with Flutterwave.
-     * Non-success statuses do not grant course access.
+     * Verify non-terminal events too. Do not mark a payment failed
+     * solely because the webhook payload says failed: a delayed
+     * or out-of-order event must not override Flutterwave's status.
      */
-    if (
-      reportedStatus === "failed" ||
-      reportedStatus === "cancelled"
-    ) {
-      const nextStatus =
-        reportedStatus === "cancelled"
-          ? "cancelled"
-          : "failed";
-
-      const { error: statusError } = await admin
-        .from("course_payments")
-        .update({
-          status: nextStatus,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", payment.id)
-        .neq("status", "successful");
-
-      if (statusError) {
-        throw new Error(statusError.message);
-      }
-
-      return jsonResponse({
-        success: true,
-        processed: true,
-        payment_id: payment.id,
-        status: nextStatus,
-      });
-    }
-
     let verification: FlutterwaveVerification;
 
     try {
-      verification = transactionId > 0
-        ? await verifyFlutterwaveTransaction(
-            String(transactionId),
-          )
-        : await verifyFlutterwaveByReference(
-            payment.tx_ref,
-          );
+      verification =
+        transactionId > 0
+          ? await verifyFlutterwaveTransaction(
+              String(transactionId),
+            )
+          : await verifyFlutterwaveByReference(payment.tx_ref);
     } catch (error) {
-      console.error(
-        "Flutterwave transaction verification failed:",
-        error,
-      );
+      console.error("Flutterwave verification failed:", error);
 
-      /*
-       * Keep the payment retryable. Do not grant access.
-       */
       const { error: pendingError } = await admin
         .from("course_payments")
         .update({
@@ -644,15 +507,6 @@ export async function POST(request: Request) {
     const verifiedStatus =
       getString(verification.status).toLowerCase();
 
-    const verifiedTxRef =
-      getString(verification.txRef);
-
-    const verifiedCurrency =
-      getString(verification.currency).toUpperCase();
-
-    const verifiedAmount =
-      getNumber(verification.amount);
-
     if (verifiedStatus !== "successful") {
       const nextStatus: PaymentStatus =
         verifiedStatus === "cancelled"
@@ -670,9 +524,7 @@ export async function POST(request: Request) {
         .eq("id", payment.id)
         .neq("status", "successful");
 
-      if (statusError) {
-        throw new Error(statusError.message);
-      }
+      if (statusError) throw new Error(statusError.message);
 
       return jsonResponse({
         success: true,
@@ -682,11 +534,10 @@ export async function POST(request: Request) {
       });
     }
 
-    if (verifiedTxRef !== payment.tx_ref) {
-      console.error(
-        "Flutterwave transaction reference mismatch.",
-        { paymentId: payment.id },
-      );
+    if (getString(verification.txRef) !== payment.tx_ref) {
+      console.error("Flutterwave transaction reference mismatch.", {
+        paymentId: payment.id,
+      });
 
       return jsonResponse(
         { error: "Transaction reference mismatch." },
@@ -695,13 +546,12 @@ export async function POST(request: Request) {
     }
 
     if (
-      verifiedCurrency !==
+      getString(verification.currency).toUpperCase() !==
       payment.currency.trim().toUpperCase()
     ) {
-      console.error(
-        "Flutterwave transaction currency mismatch.",
-        { paymentId: payment.id },
-      );
+      console.error("Flutterwave transaction currency mismatch.", {
+        paymentId: payment.id,
+      });
 
       return jsonResponse(
         { error: "Transaction currency mismatch." },
@@ -710,54 +560,38 @@ export async function POST(request: Request) {
     }
 
     /*
-     * Compare in currency minor units to avoid floating-point
-     * equality problems. This assumes the stored amount and
-     * Flutterwave's verified amount use the same currency unit.
+     * Both values are in the same currency unit according to the
+     * existing verification helper. Do not assume all currencies
+     * use two decimal places.
      */
-    const expectedMinor = Math.round(
-      Number(payment.amount) * 100,
-    );
-    const receivedMinor = Math.round(
-      verifiedAmount * 100,
-    );
+    const expectedAmount = Number(payment.amount);
+    const receivedAmount = Number(verification.amount);
 
     if (
-      !Number.isFinite(expectedMinor) ||
-      expectedMinor <= 0 ||
-      !Number.isFinite(receivedMinor) ||
-      receivedMinor < expectedMinor
+      !Number.isFinite(expectedAmount) ||
+      expectedAmount <= 0 ||
+      !Number.isFinite(receivedAmount) ||
+      receivedAmount < expectedAmount
     ) {
-      console.error(
-        "Flutterwave transaction amount mismatch.",
-        {
-          paymentId: payment.id,
-          expected: payment.amount,
-          received: verifiedAmount,
-        },
-      );
+      console.error("Flutterwave transaction amount mismatch.", {
+        paymentId: payment.id,
+        expected: payment.amount,
+        received: verification.amount,
+      });
 
       return jsonResponse(
-        {
-          error:
-            "Verified transaction amount does not meet the required course amount.",
-        },
+        { error: "Verified transaction amount mismatch." },
         409,
       );
     }
 
-    /*
-     * Re-read the payment to avoid overwriting a completed
-     * payment during concurrent webhook processing.
-     */
     const latestPayment = await getPaymentByReference(
       admin,
       payment.tx_ref,
     );
 
     if (!latestPayment) {
-      throw new Error(
-        "Payment record disappeared during processing.",
-      );
+      throw new Error("Payment record disappeared during processing.");
     }
 
     if (latestPayment.status === "successful") {
@@ -780,11 +614,6 @@ export async function POST(request: Request) {
       verification,
     );
 
-    /*
-     * If enrollment or discount processing fails, return 500.
-     * Flutterwave may retry; repeat processing repairs the
-     * incomplete fulfilment.
-     */
     const enrollment = await fulfillSuccessfulPayment(
       admin,
       updatedPayment,
@@ -796,14 +625,10 @@ export async function POST(request: Request) {
       verified: true,
       payment_id: updatedPayment.id,
       enrollment_id: enrollment.id,
-      transaction_id:
-        updatedPayment.flutterwave_transaction_id,
+      transaction_id: updatedPayment.flutterwave_transaction_id,
     });
   } catch (error) {
-    console.error(
-      "Flutterwave webhook processing error:",
-      error,
-    );
+    console.error("Flutterwave webhook processing error:", error);
 
     return jsonResponse(
       { error: "Webhook processing failed." },
