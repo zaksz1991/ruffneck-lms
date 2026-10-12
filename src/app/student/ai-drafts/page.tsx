@@ -60,10 +60,8 @@ const STATUS_LABELS: Record<DraftStatus, string> = {
   converted: "Converted",
 };
 
-function formatDateTime(value: string | null | undefined) {
-  if (!value) {
-    return "Not recorded";
-  }
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) return "Not recorded";
 
   const date = new Date(value);
 
@@ -72,13 +70,13 @@ function formatDateTime(value: string | null | undefined) {
   }
 
   return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "long",
+    dateStyle: "medium",
     timeStyle: "short",
     timeZone: "Africa/Lagos",
   }).format(date);
 }
 
-function getStatusClass(status: DraftStatus) {
+function getStatusClass(status: DraftStatus): string {
   switch (status) {
     case "revision_required":
       return "rn-badge rn-ai-draft-status-revision";
@@ -126,9 +124,7 @@ export default async function StudentAiDraftsPage() {
       `,
     )
     .eq("student_id", user.id)
-    .order("updated_at", {
-      ascending: false,
-    });
+    .order("updated_at", { ascending: false });
 
   if (error) {
     console.error("AI drafts page error:", error);
@@ -152,6 +148,14 @@ export default async function StudentAiDraftsPage() {
     (draft) => draft.status === "converted",
   ).length;
 
+  const editableCount = draftRows.filter(
+    (draft) => draft.status === "draft" || draft.status === "edited",
+  ).length;
+
+  const outputTypeCount = new Set(
+    draftRows.map((draft) => draft.output_type),
+  ).size;
+
   return (
     <main className="container rn-dashboard-shell">
       <section className="rn-page-header">
@@ -161,8 +165,8 @@ export default async function StudentAiDraftsPage() {
           <h1>My AI Drafts</h1>
 
           <p>
-            Review and manage learning materials generated from your scanned
-            notes, documents, and study materials.
+            Manage AI-generated lessons, study guides, revision notes,
+            quizzes, and flashcards in one workspace.
           </p>
         </div>
 
@@ -173,14 +177,37 @@ export default async function StudentAiDraftsPage() {
         </div>
       </section>
 
+      {error ? (
+        <section className="rn-card" role="alert">
+          <h2>Unable to load all drafts</h2>
+          <p>
+            Your AI drafts could not be retrieved. Refresh the page to try
+            again.
+          </p>
+        </section>
+      ) : null}
+
+      {revisionCount > 0 ? (
+        <section className="rn-card">
+          <h2>Action required: review your drafts</h2>
+
+          <p>
+            {revisionCount === 1
+              ? "One draft requires revision."
+              : `${revisionCount} drafts require revision.`}{" "}
+            Read the reviewer feedback, make the requested changes, and
+            resubmit your work.
+          </p>
+        </section>
+      ) : null}
+
       {draftRows.length === 0 ? (
         <section className="rn-card">
           <h2>No AI drafts yet</h2>
 
           <p>
-            Use Scan &amp; Learn to capture notes or documents and turn them
-            into lessons, study guides, revision notes, quizzes, or
-            flashcards.
+            Turn scanned notes and documents into structured learning
+            materials using Scan &amp; Learn.
           </p>
 
           <Link href="/student/scan" className="btn btn-primary">
@@ -192,12 +219,8 @@ export default async function StudentAiDraftsPage() {
           <section className="rn-card">
             <div className="rn-section-heading">
               <div>
-                <h2>Your AI learning workspace</h2>
-
-                <p>
-                  {draftRows.length} saved{" "}
-                  {draftRows.length === 1 ? "draft" : "drafts"}.
-                </p>
+                <h2>Workspace overview</h2>
+                <p>Your learning materials and review progress.</p>
               </div>
             </div>
 
@@ -205,6 +228,11 @@ export default async function StudentAiDraftsPage() {
               <div className="rn-dashboard-stat">
                 <strong>{draftRows.length}</strong>
                 <span>Total drafts</span>
+              </div>
+
+              <div className="rn-dashboard-stat">
+                <strong>{editableCount}</strong>
+                <span>Drafts to continue</span>
               </div>
 
               <div className="rn-dashboard-stat">
@@ -227,30 +255,30 @@ export default async function StudentAiDraftsPage() {
                 <span>Converted</span>
               </div>
             </div>
+
+            <div className="rn-ai-draft-timestamps">
+              <div>
+                <span>Different material types</span>
+                <strong>{outputTypeCount}</strong>
+              </div>
+
+              <div>
+                <span>Last workspace activity</span>
+                <strong>
+                  {formatDateTime(draftRows[0]?.updated_at)}
+                </strong>
+              </div>
+            </div>
           </section>
-
-          {revisionCount > 0 ? (
-            <section className="rn-card">
-              <h2>Revision required</h2>
-
-              <p>
-                {revisionCount === 1
-                  ? "One of your AI drafts has been returned by an LMS reviewer."
-                  : `${revisionCount} of your AI drafts have been returned by LMS reviewers.`}{" "}
-                Open the affected draft, review the feedback, make the
-                requested changes, and resubmit it.
-              </p>
-            </section>
-          ) : null}
 
           <section className="rn-card">
             <div className="rn-section-heading">
               <div>
-                <h2>Your drafts</h2>
-
+                <h2>Your learning materials</h2>
                 <p>
-                  Open a draft to review its learning material and manage its
-                  submission status.
+                  {draftRows.length}{" "}
+                  {draftRows.length === 1 ? "draft" : "drafts"} available.
+                  Select a draft to view its content and review feedback.
                 </p>
               </div>
             </div>
@@ -278,8 +306,9 @@ export default async function StudentAiDraftsPage() {
                     <h3>{draft.title}</h3>
 
                     <p>
-                      Audience:{" "}
-                      {AUDIENCE_LABELS[draft.audience] ?? draft.audience}
+                      <strong>Audience:</strong>{" "}
+                      {AUDIENCE_LABELS[draft.audience] ??
+                        draft.audience}
                     </p>
 
                     {draft.focus_instruction ? (
@@ -293,14 +322,10 @@ export default async function StudentAiDraftsPage() {
                       <div className="rn-card">
                         <h4>Reviewer feedback</h4>
 
-                        {draft.review_note ? (
-                          <p>{draft.review_note}</p>
-                        ) : (
-                          <p>
-                            The LMS reviewer requested changes to this draft.
-                            Open the draft for more information.
-                          </p>
-                        )}
+                        <p>
+                          {draft.review_note ||
+                            "The reviewer requested changes. Open this draft for further details."}
+                        </p>
 
                         {draft.reviewed_at ? (
                           <p>
@@ -313,11 +338,11 @@ export default async function StudentAiDraftsPage() {
 
                     {draft.status === "approved" ? (
                       <div className="rn-card">
-                        <h4>Approved</h4>
+                        <h4>Draft approved</h4>
 
                         <p>
-                          This AI learning draft has been approved by an LMS
-                          reviewer.
+                          This learning material has been approved by an
+                          LMS reviewer.
                         </p>
 
                         {draft.review_note ? (
@@ -338,18 +363,19 @@ export default async function StudentAiDraftsPage() {
 
                     {draft.status === "submitted" ? (
                       <div className="rn-card">
-                        <h4>Submitted for review</h4>
+                        <h4>Awaiting review</h4>
 
                         <p>
-                          This draft is currently with an LMS reviewer. You
-                          cannot edit it while it is under review.
+                          Your draft has been submitted to an LMS reviewer.
+                          Editing may be unavailable until the review is
+                          complete.
                         </p>
                       </div>
                     ) : null}
 
                     {draft.status === "converted" ? (
                       <div className="rn-card">
-                        <h4>Converted</h4>
+                        <h4>Learning material converted</h4>
 
                         <p>
                           This draft has been converted into learning
@@ -361,7 +387,6 @@ export default async function StudentAiDraftsPage() {
                     <div className="rn-ai-draft-timestamps">
                       <div>
                         <span>Source uploaded</span>
-
                         <strong>
                           {formatDateTime(
                             draft.source_uploaded_at ?? draft.created_at,
@@ -370,25 +395,18 @@ export default async function StudentAiDraftsPage() {
                       </div>
 
                       <div>
-                        <span>Draft created</span>
-
-                        <strong>
-                          {formatDateTime(draft.created_at)}
-                        </strong>
+                        <span>Created</span>
+                        <strong>{formatDateTime(draft.created_at)}</strong>
                       </div>
 
                       <div>
                         <span>Last updated</span>
-
-                        <strong>
-                          {formatDateTime(draft.updated_at)}
-                        </strong>
+                        <strong>{formatDateTime(draft.updated_at)}</strong>
                       </div>
 
                       {draft.reviewed_at ? (
                         <div>
-                          <span>Reviewed</span>
-
+                          <span>Last reviewed</span>
                           <strong>
                             {formatDateTime(draft.reviewed_at)}
                           </strong>
@@ -405,13 +423,33 @@ export default async function StudentAiDraftsPage() {
                           ? "Review & revise"
                           : draft.status === "approved"
                             ? "View approved draft"
-                            : "Open draft"}
+                            : draft.status === "converted"
+                              ? "View converted draft"
+                              : draft.status === "submitted"
+                                ? "View submission"
+                                : "Continue draft"}
                       </Link>
                     </div>
                   </div>
                 </article>
               ))}
             </div>
+          </section>
+
+          <section className="rn-card">
+            <h2>Learning Resource Centre</h2>
+
+            <p>
+              Save and organize useful learning links, documents, and
+              reference materials alongside your AI-generated drafts.
+            </p>
+
+            <Link
+              href="/student/learning-resources"
+              className="btn btn-primary"
+            >
+              Open Learning Resources
+            </Link>
           </section>
         </>
       )}
