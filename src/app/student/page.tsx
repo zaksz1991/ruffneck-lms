@@ -72,6 +72,10 @@ export default async function StudentDashboardPage() {
     (enrollment) => enrollment.enrollment_status === "completed"
   ).length;
 
+  const activeLearningCount = enrollments.filter(
+    (enrollment) => enrollment.enrollment_status === "active"
+  ).length;
+
   const pendingCount = enrollments.filter(
     (enrollment) =>
       enrollment.enrollment_status !== "active" &&
@@ -124,7 +128,12 @@ export default async function StudentDashboardPage() {
           gap: 28px;
           padding: 38px;
           border-radius: 24px;
-          background: linear-gradient(125deg, #0b1e3a 0%, #12365c 68%, #075b75 100%);
+          background: linear-gradient(
+            125deg,
+            #0b1e3a 0%,
+            #12365c 68%,
+            #075b75 100%
+          );
           color: #ffffff;
           margin-bottom: 24px;
         }
@@ -138,8 +147,9 @@ export default async function StudentDashboardPage() {
           top: -130px;
           border: 1px solid rgba(255,255,255,.12);
           border-radius: 50%;
-          box-shadow: 0 0 0 30px rgba(255,255,255,.035),
-                      0 0 0 65px rgba(255,255,255,.025);
+          box-shadow:
+            0 0 0 30px rgba(255,255,255,.035),
+            0 0 0 65px rgba(255,255,255,.025);
           pointer-events: none;
         }
 
@@ -196,7 +206,10 @@ export default async function StudentDashboardPage() {
           color: #0b1e3a;
           font-size: 13px;
           font-weight: 750;
-          transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+          transition:
+            transform .18s ease,
+            box-shadow .18s ease,
+            background .18s ease;
         }
 
         .rn-dashboard-button:hover {
@@ -339,7 +352,10 @@ export default async function StudentDashboardPage() {
           border: 1px solid #e6ebf2;
           border-radius: 16px;
           background: linear-gradient(145deg, #ffffff, #f9fbfe);
-          transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+          transition:
+            border-color .18s ease,
+            box-shadow .18s ease,
+            transform .18s ease;
         }
 
         .rn-dashboard-course:hover {
@@ -462,7 +478,7 @@ export default async function StudentDashboardPage() {
 
         .rn-dashboard-tools {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 15px;
         }
 
@@ -475,7 +491,9 @@ export default async function StudentDashboardPage() {
           border: 1px solid #e6ebf2;
           border-radius: 15px;
           background: #ffffff;
-          transition: border-color .18s ease, background .18s ease;
+          transition:
+            border-color .18s ease,
+            background .18s ease;
         }
 
         .rn-dashboard-tool:hover {
@@ -516,6 +534,16 @@ export default async function StudentDashboardPage() {
           color: #0783a0;
           font-size: 12px;
           font-weight: 800;
+        }
+
+        .rn-resource-tool {
+          border-color: #b8eaf3;
+          background: linear-gradient(145deg, #f1fcff, #ffffff);
+        }
+
+        .rn-resource-tool .rn-dashboard-tool-icon {
+          background: #0b1e3a;
+          color: #67e8f9;
         }
 
         .rn-dashboard-notice {
@@ -714,13 +742,7 @@ export default async function StudentDashboardPage() {
           </div>
 
           <strong className="rn-dashboard-stat-value">
-            {activeEnrollments.length - completedCount < 0
-              ? 0
-              : activeEnrollments.length -
-                activeEnrollments.filter(
-                  (enrollment) =>
-                    enrollment.enrollment_status === "completed"
-                ).length}
+            {activeLearningCount}
           </strong>
 
           <span className="rn-dashboard-stat-note">
@@ -860,12 +882,32 @@ export default async function StudentDashboardPage() {
           <div>
             <h2>Your Learning Tools</h2>
             <p>
-              Access useful tools and account records from one place.
+              Access study materials, saved resources, and account records.
             </p>
           </div>
         </div>
 
         <div className="rn-dashboard-tools">
+          <Link
+            href="/student/learning-resources"
+            className="rn-dashboard-tool rn-resource-tool"
+          >
+            <span className="rn-dashboard-tool-icon" aria-hidden="true">
+              R
+            </span>
+
+            <span>
+              <h3>Learning Resource Centre</h3>
+              <p>
+                Save useful links, upload study files, organise resources,
+                and revisit your favourite learning materials.
+              </p>
+              <span className="rn-dashboard-tool-arrow">
+                Open Resource Centre →
+              </span>
+            </span>
+          </Link>
+
           <Link
             href="/student/scan"
             className="rn-dashboard-tool"

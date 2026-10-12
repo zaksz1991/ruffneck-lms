@@ -15,19 +15,22 @@ const TYPES = [
   "document",
   "tool",
   "website",
+  "image",
   "other",
 ] as const;
 
 type ResourceType = (typeof TYPES)[number];
-
 type ResourceRecord = Record<string, unknown>;
 
 const SELECT_FIELDS =
-  "id,title,url,description,resource_type,course_title,topic,is_favorite,created_at,updated_at,file_path,file_name,file_size,mime_type";
+  "id,user_id,title,url,description,resource_type,course_title,topic,is_favorite,created_at,updated_at,file_path,file_name,file_size,mime_type";
 
 const ALLOWED_FILES: Record<
   string,
-  { mime: string; signature: (bytes: Uint8Array) => boolean }
+  {
+    mime: string;
+    signature: (bytes: Uint8Array) => boolean;
+  }
 > = {
   pdf: {
     mime: "application/pdf",
@@ -70,22 +73,18 @@ const ALLOWED_FILES: Record<
   },
   txt: {
     mime: "text/plain",
-    signature: (bytes) => {
-      for (const byte of bytes) {
-        if (
-          byte === 0 ||
-          (byte < 32 &&
+    signature: (bytes) =>
+      bytes.every(
+        (byte) =>
+          byte !== 0 &&
+          !(
+            byte < 32 &&
             byte !== 9 &&
             byte !== 10 &&
             byte !== 12 &&
-            byte !== 13)
-        ) {
-          return false;
-        }
-      }
-
-      return true;
-    },
+            byte !== 13
+          ),
+      ),
   },
 };
 
@@ -154,9 +153,7 @@ async function session() {
 function getFileExtension(filename: string): string {
   const dot = filename.lastIndexOf(".");
 
-  if (dot < 0) return "";
-
-  return filename.slice(dot + 1).toLowerCase();
+  return dot < 0 ? "" : filename.slice(dot + 1).toLowerCase();
 }
 
 function sanitizeFilename(filename: string): string {
@@ -171,10 +168,9 @@ function sanitizeFilename(filename: string): string {
   );
 }
 
-async function validUpload(file: File): Promise<{
-  valid: boolean;
-  mime: string | null;
-}> {
+async function validUpload(
+  file: File,
+): Promise<{ valid: boolean; mime: string | null }> {
   if (file.size <= 0 || file.size > MAX_FILE_SIZE) {
     return { valid: false, mime: null };
   }
@@ -186,7 +182,6 @@ async function validUpload(file: File): Promise<{
     return { valid: false, mime: null };
   }
 
-  // Browser-provided MIME type must agree with the extension.
   if (file.type && file.type !== config.mime) {
     return { valid: false, mime: null };
   }
@@ -214,23 +209,16 @@ async function attachDownloadLinks(
           : null;
 
       if (!filePath) {
-        return {
-          ...resource,
-          download_url: null,
-        };
+        return { ...resource, download_url: null };
       }
 
-      // Only generate links for paths belonging to this user.
-      const prefix =
+      const userId =
         typeof resource.user_id === "string"
-          ? `${resource.user_id}/`
+          ? resource.user_id
           : null;
 
-      if (!prefix || !filePath.startsWith(prefix)) {
-        return {
-          ...resource,
-          download_url: null,
-        };
+      if (!userId || !filePath.startsWith(`${userId}/`)) {
+        return { ...resource, download_url: null };
       }
 
       const { data, error } = await supabase.storage
@@ -431,25 +419,17 @@ export async function POST(request: NextRequest) {
       if (error) {
         const removed = await removeStoredFile(supabase, path);
 
-        return NextResponse.json(
-          {
-            error: removed
-              ? "Could not save the uploaded document record. Confirm the database migration has been applied."
-              : "Could not save the document record, and storage cleanup failed. Administrator review is required.",
-          },
-          { status: 500 },
+        return jsonError(
+          removed
+            ? "Could not save the uploaded document record. Confirm the database migration has been applied."
+            : "Could not save the document record, and storage cleanup failed. Administrator review is required.",
+          500,
         );
       }
 
-      const [resource] = await attachDownloadLinks(
-        supabase,
-        [
-          {
-            ...(data as ResourceRecord),
-            user_id: user.id,
-          },
-        ],
-      );
+      const [resource] = await attachDownloadLinks(supabase, [
+        data as ResourceRecord,
+      ]);
 
       return NextResponse.json({ resource }, { status: 201 });
     }
@@ -463,12 +443,10 @@ export async function POST(request: NextRequest) {
     const input = body as Record<string, unknown>;
     const title = cleanText(input.title, MAX_TITLE);
     const url = validUrl(input.url);
-
     const description = optionalText(
       input.description,
       MAX_DESCRIPTION,
     );
-
     const courseTitle = optionalText(input.course_title, 180);
     const topic = optionalText(input.topic, 120);
 
@@ -510,12 +488,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      {
-        resource: {
-          ...data,
-          download_url: null,
-        },
-      },
+      { resource: { ...data, download_url: null } },
       { status: 201 },
     );
   } catch {
@@ -593,8 +566,7 @@ export async function PATCH(request: NextRequest) {
         return jsonError("Course title is too long.", 400);
       }
 
-      update.course_title =
-        input.course_title.trim() || null;
+      update.course_title = input.course_title.trim() || null;
     }
 
     if (input.resource_type !== undefined) {
@@ -621,15 +593,9 @@ export async function PATCH(request: NextRequest) {
       return jsonError("Could not update resource.", 404);
     }
 
-    const [resource] = await attachDownloadLinks(
-      supabase,
-      [
-        {
-          ...(data as ResourceRecord),
-          user_id: user.id,
-        },
-      ],
-    );
+    const [resource] = await attachDownloadLinks(supabase, [
+      data as ResourceRecord,
+    ]);
 
     return NextResponse.json({ resource });
   } catch {
@@ -648,7 +614,20 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const id = request.nextUrl.searchParams.get("id")?.trim();
+    // Accept an ID in either the query string or JSON body.
+    let id = request.nextUrl.searchParams.get("id")?.trim() ?? "";
+
+    if (!id) {
+      const body = await readJson(request);
+
+      if (body && typeof body === "object" && !Array.isArray(body)) {
+        const input = body as Record<string, unknown>;
+
+        if (typeof input.id === "string") {
+          id = input.id.trim();
+        }
+      }
+    }
 
     if (!id) {
       return jsonError("Resource ID is required.", 400);
@@ -669,18 +648,18 @@ export async function DELETE(request: NextRequest) {
       return jsonError("Resource not found.", 404);
     }
 
-    // Reject unexpected paths before performing storage operations.
     const filePath =
       typeof resource.file_path === "string"
         ? resource.file_path
         : null;
 
     if (filePath && !filePath.startsWith(`${user.id}/`)) {
-      return jsonError("Resource file ownership could not be verified.", 403);
+      return jsonError(
+        "Resource file ownership could not be verified.",
+        403,
+      );
     }
 
-    // Remove the database row only after storage cleanup succeeds.
-    // This avoids orphaning the file when storage deletion fails.
     if (filePath) {
       const removed = await removeStoredFile(supabase, filePath);
 
