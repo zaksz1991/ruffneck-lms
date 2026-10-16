@@ -3,164 +3,191 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-type Props = {
+type LabReviewFormProps = {
   submissionId: string;
-  initialScore: number | null;
-  initialFeedback: string | null;
+  currentScore: number | null;
+  currentFeedback: string | null;
 };
 
 export default function LabReviewForm({
   submissionId,
-  initialScore,
-  initialFeedback,
-}: Props) {
+  currentScore,
+  currentFeedback,
+}: LabReviewFormProps) {
   const router = useRouter();
 
   const [score, setScore] = useState(
-    initialScore === null ? "" : String(initialScore),
+    currentScore === null ? "" : String(currentScore),
   );
-  const [feedback, setFeedback] = useState(initialFeedback ?? "");
-  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState(currentFeedback ?? "");
+  const [status, setStatus] = useState<"approved" | "revision_required">(
+    "approved",
+  );
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  async function submitReview(status: "approved" | "revision_required") {
+  async function submitReview(
+    nextStatus: "approved" | "revision_required",
+  ) {
     setError("");
     setSuccess("");
 
-    if (score.trim() === "") {
-      setError("Enter a score from 0 to 100.");
-      return;
-    }
-
-    const numericScore = Number(score);
+    const parsedScore = Number(score);
 
     if (
-      !Number.isInteger(numericScore) ||
-      numericScore < 0 ||
-      numericScore > 100
+      score.trim() === "" ||
+      !Number.isInteger(parsedScore) ||
+      parsedScore < 0 ||
+      parsedScore > 100
     ) {
-      setError("The score must be a whole number from 0 to 100.");
+      setError("Enter a whole-number score from 0 to 100.");
       return;
     }
 
-    setBusy(true);
+    if (feedback.length > 10000) {
+      setError("Feedback cannot exceed 10,000 characters.");
+      return;
+    }
+
+    if (
+      nextStatus === "revision_required" &&
+      feedback.trim().length === 0
+    ) {
+      setError("Provide feedback explaining what the student must improve.");
+      return;
+    }
+
+    setSaving(true);
+    setStatus(nextStatus);
 
     try {
-      const response = await fetch("/api/admin/labs/submissions/review", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          submissionId,
-          score: numericScore,
-          feedback,
-          status,
-        }),
-      });
+      const response = await fetch(
+        "/api/admin/labs/submissions/review",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            submissionId,
+            score: parsedScore,
+            feedback: feedback.trim(),
+            status: nextStatus,
+          }),
+        },
+      );
 
-      const result = await response.json().catch(() => null);
+      const result = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+      } | null;
 
       if (!response.ok || !result?.ok) {
-        setError(result?.error || "Unable to save this review.");
+        setError(result?.error || "Unable to save the review.");
         return;
       }
 
       setSuccess(
-        status === "approved"
-          ? "Submission approved."
-          : "Revision requested.",
+        nextStatus === "approved"
+          ? "Submission approved successfully."
+          : "Revision requested successfully.",
       );
 
       router.refresh();
     } catch {
       setError("A network error occurred. Please try again.");
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   }
 
   return (
-    <div style={{ marginTop: 20 }}>
-      <h4>Review submission</h4>
+    <form
+      className="rn-lab-review-form"
+      onSubmit={(event) => event.preventDefault()}
+    >
+      <div className="rn-lab-review-field">
+        <label htmlFor={`score-${submissionId}`}>
+          Score <span aria-hidden="true">*</span>
+        </label>
 
-      <div
-        style={{
-          display: "grid",
-          gap: 14,
-          maxWidth: 720,
-        }}
-      >
-        <label>
-          <span style={{ display: "block", marginBottom: 6 }}>
-            Score (0–100)
-          </span>
+        <div className="rn-lab-score-input">
           <input
+            id={`score-${submissionId}`}
             type="number"
             min={0}
             max={100}
             step={1}
             value={score}
             onChange={(event) => setScore(event.target.value)}
-            disabled={busy}
             required
-            style={{ width: "100%", maxWidth: 220 }}
+            disabled={saving}
+            placeholder="Enter score"
           />
-        </label>
-
-        <label>
-          <span style={{ display: "block", marginBottom: 6 }}>
-            Feedback for learner
-          </span>
-          <textarea
-            value={feedback}
-            onChange={(event) => setFeedback(event.target.value)}
-            maxLength={10000}
-            rows={5}
-            disabled={busy}
-            placeholder="Explain what was done well and what needs improvement."
-            style={{ width: "100%", resize: "vertical" }}
-          />
-          <small>{feedback.length}/10,000 characters</small>
-        </label>
-
-        {error ? (
-          <p role="alert" style={{ color: "#b42318" }}>
-            {error}
-          </p>
-        ) : null}
-
-        {success ? (
-          <p role="status" style={{ color: "#067647" }}>
-            {success}
-          </p>
-        ) : null}
-
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            flexWrap: "wrap",
-          }}
-        >
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={busy}
-            onClick={() => submitReview("approved")}
-          >
-            {busy ? "Saving…" : "Approve submission"}
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={busy}
-            onClick={() => submitReview("revision_required")}
-          >
-            {busy ? "Saving…" : "Request revision"}
-          </button>
+          <span>/ 100</span>
         </div>
       </div>
-    </div>
+
+      <div className="rn-lab-review-field">
+        <label htmlFor={`feedback-${submissionId}`}>
+          Feedback
+        </label>
+
+        <textarea
+          id={`feedback-${submissionId}`}
+          value={feedback}
+          onChange={(event) => setFeedback(event.target.value)}
+          maxLength={10000}
+          rows={5}
+          disabled={saving}
+          placeholder="Explain what the student did well and what needs improvement..."
+        />
+
+        <small>{feedback.length.toLocaleString()} / 10,000 characters</small>
+      </div>
+
+      {error ? (
+        <div className="rn-lab-review-message error" role="alert">
+          {error}
+        </div>
+      ) : null}
+
+      {success ? (
+        <div className="rn-lab-review-message success" role="status">
+          {success}
+        </div>
+      ) : null}
+
+      <div className="rn-lab-review-actions">
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => submitReview("approved")}
+          disabled={saving}
+        >
+          {saving && status === "approved"
+            ? "Approving..."
+            : "Approve Submission"}
+        </button>
+
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={() => submitReview("revision_required")}
+          disabled={saving}
+        >
+          {saving && status === "revision_required"
+            ? "Saving..."
+            : "Request Revision"}
+        </button>
+      </div>
+
+      <p className="rn-lab-review-note">
+        Approval records the score and feedback. Requesting a revision returns
+        the submission to the student for improvement.
+      </p>
+    </form>
   );
 }
