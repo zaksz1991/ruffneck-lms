@@ -69,6 +69,8 @@ type AdminCourse = {
   updated_at: string;
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminLmsPage({
   searchParams,
 }: AdminLmsPageProps) {
@@ -374,6 +376,20 @@ export default async function AdminLmsPage({
             <Link href="/admin/labs" className="btn btn-primary">
               Practical Labs
             </Link>
+
+            {profile.role === "admin" ? (
+              <Link
+                href="/admin/users/role"
+                className="btn btn-primary"
+                style={{
+                  background: "#00b4d8",
+                  color: "#0b1e3a",
+                  fontWeight: 700,
+                }}
+              >
+                Instructors
+              </Link>
+            ) : null}
           </div>
         </div>
 
