@@ -13,6 +13,7 @@ export function Header() {
   const router = useRouter();
 
   const [role, setRole] = useState<Role>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
@@ -34,12 +35,14 @@ export function Header() {
         if (!mounted) return;
 
         if (authError || !user) {
+          setIsAuthenticated(false);
           setRole(null);
-          setLoading(false);
           return;
         }
 
-        const { data: profile } = await supabase
+        setIsAuthenticated(true);
+
+        const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("role")
           .eq("id", user.id)
@@ -47,16 +50,33 @@ export function Header() {
 
         if (!mounted) return;
 
-        const profileRole: Role =
-          profile?.role === "admin" ||
-          profile?.role === "instructor" ||
-          profile?.role === "student"
-            ? profile.role
-            : "student";
+        if (profileError) {
+          console.error(
+            "Unable to load profile role:",
+            profileError.message,
+          );
 
-        setRole(profileRole);
-      } catch {
+          // Never grant administrator or instructor navigation
+          // when the account role cannot be verified.
+          setRole(null);
+          return;
+        }
+
+        const profileRole = profile?.role;
+
+        if (
+          profileRole === "admin" ||
+          profileRole === "instructor" ||
+          profileRole === "student"
+        ) {
+          setRole(profileRole);
+        } else {
+          setRole(null);
+        }
+      } catch (error) {
         if (mounted) {
+          console.error("Unable to load authenticated user:", error);
+          setIsAuthenticated(false);
           setRole(null);
         }
       } finally {
@@ -73,11 +93,6 @@ export function Header() {
     };
   }, [pathname]);
 
-  const isAuthenticated = role !== null;
-
-  const canAccessAdmin =
-    role === "admin" || role === "instructor";
-
   async function handleSignOut() {
     if (signingOut) return;
 
@@ -90,11 +105,11 @@ export function Header() {
 
       if (error) {
         setSignOutError(error.message);
-        setSigningOut(false);
         return;
       }
 
       setRole(null);
+      setIsAuthenticated(false);
 
       router.replace("/");
       router.refresh();
@@ -104,13 +119,14 @@ export function Header() {
           ? error.message
           : "Unable to sign out. Please try again.",
       );
-
+    } finally {
       setSigningOut(false);
     }
   }
 
   return (
     <>
+      {/* Parent company branding */}
       <div className="rn-parent-brand">
         <div className="rn-parent-brand-inner">
           <Link
@@ -128,18 +144,20 @@ export function Header() {
             href="https://ruffneck-entertainment.vercel.app/"
             className="rn-parent-brand-visit"
           >
-            Visit RuffNeck Entertainment →
+            Visit RuffNeck Entertainment
+            <span aria-hidden="true"> →</span>
           </Link>
         </div>
       </div>
 
+      {/* Main navigation */}
       <header className="site-header">
         <div className="inner">
           <div className="brand">
             <Link
               href="/"
               className="brand-link"
-              aria-label="RuffNeck Learn"
+              aria-label="RuffNeck Learn homepage"
             >
               <Image
                 src="/brand/ruffneck-logo.png"
@@ -160,18 +178,32 @@ export function Header() {
             </Link>
           </div>
 
-          <nav className="nav" aria-label="Main navigation">
+          <nav
+            className="nav"
+            aria-label="Main navigation"
+            aria-busy={loading}
+          >
             <Link href="/courses" className="rn-nav-button">
               Courses
             </Link>
 
-            {loading ? null : isAuthenticated ? (
+            {loading ? (
+              <span className="rn-nav-loading" aria-live="polite">
+                Loading account…
+              </span>
+            ) : isAuthenticated ? (
               <>
-                <Link href="/student/courses" className="rn-nav-button">
-                  My learning
+                <Link
+                  href="/student/courses"
+                  className="rn-nav-button"
+                >
+                  My Learning
                 </Link>
 
-                <Link href="/student/scan" className="rn-nav-button">
+                <Link
+                  href="/student/scan"
+                  className="rn-nav-button"
+                >
                   Scan &amp; Learn
                 </Link>
 
@@ -184,22 +216,7 @@ export function Header() {
 
                 <Link
                   href="/student/labs"
-                  className="rn-nav-button"
-                  style={{
-                    backgroundColor: "#e0f7fc",
-                    color: "#0b1e3a",
-                    border: "1px solid #00b4d8",
-                    borderRadius: "9px",
-                    fontWeight: 750,
-                    textDecoration: "none",
-                    padding: "8px 12px",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "6px",
-                    whiteSpace: "nowrap",
-                    boxShadow: "0 2px 6px rgba(0, 180, 216, 0.15)",
-                  }}
+                  className="rn-nav-button rn-labs-nav-button"
                 >
                   <span aria-hidden="true">✦</span>
                   Practical Labs
@@ -219,7 +236,10 @@ export function Header() {
                   My AI Drafts
                 </Link>
 
-                <Link href="/student/payments" className="rn-nav-button">
+                <Link
+                  href="/student/payments"
+                  className="rn-nav-button"
+                >
                   Payment History
                 </Link>
 
@@ -237,30 +257,48 @@ export function Header() {
                   Certificates
                 </Link>
 
-                {canAccessAdmin ? (
-                  <Link href="/admin/lms" className="rn-nav-button">
+                {role === "instructor" && (
+                  <Link
+                    href="/admin/lms"
+                    className="rn-nav-button rn-role-link rn-role-link--instructor"
+                  >
+                    Instructor
+                  </Link>
+                )}
+
+                {role === "admin" && (
+                  <Link
+                    href="/admin/lms"
+                    className="rn-nav-button rn-role-link rn-role-link--admin"
+                  >
                     Admin
                   </Link>
-                ) : null}
+                )}
 
                 <button
                   type="button"
-                  className="rn-nav-button"
+                  className="rn-nav-button rn-signout-button"
                   onClick={handleSignOut}
                   disabled={signingOut}
                   aria-busy={signingOut}
                 >
-                  {signingOut ? "Signing out..." : "Sign out"}
+                  {signingOut ? "Signing out…" : "Sign out"}
                 </button>
               </>
             ) : (
               <>
-                <Link href="/login" className="rn-nav-button">
+                <Link
+                  href="/login"
+                  className="rn-nav-button"
+                >
                   Log in
                 </Link>
 
-                <Link href="/signup" className="rn-nav-button">
-                  Sign up
+                <Link
+                  href="/signup"
+                  className="rn-nav-button rn-signup-button"
+                >
+                  Create Account
                 </Link>
               </>
             )}
@@ -268,23 +306,11 @@ export function Header() {
         </div>
       </header>
 
-      {signOutError ? (
-        <div
-          role="alert"
-          style={{
-            maxWidth: 1200,
-            margin: "10px auto",
-            padding: "10px 16px",
-            color: "#991b1b",
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
-            borderRadius: 8,
-            fontSize: 14,
-          }}
-        >
+      {signOutError && (
+        <div className="rn-signout-error" role="alert">
           Sign out failed: {signOutError}
         </div>
-      ) : null}
+      )}
     </>
   );
 }
