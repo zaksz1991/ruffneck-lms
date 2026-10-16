@@ -1,37 +1,34 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import ProjectReviewForm from "@/components/ProjectReviewForm";
+import LabReviewForm from "./LabReviewForm";
+
+type Profile = {
+  role: "admin" | "instructor" | "student";
+  full_name: string | null;
+};
 
 type Submission = {
   id: string;
-  project_id: string;
+  lab_id: string;
   student_id: string;
-  submission_text: string | null;
-  submission_url: string | null;
-  status:
-    | "draft"
-    | "submitted"
-    | "under_review"
-    | "approved"
-    | "revision_required";
+  answer_text: string;
+  status: string;
   score: number | null;
   feedback: string | null;
   submitted_at: string | null;
+  created_at: string;
 };
 
-type Project = {
+type Lab = {
   id: string;
-  course_id: string;
   title: string;
-  max_score: number;
+  course_id: string;
 };
 
 type Course = {
   id: string;
   title: string;
-  status: string;
-  instructor_id: string | null;
 };
 
 type Student = {
@@ -40,70 +37,7 @@ type Student = {
   email: string | null;
 };
 
-type Filter =
-  | "all"
-  | "pending"
-  | "approved"
-  | "revision_required";
-
-function formatStatus(
-  status: Submission["status"]
-) {
-  switch (status) {
-    case "under_review":
-      return "Under Review";
-
-    case "revision_required":
-      return "Revision Required";
-
-    case "approved":
-      return "Approved";
-
-    case "submitted":
-      return "Submitted";
-
-    default:
-      return "Draft";
-  }
-}
-
-function formatDate(
-  value: string | null
-) {
-  if (!value) {
-    return "—";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "—";
-  }
-
-  return new Intl.DateTimeFormat(
-    "en-NG",
-    {
-      dateStyle: "medium",
-    }
-  ).format(date);
-}
-
-export default async function AdminProjectsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{
-    status?: string;
-  }>;
-}) {
-  const params = await searchParams;
-
-  const filter: Filter =
-    params.status === "pending" ||
-    params.status === "approved" ||
-    params.status === "revision_required"
-      ? params.status
-      : "all";
-
+export default async function AdminLabsPage() {
   const supabase = await createClient();
 
   const {
@@ -111,662 +45,273 @@ export default async function AdminProjectsPage({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect(
-      "/login?next=/admin/projects"
-    );
+    redirect("/login?next=/admin/labs");
   }
 
   const { data: profileData, error: profileError } =
     await supabase
       .from("profiles")
-      .select("id, role")
+      .select("role, full_name")
       .eq("id", user.id)
       .maybeSingle();
 
   if (profileError) {
-    console.error(
-      "Admin project profile lookup failed:",
-      profileError
-    );
-
-    throw new Error(
-      "Unable to verify admin access."
-    );
+    console.error("Lab review profile lookup failed:", profileError);
+    throw new Error("Unable to verify reviewer permissions.");
   }
 
-  const profile = profileData as {
-    id: string;
-    role:
-      | "student"
-      | "instructor"
-      | "admin";
-  } | null;
+  const profile = profileData as Profile | null;
 
-  if (
-    !profile ||
-    !["admin", "instructor"].includes(
-      profile.role
-    )
-  ) {
+  if (!profile || !["admin", "instructor"].includes(profile.role)) {
     redirect("/student/dashboard");
   }
 
-  /*
-   * Load projects first so instructors can be restricted
-   * to projects belonging to their own courses.
-   */
-  const { data: allProjectData, error: projectError } =
+  const { data: submissionData, error: submissionError } =
     await supabase
-      .from("course_projects")
+      .from("lab_submissions")
       .select(
-        "id, course_id, title, max_score"
-      );
+        "id, lab_id, student_id, answer_text, status, score, feedback, submitted_at, created_at",
+      )
+      .in("status", ["submitted", "revision_required", "approved"])
+      .order("submitted_at", { ascending: false, nullsFirst: false });
 
-  if (projectError) {
-    console.error(
-      "Admin project lookup failed:",
-      projectError
-    );
-
-    throw new Error(
-      "Unable to load projects."
-    );
+  if (submissionError) {
+    console.error("Lab review submissions lookup failed:", submissionError);
+    throw new Error("Unable to load lab submissions.");
   }
 
-  const allProjects =
-    (allProjectData as unknown as Project[]) || [];
+  const submissions = (submissionData ?? []) as Submission[];
 
-  const allCourseIds = Array.from(
-    new Set(
-      allProjects.map(
-        (project) => project.course_id
-      )
-    )
-  );
+  const labIds = [...new Set(submissions.map((item) => item.lab_id))];
+  const studentIds = [
+    ...new Set(submissions.map((item) => item.student_id)),
+  ];
 
-  const { data: allCourseData, error: courseError } =
-    allCourseIds.length > 0
+  const { data: labData, error: labError } =
+    labIds.length > 0
+      ? await supabase
+          .from("practical_labs")
+          .select("id, title, course_id")
+          .in("id", labIds)
+      : { data: [], error: null };
+
+  if (labError) {
+    console.error("Lab review lab lookup failed:", labError);
+    throw new Error("Unable to load practical lab details.");
+  }
+
+  const labs = (labData ?? []) as Lab[];
+  const courseIds = [...new Set(labs.map((lab) => lab.course_id))];
+
+  const { data: courseData, error: courseError } =
+    courseIds.length > 0
       ? await supabase
           .from("courses")
-          .select(
-            "id, title, status, instructor_id"
-          )
-          .in("id", allCourseIds)
+          .select("id, title")
+          .in("id", courseIds)
       : { data: [], error: null };
 
   if (courseError) {
-    console.error(
-      "Admin course lookup failed:",
-      courseError
-    );
-
-    throw new Error(
-      "Unable to load project courses."
-    );
+    console.error("Lab review course lookup failed:", courseError);
+    throw new Error("Unable to load course details.");
   }
-
-  const allCourses =
-    (allCourseData as unknown as Course[]) || [];
-
-  /*
-   * Admins can review all courses.
-   * Instructors can review only their own courses.
-   *
-   * Published courses are required because the review API
-   * also requires the project to belong to a published course.
-   */
-  const reviewableCourseIds = new Set(
-    allCourses
-      .filter((course) => {
-        if (course.status !== "published") {
-          return false;
-        }
-
-        if (profile.role === "admin") {
-          return true;
-        }
-
-        return course.instructor_id === user.id;
-      })
-      .map((course) => course.id)
-  );
-
-  const reviewableProjectIds = new Set(
-    allProjects
-      .filter((project) =>
-        reviewableCourseIds.has(
-          project.course_id
-        )
-      )
-      .map((project) => project.id)
-  );
-
-  const reviewableProjects =
-    allProjects.filter((project) =>
-      reviewableProjectIds.has(project.id)
-    );
-
-  const reviewableProjectIdArray = Array.from(
-    reviewableProjectIds
-  );
-
-  /*
-   * There is no need to query submissions when this
-   * admin/instructor has no reviewable projects.
-   */
-  let submissions: Submission[] = [];
-
-  if (reviewableProjectIdArray.length > 0) {
-    let query = supabase
-      .from("project_submissions")
-      .select(
-        [
-          "id",
-          "project_id",
-          "student_id",
-          "submission_text",
-          "submission_url",
-          "status",
-          "score",
-          "feedback",
-          "submitted_at",
-        ].join(", ")
-      )
-      .in(
-        "project_id",
-        reviewableProjectIdArray
-      )
-      .order("created_at", {
-        ascending: false,
-      });
-
-    if (filter === "pending") {
-      query = query.in("status", [
-        "submitted",
-        "under_review",
-      ]);
-    }
-
-    if (filter === "approved") {
-      query = query.eq(
-        "status",
-        "approved"
-      );
-    }
-
-    if (
-      filter === "revision_required"
-    ) {
-      query = query.eq(
-        "status",
-        "revision_required"
-      );
-    }
-
-    const {
-      data: submissionData,
-      error: submissionError,
-    } = await query;
-
-    if (submissionError) {
-      console.error(
-        "Admin project submissions lookup failed:",
-        submissionError
-      );
-
-      throw new Error(
-        "Unable to load project submissions."
-      );
-    }
-
-    submissions =
-      (submissionData as unknown as Submission[]) ||
-      [];
-  }
-
-  /*
-   * Summary counts are calculated from the same
-   * reviewable project scope as the main list.
-   * This prevents instructors from seeing global counts
-   * for projects they are not allowed to review.
-   */
-  let pendingCount = 0;
-  let approvedCount = 0;
-  let revisionCount = 0;
-
-  if (reviewableProjectIdArray.length > 0) {
-    const [
-      pendingResult,
-      approvedResult,
-      revisionResult,
-    ] = await Promise.all([
-      supabase
-        .from("project_submissions")
-        .select("*", {
-          count: "exact",
-          head: true,
-        })
-        .in(
-          "project_id",
-          reviewableProjectIdArray
-        )
-        .in("status", [
-          "submitted",
-          "under_review",
-        ]),
-
-      supabase
-        .from("project_submissions")
-        .select("*", {
-          count: "exact",
-          head: true,
-        })
-        .in(
-          "project_id",
-          reviewableProjectIdArray
-        )
-        .eq("status", "approved"),
-
-      supabase
-        .from("project_submissions")
-        .select("*", {
-          count: "exact",
-          head: true,
-        })
-        .in(
-          "project_id",
-          reviewableProjectIdArray
-        )
-        .eq(
-          "status",
-          "revision_required"
-        ),
-    ]);
-
-    if (pendingResult.error) {
-      console.error(
-        "Pending project count failed:",
-        pendingResult.error
-      );
-    }
-
-    if (approvedResult.error) {
-      console.error(
-        "Approved project count failed:",
-        approvedResult.error
-      );
-    }
-
-    if (revisionResult.error) {
-      console.error(
-        "Revision project count failed:",
-        revisionResult.error
-      );
-    }
-
-    pendingCount =
-      pendingResult.count ?? 0;
-
-    approvedCount =
-      approvedResult.count ?? 0;
-
-    revisionCount =
-      revisionResult.count ?? 0;
-  }
-
-  const projectMap = new Map(
-    reviewableProjects.map((project) => [
-      project.id,
-      project,
-    ])
-  );
-
-  const reviewableCourses = allCourses.filter(
-    (course) =>
-      reviewableCourseIds.has(course.id)
-  );
-
-  const courseMap = new Map(
-    reviewableCourses.map((course) => [
-      course.id,
-      course,
-    ])
-  );
-
-  const studentIds = Array.from(
-    new Set(
-      submissions.map(
-        (submission) =>
-          submission.student_id
-      )
-    )
-  );
 
   const { data: studentData, error: studentError } =
     studentIds.length > 0
       ? await supabase
           .from("profiles")
-          .select(
-            "id, full_name, email"
-          )
+          .select("id, full_name, email")
           .in("id", studentIds)
       : { data: [], error: null };
 
   if (studentError) {
-    console.error(
-      "Admin project student lookup failed:",
-      studentError
-    );
-
-    throw new Error(
-      "Unable to load student information."
-    );
+    console.error("Lab review student lookup failed:", studentError);
+    throw new Error("Unable to load learner details.");
   }
 
-  const students =
-    (studentData as unknown as Student[]) || [];
-
-  const studentMap = new Map(
-    students.map((student) => [
-      student.id,
-      student,
-    ])
+  const labMap = new Map(
+    ((labs ?? []) as Lab[]).map((lab) => [lab.id, lab]),
   );
 
+  const courseMap = new Map(
+    ((courseData ?? []) as Course[]).map((course) => [
+      course.id,
+      course,
+    ]),
+  );
+
+  const studentMap = new Map(
+    ((studentData ?? []) as Student[]).map((student) => [
+      student.id,
+      student,
+    ]),
+  );
+
+  const pendingCount = submissions.filter(
+    (item) =>
+      item.status === "submitted" ||
+      item.status === "revision_required",
+  ).length;
+
   return (
-    <main className="rn-admin-projects-page">
+    <section className="section">
       <div className="container">
-        <div className="rn-admin-project-header">
+        <div className="rn-admin-heading">
           <div>
-            <Link
-              href="/admin/lms"
-              className="rn-learning-back"
-            >
-              ← LMS Admin
-            </Link>
-
-            <span className="rn-eyebrow">
-              PROJECT REVIEW
-            </span>
-
-            <h1>
-              Projects & Capstones
-            </h1>
-
-            <p>
-              Review practical work, manage
-              revisions, approve projects and record
-              assessment results.
+            <div className="rn-brand-kicker">RuffNeck Learn</div>
+            <h2>Practical Labs Review</h2>
+            <p className="muted">
+              Review learner submissions, provide feedback, and approve
+              completed practical work.
+            </p>
+            <p className="muted">
+              Signed in as {profile.full_name || user.email} (
+              {profile.role}).
             </p>
           </div>
 
-          <div className="rn-admin-project-header-action">
-            <Link
-              href="/admin/lms"
-              className="btn btn-ghost"
-            >
-              Back to LMS
+          <div className="rn-admin-heading-actions">
+            <Link href="/admin/lms" className="btn btn-ghost">
+              Back to LMS Admin
             </Link>
           </div>
         </div>
 
-        <section className="rn-project-review-summary">
-          <Link
-            href="/admin/projects?status=pending"
-            className={`rn-project-review-summary-card ${
-              filter === "pending"
-                ? "active"
-                : ""
-            }`}
-          >
-            <strong>
-              {pendingCount}
-            </strong>
-
+        <div className="rn-admin-stats">
+          <div className="rn-admin-stat">
+            <span className="rn-admin-stat-icon">▤</span>
             <span>
-              Awaiting Review
+              <span className="muted">Visible submissions</span>
+              <strong>{submissions.length}</strong>
             </span>
+          </div>
 
-            <small>
-              Submitted + under review
-            </small>
-          </Link>
-
-          <Link
-            href="/admin/projects?status=approved"
-            className={`rn-project-review-summary-card ${
-              filter === "approved"
-                ? "active"
-                : ""
-            }`}
-          >
-            <strong>
-              {approvedCount}
-            </strong>
-
+          <div className="rn-admin-stat">
+            <span className="rn-admin-stat-icon">◷</span>
             <span>
-              Approved
+              <span className="muted">Awaiting review</span>
+              <strong>{pendingCount}</strong>
             </span>
+          </div>
 
-            <small>
-              Completed project reviews
-            </small>
-          </Link>
-
-          <Link
-            href="/admin/projects?status=revision_required"
-            className={`rn-project-review-summary-card ${
-              filter ===
-              "revision_required"
-                ? "active"
-                : ""
-            }`}
-          >
-            <strong>
-              {revisionCount}
-            </strong>
-
+          <div className="rn-admin-stat">
+            <span className="rn-admin-stat-icon">✓</span>
             <span>
-              Revision Required
-            </span>
-
-            <small>
-              Waiting for learner resubmission
-            </small>
-          </Link>
-        </section>
-
-        <nav className="rn-project-review-tabs">
-          <Link
-            href="/admin/projects"
-            className={
-              filter === "all"
-                ? "active"
-                : ""
-            }
-          >
-            All submissions
-          </Link>
-
-          <Link
-            href="/admin/projects?status=pending"
-            className={
-              filter === "pending"
-                ? "active"
-                : ""
-            }
-          >
-            Awaiting Review
-          </Link>
-
-          <Link
-            href="/admin/projects?status=approved"
-            className={
-              filter === "approved"
-                ? "active"
-                : ""
-            }
-          >
-            Approved
-          </Link>
-
-          <Link
-            href="/admin/projects?status=revision_required"
-            className={
-              filter ===
-              "revision_required"
-                ? "active"
-                : ""
-            }
-          >
-            Revision Required
-          </Link>
-        </nav>
-
-        {submissions.length === 0 ? (
-          <section className="rn-project-empty">
-            <span className="rn-eyebrow">
-              {filter === "approved"
-                ? "APPROVED"
-                : filter ===
-                    "revision_required"
-                  ? "REVISION REQUIRED"
-                  : filter === "pending"
-                    ? "AWAITING REVIEW"
-                    : "SUBMISSIONS"}
-            </span>
-
-            <h2>
-              No submissions in this section
-            </h2>
-
-            <p>
-              Student project submissions matching
-              this workflow status will appear here.
-            </p>
-          </section>
-        ) : (
-          <section className="rn-admin-project-list">
-            {submissions.map(
-              (submission) => {
-                const project =
-                  projectMap.get(
-                    submission.project_id
-                  );
-
-                if (!project) {
-                  return null;
+              <span className="muted">Approved</span>
+              <strong>
+                {
+                  submissions.filter(
+                    (item) => item.status === "approved",
+                  ).length
                 }
+              </strong>
+            </span>
+          </div>
+        </div>
 
-                const course =
-                  courseMap.get(
-                    project.course_id
-                  );
+        <section className="rn-admin-list-panel">
+          <div className="rn-admin-list-header">
+            <div>
+              <div className="rn-brand-kicker">Learner submissions</div>
+              <h3>Review queue</h3>
+            </div>
+          </div>
 
-                const student =
-                  studentMap.get(
-                    submission.student_id
-                  );
+          {submissions.length === 0 ? (
+            <div className="rn-empty-state">
+              <div className="rn-empty-icon">▤</div>
+              <strong>No visible submissions</strong>
+              <p>
+                Submissions will appear here when learners submit practical
+                work for courses you manage.
+              </p>
+            </div>
+          ) : (
+            <div className="rn-lab-review-list">
+              {submissions.map((submission) => {
+                const lab = labMap.get(submission.lab_id);
+                const course = lab
+                  ? courseMap.get(lab.course_id)
+                  : undefined;
+                const student = studentMap.get(submission.student_id);
+                const canReview =
+                  submission.status === "submitted" ||
+                  submission.status === "revision_required";
 
                 return (
                   <article
                     key={submission.id}
-                    className="rn-admin-project-card"
+                    className="rn-admin-list-panel"
+                    style={{ marginBottom: 20 }}
                   >
-                    <div className="rn-admin-project-card-header">
+                    <div className="rn-admin-list-header">
                       <div>
-                        <span className="rn-eyebrow">
-                          {course?.title ||
-                            "Course"}
-                        </span>
-
-                        <h2>
-                          {project.title}
-                        </h2>
+                        <div className="rn-brand-kicker">
+                          {course?.title || "Course"}
+                        </div>
+                        <h3>{lab?.title || "Practical Lab"}</h3>
+                        <p className="muted">
+                          Learner: {student?.full_name || "Unnamed learner"}
+                          {student?.email ? ` · ${student.email}` : ""}
+                        </p>
                       </div>
 
-                      <span
-                        className={`rn-project-status status-${submission.status}`}
+                      <span className="rn-status-pill">
+                        {submission.status.replaceAll("_", " ")}
+                      </span>
+                    </div>
+
+                    <div style={{ margin: "16px 0" }}>
+                      <strong>Learner response</strong>
+                      <div
+                        style={{
+                          whiteSpace: "pre-wrap",
+                          overflowWrap: "anywhere",
+                          marginTop: 8,
+                          padding: 16,
+                          borderRadius: 12,
+                          background: "var(--surface, #f5f7fa)",
+                          lineHeight: 1.65,
+                        }}
                       >
-                        {formatStatus(
-                          submission.status
+                        {submission.answer_text}
+                      </div>
+                    </div>
+
+                    {submission.submitted_at ? (
+                      <p className="muted">
+                        Submitted:{" "}
+                        {new Date(submission.submitted_at).toLocaleString(
+                          "en-NG",
                         )}
-                      </span>
-                    </div>
+                      </p>
+                    ) : null}
 
-                    <div className="rn-admin-project-student">
-                      <strong>
-                        {student?.full_name ||
-                          "Student"}
-                      </strong>
-
-                      <span>
-                        {student?.email ||
-                          "—"}
-                      </span>
-
-                      <span>
-                        Submitted{" "}
-                        {formatDate(
-                          submission.submitted_at
-                        )}
-                      </span>
-                    </div>
-
-                    <div className="rn-admin-project-content">
-                      {submission.submission_text ? (
-                        <div>
-                          <span className="rn-eyebrow">
-                            WRITTEN SUBMISSION
-                          </span>
-
-                          <p>
-                            {
-                              submission.submission_text
-                            }
-                          </p>
-                        </div>
-                      ) : null}
-
-                      {submission.submission_url ? (
-                        <a
-                          href={
-                            submission.submission_url
-                          }
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rn-button rn-button-secondary"
-                        >
-                          Open Supporting Work
-                        </a>
-                      ) : null}
-                    </div>
-
-                    <ProjectReviewForm
-                      submissionId={
-                        submission.id
-                      }
-                      initialStatus={
-                        submission.status
-                      }
-                      initialScore={
-                        submission.score
-                      }
-                      initialFeedback={
-                        submission.feedback ||
-                        ""
-                      }
-                      maxScore={
-                        project.max_score
-                      }
-                    />
+                    {submission.status === "approved" ? (
+                      <div>
+                        <p>
+                          <strong>Score:</strong>{" "}
+                          {submission.score ?? "Not recorded"}
+                        </p>
+                        <p>
+                          <strong>Feedback:</strong>{" "}
+                          {submission.feedback || "No feedback recorded."}
+                        </p>
+                      </div>
+                    ) : canReview ? (
+                      <LabReviewForm
+                        submissionId={submission.id}
+                        initialScore={submission.score}
+                        initialFeedback={submission.feedback}
+                      />
+                    ) : null}
                   </article>
                 );
-              }
-            )}
-          </section>
-        )}
+              })}
+            </div>
+          )}
+        </section>
       </div>
-    </main>
+    </section>
   );
 }
