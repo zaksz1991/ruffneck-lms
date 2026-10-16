@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-const ALLOWED_ROLES = new Set([
-  "student",
-  "instructor",
-  "admin",
-]);
+const USER_ID = "c2ded758-b63f-4998-9d9c-2f6e8c393adc";
+const COURSE_ID = "ed6c001a-7a0f-44ad-98e3-404d690c2831";
 
-export async function POST(request: Request) {
+export async function POST() {
   try {
     const supabase = await createClient();
 
@@ -18,8 +15,8 @@ export async function POST(request: Request) {
 
     if (authError || !user) {
       return NextResponse.json(
-        { ok: false, error: "Authentication required." },
-        { status: 401 },
+        { error: "Please sign in first." },
+        { status: 401 }
       );
     }
 
@@ -29,87 +26,41 @@ export async function POST(request: Request) {
       .eq("id", user.id)
       .maybeSingle();
 
-    if (profileError) {
-      console.error("Admin role lookup failed:", profileError);
-
+    if (profileError || profile?.role !== "admin") {
       return NextResponse.json(
-        { ok: false, error: "Unable to verify administrator permissions." },
-        { status: 500 },
+        { error: "Only administrators can perform this action." },
+        { status: 403 }
       );
     }
 
-    if (profile?.role !== "admin") {
-      return NextResponse.json(
-        { ok: false, error: "Administrator access required." },
-        { status: 403 },
-      );
-    }
-
-    const body: unknown = await request.json().catch(() => null);
-
-    if (
-      typeof body !== "object" ||
-      body === null ||
-      !("userId" in body) ||
-      !("role" in body)
-    ) {
-      return NextResponse.json(
-        { ok: false, error: "A user ID and role are required." },
-        { status: 400 },
-      );
-    }
-
-    const { userId, role } = body as {
-      userId: unknown;
-      role: unknown;
-    };
-
-    if (
-      typeof userId !== "string" ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        userId,
-      )
-    ) {
-      return NextResponse.json(
-        { ok: false, error: "A valid user ID is required." },
-        { status: 400 },
-      );
-    }
-
-    if (typeof role !== "string" || !ALLOWED_ROLES.has(role)) {
-      return NextResponse.json(
-        { ok: false, error: "Choose a valid profile role." },
-        { status: 400 },
-      );
-    }
-
-    const { error: updateError } = await supabase.rpc(
-      "admin_set_profile_role",
+    const { error } = await supabase.rpc(
+      "admin_promote_instructor_and_assign_course",
       {
-        p_user_id: userId,
-        p_role: role,
-      },
+        p_user_id: USER_ID,
+        p_course_id: COURSE_ID,
+      }
     );
 
-    if (updateError) {
-      console.error("Profile role update failed:", updateError);
+    if (error) {
+      console.error("Instructor assignment failed:", error.message);
 
       return NextResponse.json(
-        { ok: false, error: "The profile role could not be updated." },
-        { status: 400 },
+        { error: "Could not assign the instructor. Check the database function and permissions." },
+        { status: 500 }
       );
     }
 
     return NextResponse.json({
-      ok: true,
-      message: "Profile role updated successfully.",
+      success: true,
+      message:
+        "Zakariya Hassan is now an instructor and has been assigned to the test lab course.",
     });
   } catch (error) {
-    console.error("Admin role endpoint failed:", error);
+    console.error("Instructor role route error:", error);
 
     return NextResponse.json(
-      { ok: false, error: "Unexpected error while updating the role." },
-      { status: 500 },
+      { error: "An unexpected error occurred." },
+      { status: 500 }
     );
   }
 }
