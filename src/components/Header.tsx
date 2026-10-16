@@ -6,11 +6,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-type Role =
-  | "student"
-  | "instructor"
-  | "admin"
-  | null;
+type Role = "student" | "instructor" | "admin" | null;
 
 export function Header() {
   const pathname = usePathname();
@@ -25,44 +21,52 @@ export function Header() {
     let mounted = true;
 
     async function loadUser() {
-      const supabase = createClient();
+      setLoading(true);
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      try {
+        const supabase = createClient();
 
-      if (!mounted) {
-        return;
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser();
+
+        if (!mounted) return;
+
+        if (authError || !user) {
+          setRole(null);
+          setLoading(false);
+          return;
+        }
+
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (!mounted) return;
+
+        const profileRole: Role =
+          profile?.role === "admin" ||
+          profile?.role === "instructor" ||
+          profile?.role === "student"
+            ? profile.role
+            : "student";
+
+        setRole(profileRole);
+      } catch {
+        if (mounted) {
+          setRole(null);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
-
-      if (!user) {
-        setRole(null);
-        setLoading(false);
-        return;
-      }
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (!mounted) {
-        return;
-      }
-
-      const profileRole =
-        profile?.role === "admin" ||
-        profile?.role === "instructor" ||
-        profile?.role === "student"
-          ? profile.role
-          : "student";
-
-      setRole(profileRole);
-      setLoading(false);
     }
 
-    loadUser();
+    void loadUser();
 
     return () => {
       mounted = false;
@@ -72,22 +76,17 @@ export function Header() {
   const isAuthenticated = role !== null;
 
   const canAccessAdmin =
-    role === "admin" ||
-    role === "instructor";
+    role === "admin" || role === "instructor";
 
   async function handleSignOut() {
-    if (signingOut) {
-      return;
-    }
+    if (signingOut) return;
 
     setSigningOut(true);
     setSignOutError("");
 
     try {
       const supabase = createClient();
-
-      const { error } =
-        await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
 
       if (error) {
         setSignOutError(error.message);
@@ -103,7 +102,7 @@ export function Header() {
       setSignOutError(
         error instanceof Error
           ? error.message
-          : "Unable to sign out.",
+          : "Unable to sign out. Please try again.",
       );
 
       setSigningOut(false);
@@ -118,13 +117,10 @@ export function Header() {
             href="https://ruffneck-entertainment.vercel.app/"
             className="rn-parent-brand-link"
           >
-            <strong>
-              RUFFNECK ENTERTAINMENT
-            </strong>
+            <strong>RUFFNECK ENTERTAINMENT</strong>
 
             <span>
-              Practical AI &amp; digital systems
-              for Nigerian professionals
+              Practical AI &amp; digital systems for Nigerian professionals
             </span>
           </Link>
 
@@ -155,45 +151,27 @@ export function Header() {
               />
             </Link>
 
-            <Link
-              href="/"
-              className="brand-name"
-            >
-              <strong>
-                RuffNeck Learn
-              </strong>
+            <Link href="/" className="brand-name">
+              <strong>RuffNeck Learn</strong>
 
               <span>
-                Practical AI &amp; digital systems
-                for Nigerian professionals
+                Practical AI &amp; digital systems for Nigerian professionals
               </span>
             </Link>
           </div>
 
-          <nav
-            className="nav"
-            aria-label="Main navigation"
-          >
-            <Link
-              href="/courses"
-              className="rn-nav-button"
-            >
+          <nav className="nav" aria-label="Main navigation">
+            <Link href="/courses" className="rn-nav-button">
               Courses
             </Link>
 
             {loading ? null : isAuthenticated ? (
               <>
-                <Link
-                  href="/student/courses"
-                  className="rn-nav-button"
-                >
+                <Link href="/student/courses" className="rn-nav-button">
                   My learning
                 </Link>
 
-                <Link
-                  href="/student/scan"
-                  className="rn-nav-button"
-                >
+                <Link href="/student/scan" className="rn-nav-button">
                   Scan &amp; Learn
                 </Link>
 
@@ -241,10 +219,7 @@ export function Header() {
                   My AI Drafts
                 </Link>
 
-                <Link
-                  href="/student/payments"
-                  className="rn-nav-button"
-                >
+                <Link href="/student/payments" className="rn-nav-button">
                   Payment History
                 </Link>
 
@@ -263,10 +238,7 @@ export function Header() {
                 </Link>
 
                 {canAccessAdmin ? (
-                  <Link
-                    href="/admin/lms"
-                    className="rn-nav-button"
-                  >
+                  <Link href="/admin/lms" className="rn-nav-button">
                     Admin
                   </Link>
                 ) : null}
@@ -276,25 +248,18 @@ export function Header() {
                   className="rn-nav-button"
                   onClick={handleSignOut}
                   disabled={signingOut}
+                  aria-busy={signingOut}
                 >
-                  {signingOut
-                    ? "Signing out..."
-                    : "Sign out"}
+                  {signingOut ? "Signing out..." : "Sign out"}
                 </button>
               </>
             ) : (
               <>
-                <Link
-                  href="/login"
-                  className="rn-nav-button"
-                >
+                <Link href="/login" className="rn-nav-button">
                   Log in
                 </Link>
 
-                <Link
-                  href="/signup"
-                  className="rn-nav-button"
-                >
+                <Link href="/signup" className="rn-nav-button">
                   Sign up
                 </Link>
               </>
@@ -303,7 +268,7 @@ export function Header() {
         </div>
       </header>
 
-      {signOutError && (
+      {signOutError ? (
         <div
           role="alert"
           style={{
@@ -319,7 +284,7 @@ export function Header() {
         >
           Sign out failed: {signOutError}
         </div>
-      )}
+      ) : null}
     </>
   );
 }
