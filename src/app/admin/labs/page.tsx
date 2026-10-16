@@ -4,11 +4,13 @@ import { createClient } from "@/lib/supabase/server";
 import LabReviewForm from "./LabReviewForm";
 
 type Profile = {
-  role: "admin" | "instructor" | "student";
+  id: string;
+  role: string;
   full_name: string | null;
+  email: string | null;
 };
 
-type Submission = {
+type LabSubmission = {
   id: string;
   lab_id: string;
   student_id: string;
@@ -22,13 +24,16 @@ type Submission = {
 
 type Lab = {
   id: string;
-  title: string;
   course_id: string;
+  title: string;
+  category: string | null;
+  difficulty: string | null;
 };
 
 type Course = {
   id: string;
   title: string;
+  instructor_id: string | null;
 };
 
 type Student = {
@@ -37,23 +42,64 @@ type Student = {
   email: string | null;
 };
 
-export default async function AdminLabsPage() {
+type SearchParams = Promise<{
+  status?: string;
+}>;
+
+const REVIEWABLE_STATUSES = ["submitted", "revision_required"];
+
+function formatDate(value: string | null) {
+  if (!value) return "Not submitted";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "Unknown date";
+
+  return date.toLocaleString("en-NG", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function statusLabel(status: string) {
+  switch (status) {
+    case "submitted":
+      return "Awaiting review";
+    case "revision_required":
+      return "Revision required";
+    case "approved":
+      return "Approved";
+    case "draft":
+      return "Draft";
+    default:
+      return status.replaceAll("_", " ");
+  }
+}
+
+export default async function AdminLabsPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const supabase = await createClient();
 
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (authError || !user) {
     redirect("/login?next=/admin/labs");
   }
 
-  const { data: profileData, error: profileError } =
-    await supabase
-      .from("profiles")
-      .select("role, full_name")
-      .eq("id", user.id)
-      .maybeSingle();
+  const {
+    data: profileData,
+    error: profileError,
+  } = await supabase
+    .from("profiles")
+    .select("id, role, full_name, email")
+    .eq("id", user.id)
+    .maybeSingle();
 
   if (profileError) {
     console.error("Lab review profile lookup failed:", profileError);
@@ -62,256 +108,431 @@ export default async function AdminLabsPage() {
 
   const profile = profileData as Profile | null;
 
-  if (!profile || !["admin", "instructor"].includes(profile.role)) {
+  if (
+    !profile ||
+    (profile.role !== "admin" && profile.role !== "instructor")
+  ) {
     redirect("/student/dashboard");
   }
 
-  const { data: submissionData, error: submissionError } =
-    await supabase
-      .from("lab_submissions")
-      .select(
-        "id, lab_id, student_id, answer_text, status, score, feedback, submitted_at, created_at",
-      )
-      .in("status", ["submitted", "revision_required", "approved"])
-      .order("submitted_at", { ascending: false, nullsFirst: false });
+  const params = await searchParams;
+  const selectedStatus = params.status ?? "all";
 
-  if (submissionError) {
-    console.error("Lab review submissions lookup failed:", submissionError);
-    throw new Error("Unable to load lab submissions.");
-  }
-
-  const submissions = (submissionData ?? []) as Submission[];
-
-  const labIds = [...new Set(submissions.map((item) => item.lab_id))];
-  const studentIds = [
-    ...new Set(submissions.map((item) => item.student_id)),
+  const allowedFilters = [
+    "all",
+    "submitted",
+    "revision_required",
+    "approved",
   ];
 
-  const { data: labData, error: labError } =
-    labIds.length > 0
-      ? await supabase
-          .from("practical_labs")
-          .select("id, title, course_id")
-          .in("id", labIds)
-      : { data: [], error: null };
+  const activeFilter = allowedFilters.includes(selectedStatus)
+    ? selectedStatus
+    : "all";
 
-  if (labError) {
-    console.error("Lab review lab lookup failed:", labError);
+  let submissionsQuery = supabase
+    .from("lab_submissions")
+    .select(
+      "id, lab_id, student_id, answer_text, status, score, feedback, submitted_at, created_at",
+    )
+    .in("status", [
+      "submitted",
+      "revision_required",
+      "approved",
+    ])
+    .order("submitted_at", { ascending: false, nullsFirst: false });
+
+  if (activeFilter !== "all") {
+    submissionsQuery = submissionsQuery.eq("status", activeFilter);
+  }
+
+  const {
+    data: submissionData,
+    error: submissionsError,
+  } = await submissionsQuery;
+
+  if (submissionsError) {
+    console.error("Lab submissions lookup failed:", submissionsError);
+    throw new Error(
+      "Unable to load lab submissions. Check the Practical Labs database policies.",
+    );
+  }
+
+  const submissions = (submissionData ?? []) as LabSubmission[];
+
+  const labIds = [...new Set(submissions.map((item) => item.lab_id))];
+  const studentIds = [...new Set(submissions.map((item) => item.student_id))];
+
+  const {
+    data: labData,
+    error: labsError,
+  } = labIds.length > 0
+    ? await supabase
+        .from("practical_labs")
+        .select("id, course_id, title, category, difficulty")
+        .in("id", labIds)
+    : { data: [], error: null };
+
+  if (labsError) {
+    console.error("Practical labs lookup failed:", labsError);
     throw new Error("Unable to load practical lab details.");
   }
 
   const labs = (labData ?? []) as Lab[];
+  const labMap = new Map(labs.map((lab) => [lab.id, lab]));
+
   const courseIds = [...new Set(labs.map((lab) => lab.course_id))];
 
-  const { data: courseData, error: courseError } =
-    courseIds.length > 0
-      ? await supabase
-          .from("courses")
-          .select("id, title")
-          .in("id", courseIds)
-      : { data: [], error: null };
+  const {
+    data: courseData,
+    error: coursesError,
+  } = courseIds.length > 0
+    ? await supabase
+        .from("courses")
+        .select("id, title, instructor_id")
+        .in("id", courseIds)
+    : { data: [], error: null };
 
-  if (courseError) {
-    console.error("Lab review course lookup failed:", courseError);
+  if (coursesError) {
+    console.error("Lab review courses lookup failed:", coursesError);
     throw new Error("Unable to load course details.");
   }
 
-  const { data: studentData, error: studentError } =
-    studentIds.length > 0
-      ? await supabase
-          .from("profiles")
-          .select("id, full_name, email")
-          .in("id", studentIds)
-      : { data: [], error: null };
+  const courses = (courseData ?? []) as Course[];
+  const courseMap = new Map(courses.map((course) => [course.id, course]));
 
-  if (studentError) {
-    console.error("Lab review student lookup failed:", studentError);
-    throw new Error("Unable to load learner details.");
+  // Admins may read student profiles through the existing admin policies.
+  // Instructors only see profile details if their current RLS policies permit it.
+  const {
+    data: studentData,
+    error: studentsError,
+  } = profile.role === "admin" && studentIds.length > 0
+    ? await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", studentIds)
+    : { data: [], error: null };
+
+  if (studentsError) {
+    console.error("Lab review student lookup failed:", studentsError);
   }
 
-  const labMap = new Map(
-    ((labs ?? []) as Lab[]).map((lab) => [lab.id, lab]),
-  );
-
-  const courseMap = new Map(
-    ((courseData ?? []) as Course[]).map((course) => [
-      course.id,
-      course,
-    ]),
-  );
-
+  const students = (studentData ?? []) as Student[];
   const studentMap = new Map(
-    ((studentData ?? []) as Student[]).map((student) => [
-      student.id,
-      student,
-    ]),
+    students.map((student) => [student.id, student]),
   );
 
   const pendingCount = submissions.filter(
-    (item) =>
-      item.status === "submitted" ||
-      item.status === "revision_required",
+    (item) => item.status === "submitted",
+  ).length;
+
+  const revisionCount = submissions.filter(
+    (item) => item.status === "revision_required",
+  ).length;
+
+  const approvedCount = submissions.filter(
+    (item) => item.status === "approved",
   ).length;
 
   return (
-    <section className="section">
+    <main className="section">
       <div className="container">
-        <div className="rn-admin-heading">
+        <header
+          className="rn-admin-heading"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            flexWrap: "wrap",
+            gap: 20,
+          }}
+        >
           <div>
-            <div className="rn-brand-kicker">RuffNeck Learn</div>
-            <h2>Practical Labs Review</h2>
+            <div className="rn-brand-kicker">
+              RUFFNECK LEARN · PRACTICAL ASSESSMENT
+            </div>
+
+            <h1>Practical Labs Review</h1>
+
             <p className="muted">
-              Review learner submissions, provide feedback, and approve
-              completed practical work.
+              Review student work, provide feedback, and record assessment
+              results.
             </p>
+
             <p className="muted">
-              Signed in as {profile.full_name || user.email} (
-              {profile.role}).
+              Reviewer: {profile.full_name || profile.email || user.email} ·{" "}
+              {profile.role}
             </p>
           </div>
 
-          <div className="rn-admin-heading-actions">
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
             <Link href="/admin/lms" className="btn btn-ghost">
-              Back to LMS Admin
+              LMS Dashboard
+            </Link>
+
+            <Link href="/admin/projects" className="btn btn-primary">
+              Projects &amp; Capstones
             </Link>
           </div>
-        </div>
+        </header>
 
-        <div className="rn-admin-stats">
-          <div className="rn-admin-stat">
-            <span className="rn-admin-stat-icon">▤</span>
+        <section
+          className="rn-admin-stats"
+          aria-label="Lab submission statistics"
+        >
+          <Link
+            href="/admin/labs?status=all"
+            className={`rn-admin-stat ${
+              activeFilter === "all" ? "active" : ""
+            }`}
+          >
+            <span className="rn-admin-stat-icon">▦</span>
             <span>
-              <span className="muted">Visible submissions</span>
+              <span className="muted">Loaded submissions</span>
               <strong>{submissions.length}</strong>
             </span>
-          </div>
+          </Link>
 
-          <div className="rn-admin-stat">
+          <Link
+            href="/admin/labs?status=submitted"
+            className={`rn-admin-stat ${
+              activeFilter === "submitted" ? "active" : ""
+            }`}
+          >
             <span className="rn-admin-stat-icon">◷</span>
             <span>
               <span className="muted">Awaiting review</span>
               <strong>{pendingCount}</strong>
             </span>
-          </div>
+          </Link>
 
-          <div className="rn-admin-stat">
+          <Link
+            href="/admin/labs?status=revision_required"
+            className={`rn-admin-stat ${
+              activeFilter === "revision_required" ? "active" : ""
+            }`}
+          >
+            <span className="rn-admin-stat-icon">↻</span>
+            <span>
+              <span className="muted">Revision required</span>
+              <strong>{revisionCount}</strong>
+            </span>
+          </Link>
+
+          <Link
+            href="/admin/labs?status=approved"
+            className={`rn-admin-stat ${
+              activeFilter === "approved" ? "active" : ""
+            }`}
+          >
             <span className="rn-admin-stat-icon">✓</span>
             <span>
               <span className="muted">Approved</span>
-              <strong>
-                {
-                  submissions.filter(
-                    (item) => item.status === "approved",
-                  ).length
-                }
-              </strong>
+              <strong>{approvedCount}</strong>
             </span>
-          </div>
+          </Link>
+        </section>
+
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            margin: "28px 0 20px",
+          }}
+        >
+          {allowedFilters.map((filter) => (
+            <Link
+              key={filter}
+              href={`/admin/labs?status=${filter}`}
+              className={
+                activeFilter === filter
+                  ? "btn btn-primary"
+                  : "btn btn-ghost"
+              }
+            >
+              {filter === "all"
+                ? "All submissions"
+                : statusLabel(filter)}
+            </Link>
+          ))}
         </div>
 
-        <section className="rn-admin-list-panel">
-          <div className="rn-admin-list-header">
-            <div>
-              <div className="rn-brand-kicker">Learner submissions</div>
-              <h3>Review queue</h3>
-            </div>
-          </div>
-
-          {submissions.length === 0 ? (
+        {submissions.length === 0 ? (
+          <section className="rn-admin-list-panel">
             <div className="rn-empty-state">
-              <div className="rn-empty-icon">▤</div>
-              <strong>No visible submissions</strong>
+              <div className="rn-empty-icon">▦</div>
+              <strong>No submissions found</strong>
               <p>
-                Submissions will appear here when learners submit practical
-                work for courses you manage.
+                There are no submissions for this filter that you are
+                authorized to review.
               </p>
             </div>
-          ) : (
-            <div className="rn-lab-review-list">
-              {submissions.map((submission) => {
-                const lab = labMap.get(submission.lab_id);
-                const course = lab
-                  ? courseMap.get(lab.course_id)
-                  : undefined;
-                const student = studentMap.get(submission.student_id);
-                const canReview =
-                  submission.status === "submitted" ||
-                  submission.status === "revision_required";
+          </section>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gap: 22,
+            }}
+          >
+            {submissions.map((submission) => {
+              const lab = labMap.get(submission.lab_id);
+              const course = lab
+                ? courseMap.get(lab.course_id)
+                : undefined;
+              const student = studentMap.get(submission.student_id);
+              const canReview = REVIEWABLE_STATUSES.includes(
+                submission.status,
+              );
 
-                return (
-                  <article
-                    key={submission.id}
-                    className="rn-admin-list-panel"
-                    style={{ marginBottom: 20 }}
+              return (
+                <article
+                  key={submission.id}
+                  className="rn-admin-list-panel"
+                  style={{
+                    padding: 24,
+                    minWidth: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      flexWrap: "wrap",
+                      gap: 16,
+                      marginBottom: 18,
+                    }}
                   >
-                    <div className="rn-admin-list-header">
-                      <div>
-                        <div className="rn-brand-kicker">
-                          {course?.title || "Course"}
-                        </div>
-                        <h3>{lab?.title || "Practical Lab"}</h3>
-                        <p className="muted">
-                          Learner: {student?.full_name || "Unnamed learner"}
-                          {student?.email ? ` · ${student.email}` : ""}
-                        </p>
+                    <div>
+                      <div className="rn-brand-kicker">
+                        {course?.title || "Course"}
                       </div>
 
-                      <span className="rn-status-pill">
-                        {submission.status.replaceAll("_", " ")}
-                      </span>
+                      <h2 style={{ margin: "8px 0" }}>
+                        {lab?.title || "Practical Lab"}
+                      </h2>
+
+                      <p className="muted">
+                        {lab?.category || "Practical assessment"}
+                        {lab?.difficulty
+                          ? ` · ${lab.difficulty}`
+                          : ""}
+                      </p>
                     </div>
 
-                    <div style={{ margin: "16px 0" }}>
-                      <strong>Learner response</strong>
+                    <span className="rn-status-pill">
+                      {statusLabel(submission.status)}
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fit, minmax(180px, 1fr))",
+                      gap: 12,
+                      marginBottom: 22,
+                    }}
+                  >
+                    <div>
+                      <span className="muted">Student</span>
+                      <p style={{ margin: "5px 0 0" }}>
+                        <strong>
+                          {student?.full_name ||
+                            (profile.role === "instructor"
+                              ? "Enrolled student"
+                              : "Student profile unavailable")}
+                        </strong>
+                      </p>
+                      {profile.role === "admin" && student?.email ? (
+                        <small>{student.email}</small>
+                      ) : null}
+                    </div>
+
+                    <div>
+                      <span className="muted">Submitted</span>
+                      <p style={{ margin: "5px 0 0" }}>
+                        {formatDate(submission.submitted_at)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="muted">Current score</span>
+                      <p style={{ margin: "5px 0 0" }}>
+                        <strong>
+                          {submission.score === null
+                            ? "Not scored"
+                            : `${submission.score}/100`}
+                        </strong>
+                      </p>
+                    </div>
+                  </div>
+
+                  <section style={{ marginBottom: 24 }}>
+                    <h3>Student response</h3>
+
+                    <div
+                      style={{
+                        padding: 18,
+                        borderRadius: 12,
+                        background: "var(--surface, #f5f7fa)",
+                        border: "1px solid var(--border, #e1e7ef)",
+                        whiteSpace: "pre-wrap",
+                        overflowWrap: "anywhere",
+                        lineHeight: 1.75,
+                      }}
+                    >
+                      {submission.answer_text || "No response provided."}
+                    </div>
+                  </section>
+
+                  {submission.status === "approved" ? (
+                    <section>
+                      <h3>Recorded review</h3>
+
+                      <p>
+                        <strong>Score:</strong>{" "}
+                        {submission.score ?? "Not recorded"}
+                        {submission.score !== null ? "/100" : ""}
+                      </p>
+
+                      <p>
+                        <strong>Feedback:</strong>
+                      </p>
+
                       <div
                         style={{
                           whiteSpace: "pre-wrap",
                           overflowWrap: "anywhere",
-                          marginTop: 8,
-                          padding: 16,
-                          borderRadius: 12,
-                          background: "var(--surface, #f5f7fa)",
-                          lineHeight: 1.65,
                         }}
                       >
-                        {submission.answer_text}
+                        {submission.feedback || "No feedback recorded."}
                       </div>
-                    </div>
+                    </section>
+                  ) : canReview ? (
+                    <section>
+                      <h3>Review submission</h3>
 
-                    {submission.submitted_at ? (
-                      <p className="muted">
-                        Submitted:{" "}
-                        {new Date(submission.submitted_at).toLocaleString(
-                          "en-NG",
-                        )}
-                      </p>
-                    ) : null}
-
-                    {submission.status === "approved" ? (
-                      <div>
-                        <p>
-                          <strong>Score:</strong>{" "}
-                          {submission.score ?? "Not recorded"}
-                        </p>
-                        <p>
-                          <strong>Feedback:</strong>{" "}
-                          {submission.feedback || "No feedback recorded."}
-                        </p>
-                      </div>
-                    ) : canReview ? (
                       <LabReviewForm
                         submissionId={submission.id}
-                        initialScore={submission.score}
-                        initialFeedback={submission.feedback}
+                        currentScore={submission.score}
+                        currentFeedback={submission.feedback}
                       />
-                    ) : null}
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </section>
+                    </section>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        )}
       </div>
-    </section>
+    </main>
   );
 }
