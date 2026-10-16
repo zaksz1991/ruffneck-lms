@@ -30,8 +30,10 @@ export async function POST(request: Request) {
       return errorResponse("Sign in to review lab submissions.", 401);
     }
 
-    // Verify the reviewer's role using the database profile.
-    const { data: profile, error: profileError } = await supabase
+    const {
+      data: profile,
+      error: profileError,
+    } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", user.id)
@@ -39,12 +41,15 @@ export async function POST(request: Request) {
 
     if (profileError) {
       console.error("Lab review role lookup failed:", profileError);
-      return errorResponse("Unable to verify reviewer permissions.", 500);
+      return errorResponse(
+        "Unable to verify reviewer permissions.",
+        500,
+      );
     }
 
     if (
       !profile ||
-      !["admin", "instructor"].includes(profile.role ?? "")
+      !["admin", "instructor"].includes(profile.role)
     ) {
       return errorResponse(
         "Only administrators and instructors can review lab submissions.",
@@ -52,12 +57,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = (await request.json().catch(() => null)) as
-      | ReviewRequest
-      | null;
+    const body = (await request
+      .json()
+      .catch(() => null)) as ReviewRequest | null;
 
     if (!body || typeof body !== "object") {
-      return errorResponse("A valid review request is required.", 400);
+      return errorResponse(
+        "A valid review request is required.",
+        400,
+      );
     }
 
     const submissionId =
@@ -65,12 +73,14 @@ export async function POST(request: Request) {
         ? body.submissionId.trim()
         : "";
 
-    // Validate UUID format before calling the database.
     const uuidPattern =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
     if (!uuidPattern.test(submissionId)) {
-      return errorResponse("A valid submission ID is required.", 400);
+      return errorResponse(
+        "A valid submission ID is required.",
+        400,
+      );
     }
 
     if (
@@ -89,27 +99,24 @@ export async function POST(request: Request) {
       body.status !== "approved" &&
       body.status !== "revision_required"
     ) {
-      return errorResponse("Choose a valid review status.", 400);
+      return errorResponse(
+        "Choose a valid review status.",
+        400,
+      );
     }
 
     if (
-      body.status === "approved" &&
-      body.score === undefined
+      body.feedback !== undefined &&
+      body.feedback !== null &&
+      typeof body.feedback !== "string"
     ) {
-      return errorResponse(
-        "An approved submission requires a score.",
-        400,
-      );
+      return errorResponse("Feedback must be text.", 400);
     }
 
     const feedback =
       typeof body.feedback === "string"
         ? body.feedback.trim()
         : "";
-
-    if (body.feedback !== undefined && typeof body.feedback !== "string") {
-      return errorResponse("Feedback must be text.", 400);
-    }
 
     if (feedback.length > MAX_FEEDBACK_LENGTH) {
       return errorResponse(
@@ -118,8 +125,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // The database function independently checks reviewer authorization,
-    // course ownership, self-review, submission status and score limits.
+    if (
+      body.status === "revision_required" &&
+      feedback.length === 0
+    ) {
+      return errorResponse(
+        "Provide feedback explaining what the student must improve.",
+        400,
+      );
+    }
+
     const { error: reviewError } = await supabase.rpc(
       "review_lab_submission",
       {
@@ -165,7 +180,10 @@ export async function POST(request: Request) {
         message.includes("Approved submissions require") ||
         message.includes("Feedback exceeds")
       ) {
-        return errorResponse("The review details are invalid.", 400);
+        return errorResponse(
+          "The review details are invalid.",
+          400,
+        );
       }
 
       return errorResponse(
