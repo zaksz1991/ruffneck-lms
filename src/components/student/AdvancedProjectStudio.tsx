@@ -572,6 +572,89 @@ export default function AdvancedProjectStudio(props: Props) {
     const zip = createZip(entries);
     downloadBlob(`${projectName}-project.zip`, new Blob([zip], { type: "application/zip" }));
   }
+  function exportDeploymentPack() {
+    const projectName = fileNameStem(track === "digital_publishing" ? metadata.title : labTitle);
+    const entries: { path: string; content: string | Uint8Array }[] = [];
+    const sitePrefix = `${projectName}/site/`;
+    const commonHeaders = `/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: camera=(), microphone=(), geolocation=()\n`;
+    const netlifyConfig = `[build]\n  publish = "site"\n\n[[headers]]\n  for = "/*"\n  [headers.values]\n    X-Content-Type-Options = "nosniff"\n    Referrer-Policy = "strict-origin-when-cross-origin"\n    Permissions-Policy = "camera=(), microphone=(), geolocation=()"\n`;
+    const vercelConfig = JSON.stringify({
+      outputDirectory: "site",
+      headers: [{
+        source: "/(.*)",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+        ],
+      }],
+    }, null, 2) + "\n";
+
+    const deploymentGuide = track === "web_development"
+      ? `# ${labTitle} — External deployment pack\n\nThis package separates the public website from project notes. Only the \`site/\` directory is intended to be served as the public website. The project reflection and these instructions stay outside \`site/\`.\n\n## Before publishing\n\n- Review every HTML page and local link. Use relative links such as \`about.html\` or \`pages/about.html\` rather than hard-coded root paths when possible.\n- Check every image, desktop/tablet/mobile layout, readable contrast and visible keyboard focus.\n- Remove private information, credentials, licensed assets you do not have permission to distribute, and real customer data.\n- The deployment pack includes static HTML, CSS and supported local image files. It does not run JavaScript or build a backend.\n\n## Option A — Netlify\n\n1. Create or sign in to your Netlify account.\n2. For a Git-connected site, put the contents of this project folder in a repository and import it into Netlify.\n3. Keep the project folder as the base directory; the included \`netlify.toml\` sets the publish directory to \`site\`. No build command is required.\n4. Deploy and test the live URL, internal links and mobile layout.\n\nFor a manual drag-and-drop deploy, upload the contents of \`site/\`; provider configuration files in the parent folder are not needed for that method.\n\n## Option B — Vercel\n\n1. Put the project folder in a Git repository and import it into Vercel.\n2. Select the project folder as the root directory and use the Other/static site preset.\n3. Leave the build command empty and set the output directory to \`site\`; the included \`vercel.json\` records that output directory and basic security headers.\n4. Deploy, then test the URL and each local page.\n\n## Option C — GitHub Pages\n\n1. Create a repository on GitHub.\n2. Copy **the contents of \`site/\`** into the repository root; do not upload the parent project folder.\n3. In repository Settings → Pages, publish from the chosen branch and root directory.\n4. Wait for Pages to deploy, then test all links. Only copy \`site/\` so project notes remain private.\n\n## Option D — Cloudflare Pages\n\nUse the project folder as the repository root and set the output directory to \`site\` with no build command. For direct upload, upload only the contents of \`site/\`.\n\n## Important\n\nThis ZIP prepares files; it does not create accounts or deploy the project automatically. You must complete publishing within the provider's account and accept its terms. Re-check provider settings because hosting interfaces can change.\n`
+      : `# ${metadata.title || labTitle} — Publication release pack\n\nThe \`site/\` directory contains the rendered, public-facing HTML page. The \`editorial/\` directory contains the editable manuscript, metadata, checklist and private project reflection. Deploy or upload only the public-facing files you intend readers to see.\n\n## Host the rendered article\n\nUse Netlify, Vercel, GitHub Pages or Cloudflare Pages. For Git-connected hosting, keep this project folder as the repository/root folder and set the output directory to \`site\`. For manual static upload, upload only the contents of \`site/\`.\n\n## Transfer to a CMS or newsletter platform\n\n1. Use \`editorial/publication.md\` as the editable source.\n2. Copy the title, subtitle, byline, excerpt and other fields from \`editorial/metadata.json\`.\n3. Paste and reformat the content in the destination platform, then preview desktop and mobile layouts.\n4. Verify claims, quotations, citations, asset permissions and publication date before releasing.\n5. Do not upload \`editorial/project-reflection.txt\` or the checklist unless you explicitly intend to share them.\n\n## Important\n\nThis pack prepares a static HTML article and editorial transfer files. It does not automatically publish to a third-party CMS, newsletter or eBook distributor.\n`;
+
+    entries.push({ path: `${projectName}/README.md`, content: deploymentGuide });
+    entries.push({ path: `${projectName}/netlify.toml`, content: netlifyConfig });
+    entries.push({ path: `${projectName}/vercel.json`, content: vercelConfig });
+    entries.push({ path: `${sitePrefix}.nojekyll`, content: "" });
+    entries.push({ path: `${sitePrefix}_headers`, content: commonHeaders });
+
+    if (track === "web_development") {
+      const deployableFiles = files.filter((file) => {
+        const path = file.path.toLowerCase();
+        if (file.path.startsWith("/") || file.path.includes("..") || file.path.includes("\\")) return false;
+        if (/\.(?:html|css)$/.test(path)) return true;
+        return /\.(?:png|jpe?g|webp)$/.test(path) && mimeFromDataUrl(file.content) !== null;
+      });
+      if (!deployableFiles.some((file) => file.path === "index.html")) {
+        setMessage({ kind: "error", text: "Add an index.html home page before exporting a hosting pack." });
+        return;
+      }
+      if (!deployableFiles.some((file) => file.path.toLowerCase().endsWith(".css"))) {
+        setMessage({ kind: "error", text: "Add at least one CSS file before exporting a hosting pack." });
+        return;
+      }
+      for (const file of deployableFiles) {
+        entries.push({ path: `${sitePrefix}${file.path}`, content: file.content });
+      }
+      entries.push({
+        path: `${projectName}/deployment-checklist.md`,
+        content: `# Website release checklist\n\n- [ ] index.html is present in site/\n- [ ] Every navigation link points to an existing local page or a deliberate external destination.\n- [ ] Every CSS and image path works from its HTML file.\n- [ ] Desktop, tablet and mobile layouts were tested.\n- [ ] Keyboard focus is visible and text is readable.\n- [ ] The site does not contain private data, credentials or unauthorised assets.\n- [ ] Only the site/ directory will be publicly served.\n- [ ] The deployed URL and each internal page were tested after release.\n`,
+      });
+    } else {
+      if (!publicationFile) {
+        setMessage({ kind: "error", text: "The publication.md manuscript is missing. Add it before exporting a release pack." });
+        return;
+      }
+      entries.push({ path: `${sitePrefix}index.html`, content: publicationHtml });
+      entries.push({ path: `${projectName}/editorial/publication.md`, content: publicationFile.content });
+      if (files.some((file) => file.path === "publication.css")) {
+        entries.push({ path: `${projectName}/editorial/publication.css`, content: publicationCss });
+      }
+      entries.push({
+        path: `${projectName}/editorial/metadata.json`,
+        content: JSON.stringify({ ...metadata, tags: metadata.tags.split(",").map((tag) => tag.trim()).filter(Boolean) }, null, 2) + "\n",
+      });
+      const checklist = files.find((file) => file.path === "editorial-checklist.md");
+      if (checklist) entries.push({ path: `${projectName}/editorial/editorial-checklist.md`, content: checklist.content });
+      entries.push({ path: `${projectName}/editorial/project-reflection.txt`, content: reflection.trim() || "No reflection provided yet." });
+      for (const file of files) {
+        if (/\.(?:png|jpe?g|webp)$/i.test(file.path) && mimeFromDataUrl(file.content)) {
+          entries.push({ path: `${projectName}/editorial/${file.path}`, content: file.content });
+        }
+      }
+      entries.push({
+        path: `${projectName}/deployment-checklist.md`,
+        content: `# Publication release checklist\n\n- [ ] Title, subtitle, byline, excerpt and publication date are correct.\n- [ ] Factual claims and quotations are verified against real sources.\n- [ ] References and citations are genuine and complete.\n- [ ] Image and quotation rights have been checked.\n- [ ] The rendered page has been checked on desktop and mobile.\n- [ ] Only the site/ directory will be publicly hosted.\n- [ ] Editorial files and the project reflection will not be uploaded publicly by mistake.\n- [ ] A preview has been checked at the final destination before release.\n`,
+      });
+    }
+
+    const zip = createZip(entries);
+    downloadBlob(`${projectName}-hosting-pack.zip`, new Blob([zip], { type: "application/zip" }));
+    setMessage({ kind: "success", text: "Hosting pack downloaded. It keeps public site files in the site/ folder and keeps project reflection/editorial notes outside that folder. Hosting is completed separately in your chosen provider account." });
+  }
+
   function printPublication() {
     if (track !== "digital_publishing") return;
     const printUrl = URL.createObjectURL(new Blob([publicationHtml], { type: "text/html;charset=utf-8" }));
@@ -674,7 +757,7 @@ export default function AdvancedProjectStudio(props: Props) {
       </section>}
 
       <section className={styles.workbench}>
-        <div className={styles.sectionHead}><div><p className={styles.eyebrow}>YOUR PROJECT FILES</p><h2>{track === "web_development" ? "Multi-file website builder" : "Digital publishing workspace"}</h2><p>{track === "web_development" ? "Manage connected HTML pages, shared CSS and small image assets. Select a page in the preview to test internal navigation." : "Write in Markdown, manage your publication stylesheet and metadata, then export a publication-ready package."}</p></div><div className={styles.actions}><button type="button" className={styles.secondary} onClick={exportProject} disabled={!files.length}>Download project ZIP</button>{track === "digital_publishing" && <button type="button" className={styles.secondary} onClick={printPublication}>Print / Save as PDF</button>}</div></div>
+        <div className={styles.sectionHead}><div><p className={styles.eyebrow}>YOUR PROJECT FILES</p><h2>{track === "web_development" ? "Multi-file website builder" : "Digital publishing workspace"}</h2><p>{track === "web_development" ? "Manage connected HTML pages, shared CSS and small image assets. Select a page in the preview to test internal navigation." : "Write in Markdown, manage your publication stylesheet and metadata, then export a publication-ready package."}</p></div><div className={styles.actions}><button type="button" className={styles.secondary} onClick={exportProject} disabled={!files.length}>Download project ZIP</button><button type="button" className={styles.primary} onClick={exportDeploymentPack} disabled={!files.length}>Download hosting pack</button>{track === "digital_publishing" && <button type="button" className={styles.secondary} onClick={printPublication}>Print / Save as PDF</button>}</div></div>
         <div className={styles.workspaceGrid}>
           <aside className={styles.filePanel} aria-label="Project files"><div className={styles.filePanelHeader}><strong>Project explorer</strong><span>{files.length}/{MAX_FILES}</span></div>
             <div className={styles.fileTree}>{files.map((file) => <button key={file.path} type="button" className={`${styles.fileItem} ${file.path === activeFile ? styles.fileActive : ""}`} onClick={() => { setActiveFile(file.path); if (track === "web_development" && file.path.toLowerCase().endsWith(".html")) setPreviewFile(file.path); }} disabled={!canEdit && file.path !== activeFile}><span aria-hidden="true">{file.content.startsWith("data:image/") ? "▧" : file.path.endsWith(".html") ? "◇" : file.path.endsWith(".css") ? "#" : file.path.endsWith(".md") ? "¶" : file.path.endsWith(".json") ? "{}" : "▤"}</span>{file.path}</button>)}</div>
