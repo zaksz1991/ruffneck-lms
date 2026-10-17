@@ -65,9 +65,39 @@
 .fileDotHtml, .fileDotCss { width: 9px; height: 9px; border-radius: 3px; background: #ee8c49; }
 .fileDotCss { background: #5ab4ef; }
 .editorHelp { margin: 0; padding: 11px 14px; background: #0d1e31; color: #a9bed5; font-size: 11px; line-height: 1.6; }
-.codeEditor { display: block; width: 100%; min-width: 0; min-height: 460px; flex: 1; resize: vertical; border: 0; border-top: 1px solid #1b3551; border-radius: 0; outline: none; padding: 16px; background: #071321; color: #d7e7f7; font: 12px/1.75 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size: 2; white-space: pre; overflow: auto; }
+.editorTools { display: flex; justify-content: space-between; align-items: center; gap: 8px 12px; flex-wrap: wrap; padding: 8px 10px; border-top: 1px solid #1b3551; background: #0b1a2b; }
+.editorToolButtons, .editorSearchActions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.editorToolButton { min-height: 31px; border: 1px solid #314761; border-radius: 6px; padding: 6px 9px; background: #142a41; color: #d8e7f6; font-size: 11px; font-weight: 750; cursor: pointer; }
+.editorToolButton:hover { border-color: #00aeca; background: #17344d; }
+.editorToolButton:focus-visible, .editorSearchInput:focus-visible { outline: 2px solid #00c4e6; outline-offset: 2px; }
+.editorToolButton kbd { margin-left: 5px; color: #8fa8c2; font: inherit; font-size: 9px; }
+.editorShortcutNote { color: #829ab3; font-size: 9px; line-height: 1.4; }
+.editorSearchBar { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; padding: 9px 10px; border-top: 1px solid #1b3551; background: #0b1a2b; }
+.editorSearchInput { flex: 1 1 130px; width: 100%; min-width: 0; min-height: 34px; border: 1px solid #314761; border-radius: 6px; padding: 7px 9px; color: #e5eef8; background: #071321; font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.editorSearchInput::placeholder { color: #7d91a8; }
+.editorSearchNote { flex: 1 1 100%; min-height: 1em; color: #83c8d7; font-size: 10px; }
+.codeEditorShell { display: grid; grid-template-columns: 42px minmax(0, 1fr); min-width: 0; min-height: 460px; flex: 1; overflow: hidden; border-top: 1px solid #1b3551; background: #071321; }
+.lineNumberGutter { position: relative; min-width: 0; overflow: hidden; padding-top: 16px; border-right: 1px solid #1b3551; color: #5f7791; background: #081827; font: 12px/21px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-align: right; user-select: none; }
+.lineNumberRows { will-change: transform; }
+.lineNumberRows span { display: block; height: 21px; padding: 0 10px 0 4px; line-height: 21px; }
+.codeEditorInputWrap { position: relative; min-width: 0; min-height: 460px; overflow: hidden; }
+.codeHighlight { position: absolute; top: 0; left: 0; width: max-content; min-width: 100%; min-height: 100%; margin: 0; padding: 16px; color: #d7e7f7; background: transparent; font: 12px/21px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size: 2; white-space: pre; pointer-events: none; user-select: none; will-change: transform; }
+.codeEditor { position: absolute; inset: 0; display: block; width: 100%; height: 100%; min-width: 0; min-height: 460px; margin: 0; resize: none; border: 0; border-radius: 0; outline: none; padding: 16px; background: transparent; color: transparent; -webkit-text-fill-color: transparent; caret-color: #eaf6ff; font: 12px/21px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size: 2; white-space: pre; overflow: auto; }
+.codeEditor::selection { background: rgba(0, 174, 202, .42); color: transparent; -webkit-text-fill-color: transparent; }
 .codeEditor:focus-visible { box-shadow: inset 0 0 0 2px #00aeca; }
-.codeEditor:disabled { color: #93a5b7; opacity: .82; }
+.codeEditor:disabled { caret-color: #93a5b7; opacity: .82; }
+.tokenPlain { color: #d7e7f7; }
+.tokenComment { color: #78a987; }
+.tokenTag { color: #f0a36c; }
+.tokenAttribute { color: #8fc7eb; }
+.tokenOperator, .tokenPunctuation { color: #a8b8c9; }
+.tokenString { color: #d9c17c; }
+.tokenEntity { color: #df9ed8; }
+.tokenAtRule { color: #c2a0ee; }
+.tokenVariable { color: #68d0c4; }
+.tokenColor { color: #f19ab1; }
+.tokenProperty { color: #8fc7eb; }
+.tokenNumber { color: #d4adf4; }
 .previewPanel, .checksPanel, .reflectionPanel { min-width: 0; border: 1px solid var(--studio-border); border-radius: 13px; overflow: hidden; }
 .previewHeader { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; padding: 16px; border-bottom: 1px solid var(--studio-border); background: #fbfcfe; }
 .previewHeader h3, .checksHeader h3 { margin: 5px 0 0; font-size: 19px; letter-spacing: -.02em; }
@@ -112,7 +142,10 @@
 @media (max-width: 900px) {
   .briefGrid { grid-template-columns: 1fr; }
   .editorGrid { grid-template-columns: 1fr; }
+  .codeEditorShell { min-height: 350px; }
+  .codeEditorInputWrap { min-height: 350px; }
   .codeEditor { min-height: 350px; }
+  .codeHighlight { min-height: 350px; }
   .reflectionPanel { grid-template-columns: 1fr; }
   .reflectionPanel small { grid-column: 1; }
 }
@@ -127,6 +160,9 @@
   .previewHeader { align-items: flex-start; }
   .previewControls { width: 100%; }
   .previewControls button { flex: 1 1 auto; }
+  .editorTools { align-items: flex-start; }
+  .editorShortcutNote { flex-basis: 100%; }
+  .editorSearchInput { flex-basis: 100%; }
   .checkList { grid-template-columns: 1fr; }
   .actionBar, .downloadActions, .saveActions { width: 100%; }
   .downloadActions button, .saveActions button { flex: 1 1 150px; }
@@ -180,3 +216,9 @@
 .autoSaveSaving { border-color: #a9d9e8; background: #eaf8fc; color: #075a71; }
 .autoSaveSuccess { border-color: #a9ddc2; background: #edf9f1; color: #17633e; }
 .autoSaveError { border-color: #f0b9b9; background: #fff0f0; color: #8f2424; }
+
+@media (forced-colors: active) {
+  .codeHighlight { display: none; }
+  .codeEditor { color: CanvasText; -webkit-text-fill-color: CanvasText; background: Canvas; }
+  .lineNumberGutter { color: CanvasText; background: Canvas; border-right-color: CanvasText; }
+}

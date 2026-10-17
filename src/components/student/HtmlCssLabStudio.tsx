@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./HtmlCssLabStudio.module.css";
 
@@ -645,6 +645,23 @@ export default function HtmlCssLabStudio({
   const autoSaveRequestRef = useRef<Promise<StudioApiResponse> | null>(null);
   const manualSaveInProgressRef = useRef(false);
 
+  type EditorLanguage = "html" | "css";
+  type EditorSearchMode = "closed" | "find" | "replace";
+  type EditorSearchState = {
+    mode: EditorSearchMode;
+    find: string;
+    replace: string;
+    note: string;
+  };
+  const [editorSearch, setEditorSearch] = useState<Record<EditorLanguage, EditorSearchState>>({
+    html: { mode: "closed", find: "", replace: "", note: "" },
+    css: { mode: "closed", find: "", replace: "", note: "" },
+  });
+  const htmlEditorRef = useRef<HTMLTextAreaElement>(null);
+  const cssEditorRef = useRef<HTMLTextAreaElement>(null);
+  const [htmlScroll, setHtmlScroll] = useState({ top: 0, left: 0 });
+  const [cssScroll, setCssScroll] = useState({ top: 0, left: 0 });
+
   const previewDocument = useMemo(() => makePreviewDocument(html, css), [html, css, previewKey]);
   const rubricTotal = assessmentRubric.reduce((total, item) => total + item.points, 0);
   const locked = status === "submitted" || status === "approved";
@@ -749,16 +766,286 @@ export default function HtmlCssLabStudio({
     return () => window.clearTimeout(timer);
   }, [html, css, reflection, locked, saving, labId, autoSaveCycle]);
 
-  function handleTab(event: KeyboardEvent<HTMLTextAreaElement>, language: "html" | "css") {
-    if (event.key !== "Tab" || event.shiftKey || locked) return;
-    event.preventDefault();
+  function getEditorValue(language: EditorLanguage): string {
+    return language === "html" ? html : css;
+  }
+
+  function setEditorValue(language: EditorLanguage, value: string) {
+    if (language === "html") setHtml(value);
+    else setCss(value);
+  }
+
+  function getEditorRef(language: EditorLanguage) {
+    return language === "html" ? htmlEditorRef : cssEditorRef;
+  }
+
+  function updateEditorSearch(language: EditorLanguage, patch: Partial<EditorSearchState>) {
+    setEditorSearch((current) => ({
+      ...current,
+      [language]: { ...current[language], ...patch },
+    }));
+  }
+
+  function toggleEditorSearch(language: EditorLanguage, mode: Exclude<EditorSearchMode, "closed">) {
+    updateEditorSearch(language, {
+      mode: editorSearch[language].mode === mode ? "closed" : mode,
+      note: "",
+    });
+  }
+
+  function findNext(language: EditorLanguage) {
+    const needle = editorSearch[language].find;
+    const target = getEditorRef(language).current;
+    const value = getEditorValue(language);
+    if (!needle) {
+      updateEditorSearch(language, { note: "Enter text to find." });
+      return;
+    }
+    if (!target) return;
+    let index = value.indexOf(needle, target.selectionEnd);
+    if (index < 0) index = value.indexOf(needle, 0);
+    if (index < 0) {
+      updateEditorSearch(language, { note: "No match found." });
+      return;
+    }
+    target.focus();
+    target.setSelectionRange(index, index + needle.length);
+    const line = value.slice(0, index).split("\n").length;
+    updateEditorSearch(language, { note: `Match selected on line ${line}.` });
+  }
+
+  function replaceCurrent(language: EditorLanguage) {
+    const search = editorSearch[language];
+    const target = getEditorRef(language).current;
+    const value = getEditorValue(language);
+    if (!search.find || !target) {
+      updateEditorSearch(language, { note: "Enter text to find first." });
+      return;
+    }
+    let start = target.selectionStart;
+    let end = target.selectionEnd;
+    if (value.slice(start, end) !== search.find) {
+      let found = value.indexOf(search.find, target.selectionEnd);
+      if (found < 0) found = value.indexOf(search.find, 0);
+      if (found < 0) {
+        updateEditorSearch(language, { note: "No match found." });
+        return;
+      }
+      start = found;
+      end = found + search.find.length;
+    }
+    const next = value.slice(0, start) + search.replace + value.slice(end);
+    const characterLimit = language === "html" ? MAX_HTML_LENGTH : MAX_CSS_LENGTH;
+    if (next.length > characterLimit) {
+      updateEditorSearch(language, { note: `Replacement would exceed the ${characterLimit.toLocaleString()} character limit.` });
+      return;
+    }
+    setEditorValue(language, next);
+    updateEditorSearch(language, { note: "Replaced one occurrence." });
+    window.requestAnimationFrame(() => {
+      target.focus();
+      target.setSelectionRange(start + search.replace.length, start + search.replace.length);
+    });
+  }
+
+  function replaceAll(language: EditorLanguage) {
+    const search = editorSearch[language];
+    const value = getEditorValue(language);
+    if (!search.find) {
+      updateEditorSearch(language, { note: "Enter text to find first." });
+      return;
+    }
+    const parts = value.split(search.find);
+    const count = parts.length - 1;
+    if (count === 0) {
+      updateEditorSearch(language, { note: "No match found." });
+      return;
+    }
+    const next = parts.join(search.replace);
+    const characterLimit = language === "html" ? MAX_HTML_LENGTH : MAX_CSS_LENGTH;
+    if (next.length > characterLimit) {
+      updateEditorSearch(language, { note: `Replace all would exceed the ${characterLimit.toLocaleString()} character limit.` });
+      return;
+    }
+    setEditorValue(language, next);
+    updateEditorSearch(language, { note: `Replaced ${count} occurrence${count === 1 ? "" : "s"}.` });
+  }
+
+  function indentEditor(event: KeyboardEvent<HTMLTextAreaElement>, language: EditorLanguage) {
     const target = event.currentTarget;
+    const value = getEditorValue(language);
     const start = target.selectionStart;
     const end = target.selectionEnd;
-    const current = language === "html" ? html : css;
-    const next = `${current.slice(0, start)}  ${current.slice(end)}`;
-    if (language === "html") setHtml(next); else setCss(next);
-    window.requestAnimationFrame(() => target.setSelectionRange(start + 2, start + 2));
+    const selected = value.slice(start, end);
+    const outdent = event.shiftKey;
+
+    if (selected.includes("\n")) {
+      event.preventDefault();
+      const blockStart = value.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
+      let blockEnd = value.indexOf("\n", end);
+      if (blockEnd < 0) blockEnd = value.length;
+      const block = value.slice(blockStart, blockEnd);
+      const lines = block.split("\n");
+      const changedLines = lines.map((line) => {
+        if (!outdent) return `  ${line}`;
+        if (line.startsWith("\t")) return line.slice(1);
+        if (line.startsWith("  ")) return line.slice(2);
+        if (line.startsWith(" ")) return line.slice(1);
+        return line;
+      });
+      const changed = changedLines.join("\n");
+      setEditorValue(language, value.slice(0, blockStart) + changed + value.slice(blockEnd));
+      window.requestAnimationFrame(() => {
+        target.focus();
+        target.setSelectionRange(blockStart, blockStart + changed.length);
+      });
+      return;
+    }
+
+    if (outdent) {
+      event.preventDefault();
+      const lineStart = value.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
+      const line = value.slice(lineStart);
+      const indent = /^(?: {1,2}|\t)/.exec(line)?.[0];
+      if (!indent) return;
+      const next = value.slice(0, lineStart) + value.slice(lineStart + indent.length);
+      setEditorValue(language, next);
+      const nextStart = Math.max(lineStart, start - indent.length);
+      const nextEnd = Math.max(nextStart, end - indent.length);
+      window.requestAnimationFrame(() => {
+        target.focus();
+        target.setSelectionRange(nextStart, nextEnd);
+      });
+      return;
+    }
+
+    event.preventDefault();
+    const next = value.slice(0, start) + "  " + value.slice(end);
+    setEditorValue(language, next);
+    window.requestAnimationFrame(() => {
+      target.focus();
+      target.setSelectionRange(start + 2, start + 2);
+    });
+  }
+
+  function handleEditorKeyDown(event: KeyboardEvent<HTMLTextAreaElement>, language: EditorLanguage) {
+    if (locked || saving) return;
+    const target = event.currentTarget;
+    const modifier = event.ctrlKey || event.metaKey;
+    const key = event.key.toLowerCase();
+
+    if (modifier && key === "f") {
+      event.preventDefault();
+      updateEditorSearch(language, { mode: "find", note: "" });
+      return;
+    }
+    if (modifier && key === "h") {
+      event.preventDefault();
+      updateEditorSearch(language, { mode: "replace", note: "" });
+      return;
+    }
+    if (modifier && key === "g") {
+      event.preventDefault();
+      findNext(language);
+      return;
+    }
+    if (event.key === "Tab") {
+      indentEditor(event, language);
+      return;
+    }
+
+    const value = getEditorValue(language);
+    const start = target.selectionStart;
+    const end = target.selectionEnd;
+
+    if (["}", ")", "]"].includes(event.key) && start === end && value[start] === event.key) {
+      event.preventDefault();
+      target.setSelectionRange(start + 1, start + 1);
+      return;
+    }
+
+    const pairs: Record<string, string> = { "{": "}", "(": ")", "[": "]" };
+    const close = pairs[event.key];
+    if (close && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      const selectedText = value.slice(start, end);
+      setEditorValue(language, value.slice(0, start) + event.key + selectedText + close + value.slice(end));
+      window.requestAnimationFrame(() => {
+        target.focus();
+        if (selectedText.length > 0) target.setSelectionRange(start + 1, start + 1 + selectedText.length);
+        else target.setSelectionRange(start + 1, start + 1);
+      });
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const lineStart = value.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
+      const linePrefix = value.slice(lineStart, start);
+      const indent = /^[ \t]*/.exec(linePrefix)?.[0] ?? "";
+      const trimmed = linePrefix.trimEnd();
+      const opensCssBlock = language === "css" && trimmed.endsWith("{");
+      const opensHtmlElement = language === "html" && /<([a-z][\w:-]*)\b[^>]*>$/i.test(trimmed) && !/\/>$/.test(trimmed) && !/^<\//.test(trimmed);
+      const nextChar = value[end];
+      const extraIndent = opensCssBlock || opensHtmlElement ? "  " : "";
+      if (extraIndent && nextChar === (language === "css" ? "}" : "<")) {
+        const closingIndent = `\n${indent}`;
+        const insertion = `\n${indent}${extraIndent}${closingIndent}`;
+        const next = value.slice(0, start) + insertion + value.slice(end);
+        setEditorValue(language, next);
+        const cursor = start + 1 + indent.length + extraIndent.length;
+        window.requestAnimationFrame(() => {
+          target.focus();
+          target.setSelectionRange(cursor, cursor);
+        });
+      } else {
+        const insertion = `\n${indent}${extraIndent}`;
+        const next = value.slice(0, start) + insertion + value.slice(end);
+        setEditorValue(language, next);
+        const cursor = start + insertion.length;
+        window.requestAnimationFrame(() => {
+          target.focus();
+          target.setSelectionRange(cursor, cursor);
+        });
+      }
+    }
+  }
+
+  function highlightedCode(source: string, language: EditorLanguage): ReactNode[] {
+    const pattern = language === "html"
+      ? /(<!--[\s\S]*?-->)|(<!--[\s\S]*?$)|(<\/?[A-Za-z][\w:-]*)|(\s+[A-Za-z_:][\w:.-]*)(?=\s*=)|(\s*=\s*)|("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|(\/?>)|(&(?:#\d+|#x[\da-f]+|[\w]+);)/gi
+      : /(\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|(@[\w-]+)|(--[\w-]+)|(#[\da-fA-F]{3,8}\b)|([.#][\w-]+)|([A-Za-z_-][\w-]*)(?=\s*:)|(\b\d*\.?\d+(?:px|rem|em|%|vh|vw|s|ms|deg)?\b)|([{}:;,()])/gi;
+    const nodes: ReactNode[] = [];
+    let offset = 0;
+    let keyIndex = 0;
+    for (const match of source.matchAll(pattern)) {
+      const token = match[0];
+      const index = match.index ?? 0;
+      if (index > offset) nodes.push(source.slice(offset, index));
+      let tokenClass = styles.tokenPlain;
+      if (language === "html") {
+        if (match[1] || match[2]) tokenClass = styles.tokenComment;
+        else if (match[3]) tokenClass = styles.tokenTag;
+        else if (match[4]) tokenClass = styles.tokenAttribute;
+        else if (match[5]) tokenClass = styles.tokenOperator;
+        else if (match[6]) tokenClass = styles.tokenString;
+        else if (match[7]) tokenClass = styles.tokenPunctuation;
+        else if (match[8]) tokenClass = styles.tokenEntity;
+      } else {
+        if (match[1]) tokenClass = styles.tokenComment;
+        else if (match[2]) tokenClass = styles.tokenString;
+        else if (match[3]) tokenClass = styles.tokenAtRule;
+        else if (match[4]) tokenClass = styles.tokenVariable;
+        else if (match[5] || match[6]) tokenClass = styles.tokenColor;
+        else if (match[7]) tokenClass = styles.tokenProperty;
+        else if (match[8]) tokenClass = styles.tokenNumber;
+        else if (match[9]) tokenClass = styles.tokenPunctuation;
+      }
+      nodes.push(<span key={`token-${keyIndex++}`} className={tokenClass}>{token}</span>);
+      offset = index + token.length;
+    }
+    if (offset < source.length) nodes.push(source.slice(offset));
+    return nodes.length ? nodes : [" "];
   }
 
   function changeTemplate(nextTemplateId: TemplateId) {
@@ -907,13 +1194,51 @@ export default function HtmlCssLabStudio({
         <div className={styles.editorGrid}>
           <section className={styles.editorPanel}>
             <div className={styles.editorTitle}><div><span className={styles.fileDotHtml} /> <strong>index.html</strong></div><span>{html.length.toLocaleString()} / {MAX_HTML_LENGTH.toLocaleString()}</span></div>
-            <p className={styles.editorHelp}>Write the page structure and content. Use two spaces for indentation; Tab inserts spaces.</p>
-            <textarea className={styles.codeEditor} aria-label="HTML source code" spellCheck={false} autoCapitalize="off" autoComplete="off" autoCorrect="off" value={html} onChange={(event) => setHtml(event.target.value)} onKeyDown={(event) => handleTab(event, "html")} maxLength={MAX_HTML_LENGTH} rows={24} disabled={locked || saving} />
+            <p className={styles.editorHelp}>HTML with line numbers, basic syntax highlighting, auto-closing brackets, smart indentation and find/replace.</p>
+            <div className={styles.editorTools}>
+              <div className={styles.editorToolButtons}>
+                <button type="button" className={styles.editorToolButton} onClick={() => toggleEditorSearch("html", "find")} aria-expanded={editorSearch.html.mode !== "closed"}>Find <kbd>Ctrl/⌘ F</kbd></button>
+                <button type="button" className={styles.editorToolButton} onClick={() => toggleEditorSearch("html", "replace")} aria-expanded={editorSearch.html.mode === "replace"}>Replace <kbd>Ctrl/⌘ H</kbd></button>
+              </div>
+              <span className={styles.editorShortcutNote}>Tab indent · Shift+Tab outdent · Ctrl/⌘+G next match</span>
+            </div>
+            {editorSearch.html.mode !== "closed" && <div className={styles.editorSearchBar}>
+              <input className={styles.editorSearchInput} aria-label="Find in HTML" placeholder="Find in HTML…" value={editorSearch.html.find} onChange={(event) => updateEditorSearch("html", { find: event.target.value, note: "" })} onKeyDown={(event) => { if (event.key === "Enter") findNext("html"); if (event.key === "Escape") updateEditorSearch("html", { mode: "closed" }); }} />
+              {editorSearch.html.mode === "replace" && <input className={styles.editorSearchInput} aria-label="Replace HTML text with" placeholder="Replace with…" value={editorSearch.html.replace} onChange={(event) => updateEditorSearch("html", { replace: event.target.value, note: "" })} onKeyDown={(event) => { if (event.key === "Enter") replaceCurrent("html"); if (event.key === "Escape") updateEditorSearch("html", { mode: "closed" }); }} />}
+              <div className={styles.editorSearchActions}><button type="button" className={styles.editorToolButton} onClick={() => findNext("html")}>Find next</button>{editorSearch.html.mode === "replace" && <><button type="button" className={styles.editorToolButton} onClick={() => replaceCurrent("html")}>Replace</button><button type="button" className={styles.editorToolButton} onClick={() => replaceAll("html")}>Replace all</button></>}</div>
+              <span className={styles.editorSearchNote} role="status" aria-live="polite">{editorSearch.html.note}</span>
+            </div>}
+            <div className={styles.codeEditorShell}>
+              <div className={styles.lineNumberGutter} aria-hidden="true"><div className={styles.lineNumberRows} style={{ transform: `translateY(-${htmlScroll.top}px)` }}>{Array.from({ length: html.split("\n").length }, (_, index) => <span key={index}>{index + 1}</span>)}</div></div>
+              <div className={styles.codeEditorInputWrap}>
+                <pre aria-hidden="true" className={styles.codeHighlight} style={{ transform: `translate(${-htmlScroll.left}px, ${-htmlScroll.top}px)` }}>{highlightedCode(html, "html")}</pre>
+                <textarea ref={htmlEditorRef} className={styles.codeEditor} aria-label="HTML source code" spellCheck={false} autoCapitalize="off" autoComplete="off" autoCorrect="off" value={html} onChange={(event) => setHtml(event.target.value)} onScroll={(event) => setHtmlScroll({ top: event.currentTarget.scrollTop, left: event.currentTarget.scrollLeft })} onKeyDown={(event) => handleEditorKeyDown(event, "html")} maxLength={MAX_HTML_LENGTH} rows={24} disabled={locked || saving} />
+              </div>
+            </div>
           </section>
           <section className={styles.editorPanel}>
             <div className={styles.editorTitle}><div><span className={styles.fileDotCss} /> <strong>styles.css</strong></div><span>{css.length.toLocaleString()} / {MAX_CSS_LENGTH.toLocaleString()}</span></div>
-            <p className={styles.editorHelp}>Define colours, spacing, layout, responsive rules, and focus/hover states.</p>
-            <textarea className={styles.codeEditor} aria-label="CSS source code" spellCheck={false} autoCapitalize="off" autoComplete="off" autoCorrect="off" value={css} onChange={(event) => setCss(event.target.value)} onKeyDown={(event) => handleTab(event, "css")} maxLength={MAX_CSS_LENGTH} rows={24} disabled={locked || saving} />
+            <p className={styles.editorHelp}>CSS with line numbers, syntax colours, auto-paired braces, smart indentation and find/replace.</p>
+            <div className={styles.editorTools}>
+              <div className={styles.editorToolButtons}>
+                <button type="button" className={styles.editorToolButton} onClick={() => toggleEditorSearch("css", "find")} aria-expanded={editorSearch.css.mode !== "closed"}>Find <kbd>Ctrl/⌘ F</kbd></button>
+                <button type="button" className={styles.editorToolButton} onClick={() => toggleEditorSearch("css", "replace")} aria-expanded={editorSearch.css.mode === "replace"}>Replace <kbd>Ctrl/⌘ H</kbd></button>
+              </div>
+              <span className={styles.editorShortcutNote}>Tab indent · Shift+Tab outdent · Ctrl/⌘+G next match</span>
+            </div>
+            {editorSearch.css.mode !== "closed" && <div className={styles.editorSearchBar}>
+              <input className={styles.editorSearchInput} aria-label="Find in CSS" placeholder="Find in CSS…" value={editorSearch.css.find} onChange={(event) => updateEditorSearch("css", { find: event.target.value, note: "" })} onKeyDown={(event) => { if (event.key === "Enter") findNext("css"); if (event.key === "Escape") updateEditorSearch("css", { mode: "closed" }); }} />
+              {editorSearch.css.mode === "replace" && <input className={styles.editorSearchInput} aria-label="Replace CSS text with" placeholder="Replace with…" value={editorSearch.css.replace} onChange={(event) => updateEditorSearch("css", { replace: event.target.value, note: "" })} onKeyDown={(event) => { if (event.key === "Enter") replaceCurrent("css"); if (event.key === "Escape") updateEditorSearch("css", { mode: "closed" }); }} />}
+              <div className={styles.editorSearchActions}><button type="button" className={styles.editorToolButton} onClick={() => findNext("css")}>Find next</button>{editorSearch.css.mode === "replace" && <><button type="button" className={styles.editorToolButton} onClick={() => replaceCurrent("css")}>Replace</button><button type="button" className={styles.editorToolButton} onClick={() => replaceAll("css")}>Replace all</button></>}</div>
+              <span className={styles.editorSearchNote} role="status" aria-live="polite">{editorSearch.css.note}</span>
+            </div>}
+            <div className={styles.codeEditorShell}>
+              <div className={styles.lineNumberGutter} aria-hidden="true"><div className={styles.lineNumberRows} style={{ transform: `translateY(-${cssScroll.top}px)` }}>{Array.from({ length: css.split("\n").length }, (_, index) => <span key={index}>{index + 1}</span>)}</div></div>
+              <div className={styles.codeEditorInputWrap}>
+                <pre aria-hidden="true" className={styles.codeHighlight} style={{ transform: `translate(${-cssScroll.left}px, ${-cssScroll.top}px)` }}>{highlightedCode(css, "css")}</pre>
+                <textarea ref={cssEditorRef} className={styles.codeEditor} aria-label="CSS source code" spellCheck={false} autoCapitalize="off" autoComplete="off" autoCorrect="off" value={css} onChange={(event) => setCss(event.target.value)} onScroll={(event) => setCssScroll({ top: event.currentTarget.scrollTop, left: event.currentTarget.scrollLeft })} onKeyDown={(event) => handleEditorKeyDown(event, "css")} maxLength={MAX_CSS_LENGTH} rows={24} disabled={locked || saving} />
+              </div>
+            </div>
           </section>
         </div>
 
