@@ -35,6 +35,9 @@ type WorkspaceMessage = {
   text: string;
 };
 
+const MIN_SUBMISSION_LENGTH = 80;
+const MAX_ANSWER_LENGTH = 20_000;
+
 const categories = [
   "All tasks",
   "AI & Prompting",
@@ -46,7 +49,6 @@ const categories = [
 
 function statusLabel(status?: string): string {
   if (!status) return "Not started";
-
   const labels: Record<string, string> = {
     approved: "Approved",
     submitted: "Submitted",
@@ -62,7 +64,6 @@ function categoryMatches(lab: LabCard, filter: string): boolean {
 
   const value =
     `${lab.category} ${lab.title} ${lab.course_title}`.toLowerCase();
-
   if (filter === "AI & Prompting") {
     return /ai|prompt|literacy|automation/.test(value);
   }
@@ -78,7 +79,6 @@ function categoryMatches(lab: LabCard, filter: string): boolean {
   if (filter === "Marketing") {
     return /marketing|campaign|content|social media/.test(value);
   }
-
   if (filter === "Business Operations") {
     return /business|record|workflow|operations|admin/.test(value);
   }
@@ -107,7 +107,6 @@ export default function LabWorkspace({
   submissions: LabSubmission[];
 }) {
   const router = useRouter();
-
   const [filter, setFilter] = useState("All tasks");
   const [search, setSearch] = useState("");
   const [activeLabId, setActiveLabId] = useState<string | null>(null);
@@ -119,7 +118,6 @@ export default function LabWorkspace({
 
   const latestByLab = useMemo(() => {
     const map = new Map<string, LabSubmission>();
-
     for (const submission of submissions) {
       const existing = map.get(submission.lab_id);
 
@@ -189,12 +187,24 @@ export default function LabWorkspace({
       return;
     }
 
-    if (answer.length > 20_000) {
+    if (mode === "submitted" && answer.length < MIN_SUBMISSION_LENGTH) {
       setMessages((previous) => ({
         ...previous,
         [lab.id]: {
           type: "error",
-          text: "Your response exceeds the 20,000-character limit.",
+          text: `Add at least ${MIN_SUBMISSION_LENGTH} characters before submitting. You currently have ${answer.length}. You can still save a shorter response as a draft.`,
+        },
+      }));
+
+      return;
+    }
+
+    if (answer.length > MAX_ANSWER_LENGTH) {
+      setMessages((previous) => ({
+        ...previous,
+        [lab.id]: {
+          type: "error",
+          text: `Your response exceeds the ${MAX_ANSWER_LENGTH.toLocaleString()}-character limit.`,
         },
       }));
 
@@ -276,7 +286,6 @@ export default function LabWorkspace({
       <div className="rn-lab-controls">
         <label className="rn-lab-search">
           <span aria-hidden="true">⌕</span>
-
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -309,15 +318,17 @@ export default function LabWorkspace({
             const status = submission?.status;
             const isActive = activeLabId === lab.id;
             const isApproved = status === "approved";
-            const isRevisionRequired =
-              status === "revision_required";
+            const isRevisionRequired = status === "revision_required";
             const isBusy = busyId === lab.id;
-
             const answer =
               answers[lab.id] ??
               submission?.answer_text ??
               "";
-
+            const trimmedAnswerLength = answer.trim().length;
+            const charactersNeeded = Math.max(
+              0,
+              MIN_SUBMISSION_LENGTH - trimmedAnswerLength,
+            );
             const updatedAt = formatDate(submission?.updated_at);
 
             return (
@@ -332,7 +343,6 @@ export default function LabWorkspace({
                   >
                     {["✦", "▦", "⌘", "↗", "◈"][index % 5]}
                   </span>
-
                   <span
                     className={`rn-lab-status status-${status ?? "new"}`}
                   >
@@ -345,23 +355,14 @@ export default function LabWorkspace({
                 </div>
 
                 <h3>{lab.title}</h3>
-
-                <p className="rn-lab-card-summary">
-                  {lab.summary}
-                </p>
-
+                <p className="rn-lab-card-summary">{lab.summary}</p>
                 <div className="rn-lab-card-course">
                   {lab.course_title}
                 </div>
 
                 <div className="rn-lab-card-meta">
-                  <span>
-                    ◷ {lab.estimated_minutes || 30} min
-                  </span>
-
-                  <span>
-                    ◆ {lab.difficulty || "Practical"}
-                  </span>
+                  <span>◷ {lab.estimated_minutes || 30} min</span>
+                  <span>◆ {lab.difficulty || "Practical"}</span>
                 </div>
 
                 {updatedAt ? (
@@ -389,23 +390,19 @@ export default function LabWorkspace({
                         ? "Reviewer feedback — revision needed"
                         : "Reviewer feedback"}
                     </strong>
-
                     <p>{submission.feedback}</p>
-
                     {isRevisionRequired ? (
                       <span className="rn-lab-revision-hint">
-                        Update your response below and resubmit it
-                        for review.
+                        Update your response below and resubmit it for review.
                       </span>
                     ) : null}
                   </div>
                 ) : isRevisionRequired ? (
                   <div className="rn-lab-feedback needs-revision">
                     <strong>Revision requested</strong>
-
                     <p>
-                      Your reviewer has requested changes. Open this
-                      task, update your work, and resubmit it.
+                      Your reviewer has requested changes. Open this task,
+                      update your work, and resubmit it.
                     </p>
                   </div>
                 ) : null}
@@ -427,7 +424,6 @@ export default function LabWorkspace({
                         : status
                           ? "Continue task"
                           : "Open task"}
-
                   <span aria-hidden="true">
                     {isActive ? "↑" : "→"}
                   </span>
@@ -435,14 +431,10 @@ export default function LabWorkspace({
 
                 {isActive ? (
                   <div className="rn-lab-detail">
-                    <div className="rn-lab-detail-label">
-                      THE BRIEF
-                    </div>
-
+                    <div className="rn-lab-detail-label">THE BRIEF</div>
                     <p className="rn-lab-instructions">
                       {lab.instructions}
                     </p>
-
                     <div className="rn-lab-deliverable">
                       <strong>What to produce</strong>
                       <p>{lab.deliverable}</p>
@@ -450,9 +442,9 @@ export default function LabWorkspace({
 
                     {isApproved ? (
                       <div className="rn-lab-approved-notice">
-                        This submission has been approved. Your work
-                        and reviewer feedback are available above.
-                        The approved submission cannot be changed.
+                        This submission has been approved. Your work and reviewer
+                        feedback are available above. The approved submission
+                        cannot be changed.
                       </div>
                     ) : (
                       <>
@@ -480,18 +472,51 @@ export default function LabWorkspace({
                               : "Describe your solution, paste your written output, or explain the steps you completed..."
                           }
                           rows={7}
-                          maxLength={20_000}
+                          maxLength={MAX_ANSWER_LENGTH}
+                          aria-describedby={`answer-guidance-${lab.id} answer-count-${lab.id}`}
                           disabled={isBusy}
                         />
 
-                        <div className="rn-lab-answer-hint">
-                          Up to 20,000 characters. Do not include
+                        <div
+                          id={`answer-guidance-${lab.id}`}
+                          className="rn-lab-answer-hint"
+                        >
+                          Final submissions need at least {MIN_SUBMISSION_LENGTH} characters.
+                          Shorter answers can be saved as drafts. Do not include
                           passwords or sensitive personal information.
                         </div>
 
-                        <div className="rn-lab-character-count">
-                          {answer.length.toLocaleString()} / 20,000
-                          characters
+                        <div className="rn-lab-answer-progress">
+                          <div
+                            className="rn-lab-answer-progress-track"
+                            aria-hidden="true"
+                          >
+                            <span
+                              className={
+                                charactersNeeded === 0
+                                  ? "is-ready"
+                                  : ""
+                              }
+                              style={{
+                                width: `${Math.min(
+                                  100,
+                                  (trimmedAnswerLength / MIN_SUBMISSION_LENGTH) * 100,
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                          <div
+                            id={`answer-count-${lab.id}`}
+                            className={`rn-lab-character-count ${
+                              charactersNeeded === 0 ? "is-ready" : ""
+                            }`}
+                            aria-live="polite"
+                          >
+                            {trimmedAnswerLength.toLocaleString()} / {MIN_SUBMISSION_LENGTH} minimum characters
+                            {charactersNeeded > 0
+                              ? ` · ${charactersNeeded} more to submit`
+                              : " · Ready to submit"}
+                          </div>
                         </div>
 
                         {messages[lab.id] ? (
@@ -516,14 +541,11 @@ export default function LabWorkspace({
                           >
                             {isBusy ? "Saving…" : "Save draft"}
                           </button>
-
                           <button
                             type="button"
                             className="rn-lab-submit-button"
                             disabled={isBusy}
-                            onClick={() =>
-                              submitLab(lab, "submitted")
-                            }
+                            onClick={() => submitLab(lab, "submitted")}
                           >
                             {isBusy
                               ? "Submitting…"
@@ -536,9 +558,8 @@ export default function LabWorkspace({
                     )}
 
                     <p className="rn-lab-review-note">
-                      Lab work is separate from lesson tests and final
-                      assessments. Submitting here does not
-                      automatically award a certificate.
+                      Lab work is separate from lesson tests and final assessments.
+                      Submitting here does not automatically award a certificate.
                     </p>
                   </div>
                 ) : null}
@@ -607,8 +628,13 @@ export default function LabWorkspace({
         .rn-lab-detail textarea:focus{border-color:#00b4d8;box-shadow:0 0 0 3px #00b4d81c}
         .rn-lab-detail textarea:disabled{opacity:.7;cursor:wait}
         .rn-lab-detail textarea::placeholder{color:#5d7793}
-        .rn-lab-answer-hint,.rn-lab-character-count{font-size:9px;color:#718aa4;margin-top:6px}
-        .rn-lab-character-count{text-align:right}
+        .rn-lab-answer-hint,.rn-lab-character-count{font-size:9px;color:#718aa4;margin-top:6px;line-height:1.6}
+        .rn-lab-answer-progress{margin-top:9px;padding:10px 12px;border:1px solid #213e59;background:#091a2d;border-radius:9px}
+        .rn-lab-answer-progress-track{height:5px;border-radius:99px;background:#20354b;overflow:hidden}
+        .rn-lab-answer-progress-track span{display:block;height:100%;border-radius:99px;background:#fbbf24;transition:width .15s ease,background-color .15s ease}
+        .rn-lab-answer-progress-track span.is-ready{background:#34d399}
+        .rn-lab-character-count{text-align:right;margin-top:8px}
+        .rn-lab-character-count.is-ready{color:#6ee7b7}
         .rn-lab-message{font-size:11px;padding:10px;border-radius:8px;margin-top:12px;overflow-wrap:anywhere}
         .rn-lab-message.success{color:#8ce7c9;background:#10372d;border:1px solid #245c4d}
         .rn-lab-message.error{color:#ffb5b5;background:#3a2028;border:1px solid #69343e}
