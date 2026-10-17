@@ -9,27 +9,58 @@ type LabReviewFormProps = {
   currentFeedback: string | null;
 };
 
+type ReviewStatus = "approved" | "revision_required";
+
+const FEEDBACK_TEMPLATES = [
+  {
+    label: "Needs more detail",
+    text: "Your response needs more detail. Address each part of the task brief and explain the steps you took, the decisions you made, and the result.",
+  },
+  {
+    label: "Check accuracy",
+    text: "Review the factual accuracy of your response. Verify important claims against reliable sources and correct any unsupported or inaccurate information.",
+  },
+  {
+    label: "Follow the brief",
+    text: "Your submission does not yet meet all the requirements in the task brief. Compare your work with the requested deliverable and address each requirement that is missing.",
+  },
+  {
+    label: "Improve structure",
+    text: "Improve the structure and readability of your response. Use clear sections or steps, explain your reasoning, and make the final deliverable easy to follow.",
+  },
+  {
+    label: "Good work",
+    text: "Your submission addresses the task requirements and communicates the result clearly. Review the feedback above for any final points to carry into future work.",
+  },
+] as const;
+
 export default function LabReviewForm({
   submissionId,
   currentScore,
   currentFeedback,
 }: LabReviewFormProps) {
   const router = useRouter();
-
   const [score, setScore] = useState(
     currentScore === null ? "" : String(currentScore),
   );
   const [feedback, setFeedback] = useState(currentFeedback ?? "");
-  const [status, setStatus] = useState<"approved" | "revision_required">(
-    "approved",
-  );
+  const [status, setStatus] = useState<ReviewStatus>("approved");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  async function submitReview(
-    nextStatus: "approved" | "revision_required",
-  ) {
+  function addFeedbackTemplate(template: string) {
+    setFeedback((current) => {
+      const existing = current.trim();
+      if (!existing) return template;
+      if (existing.includes(template)) return current;
+      return `${existing}\n\n${template}`;
+    });
+    setError("");
+    setSuccess("");
+  }
+
+  async function submitReview(nextStatus: ReviewStatus) {
     setError("");
     setSuccess("");
 
@@ -94,7 +125,6 @@ export default function LabReviewForm({
           ? "Submission approved successfully."
           : "Revision requested successfully.",
       );
-
       router.refresh();
     } catch {
       setError("A network error occurred. Please try again.");
@@ -112,7 +142,6 @@ export default function LabReviewForm({
         <label htmlFor={`score-${submissionId}`}>
           Score <span aria-hidden="true">*</span>
         </label>
-
         <div className="rn-lab-score-input">
           <input
             id={`score-${submissionId}`}
@@ -131,10 +160,32 @@ export default function LabReviewForm({
       </div>
 
       <div className="rn-lab-review-field">
-        <label htmlFor={`feedback-${submissionId}`}>
-          Feedback
-        </label>
+        <label>Feedback templates</label>
+        <p className="rn-lab-review-note">
+          Choose a template to add guidance to your feedback. Edit the text
+          below so it reflects this student's actual work.
+        </p>
+        <div
+          role="group"
+          aria-label="Feedback templates"
+          style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}
+        >
+          {FEEDBACK_TEMPLATES.map((template) => (
+            <button
+              key={template.label}
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => addFeedbackTemplate(template.text)}
+              disabled={saving}
+            >
+              {template.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
+      <div className="rn-lab-review-field">
+        <label htmlFor={`feedback-${submissionId}`}>Feedback</label>
         <textarea
           id={`feedback-${submissionId}`}
           value={feedback}
@@ -144,7 +195,6 @@ export default function LabReviewForm({
           disabled={saving}
           placeholder="Explain what the student did well and what needs improvement..."
         />
-
         <small>{feedback.length.toLocaleString()} / 10,000 characters</small>
       </div>
 
@@ -171,7 +221,6 @@ export default function LabReviewForm({
             ? "Approving..."
             : "Approve Submission"}
         </button>
-
         <button
           type="button"
           className="btn btn-ghost"
