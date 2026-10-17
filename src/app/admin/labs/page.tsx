@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import HtmlCssSubmissionReview from "./HtmlCssSubmissionReview";
 import LabReviewForm from "./LabReviewForm";
+import HtmlCssSubmissionReview from "./HtmlCssSubmissionReview";
 
 type Profile = {
   id: string;
@@ -56,6 +56,7 @@ type SearchParams = Promise<{
 }>;
 
 const REVIEWABLE_STATUSES = ["submitted", "revision_required"];
+const ALLOWED_FILTERS = ["all", "submitted", "revision_required", "approved"];
 
 function formatDate(value: string | null) {
   if (!value) return "Not submitted";
@@ -99,9 +100,7 @@ export default async function AdminLabsPage({
     error: authError,
   } = await supabase.auth.getUser();
 
-  if (authError || !user) {
-    redirect("/login?next=/admin/labs");
-  }
+  if (authError || !user) redirect("/login?next=/admin/labs");
 
   const { data: profileData, error: profileError } = await supabase
     .from("profiles")
@@ -120,19 +119,13 @@ export default async function AdminLabsPage({
   }
 
   const params = await searchParams;
-  const selectedStatus = params.status ?? "all";
-  const allowedFilters = [
-    "all",
-    "submitted",
-    "revision_required",
-    "approved",
-  ];
-  const activeFilter = allowedFilters.includes(selectedStatus)
-    ? selectedStatus
+  const requestedStatus = params.status ?? "all";
+  const activeFilter = ALLOWED_FILTERS.includes(requestedStatus)
+    ? requestedStatus
     : "all";
   const requestedCourseId = params.courseId ?? "all";
 
-  // RLS limits the submissions this reviewer can read.
+  // RLS remains the authority for which submissions the reviewer can read.
   const { data: submissionData, error: submissionsError } = await supabase
     .from("lab_submissions")
     .select(
@@ -183,8 +176,7 @@ export default async function AdminLabsPage({
 
   const courseScopedSubmissions = allSubmissions.filter((submission) => {
     if (activeCourseId === "all") return true;
-    const lab = labMap.get(submission.lab_id);
-    return lab?.course_id === activeCourseId;
+    return labMap.get(submission.lab_id)?.course_id === activeCourseId;
   });
   const displayedSubmissions = courseScopedSubmissions.filter(
     (submission) => activeFilter === "all" || submission.status === activeFilter,
@@ -206,9 +198,7 @@ export default async function AdminLabsPage({
   } else if (profile.role === "instructor" && displayedSubmissions.length > 0) {
     const { data: studentNamesData, error: studentNamesError } = await supabase.rpc(
       "get_lab_submission_student_names",
-      {
-        p_submission_ids: displayedSubmissions.map((submission) => submission.id),
-      },
+      { p_submission_ids: displayedSubmissions.map((submission) => submission.id) },
     );
 
     if (studentNamesError) {
@@ -253,69 +243,34 @@ export default async function AdminLabsPage({
             <div className="rn-brand-kicker">RUFFNECK LEARN · PRACTICAL ASSESSMENT</div>
             <h1>Practical Labs Review</h1>
             <p className="muted">
-              Review student work against the task requirements, inspect website code and previews,
-              provide feedback, and record assessment results.
+              Review student work against the task requirements, provide feedback, and record assessment results.
             </p>
             <p className="muted">
               Reviewer: {profile.full_name || profile.email || user.email} · {profile.role}
             </p>
           </div>
-          <div
-            style={{
-              display: "flex",
-              gap: 10,
-              flexWrap: "wrap",
-            }}
-          >
-            <Link href="/admin/lms" className="btn btn-ghost">
-              LMS Dashboard
-            </Link>
-            <Link href="/admin/projects" className="btn btn-primary">
-              Projects &amp; Capstones
-            </Link>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <Link href="/admin/lms" className="btn btn-ghost">LMS Dashboard</Link>
+            <Link href="/admin/projects" className="btn btn-primary">Projects &amp; Capstones</Link>
           </div>
         </header>
 
         <section className="rn-admin-stats" aria-label="Lab submission statistics">
-          <Link
-            href={reviewHref("all", activeCourseId)}
-            className={`rn-admin-stat ${activeFilter === "all" ? "active" : ""}`}
-          >
+          <Link href={reviewHref("all", activeCourseId)} className={`rn-admin-stat ${activeFilter === "all" ? "active" : ""}`}>
             <span className="rn-admin-stat-icon">▦</span>
-            <span>
-              <span className="muted">Loaded submissions</span>
-              <strong>{courseScopedSubmissions.length}</strong>
-            </span>
+            <span><span className="muted">Loaded submissions</span><strong>{courseScopedSubmissions.length}</strong></span>
           </Link>
-          <Link
-            href={reviewHref("submitted", activeCourseId)}
-            className={`rn-admin-stat ${activeFilter === "submitted" ? "active" : ""}`}
-          >
+          <Link href={reviewHref("submitted", activeCourseId)} className={`rn-admin-stat ${activeFilter === "submitted" ? "active" : ""}`}>
             <span className="rn-admin-stat-icon">◷</span>
-            <span>
-              <span className="muted">Awaiting review</span>
-              <strong>{pendingCount}</strong>
-            </span>
+            <span><span className="muted">Awaiting review</span><strong>{pendingCount}</strong></span>
           </Link>
-          <Link
-            href={reviewHref("revision_required", activeCourseId)}
-            className={`rn-admin-stat ${activeFilter === "revision_required" ? "active" : ""}`}
-          >
+          <Link href={reviewHref("revision_required", activeCourseId)} className={`rn-admin-stat ${activeFilter === "revision_required" ? "active" : ""}`}>
             <span className="rn-admin-stat-icon">↻</span>
-            <span>
-              <span className="muted">Revision required</span>
-              <strong>{revisionCount}</strong>
-            </span>
+            <span><span className="muted">Revision required</span><strong>{revisionCount}</strong></span>
           </Link>
-          <Link
-            href={reviewHref("approved", activeCourseId)}
-            className={`rn-admin-stat ${activeFilter === "approved" ? "active" : ""}`}
-          >
+          <Link href={reviewHref("approved", activeCourseId)} className={`rn-admin-stat ${activeFilter === "approved" ? "active" : ""}`}>
             <span className="rn-admin-stat-icon">✓</span>
-            <span>
-              <span className="muted">Approved</span>
-              <strong>{approvedCount}</strong>
-            </span>
+            <span><span className="muted">Approved</span><strong>{approvedCount}</strong></span>
           </Link>
         </section>
 
@@ -335,63 +290,25 @@ export default async function AdminLabsPage({
           }}
         >
           <input type="hidden" name="status" value={activeFilter} />
-          <label
-            htmlFor="lab-review-course-filter"
-            style={{
-              display: "grid",
-              gap: 7,
-              minWidth: 240,
-              flex: "1 1 260px",
-              fontWeight: 650,
-            }}
-          >
+          <label htmlFor="lab-review-course-filter" style={{ display: "grid", gap: 7, minWidth: 240, flex: "1 1 260px", fontWeight: 650 }}>
             Filter by course
             <select
               id="lab-review-course-filter"
               name="courseId"
               defaultValue={activeCourseId}
-              style={{
-                minHeight: 42,
-                padding: "9px 12px",
-                border: "1px solid var(--border, #cbd5e1)",
-                borderRadius: 9,
-                background: "var(--background, #fff)",
-                color: "inherit",
-                font: "inherit",
-              }}
+              style={{ minHeight: 42, padding: "9px 12px", border: "1px solid var(--border, #cbd5e1)", borderRadius: 9, background: "var(--background, #fff)", color: "inherit", font: "inherit" }}
             >
               <option value="all">All assigned courses</option>
-              {courses.map((course) => (
-                <option key={course.id} value={course.id}>
-                  {course.title}
-                </option>
-              ))}
+              {courses.map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
             </select>
           </label>
-          <button type="submit" className="btn btn-primary">
-            Apply filter
-          </button>
-          {activeCourseId !== "all" ? (
-            <Link href={reviewHref(activeFilter, "all")} className="btn btn-ghost">
-              Clear course filter
-            </Link>
-          ) : null}
+          <button type="submit" className="btn btn-primary">Apply filter</button>
+          {activeCourseId !== "all" ? <Link href={reviewHref(activeFilter, "all")} className="btn btn-ghost">Clear course filter</Link> : null}
         </form>
 
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            flexWrap: "wrap",
-            margin: "28px 0 20px",
-          }}
-        >
-          {allowedFilters.map((filter) => (
-            <Link
-              key={filter}
-              href={reviewHref(filter, activeCourseId)}
-              className={activeFilter === filter ? "btn btn-primary" : "btn btn-ghost"}
-            >
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "28px 0 20px" }}>
+          {ALLOWED_FILTERS.map((filter) => (
+            <Link key={filter} href={reviewHref(filter, activeCourseId)} className={activeFilter === filter ? "btn btn-primary" : "btn btn-ghost"}>
               {filter === "all" ? "All submissions" : statusLabel(filter)}
             </Link>
           ))}
@@ -414,134 +331,55 @@ export default async function AdminLabsPage({
               const canReview = REVIEWABLE_STATUSES.includes(submission.status);
 
               return (
-                <article
-                  key={submission.id}
-                  className="rn-admin-list-panel"
-                  style={{ padding: 24, minWidth: 0 }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                      flexWrap: "wrap",
-                      gap: 16,
-                      marginBottom: 18,
-                    }}
-                  >
+                <article key={submission.id} className="rn-admin-list-panel" style={{ padding: 24, minWidth: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16, marginBottom: 18 }}>
                     <div>
                       <div className="rn-brand-kicker">{course?.title || "Course"}</div>
                       <h2 style={{ margin: "8px 0" }}>{lab?.title || "Practical Lab"}</h2>
-                      <p className="muted">
-                        {lab?.category || "Practical assessment"}
-                        {lab?.difficulty ? ` · ${lab.difficulty}` : ""}
-                      </p>
+                      <p className="muted">{lab?.category || "Practical assessment"}{lab?.difficulty ? ` · ${lab.difficulty}` : ""}</p>
                     </div>
                     <span className="rn-status-pill">{statusLabel(submission.status)}</span>
                   </div>
 
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                      gap: 12,
-                      marginBottom: 22,
-                    }}
-                  >
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 22 }}>
                     <div>
                       <span className="muted">Student</span>
                       <p style={{ margin: "5px 0 0" }}>
-                        <strong>
-                          {student?.full_name ||
-                            (profile.role === "instructor"
-                              ? "Enrolled student"
-                              : "Student profile unavailable")}
-                        </strong>
+                        <strong>{student?.full_name || (profile.role === "instructor" ? "Enrolled student" : "Student profile unavailable")}</strong>
                       </p>
-                      {profile.role === "admin" && student?.email ? (
-                        <small>{student.email}</small>
-                      ) : null}
+                      {profile.role === "admin" && student?.email ? <small>{student.email}</small> : null}
                     </div>
-                    <div>
-                      <span className="muted">Submitted</span>
-                      <p style={{ margin: "5px 0 0" }}>{formatDate(submission.submitted_at)}</p>
-                    </div>
-                    <div>
-                      <span className="muted">Current score</span>
-                      <p style={{ margin: "5px 0 0" }}>
-                        <strong>
-                          {submission.score === null ? "Not scored" : `${submission.score}/100`}
-                        </strong>
-                      </p>
-                    </div>
+                    <div><span className="muted">Submitted</span><p style={{ margin: "5px 0 0" }}>{formatDate(submission.submitted_at)}</p></div>
+                    <div><span className="muted">Current score</span><p style={{ margin: "5px 0 0" }}><strong>{submission.score === null ? "Not scored" : `${submission.score}/100`}</strong></p></div>
                   </div>
 
-                  <section
-                    aria-label="Practical task requirements"
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-                      gap: 16,
-                      marginBottom: 24,
-                    }}
-                  >
-                    <div
-                      style={{
-                        padding: 18,
-                        borderRadius: 12,
-                        border: "1px solid var(--border, #dbe4ef)",
-                        background: "var(--surface, #f7f9fc)",
-                      }}
-                    >
+                  <section aria-label="Practical task requirements" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16, marginBottom: 24 }}>
+                    <div style={{ padding: 18, borderRadius: 12, border: "1px solid var(--border, #dbe4ef)", background: "var(--surface, #f7f9fc)" }}>
                       <h3 style={{ marginTop: 0 }}>Task instructions</h3>
-                      <div
-                        style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.7 }}
-                      >
-                        {lab?.instructions || "No task instructions are available."}
-                      </div>
+                      <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.7 }}>{lab?.instructions || "No task instructions are available."}</div>
                     </div>
-                    <div
-                      style={{
-                        padding: 18,
-                        borderRadius: 12,
-                        border: "1px solid var(--border, #dbe4ef)",
-                        background: "var(--surface, #f7f9fc)",
-                      }}
-                    >
+                    <div style={{ padding: 18, borderRadius: 12, border: "1px solid var(--border, #dbe4ef)", background: "var(--surface, #f7f9fc)" }}>
                       <h3 style={{ marginTop: 0 }}>Expected deliverable</h3>
-                      <div
-                        style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.7 }}
-                      >
-                        {lab?.deliverable || "No expected deliverable is specified."}
-                      </div>
+                      <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.7 }}>{lab?.deliverable || "No expected deliverable is specified."}</div>
                     </div>
                   </section>
 
                   <section style={{ marginBottom: 24 }}>
                     <h3>Student submission</h3>
-                    <HtmlCssSubmissionReview answerText={submission.answer_text || "No response provided."} />
+                    <HtmlCssSubmissionReview answerText={submission.answer_text || ""} />
                   </section>
 
                   {submission.status === "approved" ? (
                     <section>
                       <h3>Recorded review</h3>
-                      <p>
-                        <strong>Score:</strong> {submission.score ?? "Not recorded"}
-                        {submission.score !== null ? "/100" : ""}
-                      </p>
+                      <p><strong>Score:</strong> {submission.score ?? "Not recorded"}{submission.score !== null ? "/100" : ""}</p>
                       <p><strong>Feedback:</strong></p>
-                      <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-                        {submission.feedback || "No feedback recorded."}
-                      </div>
+                      <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{submission.feedback || "No feedback recorded."}</div>
                     </section>
                   ) : canReview ? (
                     <section>
                       <h3>Review submission</h3>
-                      <LabReviewForm
-                        submissionId={submission.id}
-                        currentScore={submission.score}
-                        currentFeedback={submission.feedback}
-                      />
+                      <LabReviewForm submissionId={submission.id} currentScore={submission.score} currentFeedback={submission.feedback} />
                     </section>
                   ) : null}
                 </article>
