@@ -68,19 +68,21 @@ type PracticalApplication = {
 function formatDuration(
   minutes: number | null,
   seconds: number | null
-) {
-  if (minutes && minutes > 0) {
+): string | null {
+  if (minutes !== null && minutes > 0) {
     return `${minutes} min`;
   }
 
-  if (seconds && seconds > 0) {
+  if (seconds !== null && seconds > 0) {
     return `${Math.ceil(seconds / 60)} min`;
   }
 
   return null;
 }
 
-function formatLevel(level: string | null) {
+function formatLevel(
+  level: string | null
+): string | null {
   if (!level) {
     return null;
   }
@@ -88,33 +90,31 @@ function formatLevel(level: string | null) {
   return level.charAt(0).toUpperCase() + level.slice(1);
 }
 
-function getResourceLabel(type: Resource["resource_type"]) {
+function getResourceLabel(
+  type: Resource["resource_type"]
+): string {
   switch (type) {
     case "pdf":
       return "Open PDF";
-
     case "audio":
       return "Listen to audio";
-
     case "link":
       return "Open resource";
-
     default:
       return "Open file";
   }
 }
 
-function getResourceTypeLabel(type: Resource["resource_type"]) {
+function getResourceTypeLabel(
+  type: Resource["resource_type"]
+): string {
   switch (type) {
     case "pdf":
       return "PDF";
-
     case "audio":
       return "Audio";
-
     case "link":
       return "External link";
-
     default:
       return "File";
   }
@@ -123,7 +123,7 @@ function getResourceTypeLabel(type: Resource["resource_type"]) {
 function removeDuplicateLeadingHeading(
   html: string | null,
   title: string
-) {
+): string {
   if (!html) {
     return "<p>No lesson content is available yet.</p>";
   }
@@ -143,20 +143,25 @@ function removeDuplicateLeadingHeading(
   );
 }
 
-function makeTablesResponsive(html: string) {
+function makeTablesResponsive(
+  html: string
+): string {
   if (!html || !/<table[\s>]/i.test(html)) {
     return html;
   }
 
   return html.replace(
     /<table\b([^>]*)>([\s\S]*?)<\/table>/gi,
-    (_match, attributes, tableContent) => {
-      return `
-        <div class="rn-learning-table-wrap" role="region" aria-label="Scrollable lesson table" tabindex="0">
-          <table${attributes}>${tableContent}</table>
-        </div>
-      `;
-    }
+    (_match, attributes, tableContent) => `
+      <div
+        class="rn-learning-table-wrap"
+        role="region"
+        aria-label="Scrollable lesson table"
+        tabindex="0"
+      >
+        <table${attributes}>${tableContent}</table>
+      </div>
+    `
   );
 }
 
@@ -169,33 +174,29 @@ function getPracticalApplication(
     category ?? ""
   }`.toLowerCase();
 
-  if (
-    text.includes("prompt") ||
-    text.includes("prompt engineering")
-  ) {
+  if (text.includes("prompt")) {
     return {
-      title:
-        "Build and test a professional prompt",
+      title: "Build and test a professional prompt",
       introduction:
-        "Turn the lesson into a usable prompt for a real professional task. Focus on clarity, context, instructions, and the quality of the resulting output.",
+        "Turn the lesson into a usable prompt for a real professional task. Focus on clarity, context, instructions, and output quality.",
       steps: [
         {
           number: "01",
           title: "Choose a real task",
           description:
-            "Select a task you actually perform, such as drafting an email, summarising a report, analysing information, or preparing a document.",
+            "Select a task you perform, such as drafting an email, summarising a report, analysing information, or preparing a document.",
         },
         {
           number: "02",
           title: "Build the prompt",
           description:
-            "Create a structured prompt that gives the AI clear context, instructions, constraints, and the desired output format.",
+            "Give the AI clear context, instructions, constraints, and the required output format.",
         },
         {
           number: "03",
           title: "Test and improve",
           description:
-            "Run the prompt, review the result, identify weaknesses, and revise the prompt until the output is useful and professionally appropriate.",
+            "Review the result, identify weaknesses, and revise the prompt until the output is useful and professionally appropriate.",
         },
       ],
       deliverable:
@@ -211,8 +212,7 @@ function getPracticalApplication(
     text.includes("ai foundation")
   ) {
     return {
-      title:
-        "Apply AI foundations to a workplace task",
+      title: "Apply AI foundations to a workplace task",
       introduction:
         "Connect the concept to an actual professional situation and determine where AI can assist without replacing appropriate human judgement.",
       steps: [
@@ -220,23 +220,23 @@ function getPracticalApplication(
           number: "01",
           title: "Identify a task",
           description:
-            "Choose one recurring task from your work, study, business, teaching, administration, or personal productivity.",
+            "Choose a recurring task from your work, study, business, teaching, administration, or personal productivity.",
         },
         {
           number: "02",
           title: "Apply AI assistance",
           description:
-            "Use an appropriate AI tool to assist with the task. Give clear instructions and avoid submitting confidential or sensitive information.",
+            "Use an appropriate AI tool and avoid sharing confidential or sensitive information.",
         },
         {
           number: "03",
           title: "Evaluate the result",
           description:
-            "Check the output for accuracy, relevance, missing information, privacy concerns, and whether it genuinely improves the task.",
+            "Check accuracy, relevance, missing information, privacy concerns, and whether the result genuinely improves the task.",
         },
       ],
       deliverable:
-        "Record the task, the AI-assisted result, and one improvement you would make before using the result professionally.",
+        "Record the task, the AI-assisted result, and one improvement you would make before using it professionally.",
     };
   }
 
@@ -247,32 +247,31 @@ function getPracticalApplication(
     text.includes("privacy")
   ) {
     return {
-      title:
-        "Apply responsible AI controls",
+      title: "Apply responsible AI controls",
       introduction:
-        "Use the lesson to identify risks in a realistic AI-assisted workflow and establish practical controls before using the workflow professionally.",
+        "Identify risks in a realistic AI-assisted workflow and establish practical safeguards before using it professionally.",
       steps: [
         {
           number: "01",
           title: "Identify the risk",
           description:
-            "Choose an AI task and identify possible privacy, accuracy, bias, security, confidentiality, or misuse risks.",
+            "Consider privacy, accuracy, bias, security, confidentiality, and misuse risks.",
         },
         {
           number: "02",
           title: "Apply safeguards",
           description:
-            "Decide what information can be shared, what must be removed, and where human review is required.",
+            "Determine what information can be shared, what must be removed, and where human review is required.",
         },
         {
           number: "03",
           title: "Review the workflow",
           description:
-            "Check whether the process produces a useful result while maintaining appropriate professional and ethical controls.",
+            "Confirm that the process produces a useful result while maintaining appropriate professional and ethical controls.",
         },
       ],
       deliverable:
-        "Create a short AI safety checklist for the task you selected.",
+        "Create a short AI safety checklist for your chosen task.",
     };
   }
 
@@ -284,10 +283,9 @@ function getPracticalApplication(
     text.includes("data analytics")
   ) {
     return {
-      title:
-        "Apply the technique to real data",
+      title: "Apply the technique to real data",
       introduction:
-        "Use the lesson concept on a realistic dataset so that the skill becomes something you can apply in an actual workplace or business situation.",
+        "Apply the lesson to a realistic dataset so the skill becomes useful in an actual workplace or business situation.",
       steps: [
         {
           number: "01",
@@ -299,17 +297,17 @@ function getPracticalApplication(
           number: "02",
           title: "Perform the analysis",
           description:
-            "Apply the technique from this lesson to calculate, organise, analyse, visualise, or interpret the information.",
+            "Apply the lesson to calculate, organise, analyse, visualise, or interpret the information.",
         },
         {
           number: "03",
           title: "Interpret the result",
           description:
-            "Review the output and explain what it means for a manager, colleague, customer, business, or other intended audience.",
+            "Explain what the result means for a manager, colleague, customer, business, or intended audience.",
         },
       ],
       deliverable:
-        "Produce one useful analysis, calculation, table, chart, or insight based on the lesson.",
+        "Produce one useful analysis, calculation, table, chart, or insight.",
     };
   }
 
@@ -321,32 +319,31 @@ function getPracticalApplication(
     text.includes("content marketing")
   ) {
     return {
-      title:
-        "Apply the concept to a marketing campaign",
+      title: "Apply the concept to a marketing campaign",
       introduction:
-        "Use the lesson to create one practical component of a professional digital marketing activity.",
+        "Create one practical component of a professional digital marketing activity.",
       steps: [
         {
           number: "01",
           title: "Define the objective",
           description:
-            "Choose a realistic marketing objective and identify the audience you want the activity to reach.",
+            "Choose a realistic marketing objective and identify the intended audience.",
         },
         {
           number: "02",
           title: "Create the marketing asset",
           description:
-            "Apply the lesson to produce an appropriate post, message, campaign element, content idea, audience definition, or marketing workflow.",
+            "Produce a post, message, campaign element, content idea, audience definition, or marketing workflow.",
         },
         {
           number: "03",
           title: "Review effectiveness",
           description:
-            "Check whether the result is clear, relevant to the audience, aligned with the objective, and suitable for publication.",
+            "Check clarity, audience relevance, alignment with the objective, and suitability for publication.",
         },
       ],
       deliverable:
-        "Create one campaign-ready marketing asset and briefly explain its intended audience and objective.",
+        "Create one campaign-ready marketing asset and explain its intended audience and objective.",
     };
   }
 
@@ -358,46 +355,44 @@ function getPracticalApplication(
     text.includes("lesson plan")
   ) {
     return {
-      title:
-        "Apply the concept to a teaching situation",
+      title: "Apply the concept to a teaching situation",
       introduction:
-        "Translate the lesson into a practical teaching activity that could be used with learners in a real educational environment.",
+        "Translate the lesson into a practical teaching activity for a real educational environment.",
       steps: [
         {
           number: "01",
           title: "Choose a teaching situation",
           description:
-            "Select a real topic, learner group, classroom challenge, or teaching objective relevant to your context.",
+            "Select a topic, learner group, classroom challenge, or teaching objective.",
         },
         {
           number: "02",
           title: "Apply the technique",
           description:
-            "Use the method from this lesson to design, improve, deliver, or assess the selected teaching activity.",
+            "Use the lesson to design, improve, deliver, or assess the teaching activity.",
         },
         {
           number: "03",
           title: "Review the outcome",
           description:
-            "Consider whether the activity supports the learning objective and identify what you would improve next time.",
+            "Determine whether the activity supports the learning objective and identify possible improvements.",
         },
       ],
       deliverable:
-        "Create one practical teaching resource, activity, plan, or assessment aligned with the lesson.",
+        "Create one teaching resource, activity, plan, or assessment.",
     };
   }
 
   if (
-    text.includes("record") ||
     text.includes("records management") ||
     text.includes("information management") ||
-    text.includes("document management")
+    text.includes("document management") ||
+    text.includes("record")
   ) {
     return {
-      title:
-        "Apply the concept to records management",
+      title: "Apply the concept to records management",
       introduction:
-        "Use the lesson to improve how a real organisation creates, captures, classifies, stores, retrieves, protects, or disposes of information.",
+        "Improve how an organisation creates, classifies, stores, retrieves, protects, or disposes of information.",
       steps: [
         {
           number: "01",
@@ -409,17 +404,17 @@ function getPracticalApplication(
           number: "02",
           title: "Apply the method",
           description:
-            "Use the lesson's records or information-management principle to classify, organise, process, protect, or retrieve the record.",
+            "Use the lesson to classify, organise, process, protect, or retrieve the record.",
         },
         {
           number: "03",
           title: "Review the process",
           description:
-            "Check whether the information is accurate, accessible, appropriately protected, and managed according to its purpose.",
+            "Check accuracy, accessibility, appropriate protection, and suitability for the record's purpose.",
         },
       ],
       deliverable:
-        "Produce a simple record-management example, classification, workflow, register, or control based on the lesson.",
+        "Produce a record-management example, classification, workflow, register, or control.",
     };
   }
 
@@ -431,46 +426,44 @@ function getPracticalApplication(
     text.includes("business operations")
   ) {
     return {
-      title:
-        "Improve a real professional workflow",
+      title: "Improve a real professional workflow",
       introduction:
-        "Identify a repetitive or inefficient task and apply the lesson to make the workflow clearer, faster, more consistent, or easier to manage.",
+        "Apply the lesson to make a repetitive or inefficient task clearer, faster, more consistent, or easier to manage.",
       steps: [
         {
           number: "01",
           title: "Map the current task",
           description:
-            "Write down the main steps currently required to complete the task and identify where time or effort is being lost.",
+            "Write down the main steps and identify where time or effort is being lost.",
         },
         {
           number: "02",
           title: "Apply the lesson",
           description:
-            "Use the technique from this lesson to improve, simplify, automate, organise, or standardise the workflow.",
+            "Use the technique to improve, simplify, automate, organise, or standardise the workflow.",
         },
         {
           number: "03",
           title: "Review the improvement",
           description:
-            "Compare the original and improved workflow and identify the practical benefit, remaining risks, and next improvement.",
+            "Compare the original and improved workflows, including benefits, risks, and remaining improvements.",
         },
       ],
       deliverable:
-        "Create a simple before-and-after workflow showing how the lesson improved the task.",
+        "Create a before-and-after workflow showing how the lesson improved the task.",
     };
   }
 
   return {
-    title:
-      `Apply ${lessonTitle} to a real situation`,
+    title: `Apply ${lessonTitle} to a real situation`,
     introduction:
-      "Connect the lesson to an actual professional, business, educational, or personal situation so that the concept becomes a usable skill.",
+      "Connect the lesson to a professional, business, educational, or personal situation to turn the concept into a usable skill.",
     steps: [
       {
         number: "01",
         title: "Identify the concept",
         description:
-          "Select the most important concept, method, process, or skill from this lesson.",
+          "Select the most important concept, method, process, or skill from the lesson.",
       },
       {
         number: "02",
@@ -482,7 +475,7 @@ function getPracticalApplication(
         number: "03",
         title: "Review your result",
         description:
-          "Check the result for accuracy, usefulness, completeness, and areas that could be improved.",
+          "Check accuracy, usefulness, completeness, and areas that could be improved.",
       },
     ],
     deliverable:
@@ -492,13 +485,9 @@ function getPracticalApplication(
 
 function isActiveEnrollment(
   enrollment: Enrollment | null
-) {
+): boolean {
   if (!enrollment) {
     return false;
-  }
-
-  if (!enrollment.enrollment_status) {
-    return true;
   }
 
   return (
@@ -510,7 +499,7 @@ function isActiveEnrollment(
 function hasPaidAccess(
   course: Course,
   enrollment: Enrollment | null
-) {
+): boolean {
   if (!isActiveEnrollment(enrollment)) {
     return false;
   }
@@ -540,7 +529,9 @@ export default async function LessonPage({
 
   if (!user) {
     redirect(
-      `/login?next=/learn/${courseSlug}/${lessonSlug}`
+      `/login?next=${encodeURIComponent(
+        `/learn/${courseSlug}/${lessonSlug}`
+      )}`
     );
   }
 
@@ -557,14 +548,8 @@ export default async function LessonPage({
     .maybeSingle();
 
   if (courseError) {
-    console.error(
-      "Failed to load course:",
-      courseError
-    );
-
-    throw new Error(
-      "Unable to load the course."
-    );
+    console.error("Failed to load course:", courseError);
+    throw new Error("Unable to load the course.");
   }
 
   const course =
@@ -573,22 +558,6 @@ export default async function LessonPage({
   if (!course) {
     notFound();
   }
-
-  const { data: enrollmentData } =
-    await supabase
-      .from("enrollments")
-      .select(
-        "id, progress_percent, enrollment_status, payment_status"
-      )
-      .eq("student_id", user.id)
-      .eq("course_id", course.id)
-      .maybeSingle();
-
-  const enrollment =
-    enrollmentData as unknown as Enrollment | null;
-
-  const hasCourseAccess =
-    hasPaidAccess(course, enrollment);
 
   const {
     data: curriculumData,
@@ -621,7 +590,6 @@ export default async function LessonPage({
       "Failed to load curriculum:",
       curriculumError
     );
-
     throw new Error(
       "Unable to load the course curriculum."
     );
@@ -630,17 +598,14 @@ export default async function LessonPage({
   const curriculum =
     (curriculumData ?? []) as unknown as CurriculumRow[];
 
-  const curriculumLessonIds = new Set(
-    curriculum.map(
-      (row) => row.lesson_id
-    )
-  );
+  const currentCurriculumRow =
+    curriculum.find(
+      (row) => row.lesson_slug === lessonSlug
+    );
 
-  const curriculumLessonSlugs = new Set(
-    curriculum.map(
-      (row) => row.lesson_slug
-    )
-  );
+  if (!currentCurriculumRow) {
+    notFound();
+  }
 
   const {
     data: lessonData,
@@ -660,20 +625,15 @@ export default async function LessonPage({
         "is_published",
       ].join(", ")
     )
+    .eq("id", currentCurriculumRow.lesson_id)
     .eq("course_id", course.id)
     .eq("slug", lessonSlug)
     .eq("is_published", true)
     .maybeSingle();
 
   if (lessonError) {
-    console.error(
-      "Failed to load lesson:",
-      lessonError
-    );
-
-    throw new Error(
-      "Unable to load the lesson."
-    );
+    console.error("Failed to load lesson:", lessonError);
+    throw new Error("Unable to load the lesson.");
   }
 
   const lesson =
@@ -683,18 +643,41 @@ export default async function LessonPage({
     notFound();
   }
 
-  if (
-    !curriculumLessonIds.has(lesson.id) ||
-    !curriculumLessonSlugs.has(lesson.slug)
-  ) {
-    notFound();
+  const { data: enrollmentData, error: enrollmentError } =
+    await supabase
+      .from("enrollments")
+      .select(
+        "id, progress_percent, enrollment_status, payment_status"
+      )
+      .eq("student_id", user.id)
+      .eq("course_id", course.id)
+      .maybeSingle();
+
+  if (enrollmentError) {
+    console.error(
+      "Failed to verify enrollment:",
+      enrollmentError
+    );
+    throw new Error(
+      "Unable to verify your course enrollment."
+    );
   }
 
-  if (!lesson.is_preview && !hasCourseAccess) {
-    redirect(`/courses/${courseSlug}`);
+  const enrollment =
+    enrollmentData as unknown as Enrollment | null;
+
+  const hasCourseAccess =
+    hasPaidAccess(course, enrollment);
+
+  const isPreview =
+    lesson.is_preview === true &&
+    currentCurriculumRow.is_preview === true;
+
+  if (!isPreview && !hasCourseAccess) {
+    redirect(`/courses/${course.slug}`);
   }
 
-  const { data: completedProgressData } =
+  const completedProgressResult =
     hasCourseAccess
       ? await supabase
           .from("lesson_progress")
@@ -702,27 +685,35 @@ export default async function LessonPage({
           .eq("student_id", user.id)
           .eq("course_id", course.id)
           .eq("completed", true)
-      : { data: [] };
+      : { data: [], error: null };
+
+  if (completedProgressResult.error) {
+    console.error(
+      "Failed to load lesson progress:",
+      completedProgressResult.error
+    );
+    throw new Error(
+      "Unable to load your learning progress."
+    );
+  }
 
   const completedProgress =
-    (completedProgressData ?? []) as {
+    (completedProgressResult.data ?? []) as {
       lesson_id: string;
     }[];
+
+  const curriculumLessonIds = new Set(
+    curriculum.map((row) => row.lesson_id)
+  );
 
   const completedLessonIds = new Set(
     completedProgress
       .map((row) => row.lesson_id)
-      .filter((lessonId) =>
-        curriculumLessonIds.has(
-          lessonId
-        )
-      )
+      .filter((id) => curriculumLessonIds.has(id))
   );
 
   const totalLessons = curriculum.length;
-
-  const totalCompleted =
-    completedLessonIds.size;
+  const totalCompleted = completedLessonIds.size;
 
   const courseProgress =
     totalLessons > 0
@@ -734,19 +725,17 @@ export default async function LessonPage({
         )
       : 0;
 
-  const currentIndex =
-    curriculum.findIndex(
-      (row) =>
-        row.lesson_id === lesson.id &&
-        row.lesson_slug === lesson.slug
-    );
+  const currentIndex = curriculum.findIndex(
+    (row) =>
+      row.lesson_id === lesson.id &&
+      row.lesson_slug === lesson.slug
+  );
 
   if (currentIndex === -1) {
     notFound();
   }
 
-  const lessonNumber =
-    currentIndex + 1;
+  const lessonNumber = currentIndex + 1;
 
   const previousLesson =
     currentIndex > 0
@@ -754,8 +743,7 @@ export default async function LessonPage({
       : null;
 
   const nextLesson =
-    currentIndex <
-    curriculum.length - 1
+    currentIndex < curriculum.length - 1
       ? curriculum[currentIndex + 1]
       : null;
 
@@ -766,39 +754,44 @@ export default async function LessonPage({
     totalLessons > 0 &&
     totalCompleted >= totalLessons;
 
-  const { data: resourcesData } =
-    await supabase
-      .from("lesson_resources")
-      .select(
-        "id, title, resource_type, url, sort_order"
-      )
-      .eq("lesson_id", lesson.id)
-      .order("sort_order")
-      .order("created_at");
+  const {
+    data: resourcesData,
+    error: resourcesError,
+  } = await supabase
+    .from("lesson_resources")
+    .select(
+      "id, title, resource_type, url, sort_order"
+    )
+    .eq("lesson_id", lesson.id)
+    .order("sort_order")
+    .order("created_at");
+
+  if (resourcesError) {
+    console.error(
+      "Failed to load lesson resources:",
+      resourcesError
+    );
+  }
 
   const resources =
     (resourcesData ?? []) as unknown as Resource[];
 
   const sectionTitle =
-    curriculum[currentIndex]?.section_title ||
+    currentCurriculumRow.section_title ||
     course.category ||
     "Course lesson";
 
   const totalDuration = formatDuration(
     lesson.duration_minutes,
-    null
+    currentCurriculumRow.duration_seconds
   );
 
-  const rawLessonContent =
+  const lessonContent = makeTablesResponsive(
     removeDuplicateLeadingHeading(
       lesson.content_html,
       lesson.title
-    );
-
-  const lessonContent =
-    makeTablesResponsive(
-      rawLessonContent
-    );
+    )
+  );
 
   const practicalApplication =
     getPracticalApplication(
@@ -808,9 +801,13 @@ export default async function LessonPage({
     );
 
   const progressLabel =
-    totalLessons > 0
-      ? `${totalCompleted} of ${totalLessons} lessons completed`
-      : "Course progress";
+    `${totalCompleted} of ${totalLessons} lessons completed`;
+
+  function lessonIsAccessible(
+    row: CurriculumRow
+  ): boolean {
+    return hasCourseAccess || row.is_preview;
+  }
 
   return (
     <main className="rn-learning-shell">
@@ -829,32 +826,32 @@ export default async function LessonPage({
 
             <div className="rn-learning-breadcrumb">
               <span>{sectionTitle}</span>
-              <span aria-hidden="true">
-                ·
-              </span>
+              <span aria-hidden="true">·</span>
               <span>
-                Lesson {lessonNumber} of{" "}
-                {totalLessons}
+                Lesson {lessonNumber} of {totalLessons}
               </span>
             </div>
           </div>
 
           <div className="rn-learning-progress-summary">
             <span>Course progress</span>
-
             <strong>{courseProgress}%</strong>
 
-            {lesson.is_preview ? (
+            {isPreview && (
               <span className="rn-preview-pill">
                 Preview
               </span>
-            ) : null}
+            )}
           </div>
         </div>
 
         <div
           className="rn-learning-progress-track"
-          aria-label={`Course progress: ${courseProgress}%`}
+          role="progressbar"
+          aria-label="Course progress"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={courseProgress}
         >
           <div
             style={{
@@ -874,65 +871,78 @@ export default async function LessonPage({
               <h2>Course lessons</h2>
 
               <p className="rn-learning-sidebar-progress">
-                {progressLabel}
+                {hasCourseAccess
+                  ? progressLabel
+                  : "Preview access"}
               </p>
             </div>
 
             <div className="rn-learning-sidebar-list">
-              {curriculum.map(
-                (row, index) => {
-                  const completed =
-                    completedLessonIds.has(
-                      row.lesson_id
-                    );
+              {curriculum.map((row, index) => {
+                const completed =
+                  completedLessonIds.has(row.lesson_id);
 
-                  const active =
-                    row.lesson_slug ===
-                    lesson.slug;
+                const active =
+                  row.lesson_slug === lesson.slug;
 
+                const accessible =
+                  lessonIsAccessible(row);
+
+                const lessonHref =
+                  `/learn/${course.slug}/${row.lesson_slug}`;
+
+                const label =
+                  row.lesson_title;
+
+                if (!accessible) {
                   return (
-                    <Link
+                    <div
                       key={row.lesson_id}
-                      href={`/learn/${course.slug}/${row.lesson_slug}`}
-                      className={`rn-learning-sidebar-item ${
-                        active
-                          ? "is-active"
-                          : ""
-                      }`}
-                      aria-current={
-                        active
-                          ? "page"
-                          : undefined
-                      }
+                      className="rn-learning-sidebar-item is-locked"
+                      aria-label={`${label}, locked lesson`}
                     >
                       <span className="rn-learning-sidebar-number">
-                        {completed
-                          ? "✓"
-                          : String(
-                              index + 1
-                            ).padStart(
-                              2,
-                              "0"
-                            )}
+                        🔒
                       </span>
 
                       <span className="rn-learning-sidebar-copy">
-                        <strong>
-                          {row.lesson_title}
-                        </strong>
-
+                        <strong>{label}</strong>
                         <small>
-                          {row.section_title}
-
-                          {row.is_preview
-                            ? " · Preview"
-                            : ""}
+                          {row.section_title} · Enrol to unlock
                         </small>
                       </span>
-                    </Link>
+                    </div>
                   );
                 }
-              )}
+
+                return (
+                  <Link
+                    key={row.lesson_id}
+                    href={lessonHref}
+                    className={`rn-learning-sidebar-item ${
+                      active ? "is-active" : ""
+                    }`}
+                    aria-current={
+                      active ? "page" : undefined
+                    }
+                  >
+                    <span className="rn-learning-sidebar-number">
+                      {completed
+                        ? "✓"
+                        : String(index + 1).padStart(2, "0")}
+                    </span>
+
+                    <span className="rn-learning-sidebar-copy">
+                      <strong>{label}</strong>
+
+                      <small>
+                        {row.section_title}
+                        {row.is_preview ? " · Preview" : ""}
+                      </small>
+                    </span>
+                  </Link>
+                );
+              })}
             </div>
 
             <Link
@@ -951,41 +961,34 @@ export default async function LessonPage({
                 </span>
 
                 <span className="rn-learning-lesson-number">
-                  Lesson {lessonNumber} of{" "}
-                  {totalLessons}
+                  Lesson {lessonNumber} of {totalLessons}
                 </span>
               </div>
 
               <div className="rn-course-meta-row">
                 <span>
-                  {lesson.is_preview
-                    ? "Preview"
-                    : "Course lesson"}
+                  {isPreview ? "Preview" : "Course lesson"}
                 </span>
 
-                {formatLevel(course.level) ? (
-                  <span>
-                    {formatLevel(course.level)}
-                  </span>
-                ) : null}
+                {formatLevel(course.level) && (
+                  <span>{formatLevel(course.level)}</span>
+                )}
 
-                {course.category ? (
+                {course.category && (
                   <span>{course.category}</span>
-                ) : null}
+                )}
 
-                {totalDuration ? (
+                {totalDuration && (
                   <span>{totalDuration}</span>
-                ) : null}
+                )}
               </div>
 
               <h1>{lesson.title}</h1>
 
               <p className="rn-learning-intro">
-                Lesson {lessonNumber} of{" "}
-                {totalLessons}. Work through the
-                material, complete the practical
-                task, then mark the lesson
-                complete.
+                Work through the lesson material, complete
+                the practical task, and mark the lesson
+                complete when you are ready.
               </p>
             </header>
 
@@ -995,69 +998,46 @@ export default async function LessonPage({
                   LESSON OVERVIEW
                 </span>
 
-                <h2>
-                  What you will work on
-                </h2>
+                <h2>What you will work on</h2>
               </div>
 
               <div className="rn-learning-overview-grid">
                 <div>
-                  <strong>
-                    {lessonNumber}
-                  </strong>
+                  <strong>{lessonNumber}</strong>
+                  <span>Current lesson</span>
+                </div>
 
-                  <span>
-                    Current lesson
-                  </span>
+                <div>
+                  <strong>{totalLessons}</strong>
+                  <span>Lessons in course</span>
+                </div>
+
+                <div>
+                  <strong>{courseProgress}%</strong>
+                  <span>Course completed</span>
                 </div>
 
                 <div>
                   <strong>
-                    {totalLessons}
+                    {totalDuration || "Self-paced"}
                   </strong>
-
-                  <span>
-                    Lessons in course
-                  </span>
-                </div>
-
-                <div>
-                  <strong>
-                    {courseProgress}%
-                  </strong>
-
-                  <span>
-                    Course completed
-                  </span>
-                </div>
-
-                <div>
-                  <strong>
-                    {totalDuration ||
-                      "Self-paced"}
-                  </strong>
-
-                  <span>
-                    Lesson duration
-                  </span>
+                  <span>Lesson duration</span>
                 </div>
               </div>
             </section>
 
-            {lesson.video_url ? (
+            {lesson.video_url && (
               <section className="rn-learning-video">
                 <div>
                   <span className="rn-eyebrow">
                     VIDEO LESSON
                   </span>
 
-                  <h2>
-                    Watch the lesson video
-                  </h2>
+                  <h2>Watch the lesson video</h2>
 
                   <p>
-                    Use the video together with
-                    the written lesson material.
+                    Use the video together with the written
+                    lesson material.
                   </p>
                 </div>
 
@@ -1067,10 +1047,10 @@ export default async function LessonPage({
                   rel="noopener noreferrer"
                   className="rn-button rn-button-primary"
                 >
-                  Watch video
+                  Watch video ↗
                 </a>
               </section>
-            ) : null}
+            )}
 
             <section className="rn-learning-material">
               <div className="rn-learning-section-heading">
@@ -1079,9 +1059,8 @@ export default async function LessonPage({
                 </span>
 
                 <p>
-                  Read through the material
-                  carefully before completing the
-                  practical application.
+                  Read through the material carefully before
+                  completing the practical application.
                 </p>
               </div>
 
@@ -1099,104 +1078,83 @@ export default async function LessonPage({
                   PRACTICAL APPLICATION
                 </span>
 
-                <h2>
-                  {practicalApplication.title}
-                </h2>
+                <h2>{practicalApplication.title}</h2>
 
-                <p>
-                  {practicalApplication.introduction}
-                </p>
+                <p>{practicalApplication.introduction}</p>
               </div>
 
               <div className="rn-learning-practice-grid">
-                {practicalApplication.steps.map(
-                  (step) => (
-                    <article
-                      key={step.number}
-                      className="rn-learning-practice-step"
-                    >
-                      <span className="rn-practice-number">
-                        {step.number}
-                      </span>
+                {practicalApplication.steps.map((step) => (
+                  <article
+                    key={step.number}
+                    className="rn-learning-practice-step"
+                  >
+                    <span className="rn-practice-number">
+                      {step.number}
+                    </span>
 
-                      <section className="rn-practice-step-content">
-                        <h3>{step.title}</h3>
-
-                        <p>
-                          {step.description}
-                        </p>
-                      </section>
-                    </article>
-                  )
-                )}
+                    <section className="rn-practice-step-content">
+                      <h3>{step.title}</h3>
+                      <p>{step.description}</p>
+                    </section>
+                  </article>
+                ))}
               </div>
 
               <div className="rn-learning-practice-deliverable">
-                <span>
-                  LEARNER DELIVERABLE
-                </span>
-
-                <p>
-                  {practicalApplication.deliverable}
-                </p>
+                <span>LEARNER DELIVERABLE</span>
+                <p>{practicalApplication.deliverable}</p>
               </div>
             </section>
 
-            {resources.length > 0 ? (
+            {resources.length > 0 && (
               <section className="rn-learning-resources">
                 <div className="rn-learning-section-heading">
                   <span className="rn-eyebrow">
                     LEARNING RESOURCES
                   </span>
 
-                  <h2>
-                    Resources for this lesson
-                  </h2>
+                  <h2>Resources for this lesson</h2>
 
                   <p>
-                    Supporting material you can
-                    open while studying this
-                    lesson.
+                    Supporting material you can open while
+                    studying this lesson.
                   </p>
                 </div>
 
                 <div className="rn-resource-list">
-                  {resources.map(
-                    (resource) => (
-                      <a
-                        key={resource.id}
-                        href={resource.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="rn-resource-item"
-                      >
-                        <span className="rn-resource-icon">
-                          {getResourceTypeLabel(
+                  {resources.map((resource) => (
+                    <a
+                      key={resource.id}
+                      href={resource.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rn-resource-item"
+                    >
+                      <span className="rn-resource-icon">
+                        {getResourceTypeLabel(
+                          resource.resource_type
+                        )}
+                      </span>
+
+                      <span className="rn-resource-copy">
+                        <strong>{resource.title}</strong>
+
+                        <small>
+                          {getResourceLabel(
                             resource.resource_type
                           )}
-                        </span>
+                        </small>
+                      </span>
 
-                        <span className="rn-resource-copy">
-                          <strong>
-                            {resource.title}
-                          </strong>
-
-                          <small>
-                            {getResourceLabel(
-                              resource.resource_type
-                            )}
-                          </small>
-                        </span>
-
-                        <span className="rn-resource-arrow">
-                          →
-                        </span>
-                      </a>
-                    )
-                  )}
+                      <span className="rn-resource-arrow">
+                        ↗
+                      </span>
+                    </a>
+                  ))}
                 </div>
               </section>
-            ) : null}
+            )}
 
             {hasCourseAccess ? (
               <section className="rn-learning-completion">
@@ -1213,7 +1171,7 @@ export default async function LessonPage({
 
                   <p>
                     {currentCompleted
-                      ? "This lesson is already recorded as completed. You can review it or continue through the curriculum."
+                      ? "Your completion is recorded. Review this lesson or continue through the curriculum."
                       : "Review the lesson material and complete the practical work before marking this lesson complete."}
                   </p>
                 </div>
@@ -1230,23 +1188,20 @@ export default async function LessonPage({
                   />
                 )}
               </section>
-            ) : lesson.is_preview ? (
+            ) : (
               <section className="rn-learning-preview-cta">
                 <div>
                   <span className="rn-eyebrow">
                     PREVIEW LESSON
                   </span>
 
-                  <h2>
-                    Continue with the full
-                    course
-                  </h2>
+                  <h2>Continue with the full course</h2>
 
                   <p>
-                    This is a preview lesson.
-                    View the full course to see
-                    the complete curriculum and
-                    enrollment options.
+                    This lesson is available as a preview.
+                    Enrol to unlock the complete curriculum,
+                    lesson completion tracking, and the
+                    remaining learning activities.
                   </p>
                 </div>
 
@@ -1254,27 +1209,23 @@ export default async function LessonPage({
                   href={`/courses/${course.slug}`}
                   className="rn-button rn-button-primary"
                 >
-                  View course
+                  View course and enrol →
                 </Link>
               </section>
-            ) : null}
+            )}
 
             <nav
               className="rn-learning-navigation"
               aria-label="Lesson navigation"
             >
-              {previousLesson ? (
+              {previousLesson &&
+              lessonIsAccessible(previousLesson) ? (
                 <Link
                   href={`/learn/${course.slug}/${previousLesson.lesson_slug}`}
                   className="rn-learning-nav-card"
                 >
-                  <span>
-                    ← Previous lesson
-                  </span>
-
-                  <strong>
-                    {previousLesson.lesson_title}
-                  </strong>
+                  <span>← Previous lesson</span>
+                  <strong>{previousLesson.lesson_title}</strong>
                 </Link>
               ) : (
                 <Link
@@ -1282,25 +1233,22 @@ export default async function LessonPage({
                   className="rn-learning-nav-card"
                 >
                   <span>← Course</span>
-
                   <strong>
-                    Back to course
+                    {previousLesson
+                      ? "Previous lesson locked"
+                      : "Back to course"}
                   </strong>
                 </Link>
               )}
 
-              {nextLesson ? (
+              {nextLesson &&
+              lessonIsAccessible(nextLesson) ? (
                 <Link
                   href={`/learn/${course.slug}/${nextLesson.lesson_slug}`}
                   className="rn-learning-nav-card is-next"
                 >
-                  <span>
-                    Next lesson →
-                  </span>
-
-                  <strong>
-                    {nextLesson.lesson_title}
-                  </strong>
+                  <span>Next lesson →</span>
+                  <strong>{nextLesson.lesson_title}</strong>
                 </Link>
               ) : (
                 <Link
@@ -1308,13 +1256,17 @@ export default async function LessonPage({
                   className="rn-learning-nav-card is-next"
                 >
                   <span>
-                    {courseComplete
-                      ? "Course complete"
-                      : "End of curriculum"}
+                    {nextLesson
+                      ? "🔒 Locked lesson"
+                      : courseComplete
+                        ? "Course complete"
+                        : "End of curriculum"}
                   </span>
 
                   <strong>
-                    Return to course
+                    {nextLesson
+                      ? "View course to unlock"
+                      : "Return to course"}
                   </strong>
                 </Link>
               )}

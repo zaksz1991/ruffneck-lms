@@ -84,6 +84,18 @@ function formatPrice(price: number) {
   return `₦${price.toLocaleString("en-NG")}`;
 }
 
+function getLessonDuration(lesson: CurriculumRow) {
+  if (lesson.duration_minutes != null && lesson.duration_minutes > 0) {
+    return lesson.duration_minutes;
+  }
+
+  if (lesson.duration_seconds != null && lesson.duration_seconds > 0) {
+    return Math.ceil(lesson.duration_seconds / 60);
+  }
+
+  return 0;
+}
+
 function getCourseFocus(slug: string) {
   switch (slug) {
     case "ai-literacy":
@@ -191,6 +203,21 @@ function isActiveEnrollment(enrollment: Enrollment | null) {
     paymentStatus === "successful" ||
     paymentStatus === "success"
   );
+}
+
+function stripHtml(value: string) {
+  return value
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export async function generateMetadata({
@@ -345,12 +372,12 @@ export default async function CourseDetailPage({
     (completedProgressData as { lesson_id: string }[] | null) || [];
 
   const publishedLessonIds = new Set(
-    curriculumRows.map((row) => row.lesson_id)
+    curriculumRows.map((lesson) => lesson.lesson_id)
   );
 
   const completedLessonIds = new Set(
     completedLessonRows
-      .map((row) => row.lesson_id)
+      .map((lesson) => lesson.lesson_id)
       .filter((lessonId) => publishedLessonIds.has(lessonId))
   );
 
@@ -359,7 +386,10 @@ export default async function CourseDetailPage({
 
   const progressPercent =
     totalLessons > 0
-      ? Math.min(100, Math.round((totalCompleted / totalLessons) * 100))
+      ? Math.min(
+          100,
+          Math.round((totalCompleted / totalLessons) * 100)
+        )
       : 0;
 
   const courseCompleted =
@@ -373,16 +403,10 @@ export default async function CourseDetailPage({
   const firstLesson = curriculumRows[0] || null;
   const continueLesson = nextIncompleteLesson || firstLesson;
 
-  const calculatedMinutes = curriculumRows.reduce(
-    (total, lesson) =>
-      total + (lesson.duration_minutes || 0),
+  const totalMinutes = curriculumRows.reduce(
+    (total, lesson) => total + getLessonDuration(lesson),
     0
-  );
-
-  const totalMinutes =
-    calculatedMinutes > 0
-      ? calculatedMinutes
-      : course.duration_minutes || 0;
+  ) || course.duration_minutes || 0;
 
   const sectionsMap = new Map<string, SectionGroup>();
 
@@ -466,7 +490,9 @@ export default async function CourseDetailPage({
                 href={courseCompleted ? assessmentHref : continueHref}
                 className="rn-button rn-button-primary"
               >
-                {courseCompleted ? "Take Final Assessment" : "Start Learning"}
+                {courseCompleted
+                  ? "Take Final Assessment"
+                  : "Start Learning"}
               </Link>
             ) : null}
           </section>
@@ -478,9 +504,7 @@ export default async function CourseDetailPage({
 
             <div className="rn-course-meta-row">
               <span>{formatLevel(course.level)}</span>
-
               {course.category ? <span>{course.category}</span> : null}
-
               <span>{course.is_free ? "Free course" : "Paid course"}</span>
             </div>
 
@@ -488,18 +512,13 @@ export default async function CourseDetailPage({
             <h2>{focus.title}</h2>
 
             <p className="rn-course-lead">
-              {course.short_description ||
-                focus.description ||
-                "Build practical skills through structured learning and applied exercises."}
+              {course.short_description || focus.description}
             </p>
 
             {course.description ? (
-              <div
-                className="rn-course-description"
-                dangerouslySetInnerHTML={{
-                  __html: course.description,
-                }}
-              />
+              <p className="rn-course-description">
+                {stripHtml(course.description)}
+              </p>
             ) : null}
 
             <div className="rn-course-stat-grid">
@@ -600,16 +619,17 @@ export default async function CourseDetailPage({
               </Link>
             </div>
 
-            {!course.is_free ? (
-              <p className="rn-course-price-note">
-                Course fee: <strong>{formatPrice(course.price_ngn)}</strong>
-                <span> · Secure payment through Flutterwave</span>
-              </p>
-            ) : (
-              <p className="rn-course-price-note">
-                No course fee. Sign in to enrol and track your progress.
-              </p>
-            )}
+            <p className="rn-course-price-note">
+              {course.is_free ? (
+                "No course fee. Sign in to enrol and track your progress."
+              ) : (
+                <>
+                  Course fee:{" "}
+                  <strong>{formatPrice(course.price_ngn)}</strong>
+                  <span> · Secure payment through Flutterwave</span>
+                </>
+              )}
+            </p>
           </div>
 
           <aside className="rn-course-hero-aside">
@@ -626,26 +646,11 @@ export default async function CourseDetailPage({
                 <h2>{course.title}</h2>
 
                 <ul className="rn-course-includes">
-                  <li>
-                    <span aria-hidden="true">✓</span>
-                    Structured learning modules
-                  </li>
-                  <li>
-                    <span aria-hidden="true">✓</span>
-                    {totalLessons} published lessons
-                  </li>
-                  <li>
-                    <span aria-hidden="true">✓</span>
-                    Self-paced access
-                  </li>
-                  <li>
-                    <span aria-hidden="true">✓</span>
-                    Learning progress tracking
-                  </li>
-                  <li>
-                    <span aria-hidden="true">✓</span>
-                    Practical learning activities
-                  </li>
+                  <li>✓ Structured learning modules</li>
+                  <li>✓ {totalLessons} published lessons</li>
+                  <li>✓ Self-paced learning</li>
+                  <li>✓ Learning progress tracking</li>
+                  <li>✓ Practical learning activities</li>
                 </ul>
 
                 <div className="rn-course-preview-price">
@@ -704,15 +709,18 @@ export default async function CourseDetailPage({
             <span className="rn-eyebrow">LEARNING OUTCOMES</span>
             <h2>What you will be able to do</h2>
             <p>
-              The course focuses on practical professional outcomes, not
-              theory alone.
+              Develop practical professional capabilities through structured
+              learning and applied work.
             </p>
           </div>
 
           {outcomes.length > 0 ? (
             <div className="rn-outcomes-grid">
               {outcomes.map((outcome, index) => (
-                <article key={`${index}-${outcome}`} className="rn-outcome-card">
+                <article
+                  key={`${index}-${outcome}`}
+                  className="rn-outcome-card"
+                >
                   <span className="rn-outcome-number" aria-hidden="true">
                     {String(index + 1).padStart(2, "0")}
                   </span>
@@ -761,10 +769,10 @@ export default async function CourseDetailPage({
 
             <article className="rn-practical-card">
               <span>03</span>
-              <h3>Samples and exercises</h3>
+              <h3>Guided exercises</h3>
               <p>
-                Work with examples, templates, checklists, and guided practical
-                tasks.
+                Practise with examples, templates, checklists, and guided
+                practical tasks.
               </p>
             </article>
 
@@ -791,114 +799,166 @@ export default async function CourseDetailPage({
 
           {sections.length > 0 ? (
             <div className="rn-curriculum-list">
-              {sections.map((section, index) => (
-                <details
-                  key={section.id}
-                  className="rn-curriculum-module"
-                  open={index === 0}
-                >
-                  <summary>
-                    <div className="rn-curriculum-summary-main">
-                      <span className="rn-module-number">
-                        {String(index + 1).padStart(2, "0")}
-                      </span>
+              {sections.map((section, index) => {
+                const sectionCompleted = section.lessons.filter((lesson) =>
+                  completedLessonIds.has(lesson.lesson_id)
+                ).length;
 
-                      <div>
-                        <h3>{section.title}</h3>
-                        <p>
-                          {section.lessons.length}{" "}
-                          {section.lessons.length === 1 ? "lesson" : "lessons"}
-                        </p>
+                const sectionPercent = Math.round(
+                  (sectionCompleted / section.lessons.length) * 100
+                );
+
+                return (
+                  <details
+                    key={section.id}
+                    className="rn-curriculum-module"
+                    open={index === 0}
+                  >
+                    <summary>
+                      <div className="rn-curriculum-summary-main">
+                        <span className="rn-module-number">
+                          {String(index + 1).padStart(2, "0")}
+                        </span>
+
+                        <div className="rn-curriculum-section-info">
+                          <h3>{section.title}</h3>
+                          <p>
+                            {sectionCompleted} of {section.lessons.length}{" "}
+                            lessons completed
+                          </p>
+
+                          {enrolled ? (
+                            <div
+                              className="rn-module-progress"
+                              role="progressbar"
+                              aria-label={`${section.title} progress`}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                              aria-valuenow={sectionPercent}
+                            >
+                              <div
+                                style={{ width: `${sectionPercent}%` }}
+                              />
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
-                    </div>
 
-                    <span className="rn-curriculum-chevron" aria-hidden="true">
-                      +
-                    </span>
-                  </summary>
+                      <span
+                        className="rn-curriculum-chevron"
+                        aria-hidden="true"
+                      >
+                        +
+                      </span>
+                    </summary>
 
-                  <div className="rn-curriculum-lessons">
-                    {section.lessons.map((lesson, lessonIndex) => {
-                      const completed = completedLessonIds.has(
-                        lesson.lesson_id
-                      );
+                    <div className="rn-curriculum-lessons">
+                      {section.lessons.map((lesson, lessonIndex) => {
+                        const completed = completedLessonIds.has(
+                          lesson.lesson_id
+                        );
 
-                      const canOpenLesson =
-                        enrolled || lesson.is_preview;
+                        const isNext =
+                          enrolled &&
+                          !courseCompleted &&
+                          nextIncompleteLesson?.lesson_id === lesson.lesson_id;
 
-                      return (
-                        <div
-                          key={lesson.lesson_id}
-                          className={`rn-curriculum-lesson ${
-                            completed ? "is-completed" : ""
-                          }`}
-                        >
-                          <div className="rn-lesson-index" aria-hidden="true">
-                            {completed
-                              ? "✓"
-                              : String(lessonIndex + 1).padStart(2, "0")}
-                          </div>
+                        const canOpenLesson =
+                          enrolled || lesson.is_preview;
 
-                          <div className="rn-lesson-main">
+                        return (
+                          <div
+                            key={lesson.lesson_id}
+                            className={[
+                              "rn-curriculum-lesson",
+                              completed ? "is-completed" : "",
+                              isNext ? "is-next" : "",
+                              !canOpenLesson ? "is-locked" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                          >
+                            <div
+                              className="rn-lesson-index"
+                              aria-hidden="true"
+                            >
+                              {completed
+                                ? "✓"
+                                : String(lessonIndex + 1).padStart(2, "0")}
+                            </div>
+
+                            <div className="rn-lesson-main">
+                              <div className="rn-lesson-heading">
+                                {canOpenLesson ? (
+                                  <Link
+                                    href={`/learn/${course.slug}/${lesson.lesson_slug}`}
+                                    className="rn-lesson-title"
+                                  >
+                                    {lesson.lesson_title}
+                                  </Link>
+                                ) : (
+                                  <span className="rn-lesson-title">
+                                    {lesson.lesson_title}
+                                  </span>
+                                )}
+
+                                {isNext ? (
+                                  <span className="rn-lesson-next-badge">
+                                    NEXT LESSON
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              <div className="rn-lesson-meta">
+                                {lesson.is_preview ? (
+                                  <span className="rn-lesson-preview-badge">
+                                    Preview
+                                  </span>
+                                ) : null}
+
+                                {getLessonDuration(lesson) > 0 ? (
+                                  <span>
+                                    {formatDuration(
+                                      getLessonDuration(lesson)
+                                    )}
+                                  </span>
+                                ) : null}
+
+                                {completed ? (
+                                  <span className="rn-lesson-completed-label">
+                                    Completed
+                                  </span>
+                                ) : null}
+
+                                {!canOpenLesson ? (
+                                  <span>Enrollment required</span>
+                                ) : null}
+                              </div>
+                            </div>
+
                             {canOpenLesson ? (
                               <Link
                                 href={`/learn/${course.slug}/${lesson.lesson_slug}`}
-                                className="rn-lesson-title"
+                                className="rn-lesson-open"
+                                aria-label={`Open ${lesson.lesson_title}`}
                               >
-                                {lesson.lesson_title}
+                                {isNext ? "Continue" : "Open"}
                               </Link>
                             ) : (
-                              <span className="rn-lesson-title">
-                                {lesson.lesson_title}
+                              <span
+                                className="rn-lesson-open rn-lesson-locked"
+                                aria-label="Enrollment required"
+                              >
+                                Locked
                               </span>
                             )}
-
-                            <div className="rn-lesson-meta">
-                              {lesson.is_preview ? (
-                                <span>Preview</span>
-                              ) : null}
-
-                              {lesson.duration_minutes ||
-                              lesson.duration_seconds ? (
-                                <span>
-                                  {lesson.duration_minutes
-                                    ? formatDuration(lesson.duration_minutes)
-                                    : `${Math.ceil(
-                                        (lesson.duration_seconds || 0) / 60
-                                      )} min`}
-                                </span>
-                              ) : null}
-
-                              {completed ? <span>Completed</span> : null}
-
-                              {!canOpenLesson ? (
-                                <span>Enrol to access</span>
-                              ) : null}
-                            </div>
                           </div>
-
-                          {canOpenLesson ? (
-                            <Link
-                              href={`/learn/${course.slug}/${lesson.lesson_slug}`}
-                              className="rn-lesson-open"
-                              aria-label={`Open ${lesson.lesson_title}`}
-                            >
-                              Open
-                            </Link>
-                          ) : (
-                            <span
-                              className="rn-lesson-open rn-lesson-locked"
-                              aria-label="Enrollment required"
-                            >
-                              Locked
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </details>
-              ))}
+                        );
+                      })}
+                    </div>
+                  </details>
+                );
+              })}
             </div>
           ) : (
             <div className="rn-course-info-panel">
@@ -998,10 +1058,7 @@ export default async function CourseDetailPage({
               </Link>
             )}
 
-            <Link
-              href="/courses"
-              className="rn-button rn-button-secondary"
-            >
+            <Link href="/courses" className="rn-button rn-button-secondary">
               Explore Other Courses
             </Link>
           </div>

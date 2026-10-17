@@ -30065,3 +30065,196 @@ a.rn-lesson-open:hover {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* RuffNeck Learn — curriculum upgrade */
+
+.rn-curriculum-section-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.rn-module-progress {
+  width: 100%;
+  max-width: 300px;
+  height: 6px;
+  margin-top: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.rn-module-progress > div {
+  height: 100%;
+  border-radius: inherit;
+  background: #00b4d8;
+  transition: width 200ms ease;
+}
+
+.rn-curriculum-lesson {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.rn-curriculum-lesson:last-child {
+  border-bottom: 0;
+}
+
+.rn-curriculum-lesson.is-completed {
+  background: #f0fdf4;
+}
+
+.rn-curriculum-lesson.is-next {
+  background: #f0f9ff;
+  box-shadow: inset 3px 0 #00b4d8;
+}
+
+.rn-lesson-index {
+  display: grid;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 12px;
+  background: #f1f5f9;
+  color: #0b1e3a;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.rn-curriculum-lesson.is-completed .rn-lesson-index {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.rn-lesson-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.rn-lesson-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.rn-lesson-title {
+  color: #0b1e3a;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+a.rn-lesson-title:hover {
+  color: #087e9b;
+  text-decoration: underline;
+}
+
+.rn-lesson-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.rn-lesson-next-badge,
+.rn-lesson-preview-badge,
+.rn-lesson-completed-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.rn-lesson-next-badge {
+  background: #cffafe;
+  color: #155e75;
+}
+
+.rn-lesson-preview-badge {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.rn-lesson-completed-label {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.rn-lesson-open {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 13px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0b1e3a;
+  font-size: 0.82rem;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+a.rn-lesson-open:hover {
+  border-color: #00b4d8;
+  background: #ecfeff;
+}
+
+.rn-lesson-locked {
+  background: #f8fafc;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.rn-course-description {
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.rn-course-completion-note {
+  margin-bottom: 0;
+  color: #166534;
+  font-weight: 650;
+}
+
+@media (max-width: 600px) {
+  .rn-curriculum-lesson {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 14px 10px;
+  }
+
+  .rn-lesson-index {
+    flex-basis: 32px;
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+  }
+
+  .rn-lesson-main {
+    flex-basis: calc(100% - 46px);
+  }
+
+  .rn-lesson-open {
+    margin-left: 42px;
+  }
+
+  .rn-lesson-title {
+    font-size: 0.9rem;
+  }
+
+  .rn-module-progress {
+    max-width: 100%;
+  }
+}
