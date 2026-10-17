@@ -17,6 +17,7 @@ type ExistingSubmission = {
   status: string;
 };
 
+const MIN_SUBMISSION_LENGTH = 80;
 const MAX_ANSWER_LENGTH = 20_000;
 
 const EDITABLE_STATUSES = new Set([
@@ -104,6 +105,17 @@ export async function POST(
       );
     }
 
+    // Drafts may be short. Final submissions need enough detail to review.
+    if (
+      action === "submitted" &&
+      answerText.length < MIN_SUBMISSION_LENGTH
+    ) {
+      return jsonError(
+        `Add at least ${MIN_SUBMISSION_LENGTH} characters before submitting. Explain your approach, the work you completed, and the result. You can save a shorter response as a draft.`,
+        400,
+      );
+    }
+
     // Confirm that the task exists and is published.
     const { data: lab, error: labError } = await supabase
       .from("practical_labs")
@@ -117,7 +129,6 @@ export async function POST(
         "Practical Lab submission lab lookup failed:",
         labError,
       );
-
       return jsonError(
         "The lab is not ready. Confirm the Practical Lab database migration has been applied.",
         503,
@@ -145,7 +156,6 @@ export async function POST(
         "Practical Lab enrollment validation failed:",
         enrollmentError,
       );
-
       return jsonError(
         "Unable to verify your course enrollment.",
         500,
@@ -184,7 +194,6 @@ export async function POST(
         "Practical Lab existing submission lookup failed:",
         existingError,
       );
-
       return jsonError(
         "Unable to load your existing lab submission.",
         500,
@@ -202,8 +211,8 @@ export async function POST(
       );
     }
 
-    // Only drafts and submissions returned for revision can be
-    // edited. A submission awaiting review cannot be overwritten.
+    // Only drafts and submissions returned for revision can be edited.
+    // A submission awaiting review cannot be overwritten.
     if (
       existingSubmission &&
       !EDITABLE_STATUSES.has(existingSubmission.status)
@@ -274,7 +283,6 @@ export async function POST(
       "Practical Lab submission route failed:",
       error,
     );
-
     return jsonError(
       "Unexpected error while saving your lab work.",
       500,
