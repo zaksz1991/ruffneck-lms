@@ -304,6 +304,123 @@ function downloadText(filename: string, content: string, contentType: string): v
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+type ProjectZipEntry = { path: string; content: string };
+
+const ZIP_CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let index = 0; index < 256; index += 1) {
+    let value = index;
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = (value & 1) !== 0
+        ? 0xedb88320 ^ (value >>> 1)
+        : value >>> 1;
+    }
+    table[index] = value >>> 0;
+  }
+  return table;
+})();
+
+function projectCrc32(bytes: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc = (crc >>> 8) ^ ZIP_CRC_TABLE[(crc ^ byte) & 0xff];
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function writeZipUint16(target: Uint8Array, offset: number, value: number): void {
+  target[offset] = value & 0xff;
+  target[offset + 1] = (value >>> 8) & 0xff;
+}
+
+function writeZipUint32(target: Uint8Array, offset: number, value: number): void {
+  target[offset] = value & 0xff;
+  target[offset + 1] = (value >>> 8) & 0xff;
+  target[offset + 2] = (value >>> 16) & 0xff;
+  target[offset + 3] = (value >>> 24) & 0xff;
+}
+
+/** Creates a small standards-compliant ZIP using the uncompressed STORE method. */
+function createProjectZip(entries: ProjectZipEntry[]): Uint8Array {
+  const encoder = new TextEncoder();
+  const localParts: Uint8Array[] = [];
+  const centralParts: Uint8Array[] = [];
+  let localOffset = 0;
+  const now = new Date();
+  const dosYear = Math.max(1980, now.getFullYear());
+  const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | Math.floor(now.getSeconds() / 2);
+  const dosDate = ((dosYear - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+
+  for (const entry of entries) {
+    const nameBytes = encoder.encode(entry.path);
+    const contentBytes = encoder.encode(entry.content);
+    const checksum = projectCrc32(contentBytes);
+
+    const localHeader = new Uint8Array(30 + nameBytes.length);
+    writeZipUint32(localHeader, 0, 0x04034b50);
+    writeZipUint16(localHeader, 4, 20);
+    writeZipUint16(localHeader, 6, 0x0800); // UTF-8 filenames
+    writeZipUint16(localHeader, 8, 0); // STORE: no compression
+    writeZipUint16(localHeader, 10, dosTime);
+    writeZipUint16(localHeader, 12, dosDate);
+    writeZipUint32(localHeader, 14, checksum);
+    writeZipUint32(localHeader, 18, contentBytes.length);
+    writeZipUint32(localHeader, 22, contentBytes.length);
+    writeZipUint16(localHeader, 26, nameBytes.length);
+    writeZipUint16(localHeader, 28, 0);
+    localHeader.set(nameBytes, 30);
+    localParts.push(localHeader, contentBytes);
+
+    const centralHeader = new Uint8Array(46 + nameBytes.length);
+    writeZipUint32(centralHeader, 0, 0x02014b50);
+    writeZipUint16(centralHeader, 4, 20);
+    writeZipUint16(centralHeader, 6, 20);
+    writeZipUint16(centralHeader, 8, 0x0800);
+    writeZipUint16(centralHeader, 10, 0);
+    writeZipUint16(centralHeader, 12, dosTime);
+    writeZipUint16(centralHeader, 14, dosDate);
+    writeZipUint32(centralHeader, 16, checksum);
+    writeZipUint32(centralHeader, 20, contentBytes.length);
+    writeZipUint32(centralHeader, 24, contentBytes.length);
+    writeZipUint16(centralHeader, 28, nameBytes.length);
+    writeZipUint16(centralHeader, 30, 0);
+    writeZipUint16(centralHeader, 32, 0);
+    writeZipUint16(centralHeader, 34, 0);
+    writeZipUint16(centralHeader, 36, 0);
+    writeZipUint32(centralHeader, 38, 0);
+    writeZipUint32(centralHeader, 42, localOffset);
+    centralHeader.set(nameBytes, 46);
+    centralParts.push(centralHeader);
+
+    localOffset += localHeader.length + contentBytes.length;
+  }
+
+  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+  const endRecord = new Uint8Array(22);
+  writeZipUint32(endRecord, 0, 0x06054b50);
+  writeZipUint16(endRecord, 4, 0);
+  writeZipUint16(endRecord, 6, 0);
+  writeZipUint16(endRecord, 8, entries.length);
+  writeZipUint16(endRecord, 10, entries.length);
+  writeZipUint32(endRecord, 12, centralSize);
+  writeZipUint32(endRecord, 16, localOffset);
+  writeZipUint16(endRecord, 20, 0);
+
+  const totalLength = localOffset + centralSize + endRecord.length;
+  const archive = new Uint8Array(totalLength);
+  let cursor = 0;
+  for (const part of localParts) {
+    archive.set(part, cursor);
+    cursor += part.length;
+  }
+  for (const part of centralParts) {
+    archive.set(part, cursor);
+    cursor += part.length;
+  }
+  archive.set(endRecord, cursor);
+  return archive;
+}
+
 function isStudioHazardous(html: string): boolean {
   return /<\s*script\b/i.test(html) || /\son[a-z]+\s*=/i.test(html) || /javascript\s*:/i.test(html);
 }
@@ -1138,6 +1255,30 @@ export default function HtmlCssLabStudio({
   function downloadCssFile() {
     downloadText(cssFilename, css, "text/css;charset=utf-8");
   }
+  function downloadProjectZip() {
+    const zipHtml = `<!doctype html>\n<html lang="en">\n<head>\n  <meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n  <title>${labTitle.replace(/[<>]/g, "")}</title>\n  <link rel="stylesheet" href="styles.css">\n</head>\n<body>\n${html}\n</body>\n</html>\n`;
+    const reflectionFile = reflection.trim()
+      ? `${reflection.trim()}\n`
+      : "No project reflection was provided yet.\n";
+    const projectReadme = `# ${labTitle}\n\nExported from RuffNeck Learn's Advanced HTML & CSS Website Studio.\n\n## Files\n\n- \`index.html\`: the page structure and content.\n- \`styles.css\`: the visual design and responsive layout.\n- \`project-reflection.txt\`: the reflection entered in the learning studio.\n\n## Open the project\n\n1. Extract this ZIP archive.\n2. Keep \`index.html\` and \`styles.css\` in the same folder.\n3. Open \`index.html\` in a modern web browser.\n4. Edit the HTML and CSS with a code editor to continue developing the project.\n\n## Notes\n\nThis practice project is built for HTML and CSS. The RuffNeck Learn preview blocks JavaScript and external network requests by design. Links that point to external websites may need internet access when opened outside the learning studio.\n`;
+    const archive = createProjectZip([
+      { path: `${safeProjectName}/index.html`, content: zipHtml },
+      { path: `${safeProjectName}/styles.css`, content: css },
+      { path: `${safeProjectName}/README.md`, content: projectReadme },
+      { path: `${safeProjectName}/project-reflection.txt`, content: reflectionFile },
+    ]);
+    const archiveBuffer = new ArrayBuffer(archive.byteLength);
+    new Uint8Array(archiveBuffer).set(archive);
+    const blob = new Blob([archiveBuffer], { type: "application/zip" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${safeProjectName}-project.zip`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
 
   const autoSaveLabel = autoSaveStatus === "pending"
     ? "Unsaved changes · saving shortly"
@@ -1287,7 +1428,7 @@ export default function HtmlCssLabStudio({
         {message && <div className={`${styles.message} ${message.kind === "error" ? styles.messageError : message.kind === "success" ? styles.messageSuccess : styles.messageInfo}`} role={message.kind === "error" ? "alert" : "status"}>{message.text}</div>}
 
         <div className={styles.actionBar}>
-          <div className={styles.downloadActions}><button type="button" className={styles.secondaryButton} onClick={downloadHtmlFile}>Download index.html</button><button type="button" className={styles.secondaryButton} onClick={downloadCssFile}>Download styles.css</button><button type="button" className={styles.secondaryButton} disabled={locked || saving} onClick={() => changeTemplate("business")}>Reset to starter</button></div>
+          <div className={styles.downloadActions}><button type="button" className={styles.secondaryButton} onClick={downloadHtmlFile}>Download index.html</button><button type="button" className={styles.secondaryButton} onClick={downloadCssFile}>Download styles.css</button><button type="button" className={styles.secondaryButton} onClick={downloadProjectZip}>Download project ZIP</button><button type="button" className={styles.secondaryButton} disabled={locked || saving} onClick={() => changeTemplate("business")}>Reset to starter</button></div>
           <div className={styles.saveActions}><button type="button" className={styles.secondaryButton} disabled={locked || saving} onClick={() => void saveProject("draft")}>{saving ? "Saving…" : "Save draft"}</button><button type="button" className={styles.primaryButton} disabled={locked || saving} onClick={() => void saveProject("submitted")}>{saving ? "Submitting…" : status === "revision_required" ? "Resubmit for review" : "Submit project"}</button></div>
         </div>
         <p className={styles.privacyNote}>Only your submitted project text and code are sent to RuffNeck Learn for saving and review. The live preview runs in a sandboxed frame. Do not include passwords, personal contact details or secrets in your code.</p>
