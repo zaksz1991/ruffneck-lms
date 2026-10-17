@@ -1,0 +1,379 @@
+/* RuffNeck Learn header — component-scoped styles.
+   These classes intentionally avoid the legacy global header selectors in globals.css. */
+
+.parentBar {
+  width: 100%;
+  background: #07162d;
+  color: #f8fafc;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.parentInner {
+  width: min(1240px, calc(100% - 48px));
+  min-height: 44px;
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 24px;
+}
+
+.parentBrand {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  color: #f8fafc;
+  text-decoration: none;
+}
+
+.parentBrand:hover,
+.parentVisit:hover {
+  text-decoration: none;
+}
+
+.parentCompany {
+  color: #fbbf24;
+  font-size: 0.73rem;
+  font-weight: 850;
+  letter-spacing: 0.09em;
+  line-height: 1.35;
+}
+
+.parentTagline {
+  color: #d4deeb;
+  font-size: 0.76rem;
+  font-weight: 450;
+  line-height: 1.4;
+}
+
+.parentVisit {
+  flex: 0 0 auto;
+  color: #fbbf24;
+  font-size: 0.76rem;
+  font-weight: 750;
+  line-height: 1.4;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.parentVisit:hover {
+  color: #fde68a;
+}
+
+.mainHeader {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.98);
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 4px 18px rgba(11, 30, 58, 0.055);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.mainInner {
+  width: min(1240px, calc(100% - 48px));
+  min-height: 82px;
+  margin-inline: auto;
+  padding-block: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 22px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  gap: 12px;
+}
+
+.logoLink {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.logo {
+  display: block;
+  width: 104px;
+  height: 50px;
+  object-fit: contain;
+  object-position: center;
+}
+
+.brandName {
+  min-width: 0;
+  max-width: 270px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  color: #0b1e3a;
+  text-decoration: none;
+}
+
+.brandName:hover,
+.brandName:focus-visible {
+  text-decoration: none;
+}
+
+.brandTitle {
+  color: #0b1e3a;
+  font-size: 1.08rem;
+  font-weight: 850;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
+.brandSubtitle {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 450;
+  line-height: 1.4;
+}
+
+.nav {
+  min-width: 0;
+  flex: 1 1 620px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.navLink {
+  appearance: none;
+  min-height: 36px;
+  max-width: 100%;
+  padding: 8px 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #e0e7ef;
+  border-radius: 9px;
+  background: #fff;
+  color: #26374b;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.25;
+  text-align: center;
+  text-decoration: none;
+  white-space: normal;
+  overflow-wrap: normal;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.navLink:visited {
+  color: #26374b;
+}
+
+.navLink:hover,
+.navLink:focus-visible {
+  border-color: #9bdfea;
+  background: #f0f9fc;
+  color: #0b1e3a;
+  text-decoration: none;
+  box-shadow: 0 3px 10px rgba(11, 30, 58, 0.065);
+  transform: translateY(-1px);
+}
+
+.navLink:focus-visible,
+.logoLink:focus-visible,
+.brandName:focus-visible,
+.parentBrand:focus-visible,
+.parentVisit:focus-visible {
+  outline: 3px solid #00b4d8;
+  outline-offset: 3px;
+}
+
+.labsLink {
+  background: #e0f7fc;
+  border-color: #9bdfea;
+  color: #0b1e3a;
+  font-weight: 750;
+}
+
+.labsLink:visited {
+  color: #0b1e3a;
+}
+
+.labsLink:hover {
+  background: #c8f0f8;
+  border-color: #00b4d8;
+}
+
+.instructorLink {
+  background: #e0f7fc;
+  border-color: #82d9e9;
+  color: #075985;
+  font-weight: 800;
+}
+
+.instructorLink:visited {
+  color: #075985;
+}
+
+.instructorLink:hover {
+  background: #c8f0f8;
+  border-color: #00b4d8;
+}
+
+.adminLink,
+.adminLink:visited {
+  background: #0b1e3a;
+  border-color: #0b1e3a;
+  color: #fff;
+  font-weight: 800;
+}
+
+.adminLink:hover {
+  background: #15365f;
+  border-color: #15365f;
+  color: #fff;
+}
+
+.signUp,
+.signUp:visited {
+  background: #0b1e3a;
+  border-color: #0b1e3a;
+  color: #fff;
+  font-weight: 750;
+}
+
+.signUp:hover {
+  background: #15365f;
+  border-color: #15365f;
+  color: #fff;
+}
+
+.signOut:disabled {
+  opacity: 0.6;
+  cursor: wait;
+  transform: none;
+  box-shadow: none;
+}
+
+.loading {
+  padding: 8px 4px;
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.signOutError {
+  width: min(1200px, calc(100% - 32px));
+  margin: 12px auto;
+  padding: 12px 16px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 1100px) {
+  .mainInner {
+    align-items: flex-start;
+    gap: 12px 16px;
+  }
+
+  .nav {
+    flex-basis: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .parentInner,
+  .mainInner {
+    width: calc(100% - 28px);
+  }
+
+  .parentInner {
+    min-height: 0;
+    padding-block: 9px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .parentBrand {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .parentCompany {
+    font-size: 0.7rem;
+  }
+
+  .parentTagline {
+    font-size: 0.69rem;
+  }
+
+  .parentVisit {
+    font-size: 0.72rem;
+  }
+
+  .mainInner {
+    min-height: 0;
+    padding-block: 12px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .brand {
+    width: 100%;
+    gap: 9px;
+  }
+
+  .logo {
+    width: 76px;
+    height: 42px;
+  }
+
+  .brandName {
+    max-width: calc(100% - 88px);
+  }
+
+  .brandTitle {
+    font-size: 1rem;
+  }
+
+  .brandSubtitle {
+    font-size: 0.68rem;
+  }
+
+  .nav {
+    flex: 1 1 auto;
+    width: 100%;
+    justify-content: flex-start;
+    gap: 7px;
+  }
+
+  .navLink {
+    min-height: 35px;
+    padding: 8px 10px;
+    font-size: 0.74rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navLink {
+    transition: none;
+  }
+}

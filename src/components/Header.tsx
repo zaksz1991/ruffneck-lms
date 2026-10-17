@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import styles from "./Header.module.css";
 
 type Role = "student" | "instructor" | "admin" | null;
 
@@ -45,16 +46,11 @@ export function Header() {
           .select("role")
           .eq("id", user.id)
           .maybeSingle();
+
         if (!mounted) return;
 
         if (profileError) {
-          console.error(
-            "Unable to load profile role:",
-            profileError.message,
-          );
-
-          // Never grant administrator or instructor navigation
-          // when the account role cannot be verified.
+          console.error("Unable to load profile role:", profileError.message);
           setRole(null);
           return;
         }
@@ -76,13 +72,11 @@ export function Header() {
           setRole(null);
         }
       } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+        if (mounted) setLoading(false);
       }
     }
-    void loadUser();
 
+    void loadUser();
     return () => {
       mounted = false;
     };
@@ -117,37 +111,38 @@ export function Header() {
       setSigningOut(false);
     }
   }
+
   return (
     <>
-      {/* Parent company branding */}
-      <div className="rn-parent-brand">
-        <div className="rn-parent-brand-inner">
+      <div className={styles.parentBar}>
+        <div className={styles.parentInner}>
           <Link
             href="https://ruffneck-entertainment.vercel.app/"
-            className="rn-parent-brand-link"
+            className={styles.parentBrand}
           >
-            <strong>RUFFNECK ENTERTAINMENT</strong>
-
-            <span>
+            <strong className={styles.parentCompany}>
+              RUFFNECK ENTERTAINMENT
+            </strong>
+            <span className={styles.parentTagline}>
               Practical AI &amp; digital systems for Nigerian professionals
             </span>
           </Link>
+
           <Link
             href="https://ruffneck-entertainment.vercel.app/"
-            className="rn-parent-brand-visit"
+            className={styles.parentVisit}
           >
-            Visit RuffNeck Entertainment
-            <span aria-hidden="true"> →</span>
+            Visit RuffNeck Entertainment <span aria-hidden="true">→</span>
           </Link>
         </div>
       </div>
-      {/* Main navigation */}
-      <header className="site-header">
-        <div className="inner">
-          <div className="brand">
+
+      <header className={styles.mainHeader}>
+        <div className={styles.mainInner}>
+          <div className={styles.brand}>
             <Link
               href="/"
-              className="brand-link"
+              className={styles.logoLink}
               aria-label="RuffNeck Learn homepage"
             >
               <Image
@@ -155,125 +150,83 @@ export function Header() {
                 alt="RuffNeck Entertainment"
                 width={160}
                 height={60}
-                className="brand-logo"
+                className={styles.logo}
                 priority
               />
             </Link>
-            <Link href="/" className="brand-name">
-              <strong>RuffNeck Learn</strong>
 
-              <span>
+            <Link href="/" className={styles.brandName}>
+              <strong className={styles.brandTitle}>RuffNeck Learn</strong>
+              <span className={styles.brandSubtitle}>
                 Practical AI &amp; digital systems for Nigerian professionals
               </span>
             </Link>
           </div>
 
           <nav
-            className="nav"
+            className={styles.nav}
             aria-label="Main navigation"
             aria-busy={loading}
           >
-            <Link href="/courses" className="rn-nav-button">
+            <Link href="/courses" className={styles.navLink}>
               Courses
             </Link>
+
             {loading ? (
-              <span className="rn-nav-loading" aria-live="polite">
+              <span className={styles.loading} aria-live="polite">
                 Loading account…
               </span>
             ) : isAuthenticated ? (
               <>
-                <Link
-                  href="/student/courses"
-                  className="rn-nav-button"
-                >
+                <Link href="/student/courses" className={styles.navLink}>
                   My Learning
                 </Link>
-                <Link
-                  href="/student/scan"
-                  className="rn-nav-button"
-                >
+                <Link href="/student/scan" className={styles.navLink}>
                   Scan &amp; Learn
                 </Link>
-
-                <Link
-                  href="/student/practical-work"
-                  className="rn-nav-button"
-                >
+                <Link href="/student/practical-work" className={styles.navLink}>
                   Practical Work
                 </Link>
-                <Link
-                  href="/student/labs"
-                  className="rn-nav-button rn-labs-nav-button"
-                >
-                  <span aria-hidden="true">✦</span>
-                  Practical Labs
+                <Link href="/student/labs" className={`${styles.navLink} ${styles.labsLink}`}>
+                  <span aria-hidden="true">✦</span> Practical Labs
                 </Link>
-
-                <Link
-                  href="/student/skill-passport"
-                  className="rn-nav-button"
-                >
+                <Link href="/student/skill-passport" className={styles.navLink}>
                   Skill Passport
                 </Link>
-                <Link
-                  href="/student/ai-drafts"
-                  className="rn-nav-button"
-                >
+                <Link href="/student/ai-drafts" className={styles.navLink}>
                   My AI Drafts
                 </Link>
-
-                <Link
-                  href="/student/payments"
-                  className="rn-nav-button"
-                >
+                <Link href="/student/payments" className={styles.navLink}>
                   Payment History
                 </Link>
-                <Link
-                  href="/student/assessment/results"
-                  className="rn-nav-button"
-                >
+                <Link href="/student/assessment/results" className={styles.navLink}>
                   Assessment Results
                 </Link>
-
-                <Link
-                  href="/student/certificates"
-                  className="rn-nav-button"
-                >
+                <Link href="/student/certificates" className={styles.navLink}>
                   Certificates
                 </Link>
-
-                {(role === "instructor" || role === "admin") && (
-                  <Link
-                    href="/admin/labs"
-                    className={`rn-nav-button rn-role-link ${
-                      role === "admin"
-                        ? "rn-role-link--admin"
-                        : "rn-role-link--instructor"
-                    }`}
-                  >
-                    Review Labs
-                  </Link>
-                )}
 
                 {role === "instructor" && (
                   <Link
                     href="/admin/lms"
-                    className="rn-nav-button rn-role-link rn-role-link--instructor"
+                    className={`${styles.navLink} ${styles.instructorLink}`}
                   >
                     Instructor
                   </Link>
                 )}
+
                 {role === "admin" && (
                   <Link
                     href="/admin/lms"
-                    className="rn-nav-button rn-role-link rn-role-link--admin"
+                    className={`${styles.navLink} ${styles.adminLink}`}
                   >
                     Admin
                   </Link>
                 )}
+
                 <button
                   type="button"
-                  className="rn-nav-button rn-signout-button"
+                  className={`${styles.navLink} ${styles.signOut}`}
                   onClick={handleSignOut}
                   disabled={signingOut}
                   aria-busy={signingOut}
@@ -283,16 +236,10 @@ export function Header() {
               </>
             ) : (
               <>
-                <Link
-                  href="/login"
-                  className="rn-nav-button"
-                >
+                <Link href="/login" className={styles.navLink}>
                   Log in
                 </Link>
-                <Link
-                  href="/signup"
-                  className="rn-nav-button rn-signup-button"
-                >
+                <Link href="/signup" className={`${styles.navLink} ${styles.signUp}`}>
                   Create Account
                 </Link>
               </>
@@ -302,7 +249,7 @@ export function Header() {
       </header>
 
       {signOutError && (
-        <div className="rn-signout-error" role="alert">
+        <div className={styles.signOutError} role="alert">
           Sign out failed: {signOutError}
         </div>
       )}
