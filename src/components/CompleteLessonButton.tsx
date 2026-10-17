@@ -19,9 +19,10 @@ export function CompleteLessonButton({
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   async function completeLesson() {
-    if (loading) {
+    if (loading || success) {
       return;
     }
 
@@ -31,20 +32,12 @@ export function CompleteLessonButton({
     try {
       const supabase = createClient();
 
-      /*
-       * Confirm that the current authenticated user is the
-       * student whose progress is being updated.
-       */
       const {
         data: { user },
         error: authError,
       } = await supabase.auth.getUser();
 
-      if (authError) {
-        throw new Error(authError.message);
-      }
-
-      if (!user) {
+      if (authError || !user) {
         throw new Error(
           "Your session has expired. Please sign in again."
         );
@@ -58,18 +51,11 @@ export function CompleteLessonButton({
 
       const timestamp = new Date().toISOString();
 
-      /*
-       * Upsert makes completion idempotent:
-       *
-       * - First click creates the progress record.
-       * - Repeated completion does not create duplicates.
-       * - Existing completion remains completed.
-       */
       const { error: progressError } = await supabase
         .from("lesson_progress")
         .upsert(
           {
-            student_id: studentId,
+            student_id: user.id,
             lesson_id: lessonId,
             course_id: courseId,
             completed: true,
@@ -82,21 +68,28 @@ export function CompleteLessonButton({
         );
 
       if (progressError) {
+        console.error(
+          "Lesson progress update failed:",
+          progressError
+        );
+
+        if (progressError.code === "42501") {
+          throw new Error(
+            "You are not authorized to complete this lesson. Check your course enrollment."
+          );
+        }
+
         throw new Error(
-          `Unable to save lesson completion: ${progressError.message}`
+          "Unable to save lesson completion. Please try again."
         );
       }
 
-      /*
-       * Learning activity is supplementary analytics.
-       *
-       * A failure here must not invalidate the successful
-       * lesson completion.
-       */
+      // Activity logging is supplementary. Its failure must
+      // not undo a successfully saved lesson completion.
       const { error: activityError } = await supabase
         .from("learning_activity")
         .insert({
-          student_id: studentId,
+          student_id: user.id,
           course_id: courseId,
           lesson_id: lessonId,
           activity_type: "lesson_completed",
@@ -112,15 +105,8 @@ export function CompleteLessonButton({
         );
       }
 
-      /*
-       * Refresh the server-rendered lesson page.
-       *
-       * The lesson page recalculates:
-       * - completed lessons
-       * - course percentage
-       * - current lesson status
-       * - 100% completion
-       */
+      setSuccess(true);
+
       router.refresh();
     } catch (completionError) {
       console.error(
@@ -140,25 +126,30 @@ export function CompleteLessonButton({
 
   return (
     <div>
-      {error ? (
-        <div
-          className="error"
-          role="alert"
-        >
+      {error && (
+        <div className="error" role="alert">
           {error}
         </div>
-      ) : null}
+      )}
+
+      {success && (
+        <p role="status" aria-live="polite">
+          Lesson completed successfully.
+        </p>
+      )}
 
       <button
         type="button"
         className="btn btn-primary"
         onClick={completeLesson}
-        disabled={loading}
+        disabled={loading || success}
         aria-busy={loading}
       >
         {loading
           ? "Saving…"
-          : "Mark lesson complete"}
+          : success
+            ? "Lesson completed"
+            : "Mark lesson complete"}
       </button>
     </div>
   );
