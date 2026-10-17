@@ -1,0 +1,60 @@
+.page {
+  --profile-navy: #0b1e3a;
+  --profile-cyan: #00b4d8;
+  --profile-gold: #fbbf24;
+  width: min(1160px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 28px 0 64px;
+  color: #172033;
+}
+.page * { box-sizing: border-box; }
+.breadcrumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-bottom: 18px; color: #6a778c; font-size: 12px; }
+.breadcrumbs a { color: #087f9e; text-decoration: none; font-weight: 700; }
+.hero { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: clamp(24px, 4vw, 38px); margin-bottom: 22px; border-radius: 22px; background: linear-gradient(125deg, #0b1e3a, #12365c 68%, #075b75); color: #fff; }
+.heroCopy { max-width: 680px; }
+.eyebrow { display: block; color: #0b91ad; font-size: 11px; font-weight: 800; letter-spacing: 1.8px; text-transform: uppercase; }
+.hero .eyebrow { color: #67e8f9; }
+.hero h1 { margin: 9px 0 8px; color: #fff; font-size: clamp(28px, 4vw, 40px); line-height: 1.15; letter-spacing: -1px; }
+.hero p { max-width: 580px; margin: 0; color: #d6e6f5; font-size: 14px; line-height: 1.8; }
+.heroActions { display: flex; flex-shrink: 0; }
+.layout { display: grid; grid-template-columns: minmax(250px, .78fr) minmax(0, 1.55fr); align-items: start; gap: 20px; }
+.profileCard, .formCard, .missingProfile { border: 1px solid #e3e9f1; border-radius: 18px; background: #fff; box-shadow: 0 6px 24px rgba(11,30,58,.045); }
+.profileCard { padding: 26px; text-align: center; }
+.avatar { display: grid; place-items: center; width: 78px; height: 78px; margin: 0 auto 14px; border: 4px solid #d9f7fc; border-radius: 50%; background: var(--profile-navy); color: #67e8f9; font-size: 25px; font-weight: 850; }
+.profileCard h2 { margin: 0; color: var(--profile-navy); font-size: 20px; overflow-wrap: anywhere; }
+.profileEmail { margin: 8px 0 12px; color: #69758a; font-size: 12px; overflow-wrap: anywhere; }
+.roleBadge { display: inline-flex; align-items: center; padding: 6px 11px; border: 1px solid #b8eaf3; border-radius: 999px; background: #eefcff; color: #076b83; font-size: 11px; font-weight: 800; }
+.completionBlock { margin-top: 25px; padding: 17px; border-radius: 13px; background: #f6f9fc; text-align: left; }
+.completionHeading { display: flex; justify-content: space-between; gap: 12px; color: #5f6d82; font-size: 12px; }
+.completionHeading strong { color: var(--profile-navy); }
+.progressTrack { height: 8px; margin-top: 11px; overflow: hidden; border-radius: 999px; background: #e0e8f0; }
+.progressTrack span { display: block; height: 100%; border-radius: inherit; background: var(--profile-cyan); transition: width .2s ease; }
+.completionBlock p { margin: 10px 0 0; color: #6c788b; font-size: 11px; line-height: 1.65; }
+.profileMeta { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding-top: 19px; margin-top: 20px; border-top: 1px solid #edf0f5; text-align: left; font-size: 11px; }
+.profileMeta span { color: #758196; }
+.profileMeta strong { color: #1b2e46; text-align: right; }
+.formCard { padding: clamp(20px, 3vw, 30px); }
+.formIntro { padding-bottom: 21px; margin-bottom: 22px; border-bottom: 1px solid #edf0f5; }
+.formIntro h2 { margin: 8px 0 7px; color: var(--profile-navy); font-size: 23px; }
+.formIntro p { margin: 0; color: #6b778b; font-size: 13px; line-height: 1.7; }
+.field { display: grid; gap: 8px; margin-bottom: 19px; color: #20324b; font-size: 13px; font-weight: 750; }
+.field b { color: #b45309; }
+.field input { width: 100%; min-height: 46px; padding: 11px 13px; border: 1px solid #d4deea; border-radius: 10px; background: #fff; color: #15243a; font: inherit; font-weight: 500; outline: none; }
+.field input:focus { border-color: #089bb8; box-shadow: 0 0 0 3px rgba(0,180,216,.15); }
+.field input:disabled, .field input:read-only { background: #f4f7fa; color: #58667a; cursor: not-allowed; }
+.field small { color: #748096; font-size: 11px; font-weight: 450; line-height: 1.5; }
+.formActions { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 7px; }
+.primaryButton, .secondaryButton { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; padding: 10px 16px; border: 1px solid transparent; border-radius: 10px; font: inherit; font-size: 12px; font-weight: 800; text-decoration: none; cursor: pointer; }
+.primaryButton { background: var(--profile-cyan); color: #06233b; }
+.primaryButton:hover { background: #36cae4; }
+.secondaryButton { border-color: #d6e0eb; background: #fff; color: #213650; }
+.secondaryButton:hover { background: #f5f9fc; }
+.primaryButton:disabled, .secondaryButton:disabled { opacity: .6; cursor: wait; }
+.errorMessage, .successMessage { padding: 11px 13px; border-radius: 9px; font-size: 12px; line-height: 1.6; }
+.errorMessage { border: 1px solid #fecaca; background: #fef2f2; color: #991b1b; }
+.successMessage { border: 1px solid #b7ebcd; background: #f0fdf4; color: #166534; }
+.missingProfile { padding: 30px; }
+.missingProfile h2 { margin: 0 0 8px; color: var(--profile-navy); }
+.missingProfile p { margin: 0; color: #6b778b; font-size: 13px; line-height: 1.7; }
+@media (max-width: 760px) { .hero { align-items: flex-start; flex-direction: column; } .layout { grid-template-columns: 1fr; } .profileCard { text-align: left; } .avatar { margin-left: 0; } .completionBlock { max-width: 540px; } }
+@media (max-width: 420px) { .page { width: min(100% - 22px, 1160px); padding-top: 18px; } .hero { padding: 22px 18px; border-radius: 16px; } .formCard, .profileCard, .missingProfile { padding: 19px 15px; } .formActions { flex-direction: column; } .formActions button { width: 100%; } }
