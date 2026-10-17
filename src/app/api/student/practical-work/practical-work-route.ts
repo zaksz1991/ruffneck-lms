@@ -6,7 +6,6 @@ export const runtime = "nodejs";
 const STORAGE_BUCKET = "practical-work-evidence";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_TEXT_LENGTH = 50000;
-
 const ALLOWED_FILE_TYPES = new Set([
   "application/pdf",
   "application/msword",
@@ -21,7 +20,6 @@ const ALLOWED_FILE_TYPES = new Set([
   "image/png",
   "image/webp",
 ]);
-
 type SubmissionStatus =
   | "draft"
   | "submitted"
@@ -33,7 +31,6 @@ type Enrollment = {
   course_id: string;
   enrollment_status: string;
 };
-
 type PracticalTask = {
   id: string;
   course_id: string;
@@ -52,7 +49,6 @@ type PracticalTask = {
   is_published: boolean;
   skill_id: string | null;
 };
-
 type PracticalSubmission = {
   id: string;
   task_id: string;
@@ -69,7 +65,6 @@ type PracticalSubmission = {
   evidence_file_size: number | null;
   evidence_recorded_at: string | null;
 };
-
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
 }
@@ -91,7 +86,6 @@ async function getAuthenticatedUser() {
     user: error ? null : user,
   };
 }
-
 function getSafeFileName(fileName: string) {
   const cleaned = fileName
     .normalize("NFKC")
@@ -111,7 +105,6 @@ function extensionForFile(file: File) {
   if (dot <= 0 || dot === name.length - 1) {
     return "";
   }
-
   return name
     .slice(dot + 1)
     .toLowerCase()
@@ -127,7 +120,6 @@ function submissionTypeAllowsFile(
   }
 
   const type = file.type.toLowerCase();
-
   if (submissionType === "document") {
     return [
       "application/pdf",
@@ -144,7 +136,6 @@ function submissionTypeAllowsFile(
       "text/csv",
     ].includes(type);
   }
-
   if (submissionType === "presentation") {
     return [
       "application/vnd.ms-powerpoint",
@@ -165,7 +156,6 @@ function bytesStartWith(
     (byte, index) => bytes[offset + index] === byte,
   );
 }
-
 async function validateFileSignature(file: File) {
   const buffer = await file
     .slice(0, Math.min(file.size, 8192))
@@ -183,7 +173,6 @@ async function validateFileSignature(file: File) {
   if (type === "image/jpeg") {
     return bytesStartWith(bytes, [0xff, 0xd8, 0xff]);
   }
-
   if (type === "image/png") {
     return bytesStartWith(bytes, [
       0x89, 0x50, 0x4e, 0x47,
@@ -198,19 +187,26 @@ async function validateFileSignature(file: File) {
     );
   }
 
-  if (
-    type ===
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-    type ===
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-    type ===
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
-    type === "application/msword" ||
-    type === "application/vnd.ms-excel" ||
-    type === "application/vnd.ms-powerpoint"
-  ) {
+  const modernOfficeTypes = [
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ];
+
+  if (modernOfficeTypes.includes(type)) {
+    return bytesStartWith(bytes, [0x50, 0x4b, 0x03, 0x04]);
+  }
+
+  const legacyOfficeTypes = [
+    "application/msword",
+    "application/vnd.ms-excel",
+    "application/vnd.ms-powerpoint",
+  ];
+
+  if (legacyOfficeTypes.includes(type)) {
     return bytesStartWith(bytes, [
-      0x50, 0x4b, 0x03, 0x04,
+      0xd0, 0xcf, 0x11, 0xe0,
+      0xa1, 0xb1, 0x1a, 0xe1,
     ]);
   }
 
@@ -238,7 +234,6 @@ async function createEvidenceSignedUrl(
   if (!filePath) {
     return null;
   }
-
   const { data, error } = await supabase.storage
     .from(STORAGE_BUCKET)
     .createSignedUrl(filePath, 60 * 60);
@@ -262,7 +257,6 @@ async function removeUploadedFile(
   const { error } = await supabase.storage
     .from(STORAGE_BUCKET)
     .remove([filePath]);
-
   if (error) {
     console.error("Evidence cleanup error:", error);
   }
@@ -275,7 +269,6 @@ export async function GET() {
     if (!user) {
       return jsonError("Authentication required.", 401);
     }
-
     const {
       data: enrollmentData,
       error: enrollmentError,
@@ -293,7 +286,6 @@ export async function GET() {
 
       return jsonError("Unable to load your course access.", 500);
     }
-
     const enrollments = (enrollmentData ?? []) as Enrollment[];
 
     const courseIds = [
@@ -306,7 +298,6 @@ export async function GET() {
         submissions: [],
       });
     }
-
     const {
       data: taskData,
       error: taskError,
@@ -328,7 +319,6 @@ export async function GET() {
       .in("course_id", courseIds)
       .eq("is_published", true)
       .order("sort_order", { ascending: true });
-
     if (taskError) {
       console.error("Practical tasks load error:", taskError);
       return jsonError("Unable to load practical tasks.", 500);
@@ -338,7 +328,6 @@ export async function GET() {
     const taskIds = tasks.map((task) => task.id);
 
     let submissions: PracticalSubmission[] = [];
-
     if (taskIds.length > 0) {
       const {
         data: submissionData,
@@ -364,7 +353,6 @@ export async function GET() {
         .eq("student_id", user.id)
         .in("task_id", taskIds)
         .order("submitted_at", { ascending: false });
-
       if (submissionError) {
         console.error(
           "Practical submissions load error:",
@@ -377,12 +365,10 @@ export async function GET() {
         );
       }
 
-      submissions = (submissionData ??
-        []) as unknown as PracticalSubmission[];
+      submissions = (submissionData ?? []) as unknown as PracticalSubmission[];
     }
 
     const submissionMap = new Map<string, PracticalSubmission>();
-
     for (const submission of submissions) {
       if (!submissionMap.has(submission.task_id)) {
         submissionMap.set(submission.task_id, submission);
@@ -398,7 +384,6 @@ export async function GET() {
         ),
       })),
     );
-
     const finalSubmissionMap = new Map(
       submissionsWithUrls.map((submission) => [
         submission.task_id,
@@ -417,7 +402,6 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Practical work GET error:", error);
-
     return jsonError(
       "An unexpected error occurred while loading practical work.",
       500,
@@ -438,7 +422,6 @@ export async function POST(request: Request) {
     const contentType = (
       request.headers.get("content-type") ?? ""
     ).toLowerCase();
-
     let taskId = "";
     let submissionText = "";
     let evidenceFile: File | null = null;
@@ -455,7 +438,6 @@ export async function POST(request: Request) {
       const rawTaskId = formData.get("taskId");
       const rawSubmissionText = formData.get("submissionText");
       const rawFile = formData.get("evidenceFile");
-
       taskId =
         typeof rawTaskId === "string" ? rawTaskId.trim() : "";
 
@@ -469,7 +451,6 @@ export async function POST(request: Request) {
       }
     } else if (contentType.includes("application/json")) {
       let body: unknown;
-
       try {
         body = await request.json();
       } catch {
@@ -486,7 +467,6 @@ export async function POST(request: Request) {
         typeof payload.taskId === "string"
           ? payload.taskId.trim()
           : "";
-
       submissionText =
         typeof payload.submissionText === "string"
           ? payload.submissionText.trim()
@@ -508,7 +488,6 @@ export async function POST(request: Request) {
         400,
       );
     }
-
     if (!submissionText && !evidenceFile) {
       return jsonError(
         "Enter your practical response or attach an evidence file before submitting.",
@@ -523,7 +502,6 @@ export async function POST(request: Request) {
           400,
         );
       }
-
       if (
         !ALLOWED_FILE_TYPES.has(
           evidenceFile.type.toLowerCase(),
@@ -543,7 +521,6 @@ export async function POST(request: Request) {
           400,
         );
       }
-
       const validSignature =
         await validateFileSignature(evidenceFile);
 
@@ -554,7 +531,6 @@ export async function POST(request: Request) {
         );
       }
     }
-
     const {
       data: taskData,
       error: taskError,
@@ -576,7 +552,6 @@ export async function POST(request: Request) {
       .eq("id", taskId)
       .eq("is_published", true)
       .maybeSingle();
-
     if (taskError) {
       console.error("Practical task lookup error:", taskError);
       return jsonError("Unable to verify the practical task.", 500);
@@ -590,7 +565,6 @@ export async function POST(request: Request) {
         404,
       );
     }
-
     if (
       evidenceFile &&
       !submissionTypeAllowsFile(
@@ -603,7 +577,6 @@ export async function POST(request: Request) {
         400,
       );
     }
-
     const {
       data: enrollmentData,
       error: enrollmentError,
@@ -620,7 +593,6 @@ export async function POST(request: Request) {
         "Practical work enrollment verification error:",
         enrollmentError,
       );
-
       return jsonError(
         "Unable to verify your course enrollment.",
         500,
@@ -635,7 +607,6 @@ export async function POST(request: Request) {
         403,
       );
     }
-
     const {
       data: existingData,
       error: existingError,
@@ -660,7 +631,6 @@ export async function POST(request: Request) {
       .eq("task_id", task.id)
       .eq("student_id", user.id)
       .maybeSingle();
-
     if (existingError) {
       console.error(
         "Existing practical submission lookup error:",
@@ -675,7 +645,6 @@ export async function POST(request: Request) {
 
     const existingSubmission =
       existingData as unknown as PracticalSubmission | null;
-
     if (
       existingSubmission?.status === "approved" ||
       existingSubmission?.status === "under_review"
@@ -691,7 +660,6 @@ export async function POST(request: Request) {
 
     let evidenceName =
       existingSubmission?.evidence_file_name ?? null;
-
     let evidenceType =
       existingSubmission?.evidence_file_type ?? null;
 
@@ -703,7 +671,6 @@ export async function POST(request: Request) {
       const extension = extensionForFile(evidenceFile);
       const uniqueName = `${crypto.randomUUID()}.${extension}`;
       const path = `${user.id}/${task.id}/${uniqueName}`;
-
       const { error: uploadError } = await supabase.storage
         .from(STORAGE_BUCKET)
         .upload(path, evidenceFile, {
@@ -722,7 +689,6 @@ export async function POST(request: Request) {
           500,
         );
       }
-
       uploadedFilePath = path;
       evidencePath = path;
       evidenceName = safeName;
@@ -731,7 +697,6 @@ export async function POST(request: Request) {
     }
 
     const now = new Date().toISOString();
-
     const submissionPayload = {
       task_id: task.id,
       student_id: user.id,
@@ -746,7 +711,6 @@ export async function POST(request: Request) {
       evidence_file_type: evidenceType,
       evidence_file_size: evidenceSize,
     };
-
     const selectFields = `
       id,
       task_id,
@@ -763,7 +727,6 @@ export async function POST(request: Request) {
       evidence_file_size,
       evidence_recorded_at
     `;
-
     const saveResult = existingSubmission
       ? await supabase
           .from("student_practical_task_submissions")
@@ -781,7 +744,6 @@ export async function POST(request: Request) {
       data: savedData,
       error: saveError,
     } = saveResult;
-
     if (saveError || !savedData) {
       console.error(
         "Practical submission save error:",
@@ -805,7 +767,6 @@ export async function POST(request: Request) {
         500,
       );
     }
-
     if (
       evidenceFile &&
       existingSubmission?.evidence_file_path &&
@@ -817,14 +778,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const submission =
-      savedData as unknown as PracticalSubmission;
+    const submission = savedData as unknown as PracticalSubmission;
 
     const evidenceFileUrl = await createEvidenceSignedUrl(
       supabase,
       submission.evidence_file_path,
     );
-
     return NextResponse.json({
       success: true,
       submission: {
