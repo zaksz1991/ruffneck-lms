@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+.vercel/
+coverage/
+*.tsbuildinfo
+*.log
+.env*
+!.env.example
+next-env.d.ts
+package-lock.json
+src/app/globals.css.before-header-cleanup.bak
