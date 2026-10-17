@@ -69,11 +69,8 @@ type VerificationRecord = {
 function getAssessmentPercentage(
   attempt: AssessmentAttempt,
 ): number | null {
-  const hasEarnedPoints =
-    attempt.earned_points !== null;
-
-  const hasTotalPoints =
-    attempt.total_points !== null;
+  const hasEarnedPoints = attempt.earned_points !== null;
+  const hasTotalPoints = attempt.total_points !== null;
 
   if (hasEarnedPoints || hasTotalPoints) {
     if (
@@ -101,8 +98,6 @@ function getAssessmentPercentage(
     typeof attempt.total_questions === "number" &&
     attempt.total_questions > 0
   ) {
-    // Legacy records without point totals may store score
-    // as an already-calculated percentage.
     return attempt.score;
   }
 
@@ -119,6 +114,29 @@ async function ensureVerificationRecord(
   admin: ReturnType<typeof createAdminClient>,
   certificateId: string,
 ) {
+  const { data: certificateData, error: certificateError } =
+    await admin
+      .from("course_certificates")
+      .select("id, is_revoked")
+      .eq("id", certificateId)
+      .maybeSingle();
+
+  if (certificateError) {
+    return {
+      verification: null,
+      error: certificateError,
+    };
+  }
+
+  if (!certificateData || certificateData.is_revoked) {
+    return {
+      verification: null,
+      error: new Error(
+        "Certificate is missing or has been revoked.",
+      ),
+    };
+  }
+
   const { data: existingData, error: existingError } =
     await admin
       .from("certificate_verifications")
@@ -126,7 +144,7 @@ async function ensureVerificationRecord(
         "id, certificate_id, verification_code, is_active, expires_at",
       )
       .eq("certificate_id", certificateId)
-      .maybeSingle();
+      .limit(2);
 
   if (existingError) {
     return {
@@ -135,35 +153,45 @@ async function ensureVerificationRecord(
     };
   }
 
-  const existingVerification =
-    existingData as unknown as VerificationRecord | null;
+  const existingRecords =
+    (existingData ?? []) as VerificationRecord[];
 
-  if (existingVerification) {
+  if (existingRecords.length > 1) {
+    return {
+      verification: null,
+      error: new Error(
+        "Multiple verification records exist for this certificate.",
+      ),
+    };
+  }
+
+  if (existingRecords.length === 1) {
+    const existingVerification = existingRecords[0];
+
+    // Never reactivate a deliberately disabled record.
+    // The public verification page will correctly reject it.
     if (!existingVerification.is_active) {
-      const {
-        data: reactivatedData,
-        error: reactivateError,
-      } = await admin
-        .from("certificate_verifications")
-        .update({ is_active: true })
-        .eq("id", existingVerification.id)
-        .select(
-          "id, certificate_id, verification_code, is_active, expires_at",
-        )
-        .single();
+      return {
+        verification: null,
+        error: new Error(
+          "The existing verification record is inactive.",
+        ),
+      };
+    }
 
-      if (reactivateError) {
+    if (existingVerification.expires_at) {
+      const expiry = new Date(
+        existingVerification.expires_at,
+      ).getTime();
+
+      if (!Number.isFinite(expiry) || expiry <= Date.now()) {
         return {
           verification: null,
-          error: reactivateError,
+          error: new Error(
+            "The existing verification record has expired.",
+          ),
         };
       }
-
-      return {
-        verification:
-          reactivatedData as unknown as VerificationRecord,
-        error: null,
-      };
     }
 
     return {
@@ -172,13 +200,10 @@ async function ensureVerificationRecord(
     };
   }
 
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const verificationCode = generateVerificationCode();
+  const verificationCode = generateVerificationCode();
 
-    const {
-      data: insertedData,
-      error: insertError,
-    } = await admin
+  const { data: insertedData, error: insertError } =
+    await admin
       .from("certificate_verifications")
       .insert({
         certificate_id: certificateId,
@@ -190,53 +215,50 @@ async function ensureVerificationRecord(
       )
       .single();
 
-    if (!insertError && insertedData) {
-      return {
-        verification:
-          insertedData as unknown as VerificationRecord,
-        error: null,
-      };
+  if (insertError || !insertedData) {
+    // Another request may have created the record concurrently.
+    if (insertError?.code === "23505") {
+      const { data: retryData, error: retryError } =
+        await admin
+          .from("certificate_verifications")
+          .select(
+            "id, certificate_id, verification_code, is_active, expires_at",
+          )
+          .eq("certificate_id", certificateId)
+          .limit(2);
+
+      if (retryError) {
+        return {
+          verification: null,
+          error: retryError,
+        };
+      }
+
+      const retryRecords =
+        (retryData ?? []) as VerificationRecord[];
+
+      if (
+        retryRecords.length === 1 &&
+        retryRecords[0].is_active
+      ) {
+        return {
+          verification: retryRecords[0],
+          error: null,
+        };
+      }
     }
 
-    if (insertError?.code !== "23505") {
-      return {
-        verification: null,
-        error: insertError,
-      };
-    }
-
-    const {
-      data: retryData,
-      error: retryError,
-    } = await admin
-      .from("certificate_verifications")
-      .select(
-        "id, certificate_id, verification_code, is_active, expires_at",
-      )
-      .eq("certificate_id", certificateId)
-      .maybeSingle();
-
-    if (retryError) {
-      return {
-        verification: null,
-        error: retryError,
-      };
-    }
-
-    if (retryData) {
-      return {
-        verification:
-          retryData as unknown as VerificationRecord,
-        error: null,
-      };
-    }
+    return {
+      verification: null,
+      error:
+        insertError ??
+        new Error("Unable to create a verification record."),
+    };
   }
 
   return {
-    verification: null,
-    error: new Error(
-      "Unable to create a unique certificate verification record.",
-    ),
+    verification: insertedData as VerificationRecord,
+    error: null,
   };
 }
 
@@ -248,6 +270,54 @@ function errorResponse(
   return NextResponse.json(
     { ok: false, error, stage },
     { status },
+  );
+}
+
+async function respondWithExistingCertificate(
+  admin: ReturnType<typeof createAdminClient>,
+  certificate: Certificate,
+  stage: string,
+) {
+  if (certificate.is_revoked) {
+    return errorResponse(
+      "This certificate has been revoked. Please contact RuffNeck Learn support.",
+      stage,
+      403,
+    );
+  }
+
+  const {
+    verification,
+    error: verificationError,
+  } = await ensureVerificationRecord(admin, certificate.id);
+
+  if (verificationError) {
+    console.error(
+      "Existing certificate verification setup failed:",
+      verificationError.message,
+    );
+
+    return NextResponse.json(
+      {
+        ok: true,
+        certificateId: certificate.id,
+        certificateNumber: certificate.certificate_number,
+        alreadyIssued: true,
+        verificationPending: true,
+      },
+      { status: 200 },
+    );
+  }
+
+  return NextResponse.json(
+    {
+      ok: true,
+      certificateId: certificate.id,
+      certificateNumber: certificate.certificate_number,
+      verificationCode: verification?.verification_code ?? null,
+      alreadyIssued: true,
+    },
+    { status: 200 },
   );
 }
 
@@ -316,7 +386,10 @@ export async function POST(request: Request) {
         .maybeSingle();
 
     if (courseError) {
-      console.error("Certificate course lookup failed:", courseError);
+      console.error(
+        "Certificate course lookup failed:",
+        courseError.message,
+      );
 
       return errorResponse(
         "Unable to load the course.",
@@ -337,19 +410,20 @@ export async function POST(request: Request) {
 
     stage = "enrollment lookup";
 
-    const {
-      data: enrollmentData,
-      error: enrollmentError,
-    } = await admin
-      .from("enrollments")
-      .select("id, enrollment_status, payment_status")
-      .eq("student_id", user.id)
-      .eq("course_id", course.id)
-      .in("enrollment_status", ["active", "completed"])
-      .limit(2);
+    const { data: enrollmentData, error: enrollmentError } =
+      await admin
+        .from("enrollments")
+        .select("id, enrollment_status, payment_status")
+        .eq("student_id", user.id)
+        .eq("course_id", course.id)
+        .in("enrollment_status", ["active", "completed"])
+        .limit(2);
 
     if (enrollmentError) {
-      console.error("Certificate enrollment lookup failed:", enrollmentError);
+      console.error(
+        "Certificate enrollment lookup failed:",
+        enrollmentError.message,
+      );
 
       return errorResponse(
         "Unable to verify your enrollment.",
@@ -388,17 +462,18 @@ export async function POST(request: Request) {
 
     stage = "published curriculum lookup";
 
-    const {
-      data: curriculumData,
-      error: curriculumError,
-    } = await admin
-      .from("course_curriculum")
-      .select("lesson_id")
-      .eq("course_id", course.id)
-      .eq("is_published", true);
+    const { data: curriculumData, error: curriculumError } =
+      await admin
+        .from("course_curriculum")
+        .select("lesson_id")
+        .eq("course_id", course.id)
+        .eq("is_published", true);
 
     if (curriculumError) {
-      console.error("Certificate curriculum lookup failed:", curriculumError);
+      console.error(
+        "Certificate curriculum lookup failed:",
+        curriculumError.message,
+      );
 
       return errorResponse(
         "Unable to verify the published course lessons.",
@@ -431,16 +506,21 @@ export async function POST(request: Request) {
 
     stage = "published lesson verification";
 
-    const { data: publishedLessonsData, error: publishedLessonsError } =
-      await admin
-        .from("lessons")
-        .select("id, course_id")
-        .eq("course_id", course.id)
-        .eq("is_published", true)
-        .in("id", curriculumLessonIds);
+    const {
+      data: publishedLessonsData,
+      error: publishedLessonsError,
+    } = await admin
+      .from("lessons")
+      .select("id, course_id")
+      .eq("course_id", course.id)
+      .eq("is_published", true)
+      .in("id", curriculumLessonIds);
 
     if (publishedLessonsError) {
-      console.error("Published lesson verification failed:", publishedLessonsError);
+      console.error(
+        "Published lesson verification failed:",
+        publishedLessonsError.message,
+      );
 
       return errorResponse(
         "Unable to verify published lessons.",
@@ -479,7 +559,10 @@ export async function POST(request: Request) {
         .in("lesson_id", lessonIds);
 
     if (progressError) {
-      console.error("Lesson completion verification failed:", progressError);
+      console.error(
+        "Lesson completion verification failed:",
+        progressError.message,
+      );
 
       return errorResponse(
         "Unable to verify your lesson completion.",
@@ -495,7 +578,9 @@ export async function POST(request: Request) {
     );
 
     if (
-      lessonIds.some((lessonId) => !completedLessonIds.has(lessonId))
+      lessonIds.some(
+        (lessonId) => !completedLessonIds.has(lessonId),
+      )
     ) {
       return errorResponse(
         "All published lessons must be completed before the certificate can be issued.",
@@ -506,23 +591,24 @@ export async function POST(request: Request) {
 
     stage = "assessment verification";
 
-    const {
-      data: assessmentData,
-      error: assessmentError,
-    } = await admin
-      .from("assessment_attempts")
-      .select(
-        "id, score, total_points, earned_points, total_questions, completed_at, created_at",
-      )
-      .eq("student_id", user.id)
-      .eq("course_id", course.id)
-      .not("completed_at", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const { data: assessmentData, error: assessmentError } =
+      await admin
+        .from("assessment_attempts")
+        .select(
+          "id, score, total_points, earned_points, total_questions, completed_at, created_at",
+        )
+        .eq("student_id", user.id)
+        .eq("course_id", course.id)
+        .not("completed_at", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
     if (assessmentError) {
-      console.error("Assessment verification failed:", assessmentError);
+      console.error(
+        "Assessment verification failed:",
+        assessmentError.message,
+      );
 
       return errorResponse(
         "Unable to verify your assessment result.",
@@ -568,7 +654,10 @@ export async function POST(request: Request) {
         .limit(2);
 
     if (projectError) {
-      console.error("Capstone lookup failed:", projectError);
+      console.error(
+        "Capstone lookup failed:",
+        projectError.message,
+      );
 
       return errorResponse(
         "Unable to verify the course capstone.",
@@ -608,7 +697,10 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (submissionError) {
-      console.error("Capstone approval verification failed:", submissionError);
+      console.error(
+        "Capstone approval verification failed:",
+        submissionError.message,
+      );
 
       return errorResponse(
         "Unable to verify your capstone approval.",
@@ -638,7 +730,10 @@ export async function POST(request: Request) {
         .maybeSingle();
 
     if (profileError) {
-      console.error("Certificate profile lookup failed:", profileError);
+      console.error(
+        "Certificate profile lookup failed:",
+        profileError.message,
+      );
 
       return errorResponse(
         "Unable to load your learner profile.",
@@ -676,7 +771,10 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (existingCertificateError) {
-      console.error("Existing certificate lookup failed:", existingCertificateError);
+      console.error(
+        "Existing certificate lookup failed:",
+        existingCertificateError.message,
+      );
 
       return errorResponse(
         "Unable to check for an existing certificate.",
@@ -689,48 +787,10 @@ export async function POST(request: Request) {
       existingCertificateData as Certificate | null;
 
     if (existingCertificate) {
-      if (existingCertificate.is_revoked) {
-        return errorResponse(
-          "Your existing certificate has been revoked. Please contact RuffNeck Learn support.",
-          stage,
-          403,
-        );
-      }
-
-      stage = "verification record";
-
-      const {
-        verification,
-        error: verificationError,
-      } = await ensureVerificationRecord(
+      return respondWithExistingCertificate(
         admin,
-        existingCertificate.id,
-      );
-
-      if (verificationError) {
-        console.error("Existing certificate verification setup failed:", verificationError);
-
-        return NextResponse.json(
-          {
-            ok: true,
-            certificateId: existingCertificate.id,
-            certificateNumber: existingCertificate.certificate_number,
-            alreadyIssued: true,
-            verificationPending: true,
-          },
-          { status: 200 },
-        );
-      }
-
-      return NextResponse.json(
-        {
-          ok: true,
-          certificateId: existingCertificate.id,
-          certificateNumber: existingCertificate.certificate_number,
-          verificationCode: verification?.verification_code ?? null,
-          alreadyIssued: true,
-        },
-        { status: 200 },
+        existingCertificate,
+        stage,
       );
     }
 
@@ -766,8 +826,11 @@ export async function POST(request: Request) {
           .eq("course_id", course.id)
           .maybeSingle();
 
-        if (duplicateError) {
-          console.error("Duplicate certificate lookup failed:", duplicateError);
+        if (duplicateError || !duplicateData) {
+          console.error(
+            "Duplicate certificate lookup failed:",
+            duplicateError?.message,
+          );
 
           return errorResponse(
             "The certificate already exists, but it could not be loaded.",
@@ -776,63 +839,17 @@ export async function POST(request: Request) {
           );
         }
 
-        const duplicateCertificate =
-          duplicateData as Certificate | null;
-
-        if (!duplicateCertificate) {
-          return errorResponse(
-            "The certificate record conflicted with another request. Please try again.",
-            stage,
-            409,
-          );
-        }
-
-        if (duplicateCertificate.is_revoked) {
-          return errorResponse(
-            "Your existing certificate has been revoked. Please contact RuffNeck Learn support.",
-            stage,
-            403,
-          );
-        }
-
-        stage = "verification record";
-
-        const {
-          verification,
-          error: verificationError,
-        } = await ensureVerificationRecord(
+        return respondWithExistingCertificate(
           admin,
-          duplicateCertificate.id,
-        );
-
-        if (verificationError) {
-          console.error("Duplicate certificate verification setup failed:", verificationError);
-
-          return NextResponse.json(
-            {
-              ok: true,
-              certificateId: duplicateCertificate.id,
-              certificateNumber: duplicateCertificate.certificate_number,
-              alreadyIssued: true,
-              verificationPending: true,
-            },
-            { status: 200 },
-          );
-        }
-
-        return NextResponse.json(
-          {
-            ok: true,
-            certificateId: duplicateCertificate.id,
-            certificateNumber: duplicateCertificate.certificate_number,
-            verificationCode: verification?.verification_code ?? null,
-            alreadyIssued: true,
-          },
-          { status: 200 },
+          duplicateData as Certificate,
+          stage,
         );
       }
 
-      console.error("Certificate creation failed:", insertCertificateError);
+      console.error(
+        "Certificate creation failed:",
+        insertCertificateError.message,
+      );
 
       return errorResponse(
         "Unable to issue the certificate.",
@@ -855,7 +872,10 @@ export async function POST(request: Request) {
     );
 
     if (verificationError) {
-      console.error("New certificate verification setup failed:", verificationError);
+      console.error(
+        "New certificate verification setup failed:",
+        verificationError.message,
+      );
 
       return NextResponse.json(
         {
