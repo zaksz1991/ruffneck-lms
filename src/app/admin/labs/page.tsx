@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import HtmlCssSubmissionReview from "./HtmlCssSubmissionReview";
 import LabReviewForm from "./LabReviewForm";
 
 type Profile = {
@@ -58,10 +59,8 @@ const REVIEWABLE_STATUSES = ["submitted", "revision_required"];
 
 function formatDate(value: string | null) {
   if (!value) return "Not submitted";
-
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Unknown date";
-
   return date.toLocaleString("en-NG", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -116,7 +115,6 @@ export default async function AdminLabsPage({
   }
 
   const profile = profileData as Profile | null;
-
   if (!profile || (profile.role !== "admin" && profile.role !== "instructor")) {
     redirect("/student/dashboard");
   }
@@ -134,7 +132,7 @@ export default async function AdminLabsPage({
     : "all";
   const requestedCourseId = params.courseId ?? "all";
 
-  // Read all reviewable submissions visible under the existing RLS policies.
+  // RLS limits the submissions this reviewer can read.
   const { data: submissionData, error: submissionsError } = await supabase
     .from("lab_submissions")
     .select(
@@ -151,14 +149,9 @@ export default async function AdminLabsPage({
   }
 
   const allSubmissions = (submissionData ?? []) as LabSubmission[];
-
-  // Load every lab visible to this reviewer. RLS keeps instructors within
-  // their managed courses and allows administrators their authorised view.
   const { data: labData, error: labsError } = await supabase
     .from("practical_labs")
-    .select(
-      "id, course_id, title, category, difficulty, instructions, deliverable",
-    )
+    .select("id, course_id, title, category, difficulty, instructions, deliverable")
     .order("title", { ascending: true });
 
   if (labsError) {
@@ -169,7 +162,6 @@ export default async function AdminLabsPage({
   const labs = (labData ?? []) as Lab[];
   const labMap = new Map(labs.map((lab) => [lab.id, lab]));
   const courseIds = [...new Set(labs.map((lab) => lab.course_id))];
-
   const { data: courseData, error: coursesError } =
     courseIds.length > 0
       ? await supabase
@@ -194,14 +186,10 @@ export default async function AdminLabsPage({
     const lab = labMap.get(submission.lab_id);
     return lab?.course_id === activeCourseId;
   });
-
   const displayedSubmissions = courseScopedSubmissions.filter(
-    (submission) =>
-      activeFilter === "all" || submission.status === activeFilter,
+    (submission) => activeFilter === "all" || submission.status === activeFilter,
   );
-  const studentIds = [
-    ...new Set(displayedSubmissions.map((item) => item.student_id)),
-  ];
+  const studentIds = [...new Set(displayedSubmissions.map((item) => item.student_id))];
   const students: Student[] = [];
 
   if (profile.role === "admin" && studentIds.length > 0) {
@@ -215,22 +203,16 @@ export default async function AdminLabsPage({
     } else {
       students.push(...((studentData ?? []) as Student[]));
     }
-  } else if (
-    profile.role === "instructor" &&
-    displayedSubmissions.length > 0
-  ) {
-    const { data: studentNamesData, error: studentNamesError } =
-      await supabase.rpc("get_lab_submission_student_names", {
-        p_submission_ids: displayedSubmissions.map(
-          (submission) => submission.id,
-        ),
-      });
+  } else if (profile.role === "instructor" && displayedSubmissions.length > 0) {
+    const { data: studentNamesData, error: studentNamesError } = await supabase.rpc(
+      "get_lab_submission_student_names",
+      {
+        p_submission_ids: displayedSubmissions.map((submission) => submission.id),
+      },
+    );
 
     if (studentNamesError) {
-      console.error(
-        "Restricted student name lookup failed:",
-        studentNamesError,
-      );
+      console.error("Restricted student name lookup failed:", studentNamesError);
     } else {
       const studentNames = (studentNamesData ?? []) as StudentNameResult[];
       students.push(
@@ -253,6 +235,7 @@ export default async function AdminLabsPage({
   const approvedCount = courseScopedSubmissions.filter(
     (item) => item.status === "approved",
   ).length;
+
   return (
     <main className="section">
       <div className="container">
@@ -267,13 +250,11 @@ export default async function AdminLabsPage({
           }}
         >
           <div>
-            <div className="rn-brand-kicker">
-              RUFFNECK LEARN · PRACTICAL ASSESSMENT
-            </div>
+            <div className="rn-brand-kicker">RUFFNECK LEARN · PRACTICAL ASSESSMENT</div>
             <h1>Practical Labs Review</h1>
             <p className="muted">
-              Review student work against the task requirements, provide feedback,
-              and record assessment results.
+              Review student work against the task requirements, inspect website code and previews,
+              provide feedback, and record assessment results.
             </p>
             <p className="muted">
               Reviewer: {profile.full_name || profile.email || user.email} · {profile.role}
@@ -295,10 +276,7 @@ export default async function AdminLabsPage({
           </div>
         </header>
 
-        <section
-          className="rn-admin-stats"
-          aria-label="Lab submission statistics"
-        >
+        <section className="rn-admin-stats" aria-label="Lab submission statistics">
           <Link
             href={reviewHref("all", activeCourseId)}
             className={`rn-admin-stat ${activeFilter === "all" ? "active" : ""}`}
@@ -394,10 +372,7 @@ export default async function AdminLabsPage({
             Apply filter
           </button>
           {activeCourseId !== "all" ? (
-            <Link
-              href={reviewHref(activeFilter, "all")}
-              className="btn btn-ghost"
-            >
+            <Link href={reviewHref(activeFilter, "all")} className="btn btn-ghost">
               Clear course filter
             </Link>
           ) : null}
@@ -427,18 +402,11 @@ export default async function AdminLabsPage({
             <div className="rn-empty-state">
               <div className="rn-empty-icon">▦</div>
               <strong>No submissions found</strong>
-              <p>
-                There are no submissions matching the selected course and status filters.
-              </p>
+              <p>There are no submissions matching the selected course and status filters.</p>
             </div>
           </section>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gap: 22,
-            }}
-          >
+          <div style={{ display: "grid", gap: 22 }}>
             {displayedSubmissions.map((submission) => {
               const lab = labMap.get(submission.lab_id);
               const course = lab ? courseMap.get(lab.course_id) : undefined;
@@ -449,10 +417,7 @@ export default async function AdminLabsPage({
                 <article
                   key={submission.id}
                   className="rn-admin-list-panel"
-                  style={{
-                    padding: 24,
-                    minWidth: 0,
-                  }}
+                  style={{ padding: 24, minWidth: 0 }}
                 >
                   <div
                     style={{
@@ -465,20 +430,14 @@ export default async function AdminLabsPage({
                     }}
                   >
                     <div>
-                      <div className="rn-brand-kicker">
-                        {course?.title || "Course"}
-                      </div>
-                      <h2 style={{ margin: "8px 0" }}>
-                        {lab?.title || "Practical Lab"}
-                      </h2>
+                      <div className="rn-brand-kicker">{course?.title || "Course"}</div>
+                      <h2 style={{ margin: "8px 0" }}>{lab?.title || "Practical Lab"}</h2>
                       <p className="muted">
                         {lab?.category || "Practical assessment"}
                         {lab?.difficulty ? ` · ${lab.difficulty}` : ""}
                       </p>
                     </div>
-                    <span className="rn-status-pill">
-                      {statusLabel(submission.status)}
-                    </span>
+                    <span className="rn-status-pill">{statusLabel(submission.status)}</span>
                   </div>
 
                   <div
@@ -505,17 +464,13 @@ export default async function AdminLabsPage({
                     </div>
                     <div>
                       <span className="muted">Submitted</span>
-                      <p style={{ margin: "5px 0 0" }}>
-                        {formatDate(submission.submitted_at)}
-                      </p>
+                      <p style={{ margin: "5px 0 0" }}>{formatDate(submission.submitted_at)}</p>
                     </div>
                     <div>
                       <span className="muted">Current score</span>
                       <p style={{ margin: "5px 0 0" }}>
                         <strong>
-                          {submission.score === null
-                            ? "Not scored"
-                            : `${submission.score}/100`}
+                          {submission.score === null ? "Not scored" : `${submission.score}/100`}
                         </strong>
                       </p>
                     </div>
@@ -540,11 +495,7 @@ export default async function AdminLabsPage({
                     >
                       <h3 style={{ marginTop: 0 }}>Task instructions</h3>
                       <div
-                        style={{
-                          whiteSpace: "pre-wrap",
-                          overflowWrap: "anywhere",
-                          lineHeight: 1.7,
-                        }}
+                        style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.7 }}
                       >
                         {lab?.instructions || "No task instructions are available."}
                       </div>
@@ -559,11 +510,7 @@ export default async function AdminLabsPage({
                     >
                       <h3 style={{ marginTop: 0 }}>Expected deliverable</h3>
                       <div
-                        style={{
-                          whiteSpace: "pre-wrap",
-                          overflowWrap: "anywhere",
-                          lineHeight: 1.7,
-                        }}
+                        style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.7 }}
                       >
                         {lab?.deliverable || "No expected deliverable is specified."}
                       </div>
@@ -571,20 +518,8 @@ export default async function AdminLabsPage({
                   </section>
 
                   <section style={{ marginBottom: 24 }}>
-                    <h3>Student response</h3>
-                    <div
-                      style={{
-                        padding: 18,
-                        borderRadius: 12,
-                        background: "var(--surface, #f5f7fa)",
-                        border: "1px solid var(--border, #e1e7ef)",
-                        whiteSpace: "pre-wrap",
-                        overflowWrap: "anywhere",
-                        lineHeight: 1.75,
-                      }}
-                    >
-                      {submission.answer_text || "No response provided."}
-                    </div>
+                    <h3>Student submission</h3>
+                    <HtmlCssSubmissionReview answerText={submission.answer_text || "No response provided."} />
                   </section>
 
                   {submission.status === "approved" ? (
@@ -595,12 +530,7 @@ export default async function AdminLabsPage({
                         {submission.score !== null ? "/100" : ""}
                       </p>
                       <p><strong>Feedback:</strong></p>
-                      <div
-                        style={{
-                          whiteSpace: "pre-wrap",
-                          overflowWrap: "anywhere",
-                        }}
-                      >
+                      <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
                         {submission.feedback || "No feedback recorded."}
                       </div>
                     </section>
