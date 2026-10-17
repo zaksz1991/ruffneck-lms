@@ -11,7 +11,6 @@ type Role = "student" | "instructor" | "admin" | null;
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
-
   const [role, setRole] = useState<Role>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -26,7 +25,6 @@ export function Header() {
 
       try {
         const supabase = createClient();
-
         const {
           data: { user },
           error: authError,
@@ -47,7 +45,6 @@ export function Header() {
           .select("role")
           .eq("id", user.id)
           .maybeSingle();
-
         if (!mounted) return;
 
         if (profileError) {
@@ -63,7 +60,6 @@ export function Header() {
         }
 
         const profileRole = profile?.role;
-
         if (
           profileRole === "admin" ||
           profileRole === "instructor" ||
@@ -85,7 +81,6 @@ export function Header() {
         }
       }
     }
-
     void loadUser();
 
     return () => {
@@ -110,7 +105,6 @@ export function Header() {
 
       setRole(null);
       setIsAuthenticated(false);
-
       router.replace("/");
       router.refresh();
     } catch (error) {
@@ -123,7 +117,6 @@ export function Header() {
       setSigningOut(false);
     }
   }
-
   return (
     <>
       {/* Parent company branding */}
@@ -139,7 +132,6 @@ export function Header() {
               Practical AI &amp; digital systems for Nigerian professionals
             </span>
           </Link>
-
           <Link
             href="https://ruffneck-entertainment.vercel.app/"
             className="rn-parent-brand-visit"
@@ -149,7 +141,6 @@ export function Header() {
           </Link>
         </div>
       </div>
-
       {/* Main navigation */}
       <header className="site-header">
         <div className="inner">
@@ -168,7 +159,6 @@ export function Header() {
                 priority
               />
             </Link>
-
             <Link href="/" className="brand-name">
               <strong>RuffNeck Learn</strong>
 
@@ -186,7 +176,6 @@ export function Header() {
             <Link href="/courses" className="rn-nav-button">
               Courses
             </Link>
-
             {loading ? (
               <span className="rn-nav-loading" aria-live="polite">
                 Loading account…
@@ -199,7 +188,6 @@ export function Header() {
                 >
                   My Learning
                 </Link>
-
                 <Link
                   href="/student/scan"
                   className="rn-nav-button"
@@ -213,7 +201,6 @@ export function Header() {
                 >
                   Practical Work
                 </Link>
-
                 <Link
                   href="/student/labs"
                   className="rn-nav-button rn-labs-nav-button"
@@ -228,7 +215,6 @@ export function Header() {
                 >
                   Skill Passport
                 </Link>
-
                 <Link
                   href="/student/ai-drafts"
                   className="rn-nav-button"
@@ -242,7 +228,6 @@ export function Header() {
                 >
                   Payment History
                 </Link>
-
                 <Link
                   href="/student/assessment/results"
                   className="rn-nav-button"
@@ -257,6 +242,19 @@ export function Header() {
                   Certificates
                 </Link>
 
+                {(role === "instructor" || role === "admin") && (
+                  <Link
+                    href="/admin/labs"
+                    className={`rn-nav-button rn-role-link ${
+                      role === "admin"
+                        ? "rn-role-link--admin"
+                        : "rn-role-link--instructor"
+                    }`}
+                  >
+                    Review Labs
+                  </Link>
+                )}
+
                 {role === "instructor" && (
                   <Link
                     href="/admin/lms"
@@ -265,7 +263,6 @@ export function Header() {
                     Instructor
                   </Link>
                 )}
-
                 {role === "admin" && (
                   <Link
                     href="/admin/lms"
@@ -274,7 +271,6 @@ export function Header() {
                     Admin
                   </Link>
                 )}
-
                 <button
                   type="button"
                   className="rn-nav-button rn-signout-button"
@@ -293,7 +289,6 @@ export function Header() {
                 >
                   Log in
                 </Link>
-
                 <Link
                   href="/signup"
                   className="rn-nav-button rn-signup-button"
