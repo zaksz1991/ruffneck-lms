@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "./background-upgrade.css";
 import { Header } from "@/components/Header";
 
 export const metadata: Metadata = {
@@ -23,9 +24,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <Header />
-
         <main>{children}</main>
-
         <footer className="footer">
           <div className="container">
             © {new Date().getFullYear()} RuffNeck Entertainment ·{" "}

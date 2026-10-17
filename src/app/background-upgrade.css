@@ -1,0 +1,65 @@
+/*
+ * RuffNeck Learn — page canvas upgrade
+ * Imported after globals.css so it changes the site canvas only.
+ * White cards, forms, navigation, certificates and project previews stay white.
+ */
+
+:root {
+  --rn-page-canvas: #edf3fa;
+  --rn-page-canvas-soft: #f6f8fc;
+}
+
+html {
+  min-height: 100%;
+  background-color: var(--rn-page-canvas);
+}
+
+body {
+  min-height: 100vh;
+  background-color: var(--rn-page-canvas);
+  background-image:
+    radial-gradient(
+      ellipse 58rem 34rem at 0% 0%,
+      rgba(0, 180, 216, 0.105) 0%,
+      rgba(0, 180, 216, 0) 68%
+    ),
+    radial-gradient(
+      ellipse 48rem 32rem at 100% 9%,
+      rgba(251, 191, 36, 0.09) 0%,
+      rgba(251, 191, 36, 0) 66%
+    ),
+    linear-gradient(
+      180deg,
+      #edf3fa 0%,
+      var(--rn-page-canvas-soft) 42%,
+      #eaf1f8 100%
+    );
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
+/* The root-level content area must expose the canvas behind page components. */
+body > main {
+  min-height: 48vh;
+  background: transparent;
+}
+
+/* Keep the existing footer distinct without turning the entire page white. */
+body > footer.footer {
+  border-top: 1px solid rgba(148, 163, 184, 0.26);
+  background: rgba(248, 250, 252, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Preserve clean white paper when printing certificates or project documents. */
+@media print {
+  html,
+  body,
+  body > main,
+  body > footer.footer {
+    background: #ffffff !important;
+    background-image: none !important;
+    box-shadow: none !important;
+  }
+}
