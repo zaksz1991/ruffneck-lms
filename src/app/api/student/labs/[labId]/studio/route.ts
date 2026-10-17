@@ -5,7 +5,7 @@ type RouteContext = {
   params: Promise<{ labId: string }>;
 };
 
-type StudioAction = "draft" | "submitted";
+type StudioAction = "draft" | "submitted" | "autosave";
 
 type RequestBody = {
   html?: unknown;
@@ -91,7 +91,9 @@ export async function POST(request: Request, context: RouteContext) {
       ? "draft"
       : body.action === "submitted"
         ? "submitted"
-        : null;
+        : body.action === "autosave"
+          ? "autosave"
+          : null;
 
     if (!action) return jsonError("Choose Save draft or Submit project.", 400);
     if (html.length > MAX_HTML_LENGTH) return jsonError(`HTML must not exceed ${MAX_HTML_LENGTH.toLocaleString()} characters.`, 413);
@@ -184,16 +186,27 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     const now = new Date().toISOString();
-    const nextStatus = action === "draft" ? "draft" : "submitted";
+    // Autosave preserves revision_required and existing timestamps. A first
+    // autosave creates a draft; manual Save draft/Submit retain their behavior.
+    const nextStatus = action === "submitted"
+      ? "submitted"
+      : action === "draft"
+        ? "draft"
+        : existing?.status ?? "draft";
+
+    const updateValues = action === "autosave"
+      ? { answer_text: answerText, updated_at: now }
+      : {
+          answer_text: answerText,
+          status: nextStatus,
+          submitted_at: action === "submitted" ? now : null,
+          updated_at: now,
+        };
+
     const saved = existing
       ? await supabase
           .from("lab_submissions")
-          .update({
-            answer_text: answerText,
-            status: nextStatus,
-            submitted_at: action === "submitted" ? now : null,
-            updated_at: now,
-          })
+          .update(updateValues)
           .eq("id", existing.id)
           .eq("student_id", user.id)
           .select("id, status, score, feedback, updated_at")
@@ -218,11 +231,13 @@ export async function POST(request: Request, context: RouteContext) {
 
     return NextResponse.json({
       ok: true,
-      message: action === "draft"
-        ? "Your HTML/CSS project draft has been saved."
-        : existing?.status === "revision_required"
-          ? "Your revised HTML/CSS project has been resubmitted for review."
-          : "Your HTML/CSS project has been submitted for instructor review.",
+      message: action === "autosave"
+        ? "Your HTML/CSS project has been autosaved."
+        : action === "draft"
+          ? "Your HTML/CSS project draft has been saved."
+          : existing?.status === "revision_required"
+            ? "Your revised HTML/CSS project has been resubmitted for review."
+            : "Your HTML/CSS project has been submitted for instructor review.",
       submission: saved.data,
     });
   } catch (error: unknown) {

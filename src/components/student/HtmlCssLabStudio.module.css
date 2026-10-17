@@ -162,3 +162,21 @@
   .diagnosticStat strong { font-size: 19px; }
   .diagnosticStat span { font-size: 10px; }
 }
+
+
+/* Automatic draft saving status */
+.autoSaveIndicator {
+  display: inline-flex;
+  align-items: center;
+  min-height: 29px;
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+.autoSavePending { border-color: #e9d6a2; background: #fff8e8; color: #80520c; }
+.autoSaveSaving { border-color: #a9d9e8; background: #eaf8fc; color: #075a71; }
+.autoSaveSuccess { border-color: #a9ddc2; background: #edf9f1; color: #17633e; }
+.autoSaveError { border-color: #f0b9b9; background: #fff0f0; color: #8f2424; }

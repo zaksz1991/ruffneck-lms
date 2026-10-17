@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./HtmlCssLabStudio.module.css";
 
@@ -27,6 +27,13 @@ type HtmlCssProject = {
 
 type Message = { kind: "success" | "error" | "info"; text: string };
 type SaveAction = "draft" | "submitted";
+type AutoSaveStatus = "clean" | "pending" | "saving" | "saved" | "error";
+type StudioApiResponse = {
+  ok?: boolean;
+  error?: string;
+  message?: string;
+  submission?: { status?: string; score?: number | null; feedback?: string | null; updated_at?: string | null };
+};
 type PreviewMode = "desktop" | "tablet" | "mobile";
 type TemplateId = "business" | "portfolio" | "learning";
 
@@ -253,6 +260,10 @@ footer p { color:var(--muted); font-size:.8rem; }
 @media(max-width:720px) { .header { flex-wrap:wrap; } nav { width:100%; } .hero { grid-template-columns:1fr; } .module-list article { grid-template-columns:35px 1fr; } .module-list b { grid-column:2; } .enrol { display:grid; } .button-light { justify-self:start; white-space:normal; } footer { flex-wrap:wrap; } }`,
   },
 };
+
+function projectFingerprint(html: string, css: string, reflection: string): string {
+  return JSON.stringify([html, css, reflection]);
+}
 
 function initialProject(answerText: string | null): HtmlCssProject {
   if (!answerText || !answerText.startsWith(PROJECT_MARKER)) {
@@ -625,6 +636,14 @@ export default function HtmlCssLabStudio({
   const [message, setMessage] = useState<Message | null>(null);
   const [updatedAt, setUpdatedAt] = useState(suppliedSubmission?.updated_at ?? null);
   const [previewKey, setPreviewKey] = useState(0);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>("clean");
+  const [autoSaveCycle, setAutoSaveCycle] = useState(0);
+  const currentFingerprint = projectFingerprint(html, css, reflection);
+  const currentFingerprintRef = useRef(currentFingerprint);
+  currentFingerprintRef.current = currentFingerprint;
+  const lastSavedFingerprintRef = useRef(currentFingerprint);
+  const autoSaveRequestRef = useRef<Promise<StudioApiResponse> | null>(null);
+  const manualSaveInProgressRef = useRef(false);
 
   const previewDocument = useMemo(() => makePreviewDocument(html, css), [html, css, previewKey]);
   const rubricTotal = assessmentRubric.reduce((total, item) => total + item.points, 0);
@@ -634,6 +653,101 @@ export default function HtmlCssLabStudio({
   const diagnosticErrors = diagnostics.filter((item) => item.level === "error").length;
   const diagnosticWarnings = diagnostics.filter((item) => item.level === "warning").length;
   const diagnosticPasses = diagnostics.filter((item) => item.level === "pass").length;
+
+  useEffect(() => {
+    if (locked || saving) return;
+
+    const snapshot = { html, css, reflection };
+    const snapshotFingerprint = projectFingerprint(
+      snapshot.html,
+      snapshot.css,
+      snapshot.reflection,
+    );
+
+    if (snapshotFingerprint === lastSavedFingerprintRef.current) {
+      setAutoSaveStatus((current) =>
+        current === "pending" || current === "error" ? "saved" : current,
+      );
+      return;
+    }
+
+    setAutoSaveStatus("pending");
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        // Do not send an outdated snapshot if the student typed again.
+        if (currentFingerprintRef.current !== snapshotFingerprint) {
+          setAutoSaveCycle((value) => value + 1);
+          return;
+        }
+        if (manualSaveInProgressRef.current) return;
+
+        // Serialize writes so a slower request cannot overwrite newer work.
+        const pendingRequest = autoSaveRequestRef.current;
+        if (pendingRequest) {
+          try {
+            await pendingRequest;
+          } catch {
+            // The next autosave attempt or manual save will report any failure.
+          }
+          if (currentFingerprintRef.current !== lastSavedFingerprintRef.current) {
+            setAutoSaveCycle((value) => value + 1);
+          }
+          return;
+        }
+
+        if (snapshotFingerprint === lastSavedFingerprintRef.current) {
+          setAutoSaveStatus("saved");
+          return;
+        }
+
+        setAutoSaveStatus("saving");
+        const request = (async (): Promise<StudioApiResponse> => {
+          const response = await fetch(
+            `/api/student/labs/${encodeURIComponent(labId)}/studio`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...snapshot, action: "autosave" }),
+            },
+          );
+          const result = await response.json().catch(() => null) as StudioApiResponse | null;
+          if (!response.ok || !result?.ok) {
+            throw new Error(result?.error || "Autosave failed. Use Save draft to retry.");
+          }
+          return result;
+        })();
+        autoSaveRequestRef.current = request;
+
+        try {
+          const result = await request;
+          lastSavedFingerprintRef.current = snapshotFingerprint;
+          if (result.submission?.status) setStatus(result.submission.status);
+          if (result.submission && "score" in result.submission) {
+            setScore(result.submission.score ?? null);
+          }
+          if (result.submission && "feedback" in result.submission) {
+            setFeedback(result.submission.feedback ?? null);
+          }
+          setUpdatedAt(result.submission?.updated_at ?? new Date().toISOString());
+
+          if (currentFingerprintRef.current === snapshotFingerprint) {
+            setAutoSaveStatus("saved");
+          } else {
+            setAutoSaveStatus("pending");
+            setAutoSaveCycle((value) => value + 1);
+          }
+        } catch {
+          setAutoSaveStatus("error");
+        } finally {
+          if (autoSaveRequestRef.current === request) {
+            autoSaveRequestRef.current = null;
+          }
+        }
+      })();
+    }, 1200);
+
+    return () => window.clearTimeout(timer);
+  }, [html, css, reflection, locked, saving, labId, autoSaveCycle]);
 
   function handleTab(event: KeyboardEvent<HTMLTextAreaElement>, language: "html" | "css") {
     if (event.key !== "Tab" || event.shiftKey || locked) return;
@@ -654,7 +768,7 @@ export default function HtmlCssLabStudio({
     setHtml(TEMPLATES[nextTemplateId].html);
     setCss(TEMPLATES[nextTemplateId].css);
     setReflection("");
-    setMessage({ kind: "info", text: `Loaded the ${TEMPLATES[nextTemplateId].label} starter template. Save a draft to keep it in your account.` });
+    setMessage({ kind: "info", text: `Loaded the ${TEMPLATES[nextTemplateId].label} starter template. Changes will autosave after a short pause; you can also save a draft manually.` });
   }
 
   function validateBeforeSubmit(): string | null {
@@ -690,19 +804,23 @@ export default function HtmlCssLabStudio({
       }
     }
 
+    manualSaveInProgressRef.current = true;
     setSaving(true);
     try {
+      const pendingAutoSave = autoSaveRequestRef.current;
+      if (pendingAutoSave) {
+        try {
+          await pendingAutoSave;
+        } catch {
+          // Continue with the explicit user-requested save.
+        }
+      }
       const response = await fetch(`/api/student/labs/${encodeURIComponent(labId)}/studio`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ html, css, reflection, action }),
       });
-      const result = await response.json().catch(() => null) as {
-        ok?: boolean;
-        error?: string;
-        message?: string;
-        submission?: { status?: string; score?: number | null; feedback?: string | null; updated_at?: string | null };
-      } | null;
+      const result = await response.json().catch(() => null) as StudioApiResponse | null;
       if (!response.ok || !result?.ok) {
         throw new Error(result?.error || "Unable to save the project. Please try again.");
       }
@@ -711,11 +829,15 @@ export default function HtmlCssLabStudio({
       setScore(result.submission?.score ?? null);
       setFeedback(result.submission?.feedback ?? feedback);
       setUpdatedAt(result.submission?.updated_at ?? new Date().toISOString());
+      lastSavedFingerprintRef.current = projectFingerprint(html, css, reflection);
+      setAutoSaveStatus("saved");
       setMessage({ kind: "success", text: result.message || (action === "draft" ? "Draft saved." : "Project submitted for review.") });
       router.refresh();
     } catch (error: unknown) {
+      setAutoSaveStatus("error");
       setMessage({ kind: "error", text: error instanceof Error ? error.message : "A network error occurred. Please try again." });
     } finally {
+      manualSaveInProgressRef.current = false;
       setSaving(false);
     }
   }
@@ -730,12 +852,30 @@ export default function HtmlCssLabStudio({
     downloadText(cssFilename, css, "text/css;charset=utf-8");
   }
 
+  const autoSaveLabel = autoSaveStatus === "pending"
+    ? "Unsaved changes · saving shortly"
+    : autoSaveStatus === "saving"
+      ? "Auto-saving…"
+      : autoSaveStatus === "saved"
+        ? "All changes saved"
+        : autoSaveStatus === "error"
+          ? "Autosave failed · use Save draft"
+          : "Auto-save enabled";
+  const autoSaveClass = autoSaveStatus === "error"
+    ? styles.autoSaveError
+    : autoSaveStatus === "saved"
+      ? styles.autoSaveSuccess
+      : autoSaveStatus === "saving"
+        ? styles.autoSaveSaving
+        : styles.autoSavePending;
+
   return (
     <div className={styles.studio}>
       <div className={styles.studioTopline}>
         <a href="/student/labs" className={styles.backLink}>← All practical labs</a>
         <div className={styles.toplineRight}>
           <span className={`${styles.statusPill} ${status === "approved" ? styles.statusApproved : status === "submitted" ? styles.statusSubmitted : status === "revision_required" ? styles.statusRevision : ""}`}>{status === "new" ? "Not started" : status.replaceAll("_", " ")}</span>
+          {!locked && <span className={`${styles.autoSaveIndicator} ${autoSaveClass}`} role="status" aria-live="polite">{autoSaveLabel}</span>}
           {updatedAt && <span className={styles.savedAt}>Last saved {new Date(updatedAt).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" })}</span>}
         </div>
       </div>
@@ -761,7 +901,7 @@ export default function HtmlCssLabStudio({
 
       <section className={styles.workbench} aria-label="HTML and CSS editor">
         <div className={styles.workbenchHeader}>
-          <div><span className={styles.eyebrow}>YOUR WORKSPACE</span><h2>Build. Preview. Improve.</h2><p>Edit HTML and CSS side-by-side. The preview runs in an isolated frame with scripts and network requests blocked.</p></div>
+          <div><span className={styles.eyebrow}>YOUR WORKSPACE</span><h2>Build. Preview. Improve.</h2><p>Edit HTML and CSS side-by-side. Changes autosave after about 1.2 seconds of inactivity. The preview runs in an isolated frame with scripts and network requests blocked.</p></div>
           <label className={styles.templateSelect}>Starter template<select value={templateId} onChange={(event) => changeTemplate(event.target.value as TemplateId)} disabled={locked || saving}>{Object.entries(TEMPLATES).map(([id, template]) => <option value={id} key={id}>{template.label}</option>)}</select></label>
         </div>
         <div className={styles.editorGrid}>
