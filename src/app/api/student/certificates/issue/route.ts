@@ -20,6 +20,11 @@ type CurriculumLesson = {
   lesson_id: string;
 };
 
+type PublishedLesson = {
+  id: string;
+  course_id: string;
+};
+
 type AssessmentAttempt = {
   id: string;
   score: number | null;
@@ -50,6 +55,7 @@ type Profile = {
 type Certificate = {
   id: string;
   certificate_number: string;
+  is_revoked: boolean;
 };
 
 type VerificationRecord = {
@@ -61,33 +67,46 @@ type VerificationRecord = {
 };
 
 function getAssessmentPercentage(
-  attempt: AssessmentAttempt
-) {
-  if (
-    typeof attempt.total_points === "number" &&
-    attempt.total_points > 0 &&
-    typeof attempt.earned_points === "number"
-  ) {
+  attempt: AssessmentAttempt,
+): number | null {
+  const hasEarnedPoints =
+    attempt.earned_points !== null;
+
+  const hasTotalPoints =
+    attempt.total_points !== null;
+
+  if (hasEarnedPoints || hasTotalPoints) {
+    if (
+      typeof attempt.earned_points !== "number" ||
+      typeof attempt.total_points !== "number" ||
+      !Number.isFinite(attempt.earned_points) ||
+      !Number.isFinite(attempt.total_points) ||
+      attempt.total_points <= 0 ||
+      attempt.earned_points < 0 ||
+      attempt.earned_points > attempt.total_points
+    ) {
+      return null;
+    }
+
     return (
       (attempt.earned_points / attempt.total_points) * 100
     );
   }
 
   if (
+    typeof attempt.score === "number" &&
+    Number.isFinite(attempt.score) &&
+    attempt.score >= 0 &&
+    attempt.score <= 100 &&
     typeof attempt.total_questions === "number" &&
-    attempt.total_questions > 0 &&
-    typeof attempt.score === "number"
+    attempt.total_questions > 0
   ) {
-    return (
-      (attempt.score / attempt.total_questions) * 100
-    );
-  }
-
-  if (typeof attempt.score === "number") {
+    // Legacy records without point totals may store score
+    // as an already-calculated percentage.
     return attempt.score;
   }
 
-  return 0;
+  return null;
 }
 
 function generateVerificationCode() {
@@ -98,13 +117,13 @@ function generateVerificationCode() {
 
 async function ensureVerificationRecord(
   admin: ReturnType<typeof createAdminClient>,
-  certificateId: string
+  certificateId: string,
 ) {
   const { data: existingData, error: existingError } =
     await admin
       .from("certificate_verifications")
       .select(
-        "id, certificate_id, verification_code, is_active, expires_at"
+        "id, certificate_id, verification_code, is_active, expires_at",
       )
       .eq("certificate_id", certificateId)
       .maybeSingle();
@@ -126,12 +145,10 @@ async function ensureVerificationRecord(
         error: reactivateError,
       } = await admin
         .from("certificate_verifications")
-        .update({
-          is_active: true,
-        })
+        .update({ is_active: true })
         .eq("id", existingVerification.id)
         .select(
-          "id, certificate_id, verification_code, is_active, expires_at"
+          "id, certificate_id, verification_code, is_active, expires_at",
         )
         .single();
 
@@ -150,15 +167,13 @@ async function ensureVerificationRecord(
     }
 
     return {
-      verification:
-        existingVerification as unknown as VerificationRecord,
+      verification: existingVerification,
       error: null,
     };
   }
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const verificationCode =
-      generateVerificationCode();
+    const verificationCode = generateVerificationCode();
 
     const {
       data: insertedData,
@@ -171,7 +186,7 @@ async function ensureVerificationRecord(
         is_active: true,
       })
       .select(
-        "id, certificate_id, verification_code, is_active, expires_at"
+        "id, certificate_id, verification_code, is_active, expires_at",
       )
       .single();
 
@@ -196,7 +211,7 @@ async function ensureVerificationRecord(
     } = await admin
       .from("certificate_verifications")
       .select(
-        "id, certificate_id, verification_code, is_active, expires_at"
+        "id, certificate_id, verification_code, is_active, expires_at",
       )
       .eq("certificate_id", certificateId)
       .maybeSingle();
@@ -220,9 +235,20 @@ async function ensureVerificationRecord(
   return {
     verification: null,
     error: new Error(
-      "Unable to create a unique certificate verification record."
+      "Unable to create a unique certificate verification record.",
     ),
   };
+}
+
+function errorResponse(
+  error: string,
+  stage: string,
+  status: number,
+) {
+  return NextResponse.json(
+    { ok: false, error, stage },
+    { status },
+  );
 }
 
 export async function POST(request: Request) {
@@ -235,78 +261,77 @@ export async function POST(request: Request) {
 
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser();
 
-    if (!user) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "You must be signed in to issue a certificate.",
-          stage,
-        },
-        { status: 401 }
+    if (authError || !user) {
+      return errorResponse(
+        "You must be signed in to issue a certificate.",
+        stage,
+        401,
       );
     }
 
     stage = "request body";
 
-    const body = await request.json();
+    let body: { courseId?: unknown };
+
+    try {
+      body = await request.json();
+    } catch {
+      return errorResponse(
+        "The request body must contain valid JSON.",
+        stage,
+        400,
+      );
+    }
 
     const courseId =
       typeof body?.courseId === "string"
         ? body.courseId.trim()
         : "";
 
-    if (!courseId) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "A course ID is required.",
-          stage,
-        },
-        { status: 400 }
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        courseId,
+      )
+    ) {
+      return errorResponse(
+        "A valid course ID is required.",
+        stage,
+        400,
       );
     }
-
-    stage = "admin client";
 
     const admin = createAdminClient();
 
     stage = "course lookup";
 
-    const {
-      data: courseData,
-      error: courseError,
-    } = await admin
-      .from("courses")
-      .select("id, title, slug, is_free")
-      .eq("id", courseId)
-      .eq("status", "published")
-      .maybeSingle();
+    const { data: courseData, error: courseError } =
+      await admin
+        .from("courses")
+        .select("id, title, slug, is_free")
+        .eq("id", courseId)
+        .eq("status", "published")
+        .maybeSingle();
 
     if (courseError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Unable to load the course.",
-          stage,
-          details: courseError.message,
-        },
-        { status: 500 }
+      console.error("Certificate course lookup failed:", courseError);
+
+      return errorResponse(
+        "Unable to load the course.",
+        stage,
+        500,
       );
     }
 
-    const course =
-      courseData as unknown as Course | null;
+    const course = courseData as Course | null;
 
     if (!course) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Course not found.",
-          stage,
-        },
-        { status: 404 }
+      return errorResponse(
+        "Course not found or not published.",
+        stage,
+        404,
       );
     }
 
@@ -317,43 +342,36 @@ export async function POST(request: Request) {
       error: enrollmentError,
     } = await admin
       .from("enrollments")
-      .select(
-        "id, enrollment_status, payment_status"
-      )
+      .select("id, enrollment_status, payment_status")
       .eq("student_id", user.id)
       .eq("course_id", course.id)
-      .in("enrollment_status", [
-        "active",
-        "completed",
-      ])
-      .maybeSingle();
+      .in("enrollment_status", ["active", "completed"])
+      .limit(2);
 
     if (enrollmentError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Unable to verify your enrollment.",
-          stage,
-          details: enrollmentError.message,
-        },
-        { status: 500 }
+      console.error("Certificate enrollment lookup failed:", enrollmentError);
+
+      return errorResponse(
+        "Unable to verify your enrollment.",
+        stage,
+        500,
       );
     }
 
-    const enrollment =
-      enrollmentData as unknown as Enrollment | null;
+    const enrollments =
+      (enrollmentData ?? []) as Enrollment[];
 
-    if (!enrollment) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "You must be enrolled in this course before receiving a certificate.",
-          stage,
-        },
-        { status: 403 }
+    if (enrollments.length !== 1) {
+      return errorResponse(
+        enrollments.length === 0
+          ? "You must be enrolled in this course before receiving a certificate."
+          : "Multiple matching enrollments were found. Please contact support.",
+        stage,
+        enrollments.length === 0 ? 403 : 409,
       );
     }
+
+    const enrollment = enrollments[0];
 
     stage = "payment verification";
 
@@ -361,14 +379,10 @@ export async function POST(request: Request) {
       !course.is_free &&
       enrollment.payment_status !== "paid"
     ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Payment must be completed before a certificate can be issued.",
-          stage,
-        },
-        { status: 403 }
+      return errorResponse(
+        "Payment must be completed before a certificate can be issued.",
+        stage,
+        403,
       );
     }
 
@@ -384,84 +398,109 @@ export async function POST(request: Request) {
       .eq("is_published", true);
 
     if (curriculumError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Unable to verify the published course lessons.",
-          stage,
-          details: curriculumError.message,
-        },
-        { status: 500 }
+      console.error("Certificate curriculum lookup failed:", curriculumError);
+
+      return errorResponse(
+        "Unable to verify the published course lessons.",
+        stage,
+        500,
       );
     }
 
     const curriculum =
-      curriculumData as unknown as CurriculumLesson[];
+      (curriculumData ?? []) as CurriculumLesson[];
 
-    const lessonIds = curriculum
-      .map((lesson) => lesson.lesson_id)
-      .filter(Boolean);
+    const curriculumLessonIds = [
+      ...new Set(
+        curriculum
+          .map((lesson) => lesson.lesson_id)
+          .filter(
+            (id): id is string =>
+              typeof id === "string" && id.length > 0,
+          ),
+      ),
+    ];
 
-    if (lessonIds.length === 0) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "This course does not currently have published lessons.",
-          stage,
-        },
-        { status: 400 }
+    if (curriculumLessonIds.length === 0) {
+      return errorResponse(
+        "This course does not currently have published lessons.",
+        stage,
+        400,
+      );
+    }
+
+    stage = "published lesson verification";
+
+    const { data: publishedLessonsData, error: publishedLessonsError } =
+      await admin
+        .from("lessons")
+        .select("id, course_id")
+        .eq("course_id", course.id)
+        .eq("is_published", true)
+        .in("id", curriculumLessonIds);
+
+    if (publishedLessonsError) {
+      console.error("Published lesson verification failed:", publishedLessonsError);
+
+      return errorResponse(
+        "Unable to verify published lessons.",
+        stage,
+        500,
+      );
+    }
+
+    const publishedLessons =
+      (publishedLessonsData ?? []) as PublishedLesson[];
+
+    const lessonIds = [
+      ...new Set(publishedLessons.map((lesson) => lesson.id)),
+    ];
+
+    if (
+      lessonIds.length !== curriculumLessonIds.length ||
+      lessonIds.length === 0
+    ) {
+      return errorResponse(
+        "The published curriculum contains unpublished or mismatched lessons. Please contact the course administrator.",
+        stage,
+        409,
       );
     }
 
     stage = "lesson completion verification";
 
-    const {
-      data: progressData,
-      error: progressError,
-    } = await admin
-      .from("lesson_progress")
-      .select("lesson_id, completed")
-      .eq("student_id", user.id)
-      .eq("course_id", course.id)
-      .eq("completed", true)
-      .in("lesson_id", lessonIds);
+    const { data: progressData, error: progressError } =
+      await admin
+        .from("lesson_progress")
+        .select("lesson_id")
+        .eq("student_id", user.id)
+        .eq("course_id", course.id)
+        .eq("completed", true)
+        .in("lesson_id", lessonIds);
 
     if (progressError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Unable to verify your lesson completion.",
-          stage,
-          details: progressError.message,
-        },
-        { status: 500 }
+      console.error("Lesson completion verification failed:", progressError);
+
+      return errorResponse(
+        "Unable to verify your lesson completion.",
+        stage,
+        500,
       );
     }
 
     const completedLessonIds = new Set(
-      (
-        (progressData ?? []) as Array<{
-          lesson_id: string;
-          completed: boolean;
-        }>
-      ).map((lesson) => lesson.lesson_id)
+      (progressData ?? []).map(
+        (lesson: { lesson_id: string }) => lesson.lesson_id,
+      ),
     );
 
     if (
-      completedLessonIds.size <
-      lessonIds.length
+      lessonIds.some((lessonId) => !completedLessonIds.has(lessonId))
     ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "All published lessons must be completed before the certificate can be issued.",
-          stage,
-        },
-        { status: 403 }
+      return errorResponse(
+        "All published lessons must be completed before the certificate can be issued.",
+        stage,
+        403,
       );
     }
 
@@ -473,101 +512,84 @@ export async function POST(request: Request) {
     } = await admin
       .from("assessment_attempts")
       .select(
-        "id, score, total_points, earned_points, total_questions, completed_at, created_at"
+        "id, score, total_points, earned_points, total_questions, completed_at, created_at",
       )
       .eq("student_id", user.id)
       .eq("course_id", course.id)
       .not("completed_at", "is", null)
-      .order("created_at", {
-        ascending: false,
-      })
+      .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
     if (assessmentError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Unable to verify your assessment result.",
-          stage,
-          details: assessmentError.message,
-        },
-        { status: 500 }
+      console.error("Assessment verification failed:", assessmentError);
+
+      return errorResponse(
+        "Unable to verify your assessment result.",
+        stage,
+        500,
       );
     }
 
     const assessment =
-      assessmentData as unknown as AssessmentAttempt | null;
+      assessmentData as AssessmentAttempt | null;
 
     if (!assessment) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "A completed assessment is required before the certificate can be issued.",
-          stage,
-        },
-        { status: 403 }
+      return errorResponse(
+        "A completed assessment is required before the certificate can be issued.",
+        stage,
+        403,
       );
     }
 
     const assessmentPercentage =
       getAssessmentPercentage(assessment);
 
-    if (assessmentPercentage < 70) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "You must score at least 70% on the assessment before the certificate can be issued.",
-          stage,
-        },
-        { status: 403 }
+    if (
+      assessmentPercentage === null ||
+      assessmentPercentage < 70
+    ) {
+      return errorResponse(
+        "A valid assessment result of at least 70% is required before the certificate can be issued.",
+        stage,
+        403,
       );
     }
 
     stage = "capstone lookup";
 
-    const {
-      data: projectData,
-      error: projectError,
-    } = await admin
-      .from("course_projects")
-      .select("id, project_type")
-      .eq("course_id", course.id)
-      .eq("project_type", "capstone")
-      .eq("is_published", true);
+    const { data: projectData, error: projectError } =
+      await admin
+        .from("course_projects")
+        .select("id, project_type")
+        .eq("course_id", course.id)
+        .eq("project_type", "capstone")
+        .eq("is_published", true)
+        .limit(2);
 
     if (projectError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Unable to verify the course capstone.",
-          stage,
-          details: projectError.message,
-        },
-        { status: 500 }
+      console.error("Capstone lookup failed:", projectError);
+
+      return errorResponse(
+        "Unable to verify the course capstone.",
+        stage,
+        500,
       );
     }
 
-    const projects =
-      projectData as unknown as CourseProject[];
+    const projects = (projectData ?? []) as CourseProject[];
+
+    if (projects.length !== 1) {
+      return errorResponse(
+        projects.length === 0
+          ? "The course capstone is not currently available."
+          : "Multiple published capstone projects were found. Please contact the course administrator.",
+        stage,
+        409,
+      );
+    }
 
     const capstoneProject = projects[0];
-
-    if (!capstoneProject) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "The course capstone is not currently available.",
-          stage,
-        },
-        { status: 403 }
-      );
-    }
 
     stage = "capstone approval verification";
 
@@ -576,75 +598,56 @@ export async function POST(request: Request) {
       error: submissionError,
     } = await admin
       .from("project_submissions")
-      .select(
-        "id, score, status, reviewed_at"
-      )
-      .eq(
-        "project_id",
-        capstoneProject.id
-      )
+      .select("id, score, status, reviewed_at")
+      .eq("project_id", capstoneProject.id)
       .eq("student_id", user.id)
       .eq("status", "approved")
-      .order("reviewed_at", {
-        ascending: false,
-      })
+      .not("reviewed_at", "is", null)
+      .order("reviewed_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
     if (submissionError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Unable to verify your capstone approval.",
-          stage,
-          details: submissionError.message,
-        },
-        { status: 500 }
+      console.error("Capstone approval verification failed:", submissionError);
+
+      return errorResponse(
+        "Unable to verify your capstone approval.",
+        stage,
+        500,
       );
     }
 
     const submission =
-      submissionData as unknown as ProjectSubmission | null;
+      submissionData as ProjectSubmission | null;
 
     if (!submission) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "An approved capstone submission is required before the certificate can be issued.",
-          stage,
-        },
-        { status: 403 }
+      return errorResponse(
+        "An approved and reviewed capstone submission is required before the certificate can be issued.",
+        stage,
+        403,
       );
     }
 
     stage = "profile lookup";
 
-    const {
-      data: profileData,
-      error: profileError,
-    } = await admin
-      .from("profiles")
-      .select("full_name, email")
-      .eq("id", user.id)
-      .maybeSingle();
+    const { data: profileData, error: profileError } =
+      await admin
+        .from("profiles")
+        .select("full_name, email")
+        .eq("id", user.id)
+        .maybeSingle();
 
     if (profileError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Unable to load your learner profile.",
-          stage,
-          details: profileError.message,
-        },
-        { status: 500 }
+      console.error("Certificate profile lookup failed:", profileError);
+
+      return errorResponse(
+        "Unable to load your learner profile.",
+        stage,
+        500,
       );
     }
 
-    const profile =
-      profileData as unknown as Profile | null;
+    const profile = profileData as Profile | null;
 
     const holderName =
       profile?.full_name?.trim() ||
@@ -653,7 +656,10 @@ export async function POST(request: Request) {
       "RuffNeck Learn Student";
 
     const capstoneScore =
-      typeof submission.score === "number"
+      typeof submission.score === "number" &&
+      Number.isFinite(submission.score) &&
+      submission.score >= 0 &&
+      submission.score <= 100
         ? Math.round(submission.score)
         : null;
 
@@ -664,29 +670,33 @@ export async function POST(request: Request) {
       error: existingCertificateError,
     } = await admin
       .from("course_certificates")
-      .select("id, certificate_number")
+      .select("id, certificate_number, is_revoked")
       .eq("student_id", user.id)
       .eq("course_id", course.id)
       .maybeSingle();
 
     if (existingCertificateError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Unable to check for an existing certificate.",
-          stage,
-          details:
-            existingCertificateError.message,
-        },
-        { status: 500 }
+      console.error("Existing certificate lookup failed:", existingCertificateError);
+
+      return errorResponse(
+        "Unable to check for an existing certificate.",
+        stage,
+        500,
       );
     }
 
     const existingCertificate =
-      existingCertificateData as unknown as Certificate | null;
+      existingCertificateData as Certificate | null;
 
     if (existingCertificate) {
+      if (existingCertificate.is_revoked) {
+        return errorResponse(
+          "Your existing certificate has been revoked. Please contact RuffNeck Learn support.",
+          stage,
+          403,
+        );
+      }
+
       stage = "verification record";
 
       const {
@@ -694,39 +704,33 @@ export async function POST(request: Request) {
         error: verificationError,
       } = await ensureVerificationRecord(
         admin,
-        existingCertificate.id
+        existingCertificate.id,
       );
 
       if (verificationError) {
+        console.error("Existing certificate verification setup failed:", verificationError);
+
         return NextResponse.json(
           {
             ok: true,
-            certificateId:
-              existingCertificate.id,
-            certificateNumber:
-              existingCertificate.certificate_number,
+            certificateId: existingCertificate.id,
+            certificateNumber: existingCertificate.certificate_number,
             alreadyIssued: true,
             verificationPending: true,
-            verificationError:
-              verificationError.message,
           },
-          { status: 200 }
+          { status: 200 },
         );
       }
 
       return NextResponse.json(
         {
           ok: true,
-          certificateId:
-            existingCertificate.id,
-          certificateNumber:
-            existingCertificate.certificate_number,
-          verificationCode:
-            verification?.verification_code ??
-            null,
+          certificateId: existingCertificate.id,
+          certificateNumber: existingCertificate.certificate_number,
+          verificationCode: verification?.verification_code ?? null,
           alreadyIssued: true,
         },
-        { status: 200 }
+        { status: 200 },
       );
     }
 
@@ -743,111 +747,102 @@ export async function POST(request: Request) {
         holder_name: holderName,
         course_title: course.title,
         course_slug: course.slug,
-        assessment_score: Math.round(
-          assessmentPercentage
-        ),
+        assessment_score: Math.round(assessmentPercentage),
         capstone_score: capstoneScore,
         is_revoked: false,
       })
-      .select(
-        "id, certificate_number"
-      )
+      .select("id, certificate_number, is_revoked")
       .single();
 
     if (insertCertificateError) {
-      if (
-        insertCertificateError.code ===
-        "23505"
-      ) {
+      if (insertCertificateError.code === "23505") {
         const {
           data: duplicateData,
           error: duplicateError,
         } = await admin
           .from("course_certificates")
-          .select(
-            "id, certificate_number"
-          )
+          .select("id, certificate_number, is_revoked")
           .eq("student_id", user.id)
           .eq("course_id", course.id)
           .maybeSingle();
 
         if (duplicateError) {
-          return NextResponse.json(
-            {
-              ok: false,
-              error:
-                "The certificate already exists, but it could not be loaded.",
-              stage,
-              details: duplicateError.message,
-            },
-            { status: 500 }
+          console.error("Duplicate certificate lookup failed:", duplicateError);
+
+          return errorResponse(
+            "The certificate already exists, but it could not be loaded.",
+            stage,
+            500,
           );
         }
 
         const duplicateCertificate =
-          duplicateData as unknown as Certificate | null;
+          duplicateData as Certificate | null;
 
-        if (duplicateCertificate) {
-          stage = "verification record";
-
-          const {
-            verification,
-            error: verificationError,
-          } = await ensureVerificationRecord(
-            admin,
-            duplicateCertificate.id
+        if (!duplicateCertificate) {
+          return errorResponse(
+            "The certificate record conflicted with another request. Please try again.",
+            stage,
+            409,
           );
+        }
 
-          if (verificationError) {
-            return NextResponse.json(
-              {
-                ok: true,
-                certificateId:
-                  duplicateCertificate.id,
-                certificateNumber:
-                  duplicateCertificate.certificate_number,
-                alreadyIssued: true,
-                verificationPending: true,
-                verificationError:
-                  verificationError.message,
-              },
-              { status: 200 }
-            );
-          }
+        if (duplicateCertificate.is_revoked) {
+          return errorResponse(
+            "Your existing certificate has been revoked. Please contact RuffNeck Learn support.",
+            stage,
+            403,
+          );
+        }
+
+        stage = "verification record";
+
+        const {
+          verification,
+          error: verificationError,
+        } = await ensureVerificationRecord(
+          admin,
+          duplicateCertificate.id,
+        );
+
+        if (verificationError) {
+          console.error("Duplicate certificate verification setup failed:", verificationError);
 
           return NextResponse.json(
             {
               ok: true,
-              certificateId:
-                duplicateCertificate.id,
-              certificateNumber:
-                duplicateCertificate.certificate_number,
-              verificationCode:
-                verification?.verification_code ??
-                null,
+              certificateId: duplicateCertificate.id,
+              certificateNumber: duplicateCertificate.certificate_number,
               alreadyIssued: true,
+              verificationPending: true,
             },
-            { status: 200 }
+            { status: 200 },
           );
         }
+
+        return NextResponse.json(
+          {
+            ok: true,
+            certificateId: duplicateCertificate.id,
+            certificateNumber: duplicateCertificate.certificate_number,
+            verificationCode: verification?.verification_code ?? null,
+            alreadyIssued: true,
+          },
+          { status: 200 },
+        );
       }
 
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Unable to issue the certificate.",
-          stage,
-          details:
-            insertCertificateError.message,
-          code: insertCertificateError.code,
-        },
-        { status: 500 }
+      console.error("Certificate creation failed:", insertCertificateError);
+
+      return errorResponse(
+        "Unable to issue the certificate.",
+        stage,
+        500,
       );
     }
 
     const certificate =
-      insertedCertificateData as unknown as Certificate;
+      insertedCertificateData as Certificate;
 
     stage = "verification record";
 
@@ -856,22 +851,21 @@ export async function POST(request: Request) {
       error: verificationError,
     } = await ensureVerificationRecord(
       admin,
-      certificate.id
+      certificate.id,
     );
 
     if (verificationError) {
+      console.error("New certificate verification setup failed:", verificationError);
+
       return NextResponse.json(
         {
           ok: true,
           certificateId: certificate.id,
-          certificateNumber:
-            certificate.certificate_number,
+          certificateNumber: certificate.certificate_number,
           alreadyIssued: false,
           verificationPending: true,
-          verificationError:
-            verificationError.message,
         },
-        { status: 200 }
+        { status: 200 },
       );
     }
 
@@ -879,31 +873,25 @@ export async function POST(request: Request) {
       {
         ok: true,
         certificateId: certificate.id,
-        certificateNumber:
-          certificate.certificate_number,
-        verificationCode:
-          verification?.verification_code ?? null,
+        certificateNumber: certificate.certificate_number,
+        verificationCode: verification?.verification_code ?? null,
         alreadyIssued: false,
       },
-      { status: 200 }
+      { status: 200 },
     );
   } catch (error) {
-    console.error(
-      "Certificate issuance failed:",
-      error
-    );
+    console.error("Certificate issuance failed:", {
+      stage,
+      error,
+    });
 
     return NextResponse.json(
       {
         ok: false,
         error: `Certificate issuance failed during ${stage}.`,
         stage,
-        details:
-          error instanceof Error
-            ? error.message
-            : "Unknown server error.",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
