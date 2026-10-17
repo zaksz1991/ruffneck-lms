@@ -120,3 +120,18 @@
 @media (max-width: 900px) { .briefGrid { grid-template-columns:1fr; } .workspaceGrid { grid-template-columns:1fr; } .fileTree { grid-template-columns:repeat(2,minmax(0,1fr)); } .fileItem { min-width:0; } }
 @media (max-width: 640px) { .hero { grid-template-columns:1fr; } .heroBadge { grid-template-columns:1fr; } .topStatus { width:100%; } .fileTree { grid-template-columns:1fr; } .checkList, .metadataGrid { grid-template-columns:1fr; } .full { grid-column:auto; } .editorToolbar { align-items:flex-start; } .previewFrame iframe { height:500px; } .footerActions { align-items:flex-start; } .footerActions > div:last-child { width:100%; } .footerActions button { flex:1 1 150px; } }
 @media (prefers-reduced-motion: reduce) { .previewFrame { transition:none; } }
+
+/* Public publishing controls — scoped to the Advanced Project Studio. */
+.publicPublishPanel { border-color: #cddbd6; }
+.publicPublishRow { display: grid; gap: .45rem; margin: 1rem 0; max-width: 560px; }
+.publicPublishRow > label { font-size: .9rem; font-weight: 750; }
+.publicSlugField { display: flex; align-items: center; gap: .6rem; min-height: 46px; padding: 0 .85rem; border: 1px solid var(--line, #dce4ec); border-radius: 10px; background: var(--surface, #fff); }
+.publicSlugField > span { color: var(--muted, #5c6d80); font-weight: 750; }
+.publicSlugInput { width: 100%; min-width: 0; border: 0; outline: none; background: transparent; color: var(--ink, #13263d); font: inherit; }
+.publicSlugField:focus-within { outline: 3px solid #edb64b; outline-offset: 2px; }
+.publicConfirm { display: flex; align-items: flex-start; gap: .65rem; max-width: 780px; margin: .9rem 0; line-height: 1.5; cursor: pointer; }
+.publicConfirm input { flex: 0 0 auto; width: 18px; height: 18px; margin-top: .15rem; accent-color: var(--accent, #087d75); }
+.publicPublishActions { display: flex; gap: .65rem; flex-wrap: wrap; align-items: center; margin-top: 1rem; }
+.publicPublishActions button:disabled { opacity: .55; cursor: not-allowed; }
+.publicLiveLink { overflow-wrap: anywhere; margin: .6rem 0; }
+.publicLiveLink a { font-weight: 750; }

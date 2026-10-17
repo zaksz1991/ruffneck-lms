@@ -298,6 +298,17 @@ export default function AdvancedProjectStudio(props: Props) {
   const [saving, setSaving] = useState(false);
   const [saveLabel, setSaveLabel] = useState("Auto-save enabled");
   const [message, setMessage] = useState<{ kind: "success" | "error" | "info"; text: string } | null>(null);
+  const [publishedSlug, setPublishedSlug] = useState<string | null>(null);
+  const [publishSlugInput, setPublishSlugInput] = useState(() => {
+    const candidate = track === "digital_publishing"
+      ? initialProject?.metadata?.slug || "my-digital-publication"
+      : "my-business-website";
+    const normalised = safeSlug(candidate).slice(0, 64);
+    return normalised.length >= 3 ? normalised : "ruffneck-student-project";
+  });
+  const [publicationState, setPublicationState] = useState<"checking" | "ready" | "unavailable">("checking");
+  const [publicationBusy, setPublicationBusy] = useState(false);
+  const [publishConfirmed, setPublishConfirmed] = useState(false);
   const [newFilePath, setNewFilePath] = useState("");
   const [showAddFile, setShowAddFile] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -407,6 +418,75 @@ export default function AdvancedProjectStudio(props: Props) {
       manualSaveRef.current = false;
     }
   }, [locked, status, files, totalAssets, reflection, track, metadata, publicationFile?.content, labId, createPayload, score, feedback]);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/student/labs/advanced-studio/${encodeURIComponent(labId)}/publish`, { cache: "no-store" })
+      .then(async (response) => {
+        const result = await response.json().catch(() => null);
+        if (!active) return;
+        if (!response.ok || !result || result.ok !== true) {
+          setPublicationState("unavailable");
+          return;
+        }
+        const publication = result.publication as { slug?: unknown; isPublished?: unknown } | null;
+        const slug = publication && typeof publication.slug === "string" ? publication.slug : null;
+        setPublishedSlug(publication?.isPublished === true ? slug : null);
+        if (slug) setPublishSlugInput(slug);
+        setPublicationState("ready");
+      })
+      .catch(() => {
+        if (active) setPublicationState("unavailable");
+      });
+    return () => { active = false; };
+  }, [labId]);
+
+  const changePublicState = useCallback(async (action: "publish" | "unpublish") => {
+    if (status !== "approved") {
+      setMessage({ kind: "error", text: "Public publishing is available only after an instructor approves this project." });
+      return;
+    }
+    if (action === "publish") {
+      if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(publishSlugInput) || publishSlugInput.length < 3 || publishSlugInput.length > 64) {
+        setMessage({ kind: "error", text: "Use a URL slug of 3–64 lowercase letters, numbers, and single hyphens." });
+        return;
+      }
+      if (!publishConfirmed) {
+        setMessage({ kind: "error", text: "Confirm that the project is safe to share publicly before publishing." });
+        return;
+      }
+    }
+    setPublicationBusy(true);
+    try {
+      const response = await fetch(`/api/student/labs/advanced-studio/${encodeURIComponent(labId)}/publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(action === "publish"
+          ? { action, slug: publishSlugInput }
+          : { action }),
+      });
+      const result = await response.json().catch(() => null) as {
+        ok?: boolean; error?: string; publication?: { slug?: string; isPublished?: boolean } | null;
+      } | null;
+      if (!response.ok || !result?.ok) throw new Error(result?.error || "The publication request failed.");
+      if (action === "publish") {
+        const slug = result.publication?.slug || publishSlugInput;
+        setPublishedSlug(slug);
+        setPublishSlugInput(slug);
+        setPublishConfirmed(false);
+        setMessage({ kind: "success", text: `Your approved project is live at ${window.location.origin}/p/${slug}` });
+      } else {
+        setPublishedSlug(null);
+        setPublishConfirmed(false);
+        setMessage({ kind: "success", text: "Your public project has been unpublished. Its public URL no longer serves the project." });
+      }
+      setPublicationState("ready");
+    } catch (error) {
+      setMessage({ kind: "error", text: error instanceof Error ? error.message : "The publication request failed." });
+    } finally {
+      setPublicationBusy(false);
+    }
+  }, [labId, status, publishSlugInput, publishConfirmed]);
 
   useEffect(() => {
     if (!hydratedRef.current || locked || manualSaveRef.current || currentFingerprint === lastSavedRef.current) return;
@@ -616,9 +696,30 @@ export default function AdvancedProjectStudio(props: Props) {
         <p className={styles.previewSafety}>{track === "web_development" ? "The preview blocks JavaScript, pop-ups, form submission and external network requests. This is an HTML/CSS learning environment." : "This publication preview renders Markdown as safe HTML. Script execution and external network requests are blocked."}</p>
       </section>
 
-      <section className={styles.panel}><div className={styles.sectionHead}><div><p className={styles.eyebrow}>PRE-SUBMISSION CHECKS</p><h2>{track === "web_development" ? "Project quality checks" : "Editorial and publication checks"}</h2></div><strong className={styles.checkScore}>{passedChecks}/{checks.length} passed</strong></div><div className={styles.checkList}>{checks.map((check) => <div className={check.passed ? styles.checkPass : styles.checkPending} key={check.label}><span aria-hidden="true">{check.passed ? "✓" : "○"}</span>{check.label}</div>)}</div>{track === "digital_publishing" && <p className={styles.publishNotice}><strong>Publishing scope:</strong> This studio creates an export-ready publication bundle. It does not publish a public URL automatically. Live publishing requires a selected CMS or hosting provider and an authorised integration.</p>}</section>
+      <section className={styles.panel}><div className={styles.sectionHead}><div><p className={styles.eyebrow}>PRE-SUBMISSION CHECKS</p><h2>{track === "web_development" ? "Project quality checks" : "Editorial and publication checks"}</h2></div><strong className={styles.checkScore}>{passedChecks}/{checks.length} passed</strong></div><div className={styles.checkList}>{checks.map((check) => <div className={check.passed ? styles.checkPass : styles.checkPending} key={check.label}><span aria-hidden="true">{check.passed ? "✓" : "○"}</span>{check.label}</div>)}</div>{track === "digital_publishing" && <p className={styles.publishNotice}><strong>Publishing:</strong> This studio prepares an export-ready publication. After instructor approval, you can publish it to a public RuffNeck Learn URL below. External CMS integrations are not included.</p>}</section>
 
       {message && <div className={`${styles.message} ${message.kind === "error" ? styles.error : message.kind === "success" ? styles.success : styles.info}`} role="status" aria-live="polite">{message.text}</div>}
+      <section className={`${styles.panel} ${styles.publicPublishPanel}`} aria-labelledby="public-publish-title">
+        <div className={styles.sectionHead}>
+          <div><p className={styles.eyebrow}>PUBLIC RELEASE</p><h2 id="public-publish-title">Publish your approved project</h2></div>
+          <span className={styles.muted}>{publishedSlug ? "Live" : "Not published"}</span>
+        </div>
+        {publicationState === "checking" ? <p className={styles.muted}>Checking publication availability…</p> : publicationState === "unavailable" ? <p className={styles.publishNotice}>Public publishing is not configured in this deployment yet. The private project workspace and export tools remain available.</p> : status !== "approved" ? <p className={styles.muted}>Public publishing unlocks after an instructor approves the submitted project. You can continue editing until submission; submitted work is locked during review.</p> : <>
+          <p className={styles.muted}>Anyone with this URL can view the published project. Publish only work you have permission to share; do not include private information.</p>
+          <div className={styles.publicPublishRow}>
+            <label htmlFor="public-project-slug">Public URL slug</label>
+            <div className={styles.publicSlugField}><span>/p/</span><input id="public-project-slug" className={styles.publicSlugInput} value={publishSlugInput} maxLength={64} onChange={(event) => setPublishSlugInput(event.target.value)} disabled={publicationBusy} autoComplete="off" spellCheck={false} /></div>
+          </div>
+          {publishedSlug ? <p className={styles.publicLiveLink}><strong>Live URL:</strong> <a href={`/p/${publishedSlug}`} target="_blank" rel="noopener noreferrer">{`/p/${publishedSlug}`}</a></p> : null}
+          {!publishedSlug ? <label className={styles.publicConfirm}><input type="checkbox" checked={publishConfirmed} onChange={(event) => setPublishConfirmed(event.target.checked)} disabled={publicationBusy} /><span>I confirm this project is ready to be shared publicly and contains no private or unauthorized material.</span></label> : <label className={styles.publicConfirm}><input type="checkbox" checked={publishConfirmed} onChange={(event) => setPublishConfirmed(event.target.checked)} disabled={publicationBusy} /><span>I confirm that the updated public project remains safe to share.</span></label>}
+          <div className={styles.publicPublishActions}>
+            <button type="button" className={styles.primary} onClick={() => void changePublicState("publish")} disabled={publicationBusy || !publishConfirmed}>{publicationBusy ? "Publishing…" : publishedSlug ? "Update publication" : "Publish publicly"}</button>
+            {publishedSlug ? <button type="button" className={styles.secondary} onClick={() => void changePublicState("unpublish")} disabled={publicationBusy}>{publicationBusy ? "Working…" : "Unpublish"}</button> : null}
+            {publishedSlug ? <a className={styles.secondary} href={`/p/${publishedSlug}`} target="_blank" rel="noopener noreferrer">Open live project</a> : null}
+          </div>
+        </>}
+      </section>
+
       <footer className={styles.footerActions}><div><span className={styles.eyebrow}>SUBMISSION</span><p>Drafts autosave after brief inactivity. Final submissions are locked while awaiting review.</p></div><div><button type="button" className={styles.secondary} onClick={() => void saveProject("draft")} disabled={!canEdit}>Save draft</button><button type="button" className={styles.primary} onClick={() => void saveProject("submitted")} disabled={!canEdit}>Submit for review</button></div></footer>
     </main>
   );
