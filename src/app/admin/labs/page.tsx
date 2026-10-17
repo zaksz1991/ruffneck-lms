@@ -28,6 +28,8 @@ type Lab = {
   title: string;
   category: string | null;
   difficulty: string | null;
+  instructions: string | null;
+  deliverable: string | null;
 };
 
 type Course = {
@@ -154,7 +156,9 @@ export default async function AdminLabsPage({
     labIds.length > 0
       ? await supabase
           .from("practical_labs")
-          .select("id, course_id, title, category, difficulty")
+          .select(
+            "id, course_id, title, category, difficulty, instructions, deliverable",
+          )
           .in("id", labIds)
       : { data: [], error: null };
 
@@ -248,12 +252,11 @@ export default async function AdminLabsPage({
             </div>
             <h1>Practical Labs Review</h1>
             <p className="muted">
-              Review student work, provide feedback, and record assessment
-              results.
+              Review student work against the task requirements, provide feedback,
+              and record assessment results.
             </p>
             <p className="muted">
-              Reviewer: {profile.full_name || profile.email || user.email} ·{" "}
-              {profile.role}
+              Reviewer: {profile.full_name || profile.email || user.email} · {profile.role}
             </p>
           </div>
           <div
@@ -330,9 +333,7 @@ export default async function AdminLabsPage({
             <Link
               key={filter}
               href={`/admin/labs?status=${filter}`}
-              className={
-                activeFilter === filter ? "btn btn-primary" : "btn btn-ghost"
-              }
+              className={activeFilter === filter ? "btn btn-primary" : "btn btn-ghost"}
             >
               {filter === "all" ? "All submissions" : statusLabel(filter)}
             </Link>
@@ -345,8 +346,7 @@ export default async function AdminLabsPage({
               <div className="rn-empty-icon">▦</div>
               <strong>No submissions found</strong>
               <p>
-                There are no submissions for this filter that you are
-                authorized to review.
+                There are no submissions for this filter that you are authorized to review.
               </p>
             </div>
           </section>
@@ -439,6 +439,55 @@ export default async function AdminLabsPage({
                     </div>
                   </div>
 
+                  <section
+                    aria-label="Practical task requirements"
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                      gap: 16,
+                      marginBottom: 24,
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: 18,
+                        borderRadius: 12,
+                        border: "1px solid var(--border, #dbe4ef)",
+                        background: "var(--surface, #f7f9fc)",
+                      }}
+                    >
+                      <h3 style={{ marginTop: 0 }}>Task instructions</h3>
+                      <div
+                        style={{
+                          whiteSpace: "pre-wrap",
+                          overflowWrap: "anywhere",
+                          lineHeight: 1.7,
+                        }}
+                      >
+                        {lab?.instructions || "No task instructions are available."}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        padding: 18,
+                        borderRadius: 12,
+                        border: "1px solid var(--border, #dbe4ef)",
+                        background: "var(--surface, #f7f9fc)",
+                      }}
+                    >
+                      <h3 style={{ marginTop: 0 }}>Expected deliverable</h3>
+                      <div
+                        style={{
+                          whiteSpace: "pre-wrap",
+                          overflowWrap: "anywhere",
+                          lineHeight: 1.7,
+                        }}
+                      >
+                        {lab?.deliverable || "No expected deliverable is specified."}
+                      </div>
+                    </div>
+                  </section>
+
                   <section style={{ marginBottom: 24 }}>
                     <h3>Student response</h3>
                     <div
@@ -463,9 +512,7 @@ export default async function AdminLabsPage({
                         <strong>Score:</strong> {submission.score ?? "Not recorded"}
                         {submission.score !== null ? "/100" : ""}
                       </p>
-                      <p>
-                        <strong>Feedback:</strong>
-                      </p>
+                      <p><strong>Feedback:</strong></p>
                       <div
                         style={{
                           whiteSpace: "pre-wrap",
