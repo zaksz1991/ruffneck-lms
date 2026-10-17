@@ -23,7 +23,6 @@ export function Header() {
 
     async function loadUser() {
       setLoading(true);
-
       try {
         const supabase = createClient();
         const {
@@ -40,7 +39,6 @@ export function Header() {
         }
 
         setIsAuthenticated(true);
-
         const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("role")
@@ -112,6 +110,11 @@ export function Header() {
     }
   }
 
+  const canReviewLabs = role === "admin" || role === "instructor";
+  const reviewLinkClass = `${styles.navLink} ${
+    role === "admin" ? styles.adminLink : styles.instructorLink
+  }`;
+
   return (
     <>
       <div className={styles.parentBar}>
@@ -127,7 +130,6 @@ export function Header() {
               Practical AI &amp; digital systems for Nigerian professionals
             </span>
           </Link>
-
           <Link
             href="https://ruffneck-entertainment.vercel.app/"
             className={styles.parentVisit}
@@ -154,7 +156,6 @@ export function Header() {
                 priority
               />
             </Link>
-
             <Link href="/" className={styles.brandName}>
               <strong className={styles.brandTitle}>RuffNeck Learn</strong>
               <span className={styles.brandSubtitle}>
@@ -187,7 +188,10 @@ export function Header() {
                 <Link href="/student/practical-work" className={styles.navLink}>
                   Practical Work
                 </Link>
-                <Link href="/student/labs" className={`${styles.navLink} ${styles.labsLink}`}>
+                <Link
+                  href="/student/labs"
+                  className={`${styles.navLink} ${styles.labsLink}`}
+                >
                   <span aria-hidden="true">✦</span> Practical Labs
                 </Link>
                 <Link href="/student/skill-passport" className={styles.navLink}>
@@ -206,6 +210,12 @@ export function Header() {
                   Certificates
                 </Link>
 
+                {canReviewLabs && (
+                  <Link href="/admin/labs" className={reviewLinkClass}>
+                    Review Labs
+                  </Link>
+                )}
+
                 {role === "instructor" && (
                   <Link
                     href="/admin/lms"
@@ -214,7 +224,6 @@ export function Header() {
                     Instructor
                   </Link>
                 )}
-
                 {role === "admin" && (
                   <Link
                     href="/admin/lms"
