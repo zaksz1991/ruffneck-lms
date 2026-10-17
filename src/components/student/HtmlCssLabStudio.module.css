@@ -134,3 +134,31 @@
 @media (prefers-reduced-motion: reduce) {
   .previewFrame { transition: none; }
 }
+
+
+/* Advanced HTML/CSS diagnostics */
+.diagnosticSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 16px 0; }
+.diagnosticStat { display: grid; gap: 4px; min-width: 0; padding: 12px 13px; border: 1px solid var(--studio-border); border-radius: 10px; background: #fbfcfe; }
+.diagnosticStat strong { color: var(--studio-ink); font-size: 22px; line-height: 1; }
+.diagnosticStat span { color: var(--studio-muted); font-size: 11px; }
+.diagnosticList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.diagnosticItem { min-width: 0; padding: 13px; border: 1px solid var(--studio-border); border-left-width: 3px; border-radius: 10px; background: #fff; }
+.diagnosticError { border-left-color: #b42318; }
+.diagnosticWarning { border-left-color: #b7791f; }
+.diagnosticPass { border-left-color: #17804d; }
+.diagnosticInfo { border-left-color: #147a9a; background: #f6fbfd; }
+.diagnosticMeta { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 7px; color: var(--studio-muted); font-size: 10px; }
+.diagnosticBadge { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 7px; background: #f0f3f7; color: #344b62; font-weight: 800; }
+.diagnosticError .diagnosticBadge { background: #fff0ef; color: #8f2424; }
+.diagnosticWarning .diagnosticBadge { background: #fff7e6; color: #82530b; }
+.diagnosticPass .diagnosticBadge { background: #edf9f1; color: #17633e; }
+.diagnosticInfo .diagnosticBadge { background: #eaf7fb; color: #075a71; }
+.diagnosticItem h4 { margin: 9px 0 5px; color: var(--studio-ink); font-size: 13px; line-height: 1.4; }
+.diagnosticItem p { margin: 0; color: #52677d; font-size: 11px; line-height: 1.65; overflow-wrap: anywhere; }
+@media (max-width: 720px) {
+  .diagnosticList { grid-template-columns: 1fr; }
+  .diagnosticSummary { gap: 7px; }
+  .diagnosticStat { padding: 10px; }
+  .diagnosticStat strong { font-size: 19px; }
+  .diagnosticStat span { font-size: 10px; }
+}

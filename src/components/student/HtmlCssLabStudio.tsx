@@ -297,6 +297,296 @@ function isStudioHazardous(html: string): boolean {
   return /<\s*script\b/i.test(html) || /\son[a-z]+\s*=/i.test(html) || /javascript\s*:/i.test(html);
 }
 
+type DiagnosticLevel = "error" | "warning" | "pass" | "info";
+type StudioDiagnostic = {
+  id: string;
+  level: DiagnosticLevel;
+  title: string;
+  detail: string;
+  source?: "HTML" | "CSS";
+  line?: number;
+};
+
+function sourceLine(source: string, index: number): number {
+  return source.slice(0, Math.max(0, index)).split("\n").length;
+}
+
+function readAttribute(attributes: string, name: string): string | null {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = attributes.match(new RegExp(`\\b${escaped}\\s*=\\s*(["'])(.*?)\\1`, "i"));
+  return match?.[2] ?? null;
+}
+
+function inspectCssStructure(css: string): { detail: string; index: number } | null {
+  let depth = 0;
+  let quote: "'" | '"' | null = null;
+  let quoteStart = -1;
+  let inComment = false;
+  let commentStart = -1;
+  let lastOpenBrace = -1;
+
+  for (let index = 0; index < css.length; index += 1) {
+    const character = css[index];
+    const next = css[index + 1];
+
+    if (inComment) {
+      if (character === "*" && next === "/") {
+        inComment = false;
+        index += 1;
+      }
+      continue;
+    }
+
+    if (quote) {
+      if (character === "\\") {
+        index += 1;
+        continue;
+      }
+      if (character === quote) quote = null;
+      continue;
+    }
+
+    if (character === "/" && next === "*") {
+      inComment = true;
+      commentStart = index;
+      index += 1;
+      continue;
+    }
+
+    if (character === "'" || character === '"') {
+      quote = character;
+      quoteStart = index;
+      continue;
+    }
+
+    if (character === "{") {
+      depth += 1;
+      lastOpenBrace = index;
+    } else if (character === "}") {
+      depth -= 1;
+      if (depth < 0) {
+        return { detail: "A closing brace appears before a matching opening brace.", index };
+      }
+    }
+  }
+
+  if (inComment) return { detail: "A CSS comment is opened with /* but is not closed with */.", index: commentStart };
+  if (quote) return { detail: "A quoted CSS value appears to be missing its closing quote.", index: quoteStart };
+  if (depth > 0) return { detail: "One or more CSS blocks are missing a closing brace (}).", index: lastOpenBrace };
+  return null;
+}
+
+function analyzeHtmlCssProject(html: string, css: string): StudioDiagnostic[] {
+  const diagnostics: StudioDiagnostic[] = [];
+  const add = (
+    id: string,
+    level: DiagnosticLevel,
+    title: string,
+    detail: string,
+    source?: "HTML" | "CSS",
+    line?: number,
+  ) => diagnostics.push({ id, level, title, detail, source, line });
+
+  const h1Matches = Array.from(html.matchAll(/<h1\b/gi));
+  if (h1Matches.length === 1) {
+    add("h1", "pass", "Exactly one H1 heading", "The page has one primary heading.", "HTML", sourceLine(html, h1Matches[0].index ?? 0));
+  } else if (h1Matches.length === 0) {
+    add("h1", "error", "Add a primary H1 heading", "Use one descriptive H1 that communicates the page's main purpose.", "HTML");
+  } else {
+    add("h1", "warning", "Multiple H1 headings found", `Found ${h1Matches.length} H1 headings. Check that the page has one clear primary heading.`, "HTML", sourceLine(html, h1Matches[1].index ?? 0));
+  }
+
+  const requiredLandmarks = [
+    { tag: "header", title: "Header landmark", detail: "Add a header for the page identity or introductory content." },
+    { tag: "nav", title: "Navigation landmark", detail: "Use nav around the main group of navigation links." },
+    { tag: "main", title: "Main landmark", detail: "Wrap the primary page content in one main element." },
+    { tag: "footer", title: "Footer landmark", detail: "Add a footer for supporting information or closing links." },
+  ];
+  for (const landmark of requiredLandmarks) {
+    const match = new RegExp(`<\\s*${landmark.tag}\\b`, "i").exec(html);
+    add(
+      `landmark-${landmark.tag}`,
+      match ? "pass" : "warning",
+      match ? `${landmark.tag} landmark found` : `Consider adding a ${landmark.tag} landmark`,
+      match ? `The page includes a ${landmark.tag} element.` : landmark.detail,
+      "HTML",
+      match ? sourceLine(html, match.index) : undefined,
+    );
+  }
+
+  const idMatches = Array.from(html.matchAll(/\bid\s*=\s*(["'])(.*?)\1/gi));
+  const idLocations = new Map<string, number[]>();
+  for (const match of idMatches) {
+    const value = (match[2] ?? "").trim();
+    if (!value) continue;
+    const locations = idLocations.get(value) ?? [];
+    locations.push(match.index ?? 0);
+    idLocations.set(value, locations);
+  }
+  const duplicates = Array.from(idLocations.entries()).filter(([, locations]) => locations.length > 1);
+  if (duplicates.length) {
+    const [duplicateId, locations] = duplicates[0];
+    add("duplicate-id", "error", "Duplicate HTML IDs", `The id "${duplicateId}" appears more than once. IDs should be unique so links and labels target the correct element.`, "HTML", sourceLine(html, locations[1]));
+  } else {
+    add("duplicate-id", "pass", "HTML IDs are unique", "No duplicate non-empty id attributes were detected.", "HTML");
+  }
+
+  const knownIds = new Set(idLocations.keys());
+  const brokenAnchors: Array<{ href: string; index: number }> = [];
+  const emptyAnchors: Array<{ index: number }> = [];
+  const anchorTags = Array.from(html.matchAll(/<a\b([^>]*)>/gi));
+  for (const anchor of anchorTags) {
+    const attributes = anchor[1] ?? "";
+    const href = readAttribute(attributes, "href");
+    const index = anchor.index ?? 0;
+    if (href === null || href.trim() === "" || href.trim() === "#") {
+      emptyAnchors.push({ index });
+      continue;
+    }
+    if (href.trim().startsWith("#")) {
+      let target = href.trim().slice(1);
+      try { target = decodeURIComponent(target); } catch { /* Keep the literal fragment for reporting. */ }
+      if (target && !knownIds.has(target)) brokenAnchors.push({ href: href.trim(), index });
+    }
+  }
+  if (brokenAnchors.length) {
+    const first = brokenAnchors[0];
+    add("broken-anchor", "warning", "Internal link target not found", `The link ${first.href} does not match an id in the HTML. Check spelling or add the target section.`, "HTML", sourceLine(html, first.index));
+  } else {
+    add("broken-anchor", "pass", "Internal section links checked", "No missing targets were detected for fragment links.", "HTML");
+  }
+  if (emptyAnchors.length) {
+    add("empty-link", "warning", "Empty or placeholder links", `${emptyAnchors.length} link(s) have no useful destination. Replace empty href values or href="#" with a real destination.`, "HTML", sourceLine(html, emptyAnchors[0].index));
+  } else {
+    add("empty-link", "pass", "Links have destinations", "No empty href values or href='#' placeholders were detected.", "HTML");
+  }
+
+  const imageTags = Array.from(html.matchAll(/<img\b([^>]*)>/gi));
+  const missingAlt = imageTags.filter((match) => readAttribute(match[1] ?? "", "alt") === null);
+  if (missingAlt.length) {
+    add("image-alt", "error", "Image alt text missing", `${missingAlt.length} image(s) have no alt attribute. Add concise alternative text, or alt="" for decorative images.`, "HTML", sourceLine(html, missingAlt[0].index ?? 0));
+  } else {
+    add("image-alt", "pass", imageTags.length ? "Images have alt attributes" : "No images need alt text yet", imageTags.length ? "Each image includes an alt attribute; review whether each description is meaningful." : "No img elements were detected, so there are no image alt attributes to check.", "HTML");
+  }
+
+  const linkMatches = Array.from(html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi));
+  const unnamedLinks = linkMatches.filter((match) => {
+    const attributes = match[1] ?? "";
+    const inner = match[2] ?? "";
+    const accessibleLabel = readAttribute(attributes, "aria-label");
+    const text = inner.replace(/<[^>]*>/g, " ").replace(/&(?:nbsp|#\d+|#x[0-9a-f]+);/gi, " ").trim();
+    const imageAlt = Array.from(inner.matchAll(/<img\b([^>]*)>/gi)).some((img) => Boolean(readAttribute(img[1] ?? "", "alt")?.trim()));
+    return !text && !accessibleLabel?.trim() && !imageAlt;
+  });
+  if (unnamedLinks.length) {
+    add("link-names", "warning", "Link text needs an accessible name", `${unnamedLinks.length} link(s) appear to have no readable text, aria-label, or named image. Give each link a clear purpose.`, "HTML", sourceLine(html, unnamedLinks[0].index ?? 0));
+  } else {
+    add("link-names", "pass", "Links have accessible names", "All detected anchor links have readable text or another simple accessible name.", "HTML");
+  }
+
+  const controls = Array.from(html.matchAll(/<(input|select|textarea)\b([^>]*)>/gi)).filter((match) => {
+    const tag = (match[1] ?? "").toLowerCase();
+    const type = readAttribute(match[2] ?? "", "type")?.toLowerCase();
+    return !(tag === "input" && type === "hidden");
+  });
+  const labels = Array.from(html.matchAll(/<label\b[^>]*>[\s\S]*?<\/label\s*>/gi));
+  const unlabeledControls = controls.filter((control) => {
+    const attributes = control[2] ?? "";
+    if (readAttribute(attributes, "aria-label")?.trim() || readAttribute(attributes, "aria-labelledby")?.trim()) return false;
+    const id = readAttribute(attributes, "id");
+    if (id) {
+      const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (new RegExp(`<label\\b[^>]*\\bfor\\s*=\\s*(["'])${escapedId}\\1`, "i").test(html)) return false;
+    }
+    const controlIndex = control.index ?? 0;
+    return !labels.some((label) => {
+      const start = label.index ?? 0;
+      return controlIndex >= start && controlIndex < start + label[0].length;
+    });
+  });
+  if (controls.length === 0) {
+    add("field-labels", "pass", "No form fields detected", "No input, select, or textarea controls require label checks.", "HTML");
+  } else if (unlabeledControls.length) {
+    add("field-labels", "warning", "Check form control labels", `${unlabeledControls.length} field(s) may not have an associated label. Use a wrapping label, matching label-for/id, or aria-label.`, "HTML", sourceLine(html, unlabeledControls[0].index ?? 0));
+  } else {
+    add("field-labels", "pass", "Form controls have labels", "Each detected form control has a matching label or accessible-name attribute.", "HTML");
+  }
+
+  const headingMatches = Array.from(html.matchAll(/<h([1-6])\b/gi));
+  let headingJump: RegExpMatchArray | null = null;
+  for (let index = 1; index < headingMatches.length; index += 1) {
+    const previousLevel = Number(headingMatches[index - 1][1]);
+    const currentLevel = Number(headingMatches[index][1]);
+    if (currentLevel > previousLevel + 1) {
+      headingJump = headingMatches[index];
+      break;
+    }
+  }
+  if (headingJump) {
+    add("heading-order", "warning", "Heading levels skip a level", `The page jumps from a lower-numbered heading to H${headingJump[1]}. Use a logical heading hierarchy so sections remain understandable to assistive technology.`, "HTML", sourceLine(html, headingJump.index ?? 0));
+  } else {
+    add("heading-order", "pass", "Heading order looks consistent", "No skipped heading levels were detected in the heading sequence.", "HTML");
+  }
+
+  if (isStudioHazardous(html)) {
+    add("html-sandbox", "error", "Remove scripts and inline event handlers", "This lab accepts HTML and CSS only. Script tags, event-handler attributes, and javascript: URLs are blocked.", "HTML");
+  } else {
+    add("html-sandbox", "pass", "HTML stays within the lab's rules", "No script tags, inline event handlers, or javascript: URLs were detected.", "HTML");
+  }
+
+  const structureIssue = inspectCssStructure(css);
+  if (structureIssue) {
+    add("css-structure", "error", "CSS structure needs attention", structureIssue.detail, "CSS", sourceLine(css, structureIssue.index));
+  } else {
+    add("css-structure", "pass", "CSS braces, strings and comments are balanced", "No unmatched block braces, unclosed quoted values, or unclosed comments were detected.", "CSS");
+  }
+
+  const mediaMatch = /@media\b/i.exec(css);
+  if (!mediaMatch) {
+    add("responsive-media", "error", "Responsive media query missing", "Add an @media rule and adapt the layout for narrower viewports.", "CSS");
+  } else {
+    add("responsive-media", "pass", "Responsive media query found", "The stylesheet contains an @media rule.", "CSS", sourceLine(css, mediaMatch.index));
+  }
+  if (mediaMatch && !/@media[^{}]*\(\s*(?:max-width|min-width|width\s*[<>])/i.test(css)) {
+    add("responsive-breakpoint", "warning", "Check the responsive breakpoint", "No common width-based breakpoint was detected. Confirm that the CSS adapts to phone and tablet widths.", "CSS", sourceLine(css, mediaMatch.index));
+  } else if (mediaMatch) {
+    add("responsive-breakpoint", "pass", "Width-based breakpoint found", "A width-based responsive breakpoint was detected; verify the result in all three previews.", "CSS", sourceLine(css, mediaMatch.index));
+  }
+
+  const focusMatch = /:focus-visible\b|:focus\b/i.exec(css);
+  if (!focusMatch) {
+    add("focus-style", "warning", "Keyboard focus styling not found", "Add a clearly visible :focus-visible style for links and interactive controls.", "CSS");
+  } else {
+    add("focus-style", "pass", "Keyboard focus selector found", "The stylesheet defines a :focus-visible or :focus rule. Confirm the outline remains visible against each surface.", "CSS", sourceLine(css, focusMatch.index));
+  }
+
+  const variableDefinitions = Array.from(css.matchAll(/--[a-zA-Z_][\w-]*\s*:/g));
+  const variableUses = Array.from(css.matchAll(/var\(\s*--[a-zA-Z_][\w-]*/g));
+  if (variableDefinitions.length && variableUses.length) {
+    add("design-tokens", "pass", "CSS custom properties are in use", `Found ${variableDefinitions.length} custom-property definition(s) and ${variableUses.length} var() reference(s).`, "CSS");
+  } else {
+    add("design-tokens", "warning", "Consider a small CSS design system", "Define reusable custom properties such as --brand, --space and --radius, then use them with var().", "CSS");
+  }
+
+  const fixedWidths = Array.from(css.matchAll(/(?:^|[;{])\s*(?:width|min-width)\s*:\s*(\d{3,4})px\b/gi))
+    .filter((match) => Number(match[1]) >= 600);
+  if (fixedWidths.length) {
+    add("fixed-width", "warning", "Large fixed width may overflow on mobile", `Found ${fixedWidths.length} width declaration(s) at 600px or wider. Consider max-width: 100%, flexible units, Grid, Flexbox, or clamp() where appropriate.`, "CSS", sourceLine(css, fixedWidths[0].index ?? 0));
+  } else {
+    add("fixed-width", "pass", "No large fixed width detected", "No obvious 600px-or-wider fixed width declaration was detected by this simple check.", "CSS");
+  }
+
+  const externalResources = /@import\b|url\(\s*["']?https?:\/\//i.exec(css);
+  if (externalResources || /\b(?:src|href)\s*=\s*(["'])https?:\/\//i.test(html)) {
+    add("external-assets", "warning", "External assets may not appear in preview", "The isolated preview blocks network requests. Prefer included resources, embedded data images, or local assets added to the exported project.", externalResources ? "CSS" : "HTML", externalResources ? sourceLine(css, externalResources.index) : undefined);
+  } else {
+    add("external-assets", "pass", "No obvious external asset request detected", "No CSS import or common external URL reference was detected.", "CSS");
+  }
+
+  add("visual-manual", "info", "Visual checks still require your judgement", "Automated checks cannot reliably judge colour contrast, visual hierarchy, meaning, or whether the page actually works at every width. Inspect the live preview on desktop, tablet and mobile.");
+  return diagnostics;
+}
+
 export default function HtmlCssLabStudio({
   labId,
   labTitle,
@@ -340,13 +630,10 @@ export default function HtmlCssLabStudio({
   const rubricTotal = assessmentRubric.reduce((total, item) => total + item.points, 0);
   const locked = status === "submitted" || status === "approved";
   const previewWidth = previewMode === "desktop" ? "100%" : previewMode === "tablet" ? "768px" : "390px";
-  const checks = useMemo(() => [
-    { label: "One clear H1 heading", passed: /<h1\b/i.test(html) },
-    { label: "Semantic page landmark", passed: /<(main|header|nav|footer)\b/i.test(html) },
-    { label: "Responsive CSS media query", passed: /@media\b/i.test(css) },
-    { label: "Visible keyboard-focus styling", passed: /:focus-visible/i.test(css) },
-    { label: "Images include alt text", passed: !/<img\b(?![^>]*\balt\s*=)[^>]*>/i.test(html) },
-  ], [html, css]);
+  const diagnostics = useMemo(() => analyzeHtmlCssProject(html, css), [html, css]);
+  const diagnosticErrors = diagnostics.filter((item) => item.level === "error").length;
+  const diagnosticWarnings = diagnostics.filter((item) => item.level === "warning").length;
+  const diagnosticPasses = diagnostics.filter((item) => item.level === "pass").length;
 
   function handleTab(event: KeyboardEvent<HTMLTextAreaElement>, language: "html" | "css") {
     if (event.key !== "Tab" || event.shiftKey || locked) return;
@@ -498,10 +785,32 @@ export default function HtmlCssLabStudio({
           <p className={styles.previewNote}>This preview intentionally disables JavaScript, form submission, pop-ups and external network requests. It is designed for HTML and CSS practice.</p>
         </section>
 
-        <section className={styles.checksPanel}>
-          <div className={styles.checksHeader}><div><span className={styles.eyebrow}>SELF-CHECK</span><h3>Before you submit</h3></div><span className={styles.checkCount}>{checks.filter((check) => check.passed).length} / {checks.length} checks</span></div>
-          <div className={styles.checkList}>{checks.map((check) => <div key={check.label} className={check.passed ? styles.checkPassed : styles.checkPending}><span aria-hidden="true">{check.passed ? "✓" : "○"}</span>{check.label}</div>)}</div>
-          <p className={styles.editorHelp}>These checks are hints, not a full validator. Review the actual preview at all three widths and confirm your links, content and visual hierarchy make sense.</p>
+        <section className={styles.checksPanel} aria-labelledby="studio-diagnostics-title">
+          <div className={styles.checksHeader}>
+            <div>
+              <span className={styles.eyebrow}>ADVANCED CODE DIAGNOSTICS</span>
+              <h3 id="studio-diagnostics-title">Inspect before you submit</h3>
+            </div>
+            <span className={styles.checkCount}>{diagnosticPasses} checks passing</span>
+          </div>
+          <div className={styles.diagnosticSummary} aria-live="polite">
+            <div className={styles.diagnosticStat}><strong>{diagnosticErrors}</strong><span>Needs attention</span></div>
+            <div className={styles.diagnosticStat}><strong>{diagnosticWarnings}</strong><span>Suggestions</span></div>
+            <div className={styles.diagnosticStat}><strong>{diagnosticPasses}</strong><span>Passed checks</span></div>
+          </div>
+          <div className={styles.diagnosticList}>
+            {diagnostics.map((diagnostic) => (
+              <article key={diagnostic.id} className={`${styles.diagnosticItem} ${diagnostic.level === "error" ? styles.diagnosticError : diagnostic.level === "warning" ? styles.diagnosticWarning : diagnostic.level === "info" ? styles.diagnosticInfo : styles.diagnosticPass}`}>
+                <div className={styles.diagnosticMeta}>
+                  <span className={styles.diagnosticBadge}>{diagnostic.level === "error" ? "Needs attention" : diagnostic.level === "warning" ? "Suggestion" : diagnostic.level === "info" ? "Manual check" : "Passed"}</span>
+                  <span>{diagnostic.source ? `${diagnostic.source}${diagnostic.line ? ` · line ${diagnostic.line}` : ""}` : "Project"}</span>
+                </div>
+                <h4>{diagnostic.title}</h4>
+                <p>{diagnostic.detail}</p>
+              </article>
+            ))}
+          </div>
+          <p className={styles.editorHelp}>These diagnostics use static checks and may not detect every issue or fully understand valid HTML/CSS. They do not replace the live preview. Check desktop, tablet and mobile layouts, and review contrast and readability manually.</p>
         </section>
 
         <section className={styles.reflectionPanel}>
