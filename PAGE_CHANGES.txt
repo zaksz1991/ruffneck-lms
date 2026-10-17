@@ -1,0 +1,32 @@
+File to edit: src/app/student/certificates/[certificateId]/page.tsx
+
+1) Add these imports near the other imports at the top:
+
+import CertificateJpgButton from "@/components/CertificateJpgButton";
+import { QRCodeSVG } from "qrcode.react";
+
+2) Find the helper function `buildQrCodeUrl(...)` and delete that whole helper. Find the `qrUrl` variable assignment that calls `buildQrCodeUrl(...)` and delete that assignment too. Keep `buildVerificationUrl(...)` and `fullVerificationUrl`; those are still needed.
+
+3) In the certificate QR frame, find this existing image element:
+
+<img
+  className="certificate-qr"
+  src={qrUrl}
+  alt="QR code for certificate verification"
+/>
+
+Replace it with:
+
+<QRCodeSVG
+  className="certificate-qr"
+  value={fullVerificationUrl}
+  size={300}
+  level="M"
+  bgColor="#ffffff"
+  fgColor="#0b1e3a"
+  title="QR code for certificate verification"
+/>
+
+This uses the already-installed `qrcode.react` dependency, keeps the QR code in the certificate, and removes the cross-origin QR image dependency from the JPG export.
+
+Do not replace the whole certificate page; preserve its current markup, inline print CSS, certificate data queries, revoked-certificate behavior, and other components.
