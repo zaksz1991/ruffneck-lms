@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { headers } from "next/headers";
+import { recordPublicProjectView } from "@/lib/public-project-analytics";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -226,6 +228,14 @@ export default async function PublicProjectPage({ params }: RouteParams) {
   const metaByline = project.metadata.byline || "RuffNeck Learn Student";
   const metaExcerpt = project.metadata.excerpt || project.metadata.metaDescription || "A publication prepared in RuffNeck Learn.";
   const srcDoc = makePublicationDocument(project);
+
+  // Count one article-reader request, not the separate metadata lookup.
+  const requestHeaders = await headers();
+  await recordPublicProjectView(
+    slug,
+    requestHeaders.get("referer"),
+    requestHeaders.get("user-agent"),
+  );
 
   return (
     <main style={{ minHeight: "100vh", background: "#f1f5f9", color: "#13263d" }}>

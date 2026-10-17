@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { recordPublicProjectView } from "@/lib/public-project-analytics";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -138,7 +139,7 @@ function addIndexPageSeo(html: string, slug: string, publication: PublicProject)
   return `${tags}\n${output}`;
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     const { slug, path: parts } = await context.params;
     const path = Array.isArray(parts) ? parts.join("/") : "";
@@ -171,6 +172,13 @@ export async function GET(_request: Request, context: RouteContext) {
     if (candidate.content.startsWith("data:")) return notFoundResponse();
     if (/\.html?$/i.test(path) && hasUnsafeHtml(candidate.content)) return notFoundResponse();
     if (path.toLowerCase() === "index.html") {
+      // Count successful home-page views only; CSS, image and other file requests
+      // are not page views. Analytics failure never blocks the website.
+      await recordPublicProjectView(
+        slug,
+        request.headers.get("referer"),
+        request.headers.get("user-agent"),
+      );
       const html = addIndexPageSeo(candidate.content, slug, publication);
       return new Response(html, { status: 200, headers: { ...SECURITY_HEADERS, "Content-Type": type } });
     }
