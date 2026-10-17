@@ -69,7 +69,10 @@ export async function POST(
       .catch(() => null)) as RequestBody | null;
 
     if (!body || typeof body !== "object") {
-      return jsonError("A valid JSON request body is required.", 400);
+      return jsonError(
+        "A valid JSON request body is required.",
+        400,
+      );
     }
 
     const answerText =
@@ -105,13 +108,14 @@ export async function POST(
       );
     }
 
-    // Drafts may be short. Final submissions need enough detail to review.
+    // Drafts can be short, but final submissions and resubmissions
+    // must contain enough text to describe the work being submitted.
     if (
       action === "submitted" &&
       answerText.length < MIN_SUBMISSION_LENGTH
     ) {
       return jsonError(
-        `Add at least ${MIN_SUBMISSION_LENGTH} characters before submitting. Explain your approach, the work you completed, and the result. You can save a shorter response as a draft.`,
+        `Your final response must contain at least ${MIN_SUBMISSION_LENGTH} characters. Add more detail about your work, then submit again. You can save a shorter response as a draft.`,
         400,
       );
     }
@@ -211,8 +215,8 @@ export async function POST(
       );
     }
 
-    // Only drafts and submissions returned for revision can be edited.
-    // A submission awaiting review cannot be overwritten.
+    // Only drafts and submissions returned for revision can be
+    // edited. A submission awaiting review cannot be overwritten.
     if (
       existingSubmission &&
       !EDITABLE_STATUSES.has(existingSubmission.status)
