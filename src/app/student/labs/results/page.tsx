@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
- type RubricCriterionResult = {
+type RubricCriterionResult = {
   criterion: string;
   description?: string;
   maxPoints: number;
@@ -99,7 +99,6 @@ export default async function StudentLabResultsPage() {
 
   const submissions = (submissionData ?? []) as SubmissionRow[];
   const labIds = [...new Set(submissions.map((submission) => submission.lab_id))];
-
   const { data: labData, error: labsError } = labIds.length > 0
     ? await supabase.from("practical_labs").select("id, title, course_id").in("id", labIds)
     : { data: [], error: null };
@@ -124,14 +123,14 @@ export default async function StudentLabResultsPage() {
       "get_student_lab_rubric_review",
       { p_submission_id: submission.id },
     );
+
     if (error) {
-      // Older deployments may not have the rubric-scoring migration yet.
-      // Still show the student's existing total score and written feedback.
       rubricAvailable = false;
       console.error("Student rubric detail is unavailable:", error.message);
     } else {
       rubricReview = parseReview(data);
     }
+
     const lab = labMap.get(submission.lab_id);
     return {
       submission,
@@ -150,6 +149,7 @@ export default async function StudentLabResultsPage() {
         .slr-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:28px}
         .slr-header h1{font-size:clamp(26px,4vw,38px);line-height:1.12;letter-spacing:-.03em;margin:9px 0 10px}
         .slr-header p{max-width:650px;color:#93abc4;font-size:13px;line-height:1.8;margin:0}
+        .slr-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
         .slr-back{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:10px 14px;border:1px solid #284663;border-radius:10px;color:#c7e9f4;text-decoration:none;font-size:12px;font-weight:700;background:#0d2136}
         .slr-empty{padding:30px 22px;border:1px dashed #2b4762;border-radius:16px;background:#0a1a2b;text-align:center}
         .slr-empty h2{margin:0 0 8px;font-size:18px}.slr-empty p{color:#92a9c0;font-size:13px;line-height:1.8;margin:0 auto 18px;max-width:550px}
@@ -170,16 +170,17 @@ export default async function StudentLabResultsPage() {
         .slr-points{font-size:12px;font-weight:800;color:#80e0c3;white-space:nowrap}.slr-total{display:flex;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid #2a4560;padding-top:14px;margin-top:8px;font-size:12px;color:#b7cadd}.slr-total strong{font-size:16px;color:#f6d477}
         @media(max-width:540px){.student-lab-results{padding:24px 12px 40px}.slr-card{padding:16px}.slr-criterion{grid-template-columns:minmax(0,1fr) auto}.slr-score{font-size:26px}}
       `}</style>
-
       <header className="slr-header">
         <div>
           <div className="slr-kicker">RuffNeck Learn · Practical assessment</div>
           <h1>My Practical Lab Results</h1>
-          <p>Review your score, read your instructor's feedback, and see how each rubric criterion contributed to your result. Revision requests include the feedback you need to improve your work.</p>
+          <p>Review your score, read your instructor&apos;s feedback, and see how each rubric criterion contributed to your result. Revision requests include the feedback you need to improve your work.</p>
         </div>
-        <Link className="slr-back" href="/student/labs">← Back to Practical Labs</Link>
+        <div className="slr-actions">
+          <Link className="slr-back" href="/student/labs/history">Revision history</Link>
+          <Link className="slr-back" href="/student/labs">← Back to Practical Labs</Link>
+        </div>
       </header>
-
       {submissionsError ? (
         <section className="slr-empty">
           <h2>Results could not be loaded</h2>
@@ -203,16 +204,13 @@ export default async function StudentLabResultsPage() {
                 </div>
                 <span className={`slr-status ${submission.status === "revision_required" ? "revision" : ""}`}>{statusText(submission.status)}</span>
               </div>
-
               <div className="slr-summary">
                 <div className="slr-score">{submission.score === null ? "—" : submission.score}<small> / 100</small></div>
               </div>
-
               <section className="slr-feedback">
                 <h3>Instructor feedback</h3>
                 <p>{submission.feedback?.trim() || "No written feedback was recorded for this review."}</p>
               </section>
-
               <section className="slr-rubric">
                 <h3>Criterion-level score breakdown</h3>
                 {rubricReview && rubricReview.rubric_scores.length > 0 ? (
