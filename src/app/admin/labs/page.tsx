@@ -42,18 +42,28 @@ type Student = {
   email: string | null;
 };
 
+type StudentNameResult = {
+  student_id: string;
+  full_name: string | null;
+};
+
 type SearchParams = Promise<{
   status?: string;
 }>;
 
-const REVIEWABLE_STATUSES = ["submitted", "revision_required"];
+const REVIEWABLE_STATUSES = [
+  "submitted",
+  "revision_required",
+];
 
 function formatDate(value: string | null) {
   if (!value) return "Not submitted";
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) return "Unknown date";
+  if (Number.isNaN(date.getTime())) {
+    return "Unknown date";
+  }
 
   return date.toLocaleString("en-NG", {
     dateStyle: "medium",
@@ -65,12 +75,16 @@ function statusLabel(status: string) {
   switch (status) {
     case "submitted":
       return "Awaiting review";
+
     case "revision_required":
       return "Revision required";
+
     case "approved":
       return "Approved";
+
     case "draft":
       return "Draft";
+
     default:
       return status.replaceAll("_", " ");
   }
@@ -102,15 +116,22 @@ export default async function AdminLabsPage({
     .maybeSingle();
 
   if (profileError) {
-    console.error("Lab review profile lookup failed:", profileError);
-    throw new Error("Unable to verify reviewer permissions.");
+    console.error(
+      "Lab review profile lookup failed:",
+      profileError,
+    );
+
+    throw new Error(
+      "Unable to verify reviewer permissions.",
+    );
   }
 
   const profile = profileData as Profile | null;
 
   if (
     !profile ||
-    (profile.role !== "admin" && profile.role !== "instructor")
+    (profile.role !== "admin" &&
+      profile.role !== "instructor")
   ) {
     redirect("/student/dashboard");
   }
@@ -125,7 +146,9 @@ export default async function AdminLabsPage({
     "approved",
   ];
 
-  const activeFilter = allowedFilters.includes(selectedStatus)
+  const activeFilter = allowedFilters.includes(
+    selectedStatus,
+  )
     ? selectedStatus
     : "all";
 
@@ -139,10 +162,16 @@ export default async function AdminLabsPage({
       "revision_required",
       "approved",
     ])
-    .order("submitted_at", { ascending: false, nullsFirst: false });
+    .order("submitted_at", {
+      ascending: false,
+      nullsFirst: false,
+    });
 
   if (activeFilter !== "all") {
-    submissionsQuery = submissionsQuery.eq("status", activeFilter);
+    submissionsQuery = submissionsQuery.eq(
+      "status",
+      activeFilter,
+    );
   }
 
   const {
@@ -151,16 +180,31 @@ export default async function AdminLabsPage({
   } = await submissionsQuery;
 
   if (submissionsError) {
-    console.error("Lab submissions lookup failed:", submissionsError);
+    console.error(
+      "Lab submissions lookup failed:",
+      submissionsError,
+    );
+
     throw new Error(
       "Unable to load lab submissions. Check the Practical Labs database policies.",
     );
   }
 
-  const submissions = (submissionData ?? []) as LabSubmission[];
+  const submissions = (
+    submissionData ?? []
+  ) as LabSubmission[];
 
-  const labIds = [...new Set(submissions.map((item) => item.lab_id))];
-  const studentIds = [...new Set(submissions.map((item) => item.student_id))];
+  const labIds = [
+    ...new Set(
+      submissions.map((item) => item.lab_id),
+    ),
+  ];
+
+  const studentIds = [
+    ...new Set(
+      submissions.map((item) => item.student_id),
+    ),
+  ];
 
   const {
     data: labData,
@@ -168,19 +212,34 @@ export default async function AdminLabsPage({
   } = labIds.length > 0
     ? await supabase
         .from("practical_labs")
-        .select("id, course_id, title, category, difficulty")
+        .select(
+          "id, course_id, title, category, difficulty",
+        )
         .in("id", labIds)
     : { data: [], error: null };
 
   if (labsError) {
-    console.error("Practical labs lookup failed:", labsError);
-    throw new Error("Unable to load practical lab details.");
+    console.error(
+      "Practical labs lookup failed:",
+      labsError,
+    );
+
+    throw new Error(
+      "Unable to load practical lab details.",
+    );
   }
 
   const labs = (labData ?? []) as Lab[];
-  const labMap = new Map(labs.map((lab) => [lab.id, lab]));
 
-  const courseIds = [...new Set(labs.map((lab) => lab.course_id))];
+  const labMap = new Map(
+    labs.map((lab) => [lab.id, lab]),
+  );
+
+  const courseIds = [
+    ...new Set(
+      labs.map((lab) => lab.course_id),
+    ),
+  ];
 
   const {
     data: courseData,
@@ -193,32 +252,100 @@ export default async function AdminLabsPage({
     : { data: [], error: null };
 
   if (coursesError) {
-    console.error("Lab review courses lookup failed:", coursesError);
-    throw new Error("Unable to load course details.");
+    console.error(
+      "Lab review courses lookup failed:",
+      coursesError,
+    );
+
+    throw new Error(
+      "Unable to load course details.",
+    );
   }
 
   const courses = (courseData ?? []) as Course[];
-  const courseMap = new Map(courses.map((course) => [course.id, course]));
 
-  // Admins may read student profiles through the existing admin policies.
-  // Instructors only see profile details if their current RLS policies permit it.
-  const {
-    data: studentData,
-    error: studentsError,
-  } = profile.role === "admin" && studentIds.length > 0
-    ? await supabase
-        .from("profiles")
-        .select("id, full_name, email")
-        .in("id", studentIds)
-    : { data: [], error: null };
+  const courseMap = new Map(
+    courses.map((course) => [
+      course.id,
+      course,
+    ]),
+  );
 
-  if (studentsError) {
-    console.error("Lab review student lookup failed:", studentsError);
+  /*
+   * Administrators retain their existing access to
+   * student profiles, including email addresses.
+   *
+   * Instructors use the restricted database function.
+   * That function returns only student IDs and names
+   * for submissions in courses assigned to them.
+   */
+  const students: Student[] = [];
+
+  if (
+    profile.role === "admin" &&
+    studentIds.length > 0
+  ) {
+    const {
+      data: studentData,
+      error: studentsError,
+    } = await supabase
+      .from("profiles")
+      .select("id, full_name, email")
+      .in("id", studentIds);
+
+    if (studentsError) {
+      console.error(
+        "Lab review student lookup failed:",
+        studentsError,
+      );
+    } else {
+      students.push(
+        ...((studentData ?? []) as Student[]),
+      );
+    }
+  } else if (
+    profile.role === "instructor" &&
+    submissions.length > 0
+  ) {
+    const submissionIds = submissions.map(
+      (submission) => submission.id,
+    );
+
+    const {
+      data: studentNamesData,
+      error: studentNamesError,
+    } = await supabase.rpc(
+      "get_lab_submission_student_names",
+      {
+        p_submission_ids: submissionIds,
+      },
+    );
+
+    if (studentNamesError) {
+      console.error(
+        "Restricted student name lookup failed:",
+        studentNamesError,
+      );
+    } else {
+      const studentNames = (
+        studentNamesData ?? []
+      ) as StudentNameResult[];
+
+      students.push(
+        ...studentNames.map((student) => ({
+          id: student.student_id,
+          full_name: student.full_name,
+          email: null,
+        })),
+      );
+    }
   }
 
-  const students = (studentData ?? []) as Student[];
   const studentMap = new Map(
-    students.map((student) => [student.id, student]),
+    students.map((student) => [
+      student.id,
+      student,
+    ]),
   );
 
   const pendingCount = submissions.filter(
@@ -226,7 +353,8 @@ export default async function AdminLabsPage({
   ).length;
 
   const revisionCount = submissions.filter(
-    (item) => item.status === "revision_required",
+    (item) =>
+      item.status === "revision_required",
   ).length;
 
   const approvedCount = submissions.filter(
@@ -254,13 +382,16 @@ export default async function AdminLabsPage({
             <h1>Practical Labs Review</h1>
 
             <p className="muted">
-              Review student work, provide feedback, and record assessment
-              results.
+              Review student work, provide feedback,
+              and record assessment results.
             </p>
 
             <p className="muted">
-              Reviewer: {profile.full_name || profile.email || user.email} ·{" "}
-              {profile.role}
+              Reviewer:{" "}
+              {profile.full_name ||
+                profile.email ||
+                user.email}{" "}
+              · {profile.role}
             </p>
           </div>
 
@@ -271,11 +402,17 @@ export default async function AdminLabsPage({
               flexWrap: "wrap",
             }}
           >
-            <Link href="/admin/lms" className="btn btn-ghost">
+            <Link
+              href="/admin/lms"
+              className="btn btn-ghost"
+            >
               LMS Dashboard
             </Link>
 
-            <Link href="/admin/projects" className="btn btn-primary">
+            <Link
+              href="/admin/projects"
+              className="btn btn-primary"
+            >
               Projects &amp; Capstones
             </Link>
           </div>
@@ -291,22 +428,38 @@ export default async function AdminLabsPage({
               activeFilter === "all" ? "active" : ""
             }`}
           >
-            <span className="rn-admin-stat-icon">▦</span>
+            <span className="rn-admin-stat-icon">
+              ▦
+            </span>
+
             <span>
-              <span className="muted">Loaded submissions</span>
-              <strong>{submissions.length}</strong>
+              <span className="muted">
+                Loaded submissions
+              </span>
+
+              <strong>
+                {submissions.length}
+              </strong>
             </span>
           </Link>
 
           <Link
             href="/admin/labs?status=submitted"
             className={`rn-admin-stat ${
-              activeFilter === "submitted" ? "active" : ""
+              activeFilter === "submitted"
+                ? "active"
+                : ""
             }`}
           >
-            <span className="rn-admin-stat-icon">◷</span>
+            <span className="rn-admin-stat-icon">
+              ◷
+            </span>
+
             <span>
-              <span className="muted">Awaiting review</span>
+              <span className="muted">
+                Awaiting review
+              </span>
+
               <strong>{pendingCount}</strong>
             </span>
           </Link>
@@ -314,12 +467,20 @@ export default async function AdminLabsPage({
           <Link
             href="/admin/labs?status=revision_required"
             className={`rn-admin-stat ${
-              activeFilter === "revision_required" ? "active" : ""
+              activeFilter === "revision_required"
+                ? "active"
+                : ""
             }`}
           >
-            <span className="rn-admin-stat-icon">↻</span>
+            <span className="rn-admin-stat-icon">
+              ↻
+            </span>
+
             <span>
-              <span className="muted">Revision required</span>
+              <span className="muted">
+                Revision required
+              </span>
+
               <strong>{revisionCount}</strong>
             </span>
           </Link>
@@ -327,12 +488,20 @@ export default async function AdminLabsPage({
           <Link
             href="/admin/labs?status=approved"
             className={`rn-admin-stat ${
-              activeFilter === "approved" ? "active" : ""
+              activeFilter === "approved"
+                ? "active"
+                : ""
             }`}
           >
-            <span className="rn-admin-stat-icon">✓</span>
+            <span className="rn-admin-stat-icon">
+              ✓
+            </span>
+
             <span>
-              <span className="muted">Approved</span>
+              <span className="muted">
+                Approved
+              </span>
+
               <strong>{approvedCount}</strong>
             </span>
           </Link>
@@ -366,11 +535,15 @@ export default async function AdminLabsPage({
         {submissions.length === 0 ? (
           <section className="rn-admin-list-panel">
             <div className="rn-empty-state">
-              <div className="rn-empty-icon">▦</div>
+              <div className="rn-empty-icon">
+                ▦
+              </div>
+
               <strong>No submissions found</strong>
+
               <p>
-                There are no submissions for this filter that you are
-                authorized to review.
+                There are no submissions for this
+                filter that you are authorized to review.
               </p>
             </div>
           </section>
@@ -382,14 +555,22 @@ export default async function AdminLabsPage({
             }}
           >
             {submissions.map((submission) => {
-              const lab = labMap.get(submission.lab_id);
+              const lab = labMap.get(
+                submission.lab_id,
+              );
+
               const course = lab
                 ? courseMap.get(lab.course_id)
                 : undefined;
-              const student = studentMap.get(submission.student_id);
-              const canReview = REVIEWABLE_STATUSES.includes(
-                submission.status,
+
+              const student = studentMap.get(
+                submission.student_id,
               );
+
+              const canReview =
+                REVIEWABLE_STATUSES.includes(
+                  submission.status,
+                );
 
               return (
                 <article
@@ -415,12 +596,19 @@ export default async function AdminLabsPage({
                         {course?.title || "Course"}
                       </div>
 
-                      <h2 style={{ margin: "8px 0" }}>
-                        {lab?.title || "Practical Lab"}
+                      <h2
+                        style={{
+                          margin: "8px 0",
+                        }}
+                      >
+                        {lab?.title ||
+                          "Practical Lab"}
                       </h2>
 
                       <p className="muted">
-                        {lab?.category || "Practical assessment"}
+                        {lab?.category ||
+                          "Practical assessment"}
+
                         {lab?.difficulty
                           ? ` · ${lab.difficulty}`
                           : ""}
@@ -428,7 +616,9 @@ export default async function AdminLabsPage({
                     </div>
 
                     <span className="rn-status-pill">
-                      {statusLabel(submission.status)}
+                      {statusLabel(
+                        submission.status,
+                      )}
                     </span>
                   </div>
 
@@ -442,8 +632,15 @@ export default async function AdminLabsPage({
                     }}
                   >
                     <div>
-                      <span className="muted">Student</span>
-                      <p style={{ margin: "5px 0 0" }}>
+                      <span className="muted">
+                        Student
+                      </span>
+
+                      <p
+                        style={{
+                          margin: "5px 0 0",
+                        }}
+                      >
                         <strong>
                           {student?.full_name ||
                             (profile.role === "instructor"
@@ -451,21 +648,41 @@ export default async function AdminLabsPage({
                               : "Student profile unavailable")}
                         </strong>
                       </p>
-                      {profile.role === "admin" && student?.email ? (
-                        <small>{student.email}</small>
+
+                      {profile.role === "admin" &&
+                      student?.email ? (
+                        <small>
+                          {student.email}
+                        </small>
                       ) : null}
                     </div>
 
                     <div>
-                      <span className="muted">Submitted</span>
-                      <p style={{ margin: "5px 0 0" }}>
-                        {formatDate(submission.submitted_at)}
+                      <span className="muted">
+                        Submitted
+                      </span>
+
+                      <p
+                        style={{
+                          margin: "5px 0 0",
+                        }}
+                      >
+                        {formatDate(
+                          submission.submitted_at,
+                        )}
                       </p>
                     </div>
 
                     <div>
-                      <span className="muted">Current score</span>
-                      <p style={{ margin: "5px 0 0" }}>
+                      <span className="muted">
+                        Current score
+                      </span>
+
+                      <p
+                        style={{
+                          margin: "5px 0 0",
+                        }}
+                      >
                         <strong>
                           {submission.score === null
                             ? "Not scored"
@@ -475,32 +692,44 @@ export default async function AdminLabsPage({
                     </div>
                   </div>
 
-                  <section style={{ marginBottom: 24 }}>
+                  <section
+                    style={{
+                      marginBottom: 24,
+                    }}
+                  >
                     <h3>Student response</h3>
 
                     <div
                       style={{
                         padding: 18,
                         borderRadius: 12,
-                        background: "var(--surface, #f5f7fa)",
-                        border: "1px solid var(--border, #e1e7ef)",
+                        background:
+                          "var(--surface, #f5f7fa)",
+                        border:
+                          "1px solid var(--border, #e1e7ef)",
                         whiteSpace: "pre-wrap",
                         overflowWrap: "anywhere",
                         lineHeight: 1.75,
                       }}
                     >
-                      {submission.answer_text || "No response provided."}
+                      {submission.answer_text ||
+                        "No response provided."}
                     </div>
                   </section>
 
-                  {submission.status === "approved" ? (
+                  {submission.status ===
+                  "approved" ? (
                     <section>
                       <h3>Recorded review</h3>
 
                       <p>
                         <strong>Score:</strong>{" "}
-                        {submission.score ?? "Not recorded"}
-                        {submission.score !== null ? "/100" : ""}
+                        {submission.score ??
+                          "Not recorded"}
+
+                        {submission.score !== null
+                          ? "/100"
+                          : ""}
                       </p>
 
                       <p>
@@ -513,7 +742,8 @@ export default async function AdminLabsPage({
                           overflowWrap: "anywhere",
                         }}
                       >
-                        {submission.feedback || "No feedback recorded."}
+                        {submission.feedback ||
+                          "No feedback recorded."}
                       </div>
                     </section>
                   ) : canReview ? (
@@ -523,7 +753,9 @@ export default async function AdminLabsPage({
                       <LabReviewForm
                         submissionId={submission.id}
                         currentScore={submission.score}
-                        currentFeedback={submission.feedback}
+                        currentFeedback={
+                          submission.feedback
+                        }
                       />
                     </section>
                   ) : null}
