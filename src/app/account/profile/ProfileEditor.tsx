@@ -62,19 +62,21 @@ export default function ProfileEditor({
     const requiredFields = [
       Boolean(name.trim()),
       Boolean(email.trim()),
-      Boolean(phoneNumber.trim()),
     ];
 
     return Math.round(
       (requiredFields.filter(Boolean).length / requiredFields.length) * 100
     );
-  }, [name, email, phoneNumber]);
+  }, [name, email]);
+
+  function clearFeedback() {
+    setMessage("");
+    setError("");
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    setMessage("");
-    setError("");
+    clearFeedback();
 
     const cleanName = name.trim().replace(/\s+/g, " ");
     const cleanPhone = phoneNumber.trim();
@@ -115,14 +117,23 @@ export default function ProfileEditor({
         .select("id")
         .maybeSingle();
 
-      if (updateError || !updatedRow) {
-        console.error(
-          "Profile update failed:",
-          updateError?.message ?? "No updated profile row was returned."
-        );
+      if (updateError) {
+        console.error("Profile update failed:", updateError.message);
 
         setError(
           "Your changes could not be saved. Check your connection and try again."
+        );
+
+        return;
+      }
+
+      if (!updatedRow) {
+        console.error(
+          "Profile update failed: No updated profile row was returned."
+        );
+
+        setError(
+          "Your profile could not be updated. Please refresh the page and try again."
         );
 
         return;
@@ -138,6 +149,12 @@ export default function ProfileEditor({
     } finally {
       setSaving(false);
     }
+  }
+
+  function discardChanges() {
+    setName(fullName);
+    setPhoneNumber(phone);
+    clearFeedback();
   }
 
   return (
@@ -176,7 +193,9 @@ export default function ProfileEditor({
           </div>
 
           <p>
-            Add a phone number if you want your profile to be more complete.
+            {completion === 100
+              ? "Your essential profile details are complete. Adding a phone number is optional."
+              : "Enter your full name to complete your essential profile details."}
           </p>
         </div>
 
@@ -193,9 +212,8 @@ export default function ProfileEditor({
           <h2>Profile details</h2>
 
           <p>
-            Only the fields below are editable here. Your email and account
-            role are read-only to prevent accidental account or permission
-            changes.
+            Update your personal information. Your email and account role
+            remain read-only to protect your account and permissions.
           </p>
         </div>
 
@@ -208,7 +226,10 @@ export default function ProfileEditor({
             <input
               autoComplete="name"
               value={name}
-              onChange={(event) => setName(event.target.value)}
+              onChange={(event) => {
+                setName(event.target.value);
+                clearFeedback();
+              }}
               maxLength={100}
               required
               disabled={saving}
@@ -228,7 +249,7 @@ export default function ProfileEditor({
             />
 
             <small id="email-help">
-              Email is managed by your sign-in account, not this profile form.
+              Your email is managed by your sign-in account.
             </small>
           </label>
 
@@ -239,14 +260,17 @@ export default function ProfileEditor({
               autoComplete="tel"
               inputMode="tel"
               value={phoneNumber}
-              onChange={(event) => setPhoneNumber(event.target.value)}
+              onChange={(event) => {
+                setPhoneNumber(event.target.value);
+                clearFeedback();
+              }}
               maxLength={32}
               disabled={saving}
               placeholder="e.g. +234 800 000 0000"
             />
 
             <small>
-              Optional. Include the country code if you use one.
+              Optional. Include your country code when applicable.
             </small>
           </label>
 
@@ -285,12 +309,7 @@ export default function ProfileEditor({
               className={styles.secondaryButton}
               type="button"
               disabled={saving}
-              onClick={() => {
-                setName(fullName);
-                setPhoneNumber(phone);
-                setError("");
-                setMessage("");
-              }}
+              onClick={discardChanges}
             >
               Discard changes
             </button>
