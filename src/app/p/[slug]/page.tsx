@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const PUBLIC_SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://ruffneck-lms.vercel.app").replace(/\/+$/, "");
+
 type RouteParams = { params: Promise<{ slug: string }> };
 type ProjectFile = { path: string; content: string };
 type PublicProject = {
@@ -163,15 +165,48 @@ function makePublicationDocument(project: ProjectDocument): string {
 export async function generateMetadata({ params }: RouteParams): Promise<Metadata> {
   const { slug } = await params;
   const row = await getPublicProject(slug);
-  if (!row) return { title: "Publication not found | RuffNeck Learn", robots: { index: false, follow: false } };
+  if (!row) {
+    return {
+      title: "Project not found | RuffNeck Learn",
+      robots: { index: false, follow: false },
+    };
+  }
+
   const project = readProject(row.project_json);
+  const title = (project.metadata.seoTitle || project.metadata.title || row.project_title).slice(0, 160);
+  const description = (
+    project.metadata.metaDescription ||
+    project.metadata.excerpt ||
+    (row.project_type === "web_development"
+      ? "A website built with HTML and CSS in RuffNeck Learn."
+      : "A digital publication prepared in RuffNeck Learn.")
+  ).slice(0, 320);
+  const canonicalPath = row.project_type === "web_development"
+    ? `/p/${encodeURIComponent(slug)}/file/index.html`
+    : `/p/${encodeURIComponent(slug)}`;
+  const canonicalUrl = `${PUBLIC_SITE_URL}${canonicalPath}`;
+  const socialImage = `${PUBLIC_SITE_URL}/p/${encodeURIComponent(slug)}/opengraph-image`;
+
   return {
-    title: project.metadata.seoTitle || project.metadata.title || row.project_title,
-    description: project.metadata.metaDescription || project.metadata.excerpt || undefined,
+    metadataBase: new URL(PUBLIC_SITE_URL),
+    title,
+    description,
+    alternates: { canonical: canonicalUrl },
+    robots: { index: true, follow: true },
     openGraph: {
-      title: project.metadata.seoTitle || project.metadata.title || row.project_title,
-      description: project.metadata.metaDescription || project.metadata.excerpt || undefined,
+      title,
+      description,
+      url: canonicalUrl,
+      siteName: "RuffNeck Learn",
+      locale: "en_NG",
       type: row.project_type === "digital_publishing" ? "article" : "website",
+      images: [{ url: socialImage, width: 1200, height: 630, alt: title }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [socialImage],
     },
   };
 }

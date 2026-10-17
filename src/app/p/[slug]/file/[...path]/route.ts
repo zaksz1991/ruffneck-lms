@@ -1,12 +1,13 @@
-import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const runtime = "nodejs";
 
+const PUBLIC_SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://ruffneck-lms.vercel.app").replace(/\/+$/, "");
+
 type RouteContext = { params: Promise<{ slug: string; path: string[] }> };
-type PublicProject = { project_type: string; project_json: unknown };
+type PublicProject = { publication_slug?: string; project_title?: string; project_type: string; project_json: unknown };
 type ProjectFile = { path: string; content: string };
 type PublicationRpcResult = { data: unknown; error: { message: string } | null };
 async function callPublicationRpc(supabase: Awaited<ReturnType<typeof createClient>>, slug: string): Promise<PublicationRpcResult> {
@@ -73,6 +74,70 @@ function decodeImage(value: string, path: string): { bytes: Buffer; type: string
   return { bytes, type: format === "jpeg" ? "image/jpeg" : `image/${format}` };
 }
 
+
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function readProjectMetadata(projectJson: unknown): Record<string, string> {
+  if (!projectJson || typeof projectJson !== "object" || Array.isArray(projectJson)) return {};
+  const row = projectJson as Record<string, unknown>;
+  const raw = row.metadata;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const result: Record<string, string> = {};
+  for (const key of ["title", "seoTitle", "metaDescription", "excerpt", "category"]) {
+    const value = (raw as Record<string, unknown>)[key];
+    if (typeof value === "string") result[key] = value.trim().slice(0, 320);
+  }
+  return result;
+}
+
+function addIndexPageSeo(html: string, slug: string, publication: PublicProject): string {
+  const metadata = readProjectMetadata(publication.project_json);
+  const title = (metadata.seoTitle || metadata.title || publication.project_title || "Published website").slice(0, 160);
+  const description = (metadata.metaDescription || metadata.excerpt || `${title} — a website published with RuffNeck Learn.`).slice(0, 320);
+  const canonical = `${PUBLIC_SITE_URL}/p/${encodeURIComponent(slug)}/file/index.html`;
+  const image = `${PUBLIC_SITE_URL}/p/${encodeURIComponent(slug)}/opengraph-image`;
+  const safeTitle = escapeHtmlAttribute(title);
+  const safeDescription = escapeHtmlAttribute(description);
+  const tags = [
+    `<title>${safeTitle}</title>`,
+    `<meta name="description" content="${safeDescription}">`,
+    `<link rel="canonical" href="${escapeHtmlAttribute(canonical)}">`,
+    `<meta property="og:type" content="website">`,
+    `<meta property="og:site_name" content="RuffNeck Learn">`,
+    `<meta property="og:title" content="${safeTitle}">`,
+    `<meta property="og:description" content="${safeDescription}">`,
+    `<meta property="og:url" content="${escapeHtmlAttribute(canonical)}">`,
+    `<meta property="og:image" content="${escapeHtmlAttribute(image)}">`,
+    `<meta name="twitter:card" content="summary_large_image">`,
+    `<meta name="twitter:title" content="${safeTitle}">`,
+    `<meta name="twitter:description" content="${safeDescription}">`,
+    `<meta name="twitter:image" content="${escapeHtmlAttribute(image)}">`,
+  ].join("\n");
+
+  // Replace only metadata tags controlled by this route; keep the student's page structure and CSS intact.
+  let output = html.replace(/<title\b[^>]*>[\s\S]*?<\/title\s*>/i, "");
+  output = output.replace(/<meta\b(?=[^>]*\b(?:name|property)\s*=\s*["'](?:description|og:type|og:site_name|og:title|og:description|og:url|og:image|twitter:card|twitter:title|twitter:description|twitter:image)["'])[^>]*>/gi, "");
+  output = output.replace(/<link\b(?=[^>]*\brel\s*=\s*["']canonical["'])[^>]*>/gi, "");
+
+  if (/<\/head\s*>/i.test(output)) {
+    return output.replace(/<\/head\s*>/i, `${tags}\n</head>`);
+  }
+  if (/<head\b[^>]*>/i.test(output)) {
+    return output.replace(/<head\b[^>]*>/i, `$&\n${tags}`);
+  }
+  if (/<html\b[^>]*>/i.test(output)) {
+    return output.replace(/<html\b[^>]*>/i, `$&<head>${tags}</head>`);
+  }
+  return `${tags}\n${output}`;
+}
+
 export async function GET(_request: Request, context: RouteContext) {
   try {
     const { slug, path: parts } = await context.params;
@@ -105,6 +170,10 @@ export async function GET(_request: Request, context: RouteContext) {
     }
     if (candidate.content.startsWith("data:")) return notFoundResponse();
     if (/\.html?$/i.test(path) && hasUnsafeHtml(candidate.content)) return notFoundResponse();
+    if (path.toLowerCase() === "index.html") {
+      const html = addIndexPageSeo(candidate.content, slug, publication);
+      return new Response(html, { status: 200, headers: { ...SECURITY_HEADERS, "Content-Type": type } });
+    }
     return new Response(candidate.content, { status: 200, headers: { ...SECURITY_HEADERS, "Content-Type": type } });
   } catch (error) {
     console.error("Published project file route failed:", error);
