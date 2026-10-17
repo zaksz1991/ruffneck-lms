@@ -51,6 +51,7 @@ type StudentNameResult = {
 
 type SearchParams = Promise<{
   status?: string;
+  courseId?: string;
 }>;
 
 const REVIEWABLE_STATUSES = ["submitted", "revision_required"];
@@ -80,6 +81,12 @@ function statusLabel(status: string) {
     default:
       return status.replaceAll("_", " ");
   }
+}
+
+function reviewHref(status: string, courseId: string) {
+  const query = new URLSearchParams({ status });
+  if (courseId !== "all") query.set("courseId", courseId);
+  return `/admin/labs?${query.toString()}`;
 }
 
 export default async function AdminLabsPage({
@@ -125,21 +132,16 @@ export default async function AdminLabsPage({
   const activeFilter = allowedFilters.includes(selectedStatus)
     ? selectedStatus
     : "all";
+  const requestedCourseId = params.courseId ?? "all";
 
-  let submissionsQuery = supabase
+  // Read all reviewable submissions visible under the existing RLS policies.
+  const { data: submissionData, error: submissionsError } = await supabase
     .from("lab_submissions")
     .select(
       "id, lab_id, student_id, answer_text, status, score, feedback, submitted_at, created_at",
     )
     .in("status", ["submitted", "revision_required", "approved"])
     .order("submitted_at", { ascending: false, nullsFirst: false });
-
-  if (activeFilter !== "all") {
-    submissionsQuery = submissionsQuery.eq("status", activeFilter);
-  }
-
-  const { data: submissionData, error: submissionsError } =
-    await submissionsQuery;
 
   if (submissionsError) {
     console.error("Lab submissions lookup failed:", submissionsError);
@@ -148,19 +150,16 @@ export default async function AdminLabsPage({
     );
   }
 
-  const submissions = (submissionData ?? []) as LabSubmission[];
-  const labIds = [...new Set(submissions.map((item) => item.lab_id))];
-  const studentIds = [...new Set(submissions.map((item) => item.student_id))];
+  const allSubmissions = (submissionData ?? []) as LabSubmission[];
 
-  const { data: labData, error: labsError } =
-    labIds.length > 0
-      ? await supabase
-          .from("practical_labs")
-          .select(
-            "id, course_id, title, category, difficulty, instructions, deliverable",
-          )
-          .in("id", labIds)
-      : { data: [], error: null };
+  // Load every lab visible to this reviewer. RLS keeps instructors within
+  // their managed courses and allows administrators their authorised view.
+  const { data: labData, error: labsError } = await supabase
+    .from("practical_labs")
+    .select(
+      "id, course_id, title, category, difficulty, instructions, deliverable",
+    )
+    .order("title", { ascending: true });
 
   if (labsError) {
     console.error("Practical labs lookup failed:", labsError);
@@ -186,6 +185,23 @@ export default async function AdminLabsPage({
 
   const courses = (courseData ?? []) as Course[];
   const courseMap = new Map(courses.map((course) => [course.id, course]));
+  const activeCourseId = courses.some((course) => course.id === requestedCourseId)
+    ? requestedCourseId
+    : "all";
+
+  const courseScopedSubmissions = allSubmissions.filter((submission) => {
+    if (activeCourseId === "all") return true;
+    const lab = labMap.get(submission.lab_id);
+    return lab?.course_id === activeCourseId;
+  });
+
+  const displayedSubmissions = courseScopedSubmissions.filter(
+    (submission) =>
+      activeFilter === "all" || submission.status === activeFilter,
+  );
+  const studentIds = [
+    ...new Set(displayedSubmissions.map((item) => item.student_id)),
+  ];
   const students: Student[] = [];
 
   if (profile.role === "admin" && studentIds.length > 0) {
@@ -199,10 +215,15 @@ export default async function AdminLabsPage({
     } else {
       students.push(...((studentData ?? []) as Student[]));
     }
-  } else if (profile.role === "instructor" && submissions.length > 0) {
+  } else if (
+    profile.role === "instructor" &&
+    displayedSubmissions.length > 0
+  ) {
     const { data: studentNamesData, error: studentNamesError } =
       await supabase.rpc("get_lab_submission_student_names", {
-        p_submission_ids: submissions.map((submission) => submission.id),
+        p_submission_ids: displayedSubmissions.map(
+          (submission) => submission.id,
+        ),
       });
 
     if (studentNamesError) {
@@ -223,16 +244,15 @@ export default async function AdminLabsPage({
   }
 
   const studentMap = new Map(students.map((student) => [student.id, student]));
-  const pendingCount = submissions.filter(
+  const pendingCount = courseScopedSubmissions.filter(
     (item) => item.status === "submitted",
   ).length;
-  const revisionCount = submissions.filter(
+  const revisionCount = courseScopedSubmissions.filter(
     (item) => item.status === "revision_required",
   ).length;
-  const approvedCount = submissions.filter(
+  const approvedCount = courseScopedSubmissions.filter(
     (item) => item.status === "approved",
   ).length;
-
   return (
     <main className="section">
       <div className="container">
@@ -280,17 +300,17 @@ export default async function AdminLabsPage({
           aria-label="Lab submission statistics"
         >
           <Link
-            href="/admin/labs?status=all"
+            href={reviewHref("all", activeCourseId)}
             className={`rn-admin-stat ${activeFilter === "all" ? "active" : ""}`}
           >
             <span className="rn-admin-stat-icon">▦</span>
             <span>
               <span className="muted">Loaded submissions</span>
-              <strong>{submissions.length}</strong>
+              <strong>{courseScopedSubmissions.length}</strong>
             </span>
           </Link>
           <Link
-            href="/admin/labs?status=submitted"
+            href={reviewHref("submitted", activeCourseId)}
             className={`rn-admin-stat ${activeFilter === "submitted" ? "active" : ""}`}
           >
             <span className="rn-admin-stat-icon">◷</span>
@@ -300,7 +320,7 @@ export default async function AdminLabsPage({
             </span>
           </Link>
           <Link
-            href="/admin/labs?status=revision_required"
+            href={reviewHref("revision_required", activeCourseId)}
             className={`rn-admin-stat ${activeFilter === "revision_required" ? "active" : ""}`}
           >
             <span className="rn-admin-stat-icon">↻</span>
@@ -310,7 +330,7 @@ export default async function AdminLabsPage({
             </span>
           </Link>
           <Link
-            href="/admin/labs?status=approved"
+            href={reviewHref("approved", activeCourseId)}
             className={`rn-admin-stat ${activeFilter === "approved" ? "active" : ""}`}
           >
             <span className="rn-admin-stat-icon">✓</span>
@@ -320,6 +340,68 @@ export default async function AdminLabsPage({
             </span>
           </Link>
         </section>
+
+        <form
+          action="/admin/labs"
+          method="get"
+          style={{
+            display: "flex",
+            alignItems: "end",
+            gap: 12,
+            flexWrap: "wrap",
+            margin: "26px 0 18px",
+            padding: 16,
+            border: "1px solid var(--border, #dbe4ef)",
+            borderRadius: 12,
+            background: "var(--surface, #f7f9fc)",
+          }}
+        >
+          <input type="hidden" name="status" value={activeFilter} />
+          <label
+            htmlFor="lab-review-course-filter"
+            style={{
+              display: "grid",
+              gap: 7,
+              minWidth: 240,
+              flex: "1 1 260px",
+              fontWeight: 650,
+            }}
+          >
+            Filter by course
+            <select
+              id="lab-review-course-filter"
+              name="courseId"
+              defaultValue={activeCourseId}
+              style={{
+                minHeight: 42,
+                padding: "9px 12px",
+                border: "1px solid var(--border, #cbd5e1)",
+                borderRadius: 9,
+                background: "var(--background, #fff)",
+                color: "inherit",
+                font: "inherit",
+              }}
+            >
+              <option value="all">All assigned courses</option>
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" className="btn btn-primary">
+            Apply filter
+          </button>
+          {activeCourseId !== "all" ? (
+            <Link
+              href={reviewHref(activeFilter, "all")}
+              className="btn btn-ghost"
+            >
+              Clear course filter
+            </Link>
+          ) : null}
+        </form>
 
         <div
           style={{
@@ -332,7 +414,7 @@ export default async function AdminLabsPage({
           {allowedFilters.map((filter) => (
             <Link
               key={filter}
-              href={`/admin/labs?status=${filter}`}
+              href={reviewHref(filter, activeCourseId)}
               className={activeFilter === filter ? "btn btn-primary" : "btn btn-ghost"}
             >
               {filter === "all" ? "All submissions" : statusLabel(filter)}
@@ -340,13 +422,13 @@ export default async function AdminLabsPage({
           ))}
         </div>
 
-        {submissions.length === 0 ? (
+        {displayedSubmissions.length === 0 ? (
           <section className="rn-admin-list-panel">
             <div className="rn-empty-state">
               <div className="rn-empty-icon">▦</div>
               <strong>No submissions found</strong>
               <p>
-                There are no submissions for this filter that you are authorized to review.
+                There are no submissions matching the selected course and status filters.
               </p>
             </div>
           </section>
@@ -357,7 +439,7 @@ export default async function AdminLabsPage({
               gap: 22,
             }}
           >
-            {submissions.map((submission) => {
+            {displayedSubmissions.map((submission) => {
               const lab = labMap.get(submission.lab_id);
               const course = lab ? courseMap.get(lab.course_id) : undefined;
               const student = studentMap.get(submission.student_id);
