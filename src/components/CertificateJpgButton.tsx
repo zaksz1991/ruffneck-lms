@@ -1,25 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { toBlob } from "html-to-image";
+import { toCanvas } from "html-to-image";
 
-const IMAGE_WAIT_TIMEOUT_MS = 12000;
+const IMAGE_WAIT_TIMEOUT_MS = 15000;
+
+type ExportStatus = "idle" | "working" | "success" | "error";
 
 function waitForImage(image: HTMLImageElement): Promise<void> {
   if (image.complete) {
     return image.naturalWidth > 0
       ? Promise.resolve()
-      : Promise.reject(new Error("A certificate image did not load."));
+      : Promise.reject(new Error(`Certificate image failed to load: ${image.currentSrc || image.src}`));
   }
 
   return new Promise<void>((resolve, reject) => {
-    const timeout = window.setTimeout(() => {
-      cleanup();
-      reject(new Error("A certificate image timed out while loading."));
-    }, IMAGE_WAIT_TIMEOUT_MS);
+    let timeoutId = 0;
 
     const cleanup = () => {
-      window.clearTimeout(timeout);
+      window.clearTimeout(timeoutId);
       image.removeEventListener("load", onLoad);
       image.removeEventListener("error", onError);
     };
@@ -27,20 +26,47 @@ function waitForImage(image: HTMLImageElement): Promise<void> {
     const onLoad = () => {
       cleanup();
       if (image.naturalWidth > 0) resolve();
-      else reject(new Error("A certificate image did not load."));
+      else reject(new Error("A certificate image loaded without usable dimensions."));
     };
 
     const onError = () => {
       cleanup();
-      reject(new Error("A certificate image did not load."));
+      reject(new Error(`Certificate image failed to load: ${image.currentSrc || image.src}`));
     };
+
+    timeoutId = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("A certificate image timed out while loading."));
+    }, IMAGE_WAIT_TIMEOUT_MS);
 
     image.addEventListener("load", onLoad, { once: true });
     image.addEventListener("error", onError, { once: true });
   });
 }
 
-function triggerBlobDownload(blob: Blob, filename: string) {
+function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    // Explicitly request JPEG. canvas.toBlob() defaults to PNG when no MIME type
+    // is supplied, which previously produced PNG bytes named with a .jpg suffix.
+    canvas.toBlob(
+      (blob) => {
+        if (!blob || blob.size === 0) {
+          reject(new Error("The browser could not create a certificate image."));
+          return;
+        }
+        if (blob.type !== "image/jpeg") {
+          reject(new Error(`The browser returned ${blob.type || "an unknown image format"} instead of JPEG.`));
+          return;
+        }
+        resolve(blob);
+      },
+      "image/jpeg",
+      quality,
+    );
+  });
+}
+
+function downloadBlob(blob: Blob, filename: string) {
   const objectUrl = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = objectUrl;
@@ -51,40 +77,36 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   document.body.appendChild(link);
 
   try {
-    // A Blob URL avoids the very large base64 data URLs produced by toJpeg.
     link.click();
   } finally {
     link.remove();
-    // Give browsers time to begin the download before releasing the Blob URL.
-    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    // Allow browsers time to start the download before releasing the URL.
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
   }
 }
 
 export default function CertificateJpgButton() {
-  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<ExportStatus>("idle");
   const [message, setMessage] = useState("");
-  const [error, setError] = useState(false);
 
   async function downloadJpg() {
-    const certificate = document.querySelector<HTMLElement>(
-      ".certificate-paper"
-    );
+    if (status === "working") return;
 
+    const certificate = document.querySelector<HTMLElement>(".certificate-paper");
     if (!certificate) {
-      setError(true);
+      setStatus("error");
       setMessage("Certificate not found. Reload the certificate page and try again.");
       return;
     }
 
     if (certificate.offsetWidth < 1 || certificate.offsetHeight < 1) {
-      setError(true);
-      setMessage("The certificate is not ready to export. Reload the page and try again.");
+      setStatus("error");
+      setMessage("The certificate is not visible yet. Reload the page and try again.");
       return;
     }
 
-    setLoading(true);
-    setError(false);
-    setMessage("Preparing certificate image…");
+    setStatus("working");
+    setMessage("Preparing a print-quality JPEG…");
 
     try {
       if ("fonts" in document && document.fonts?.ready) {
@@ -94,32 +116,28 @@ export default function CertificateJpgButton() {
       const images = Array.from(certificate.querySelectorAll("img"));
       await Promise.all(images.map(waitForImage));
 
-      // Use Blob output instead of a base64 data URL for more reliable downloads
-      // and lower memory use, especially for high-resolution certificates.
-      const blob = await toBlob(certificate, {
-        quality: 0.96,
-        pixelRatio: 2,
+      // Wait for the browser to finish painting after fonts and image decoding.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+
+      const canvas = await toCanvas(certificate, {
+        pixelRatio: 3,
         backgroundColor: "#fffefa",
         cacheBust: true,
         width: certificate.offsetWidth,
         height: certificate.offsetHeight,
       });
 
-      if (!(blob instanceof Blob) || blob.size === 0) {
-        throw new Error("The certificate image was empty.");
-      }
+      const blob = await canvasToJpeg(canvas, 0.96);
+      downloadBlob(blob, "ruffneck-certificate.jpg");
 
-      const filename = "ruffneck-certificate.jpg";
-      triggerBlobDownload(blob, filename);
-      setMessage("JPG download started. Check your Downloads folder.");
+      setStatus("success");
+      setMessage("JPEG downloaded. Open ruffneck-certificate.jpg and print it in landscape orientation.");
     } catch (cause) {
-      console.error("Certificate JPG export failed:", cause);
-      setError(true);
+      console.error("Certificate JPEG export failed:", cause);
+      setStatus("error");
       setMessage(
-        "Could not create the JPG. Check that certificate artwork has loaded, then try again. You can use Print / Save PDF as a fallback."
+        "The JPG could not be created because some certificate artwork did not load or could not be captured. Reload the certificate page, wait for the QR code and logos to appear, then try again. Use Print / Save PDF if the image still fails.",
       );
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -128,22 +146,22 @@ export default function CertificateJpgButton() {
       <button
         type="button"
         onClick={downloadJpg}
-        disabled={loading}
+        disabled={status === "working"}
         className="certificate-action-button"
-        aria-busy={loading}
+        aria-busy={status === "working"}
       >
-        {loading ? "Creating JPG…" : "Download JPG"}
+        {status === "working" ? "Creating JPG…" : "Download JPG"}
       </button>
       {message ? (
         <p
-          role={error ? "alert" : "status"}
+          role={status === "error" ? "alert" : "status"}
           aria-live="polite"
           style={{
-            maxWidth: 320,
+            maxWidth: 340,
             margin: "8px 0 0",
-            color: error ? "#a51d2d" : "#526174",
+            color: status === "error" ? "#a51d2d" : status === "success" ? "#166534" : "#526174",
             fontSize: 12,
-            lineHeight: 1.45,
+            lineHeight: 1.5,
           }}
         >
           {message}
