@@ -1,0 +1,15 @@
+RUFFNECK LEARN — CERTIFICATE JPG VERIFICATION
+
+[ ] Preview build passes
+[ ] Valid certificate opens
+[ ] Download JPG shows progress
+[ ] JPEG file downloads (not PNG renamed to .jpg)
+[ ] File name includes certificate number
+[ ] Holder name/course/issue date/certificate number are readable
+[ ] Logo, seal, signature and QR code are present
+[ ] QR code opens certificate verification record
+[ ] Automatic download fallback link works
+[ ] Print / Save PDF still works
+[ ] Revoked certificates do not expose the JPG action
+[ ] Test in desktop Chrome/Edge
+[ ] Test in Safari/iOS Safari when available

@@ -1,44 +1,49 @@
 # RuffNeck Learn — Certificate JPG Download Fix
 
-This package fixes the JPG export path and two related integration problems visible in the current public `main` source:
+This targeted fix addresses the JPG download failure in the current certificate source.
 
-1. `CertificateJpgButton.tsx` uses `html-to-image`, but `html-to-image` is not listed in the current `package.json`.
-2. `src/app/student/certificates/[certificateId]/page.tsx` renders `<CertificateJpgButton />` but the current `main` file does not import it.
-3. The certificate's QR code is currently loaded from a third-party image URL. Cross-origin image capture can cause DOM-to-image export failures. Use the installed `qrcode.react` package to render the QR code locally as SVG.
-4. Downloads are changed from a base64 data URL to a Blob URL, with image/font readiness checks and visible error feedback.
+## Confirmed issues in `main`
 
-## Files in this ZIP
+- The certificate page uses an externally hosted QR image from `api.qrserver.com`. Cross-origin image capture can cause `html-to-image` rasterization to fail.
+- The current JPG component waits asynchronously and then triggers a programmatic download. Some browsers, particularly Safari/mobile Safari, may ignore that click after asynchronous work finishes.
+- The existing component uses a generic filename, which makes downloads harder to identify.
 
-- `src/components/CertificateJpgButton.tsx` — complete replacement.
-- `package.json` — complete replacement, adding `html-to-image` as a direct dependency.
-- `PAGE_CHANGES.txt` — exact small changes required in the existing certificate page. Do not replace the entire 1,174-line page.
+## Files
+
+- `src/components/CertificateJpgButton.tsx` — complete replacement component.
+
+No page replacement is required. The current `src/app/student/certificates/[certificateId]/page.tsx` already imports and renders `CertificateJpgButton`, and the current `package.json` already lists both `html-to-image` and `qrcode.react` as dependencies.
+
+## What the replacement changes
+
+- Reads the actual verification URL from the existing QR image's `data` query parameter.
+- Renders that same QR locally as an inline SVG using the already-installed `qrcode.react` package.
+- Temporarily replaces the external QR image with the local SVG only while capturing the certificate, then restores the original page element.
+- Waits for fonts and remaining certificate images before capture.
+- Explicitly encodes JPEG and rejects an empty or incorrectly typed blob.
+- Uses a Blob URL rather than a large base64 data URL.
+- Names the file using its certificate number when available.
+- Shows a visible `Download JPG file` link after the image is generated, for browsers that ignore the automatic download click.
+- Keeps the existing Print / Save PDF action unchanged.
 
 ## Apply through GitHub
 
-1. Create a branch from `main` named `fix/certificate-jpg-download`.
-2. Replace `src/components/CertificateJpgButton.tsx` with the included file.
-3. Replace `package.json` with the included file. The current repository source does not contain a `package-lock.json`; if your branch has acquired one since this package was prepared, update/regenerate it with the matching dependency before deployment.
-4. Make the changes described in `PAGE_CHANGES.txt` to `src/app/student/certificates/[certificateId]/page.tsx`.
-5. Commit these changes to the branch and check the Vercel preview before merging.
-
-## Why these changes
-
-- `toBlob` reduces memory use compared with a large base64 JPEG data URL.
-- Appending the download link to the DOM is more compatible with browser download handling.
-- The button waits for fonts and all certificate `<img>` assets before rasterizing.
-- An inline SVG QR code avoids relying on a third-party QR image during canvas export.
-- The existing Print / Save PDF action remains available as fallback.
+1. Create a branch from `main`, for example `fix/certificate-jpg-download`.
+2. Replace `src/components/CertificateJpgButton.tsx` with the complete file in this package.
+3. Do not modify `package.json`: the current `main` already includes `html-to-image` and `qrcode.react`.
+4. Commit the replacement to the branch and inspect the Vercel preview before merging.
 
 ## Verification checklist
 
 1. Open a valid, non-revoked certificate.
-2. Wait for all logos, seals, and signature images to load.
-3. Click Download JPG; confirm the button shows progress and then a success message.
-4. Open the downloaded JPG and check the full certificate, QR code, logos, signature, recipient name, scores, and certificate number.
-5. Test a revoked certificate: the JPG control should remain hidden, as before.
-6. Test Chrome and Edge desktop; if applicable, test Safari/mobile Safari.
-7. Confirm Print / Save PDF and public certificate verification continue to work.
+2. Click Download JPG.
+3. Confirm the button indicates progress, then the success message and fallback link appear.
+4. Open the JPG and check the holder name, course, certificate number, logos, seal, signature and QR code.
+5. Confirm the QR code resolves to the certificate verification URL.
+6. Test Chrome/Edge and, if applicable, Safari/iOS Safari.
+7. Test a revoked certificate and confirm the JPG button remains hidden by the existing page logic.
+8. Confirm Print / Save PDF and public verification still work.
 
 ## Verification status
 
-This is a targeted source-level replacement prepared against public `main` source. It has not been built against your full repository or tested against your production certificate records. Do not merge until the Vercel preview build and a real certificate JPG download both pass.
+This package is a source-level replacement based on the public `main` component and its certificate page. It has not been built against the full repository or tested against production certificate records. Do not merge until Vercel preview build and a real JPG download both pass.
