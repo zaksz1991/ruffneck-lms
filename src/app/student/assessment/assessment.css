@@ -1,0 +1,187 @@
+/*
+ * RuffNeck Learn assessment interaction repair.
+ * Imported by AssessmentClient.tsx; scoped selectors avoid changing other pages.
+ */
+.rn-assessment-card .rn-answer-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.rn-assessment-card .rn-answer-option {
+  position: relative;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  min-height: 64px;
+  padding: 14px 16px;
+  border: 2px solid #d0d5dd;
+  border-radius: 14px;
+  background: #fff;
+  color: #1d2939;
+  text-align: left;
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 5%);
+  transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rn-assessment-card .rn-answer-option:hover:not(:disabled) {
+  border-color: #0891b2;
+  background: #f0fbff;
+  box-shadow: 0 3px 10px rgb(8 145 178 / 10%);
+}
+
+.rn-assessment-card .rn-answer-option:active:not(:disabled) {
+  transform: scale(0.995);
+}
+
+.rn-assessment-card .rn-answer-option.is-selected,
+.rn-assessment-card .rn-answer-option.is-selected:hover {
+  border-color: #087e9b;
+  background: #dff7ff;
+  color: #073b50;
+  box-shadow: inset 0 0 0 1px #087e9b, 0 0 0 3px rgb(0 180 216 / 14%);
+}
+
+.rn-assessment-card .rn-answer-option:focus-visible {
+  outline: 3px solid #00b4d8;
+  outline-offset: 3px;
+}
+
+.rn-assessment-card .rn-answer-option:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+
+.rn-assessment-card .rn-answer-radio {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  border: 2px solid #98a2b3;
+  border-radius: 50%;
+  background: #fff;
+  color: #344054;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.rn-assessment-card .rn-answer-option.is-selected .rn-answer-radio {
+  border-color: #075985;
+  background: #075985;
+  color: #fff;
+}
+
+.rn-assessment-card .rn-answer-copy {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rn-assessment-card .rn-answer-selected-label {
+  color: #075985;
+  font-size: 0.75rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rn-assessment-answer-status,
+.rn-assessment-unanswered,
+.rn-assessment-ready {
+  margin: 12px 0 0;
+  color: #475467;
+  font-size: 0.88rem;
+}
+
+.rn-assessment-ready {
+  color: #067647;
+  font-weight: 700;
+}
+
+.rn-assessment-error {
+  display: grid;
+  gap: 4px;
+  margin-top: 16px;
+  padding: 13px 15px;
+  border: 1px solid #fda29b;
+  border-left: 4px solid #d92d20;
+  border-radius: 10px;
+  background: #fff4f2;
+  color: #912018;
+}
+
+.rn-assessment-error span {
+  color: #7a271a;
+  overflow-wrap: anywhere;
+}
+
+.rn-assessment-navigation {
+  align-items: center;
+}
+
+.rn-assessment-navigation .rn-button {
+  min-height: 48px;
+  padding: 12px 20px;
+  font-weight: 800;
+}
+
+.rn-assessment-navigation .rn-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
+.rn-assessment-navigation .rn-assessment-submit {
+  min-width: min(240px, 100%);
+  background: #0b1e3a;
+  color: #fff;
+  box-shadow: 0 4px 12px rgb(11 30 58 / 18%);
+}
+
+.rn-assessment-navigation .rn-assessment-submit:hover:not(:disabled) {
+  background: #12345a;
+  color: #fff;
+}
+
+@media (max-width: 560px) {
+  .rn-assessment-card .rn-answer-option {
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 10px;
+    min-height: 60px;
+    padding: 12px;
+  }
+
+  .rn-assessment-card .rn-answer-radio {
+    width: 30px;
+    height: 30px;
+  }
+
+  .rn-assessment-card .rn-answer-selected-label {
+    grid-column: 2;
+    margin-top: -5px;
+  }
+
+  .rn-assessment-navigation {
+    align-items: stretch;
+  }
+
+  .rn-assessment-navigation .rn-button {
+    width: 100%;
+    min-height: 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rn-assessment-card .rn-answer-option {
+    transition: none;
+  }
+}
