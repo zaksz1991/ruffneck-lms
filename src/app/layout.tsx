@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "./certificate-social-print.css";
 import "./background-upgrade.css";
 import { Header } from "@/components/Header";
 
