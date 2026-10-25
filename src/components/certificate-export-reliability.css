@@ -1,0 +1,63 @@
+/* Import after the app's global stylesheet. These rules complement the existing
+   certificate CSS; they do not replace certificate branding or verification. */
+body:has(.certificate-page),
+body:has(.modern-cert-page),
+body:has(.rn-certificate-view-page) {
+  background: #f0f2f5;
+}
+.certificate-export-actions button {
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.certificate-export-actions button:hover:not(:disabled) {
+  border-color: #1877f2;
+  background: #f5f9ff;
+}
+@page { size: A4 landscape; margin: 0; }
+@media print {
+  html, body {
+    width: 297mm !important;
+    height: 210mm !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  body * { visibility: hidden !important; }
+  .certificate-paper, .certificate-paper *,
+  .mc-paper, .mc-paper *,
+  .rn-certificate-document, .rn-certificate-document * {
+    visibility: visible !important;
+  }
+  .certificate-page, .modern-cert-page, .rn-certificate-view-page {
+    position: static !important;
+    width: 297mm !important;
+    height: 210mm !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: #fff !important;
+  }
+  .certificate-paper, .mc-paper, .rn-certificate-document {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 297mm !important;
+    height: 210mm !important;
+    max-width: none !important;
+    max-height: 210mm !important;
+    margin: 0 !important;
+    aspect-ratio: auto !important;
+    overflow: hidden !important;
+    box-shadow: none !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    page-break-before: avoid !important;
+    page-break-after: avoid !important;
+  }
+  .no-print, .certificate-toolbar, .mc-toolbar,
+  .certificate-verification-component, .certificate-after-paper,
+  .certificate-revoked-notice { display: none !important; }
+}
