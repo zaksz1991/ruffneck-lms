@@ -1,29 +1,25 @@
-# RuffNeck Learn — Assessment Interaction Repair
+# RuffNeck Learn — Certificate Social/Print CSS Repair
 
-## Root cause confirmed from public `main`
-`AssessmentClient.tsx` applies the class `is-selected` when an answer is selected, but `src/app/globals.css` styles `.rn-answer-option.selected`. The selected-state CSS therefore does not match the class emitted by React. This update fixes that mismatch with scoped assessment styles.
+## Included
+- `src/app/certificate-social-print.css`: page surface, header, certificate preview, and print CSS.
+- `tests/certificate-social-print.test.mjs`: static regression checks.
 
-## Included complete replacement files
-- `src/app/student/assessment/AssessmentClient.tsx` — full component replacement.
-- `src/app/student/assessment/assessment.css` — assessment-only interaction styling.
-- `tests/assessment-interaction-repair.test.mjs` — regression checks.
+## Integrate
+1. Add `src/app/certificate-social-print.css` to the repository at the same path.
+2. Open `src/app/layout.tsx`.
+3. Add this import immediately after the existing `globals.css` import:
 
-## Apply using File Explorer / GitHub web UI
-1. Extract this ZIP.
-2. In the RuffNeck Learn repository, replace `src/app/student/assessment/AssessmentClient.tsx` with the included complete file.
-3. Add `src/app/student/assessment/assessment.css`.
-4. Add `tests/assessment-interaction-repair.test.mjs`.
-5. Keep `src/app/globals.css`, API routes, scoring logic, Supabase configuration, course content and all other files unchanged.
+   `import "./certificate-social-print.css";`
 
-## Changes
-- High-contrast selected state with a filled marker and explicit “Selected” label.
-- Corrects the `is-selected` class/CSS mismatch without overriding global styles.
-- Whole answer row remains clickable; selected state is exposed with `aria-pressed`.
-- Answers persist while moving between questions.
-- Submission checks all questions and moves to the first unanswered question.
-- Confirmation before final submission and duplicate-submit guard.
-- Clear loading state, accessible error announcement and preserved answers on failure.
-- Empty-question guard and mobile/touch sizing.
+4. Leave the certificate page component, logo files, certificate border, watermark, QR code, signatures, seals, and certificate data logic unchanged.
 
-## Verification status
-The source-level regression tests are included but were not executed against the complete repository here. The production build, live-browser interaction and live submission endpoint have not been verified. Do not treat this package as a verified production deployment.
+## Intended behaviour
+- Application and certificate-page backgrounds use a clean light-grey social-platform-style surface.
+- Toolbar/actions use white card styling; RuffNeck navy remains the brand colour and blue is used for interactive accents.
+- Certificate preview retains a landscape aspect ratio on screen.
+- Print output requests A4 landscape with zero page margins, hides surrounding controls, and fixes the certificate sheet to 297mm × 210mm.
+
+## Verification limitations
+This is a CSS integration update, not a production deployment. It has not been tested against a live browser or the deployed Vercel site. Browser print settings can affect background printing; enable “Background graphics” in the print dialog when necessary. Verify that a real certificate with a long name/course title fits one page in the target browser before deployment.
+
+The stylesheet includes selectors for both certificate markup families present in prior project artifacts. Confirm which one is currently active in `main` before deployment.

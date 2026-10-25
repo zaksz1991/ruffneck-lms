@@ -1,0 +1,253 @@
+/*
+ * RuffNeck Learn — social-style page surfaces + certificate print controls.
+ * Import from src/app/layout.tsx AFTER globals.css.
+ * Supports both certificate markup families found in the project history:
+ * .certificate-page/.certificate-paper and .rn-certificate-view-page/
+ * .rn-certificate-document.
+ */
+
+/* Facebook/LinkedIn-inspired application surface; RuffNeck branding retained. */
+:root {
+  --rn-social-page: #f0f2f5;
+  --rn-social-surface: #ffffff;
+  --rn-social-border: #d8dee8;
+  --rn-social-text: #1c1e21;
+  --rn-social-muted: #64748b;
+  --rn-social-blue: #1877f2;
+  --rn-brand-navy: #0b1e3a;
+}
+
+html {
+  background: var(--rn-social-page);
+}
+
+body {
+  background: var(--rn-social-page);
+  color: var(--rn-social-text);
+}
+
+/* Shared modern header/navigation surfaces, without overriding branded logos. */
+header:not(.certificate-header):not(.rn-certificate-header) {
+  border-color: var(--rn-social-border);
+}
+
+main:not(.certificate-page):not(.rn-certificate-view-page) {
+  color: var(--rn-social-text);
+}
+
+.container {
+  color: inherit;
+}
+
+/* Certificate page backdrop and action bar. */
+.certificate-page,
+.rn-certificate-view-page {
+  background: var(--rn-social-page) !important;
+  color: var(--rn-social-text);
+}
+
+.certificate-toolbar,
+.rn-certificate-view-actions {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto 18px !important;
+  padding: 12px 16px !important;
+  border: 1px solid var(--rn-social-border) !important;
+  border-radius: 12px !important;
+  background: var(--rn-social-surface) !important;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 5%);
+  box-sizing: border-box;
+}
+
+.certificate-toolbar a,
+.rn-certificate-view-actions a,
+.rn-certificate-view-actions button {
+  border-radius: 8px;
+}
+
+.certificate-primary-action,
+.rn-certificate-action-group .rn-button {
+  background-color: var(--rn-social-blue);
+  border-color: var(--rn-social-blue);
+  color: #fff;
+}
+
+.certificate-paper,
+.rn-certificate-document {
+  background: #fff !important;
+  border-color: var(--rn-social-border);
+  box-shadow: 0 8px 28px rgb(15 23 42 / 10%);
+  color: #24334a;
+}
+
+/* Keep the certificate header formal, but improve hierarchy and separation. */
+.certificate-header,
+.rn-certificate-header {
+  border-color: var(--rn-social-border);
+}
+
+.certificate-brand-name,
+.rn-certificate-learn-name {
+  color: var(--rn-brand-navy) !important;
+  letter-spacing: 0.035em;
+}
+
+.certificate-tagline,
+.rn-certificate-tagline {
+  color: var(--rn-social-muted) !important;
+}
+
+.certificate-brand-rule,
+.rn-certificate-header-accent {
+  color: var(--rn-social-blue);
+}
+
+.certificate-title,
+.rn-certificate-main h1 {
+  color: var(--rn-brand-navy) !important;
+}
+
+.certificate-recipient,
+.rn-certificate-main h2 {
+  color: var(--rn-brand-navy) !important;
+}
+
+.certificate-course-title,
+.rn-certificate-main h3 {
+  color: #24334a !important;
+}
+
+.certificate-paper-background,
+.rn-certificate-security-pattern {
+  pointer-events: none;
+}
+
+/* On-screen landscape sheet: scale down proportionally instead of reflowing. */
+.certificate-paper {
+  width: min(1180px, calc(100vw - 32px));
+  aspect-ratio: 297 / 210;
+  height: auto;
+  box-sizing: border-box;
+  margin-inline: auto;
+  overflow: hidden;
+}
+
+.rn-certificate-document {
+  box-sizing: border-box;
+  max-width: 1180px;
+  margin-inline: auto;
+}
+
+/* Print: one physical A4 landscape sheet, with toolbar and surrounding UI removed. */
+@page {
+  size: A4 landscape;
+  margin: 0;
+}
+
+@media print {
+  html,
+  body {
+    width: 297mm !important;
+    height: 210mm !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: #fff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .certificate-paper,
+  .certificate-paper *,
+  .rn-certificate-document,
+  .rn-certificate-document * {
+    visibility: visible !important;
+  }
+
+  .certificate-page,
+  .rn-certificate-view-page {
+    position: static !important;
+    display: block !important;
+    width: 297mm !important;
+    height: 210mm !important;
+    min-height: 0 !important;
+    max-height: 210mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: #fff !important;
+    break-after: avoid-page !important;
+    page-break-after: avoid !important;
+  }
+
+  .certificate-toolbar,
+  .rn-certificate-view-actions,
+  .certificate-verification-component,
+  .certificate-after-paper,
+  .certificate-revoked-notice,
+  .no-print {
+    display: none !important;
+  }
+
+  .certificate-paper,
+  .rn-certificate-document {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    display: block !important;
+    width: 297mm !important;
+    height: 210mm !important;
+    min-width: 297mm !important;
+    min-height: 210mm !important;
+    max-width: 297mm !important;
+    max-height: 210mm !important;
+    aspect-ratio: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    page-break-before: avoid !important;
+    page-break-after: avoid !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .certificate-border,
+  .certificate-paper-background,
+  .certificate-watermark,
+  .certificate-layout,
+  .rn-certificate-border,
+  .rn-certificate-inner,
+  .rn-certificate-watermark,
+  .rn-certificate-security-pattern {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Prevent global page header/footer styling from affecting certificate branding. */
+  .certificate-header,
+  .rn-certificate-header {
+    display: flex !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+}
+
+@media screen and (max-width: 700px) {
+  .certificate-toolbar,
+  .rn-certificate-view-actions {
+    width: calc(100% - 16px);
+    padding: 10px !important;
+    gap: 10px;
+  }
+
+  .certificate-paper {
+    width: calc(100vw - 16px);
+  }
+}
