@@ -2,669 +2,579 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./Header.module.css";
 
-type Role = "student" | "instructor" | "admin" | null;
+type NavItem = {
+  href: string;
+  label: string;
+  description?: string;
+};
+
+type MenuSection = {
+  heading: string;
+  items: NavItem[];
+};
+
+const learningItems: NavItem[] = [
+  {
+    href: "/account/profile",
+    label: "My Profile",
+    description: "Manage your account details",
+  },
+  {
+    href: "/student/scan",
+    label: "Scan & Learn",
+    description: "Access learning resources",
+  },
+  {
+    href: "/student/labs",
+    label: "Practical Labs",
+    description: "Work through applied exercises",
+  },
+  {
+    href: "/student/ai-drafts",
+    label: "My AI Drafts",
+    description: "Return to your saved drafts",
+  },
+];
+
+const recordItems: NavItem[] = [
+  {
+    href: "/student/payments",
+    label: "Payment History",
+    description: "Review your transactions",
+  },
+  {
+    href: "/student/assessment/results",
+    label: "Assessment Results",
+    description: "Review assessment performance",
+  },
+  {
+    href: "/student/certificates",
+    label: "Certificates",
+    description: "View and verify credentials",
+  },
+];
+
+const managementItems: NavItem[] = [
+  {
+    href: "/admin/lms",
+    label: "Admin Workspace",
+    description: "Manage learning activities",
+  },
+  {
+    href: "/admin/labs",
+    label: "Review Labs",
+    description: "Review practical lab work",
+  },
+  {
+    href: "/admin/practical-work",
+    label: "Practical Work Review",
+    description: "Review learner submissions",
+  },
+];
+
+function isActivePath(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const [role, setRole] = useState<Role>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [signingOut, setSigningOut] = useState(false);
-  const [signOutError, setSignOutError] = useState("");
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const supabase = useMemo(() => createClient(), []);
+  const moreRef = useRef<HTMLDivElement>(null);
 
-  const moreMenuRef = useRef<HTMLDivElement>(null);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const isManagement =
+    role === "admin" || role === "instructor";
+
+  const dashboardHref = isManagement
+    ? "/admin/lms"
+    : "/student/dashboard";
+
+  const primaryItems: NavItem[] = [
+    { href: "/courses", label: "Courses" },
+    ...(authenticated
+      ? [
+          {
+            href: dashboardHref,
+            label: "Dashboard",
+          },
+          {
+            href: "/student/courses",
+            label: "My Learning",
+          },
+          {
+            href: "/student/practical-work",
+            label: "Practical Work",
+          },
+          {
+            href: "/student/skill-passport",
+            label: "Skill Passport",
+          },
+        ]
+      : []),
+  ];
+
+  const menuSections: MenuSection[] = [
+    {
+      heading: "Your learning",
+      items: learningItems,
+    },
+    {
+      heading: "Progress & records",
+      items: recordItems,
+    },
+    ...(isManagement
+      ? [
+          {
+            heading: "Management",
+            items: managementItems,
+          },
+        ]
+      : []),
+  ];
 
   useEffect(() => {
-    let mounted = true;
+    let active = true;
 
-    setMobileMenuOpen(false);
-    setMoreMenuOpen(false);
-
-    async function loadUser() {
-      setLoading(true);
-
+    async function loadSession() {
       try {
-        const supabase = createClient();
-
         const {
           data: { user },
-          error: authError,
+          error,
         } = await supabase.auth.getUser();
 
-        if (!mounted) {
-          return;
-        }
+        if (!active) return;
 
-        if (authError || !user) {
-          setIsAuthenticated(false);
+        if (error || !user) {
+          setAuthenticated(false);
           setRole(null);
           return;
         }
 
-        setIsAuthenticated(true);
+        setAuthenticated(true);
 
-        const {
-          data: profile,
-          error: profileError,
-        } = await supabase
+        const { data: profile } = await supabase
           .from("profiles")
           .select("role")
           .eq("id", user.id)
           .maybeSingle();
 
-        if (!mounted) {
-          return;
-        }
+        if (!active) return;
 
-        if (profileError) {
-          console.error(
-            "Unable to load profile role:",
-            profileError.message,
-          );
+        setRole(
+          typeof profile?.role === "string"
+            ? profile.role.toLowerCase()
+            : null,
+        );
+      } catch {
+        if (!active) return;
 
-          setRole(null);
-          return;
-        }
-
-        const profileRole = profile?.role;
-
-        if (
-          profileRole === "admin" ||
-          profileRole === "instructor" ||
-          profileRole === "student"
-        ) {
-          setRole(profileRole);
-        } else {
-          setRole(null);
-        }
-      } catch (error) {
-        if (mounted) {
-          console.error(
-            "Unable to load authenticated user:",
-            error,
-          );
-
-          setIsAuthenticated(false);
-          setRole(null);
-        }
+        setAuthenticated(false);
+        setRole(null);
       } finally {
-        if (mounted) {
-          setLoading(false);
+        if (active) {
+          setAuthChecked(true);
         }
       }
     }
 
-    void loadUser();
+    void loadSession();
 
     return () => {
-      mounted = false;
+      active = false;
     };
+  }, [pathname, supabase]);
+
+  useEffect(() => {
+    setMobileOpen(false);
+    setMoreOpen(false);
   }, [pathname]);
 
   useEffect(() => {
-    if (!moreMenuOpen) {
-      return;
-    }
-
     function handleOutsideClick(event: MouseEvent) {
       if (
-        moreMenuRef.current &&
-        event.target instanceof Node &&
-        !moreMenuRef.current.contains(event.target)
+        moreRef.current &&
+        !moreRef.current.contains(event.target as Node)
       ) {
-        setMoreMenuOpen(false);
+        setMoreOpen(false);
       }
     }
 
     function handleEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setMoreMenuOpen(false);
-        setMobileMenuOpen(false);
+        setMoreOpen(false);
+        setMobileOpen(false);
       }
     }
 
-    document.addEventListener(
-      "mousedown",
-      handleOutsideClick,
-    );
-
-    document.addEventListener(
-      "keydown",
-      handleEscape,
-    );
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleEscape);
 
     return () => {
       document.removeEventListener(
         "mousedown",
         handleOutsideClick,
       );
-
       document.removeEventListener(
         "keydown",
         handleEscape,
       );
     };
-  }, [moreMenuOpen]);
+  }, []);
 
   async function handleSignOut() {
-    if (signingOut) {
-      return;
-    }
+    if (signingOut) return;
 
     setSigningOut(true);
-    setSignOutError("");
 
     try {
-      const supabase = createClient();
+      await supabase.auth.signOut();
 
-      const { error } = await supabase.auth.signOut();
-
-      if (error) {
-        setSignOutError(error.message);
-        return;
-      }
-
+      setAuthenticated(false);
       setRole(null);
-      setIsAuthenticated(false);
-      setMobileMenuOpen(false);
-      setMoreMenuOpen(false);
+      setMobileOpen(false);
+      setMoreOpen(false);
 
-      router.replace("/");
+      router.replace("/login");
       router.refresh();
-    } catch (error) {
-      setSignOutError(
-        error instanceof Error
-          ? error.message
-          : "Unable to sign out. Please try again.",
-      );
-    } finally {
+    } catch {
       setSigningOut(false);
     }
   }
 
-  const dashboardHref =
-    role === "instructor"
-      ? "/instructor/dashboard"
-      : role === "admin"
-        ? "/admin/lms"
-        : "/student/dashboard";
-
-  function navLinkClass(
-    href: string,
-    extraClass = "",
-  ) {
-    const active =
-      href !== "#" &&
-      (
-        pathname === href ||
-        pathname.startsWith(`${href}/`)
-      );
-
-    return [
-      styles.navLink,
-      active ? styles.activeLink : "",
-      extraClass,
-    ]
-      .filter(Boolean)
-      .join(" ");
+  function closeMenus() {
+    setMobileOpen(false);
+    setMoreOpen(false);
   }
 
-  function closeMenus() {
-    setMobileMenuOpen(false);
-    setMoreMenuOpen(false);
+  function renderNavLink(item: NavItem, mobile = false) {
+    const active = isActivePath(pathname, item.href);
+
+    return (
+      <Link
+        key={`${mobile ? "mobile" : "desktop"}-${item.href}`}
+        href={item.href}
+        className={[
+          mobile ? styles.mobileLink : styles.navLink,
+          active ? styles.activeLink : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        aria-current={active ? "page" : undefined}
+        onClick={closeMenus}
+      >
+        {item.label}
+      </Link>
+    );
   }
 
   return (
-    <>
+    <div className={styles.headerRoot}>
+      {/* Compact company strip */}
       <div className={styles.parentBar}>
-        <div className={styles.parentInner}>
+        <div className={styles.parentBarInner}>
           <Link
-            href="https://ruffneck-entertainment.vercel.app/"
             className={styles.parentBrand}
+            href="https://ruffneck-entertainment.vercel.app/"
+            target="_blank"
+            rel="noopener noreferrer"
           >
-            <strong className={styles.parentCompany}>
-              RUFFNECK ENTERTAINMENT
-            </strong>
-
-            <span className={styles.parentTagline}>
-              Practical AI &amp; digital systems for
-              Nigerian professionals
-            </span>
+            RUFFNECK ENTERTAINMENT
           </Link>
 
+          <span className={styles.parentTagline}>
+            Practical AI & digital systems for Nigerian professionals
+          </span>
+
           <Link
-            href="https://ruffneck-entertainment.vercel.app/"
             className={styles.parentVisit}
+            href="https://ruffneck-entertainment.vercel.app/"
+            target="_blank"
+            rel="noopener noreferrer"
           >
-            Visit RuffNeck Entertainment
-            <span aria-hidden="true"> →</span>
+            Main website
+            <span aria-hidden="true">↗</span>
           </Link>
         </div>
       </div>
 
+      {/* RuffNeck Learn navigation */}
       <header className={styles.mainHeader}>
-        <div className={styles.mainInner}>
-          <div className={styles.brand}>
-            <Link
-              href="/"
-              className={styles.logoLink}
-              aria-label="RuffNeck Learn homepage"
-              onClick={closeMenus}
-            >
+        <div className={styles.mainHeaderInner}>
+          <Link
+            href="/"
+            className={styles.brand}
+            aria-label="RuffNeck Learn home"
+            onClick={closeMenus}
+          >
+            <span className={styles.logoFrame}>
               <Image
                 src="/brand/ruffneck-logo.png"
-                alt="RuffNeck Entertainment"
-                width={160}
-                height={60}
-                className={styles.logo}
+                alt="RuffNeck Learn logo"
+                width={44}
+                height={44}
                 priority
+                className={styles.logo}
               />
-            </Link>
+            </span>
 
-            <Link
-              href="/"
-              className={styles.brandName}
-              onClick={closeMenus}
-            >
-              <strong className={styles.brandTitle}>
+            <span className={styles.brandCopy}>
+              <span className={styles.brandName}>
                 RuffNeck Learn
-              </strong>
-
-              <span className={styles.brandSubtitle}>
-                Practical AI &amp; digital systems
-                for Nigerian professionals
               </span>
-            </Link>
-          </div>
-
-          <button
-            type="button"
-            className={styles.mobileMenuToggle}
-            onClick={() =>
-              setMobileMenuOpen((current) => !current)
-            }
-            aria-expanded={mobileMenuOpen}
-            aria-controls="rn-primary-navigation"
-            aria-label={
-              mobileMenuOpen
-                ? "Close navigation menu"
-                : "Open navigation menu"
-            }
-          >
-            <span />
-            <span />
-            <span />
-          </button>
+              <span className={styles.brandCaption}>
+                Practical learning. Real-world skills.
+              </span>
+            </span>
+          </Link>
 
           <nav
-            id="rn-primary-navigation"
-            className={[
-              styles.nav,
-              mobileMenuOpen ? styles.navOpen : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
+            className={styles.desktopNav}
             aria-label="Main navigation"
-            aria-busy={loading}
           >
-            <Link
-              href="/courses"
-              className={navLinkClass("/courses")}
-              onClick={closeMenus}
-            >
-              Courses
-            </Link>
+            {primaryItems.map((item) =>
+              renderNavLink(item),
+            )}
 
-            {loading ? (
-              <span
-                className={styles.loading}
-                aria-live="polite"
-              >
-                Loading account…
-              </span>
-            ) : isAuthenticated ? (
-              <>
-                <Link
-                  href={dashboardHref}
-                  className={navLinkClass(dashboardHref)}
-                  onClick={closeMenus}
-                >
-                  Dashboard
-                </Link>
-
-                <Link
-                  href="/student/courses"
-                  className={navLinkClass("/student/courses")}
-                  onClick={closeMenus}
-                >
-                  My Learning
-                </Link>
-
-                <Link
-                  href="/student/practical-work"
-                  className={navLinkClass(
-                    "/student/practical-work",
-                  )}
-                  onClick={closeMenus}
-                >
-                  Practical Work
-                </Link>
-
-                <Link
-                  href="/student/skill-passport"
-                  className={navLinkClass(
-                    "/student/skill-passport",
-                  )}
-                  onClick={closeMenus}
-                >
-                  Skill Passport
-                </Link>
-
-                <div
-                  className={styles.moreWrapper}
-                  ref={moreMenuRef}
-                >
-                  <button
-                    type="button"
-                    className={[
-                      styles.navLink,
-                      styles.moreButton,
-                      moreMenuOpen ? styles.moreButtonActive : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                    onClick={() => {
-                      setMoreMenuOpen((current) => !current);
-                    }}
-                    aria-expanded={moreMenuOpen}
-                    aria-haspopup="true"
-                    aria-controls="rn-more-menu"
-                  >
-                    More
-
-                    <span
-                      className={[
-                        styles.chevron,
-                        moreMenuOpen ? styles.chevronOpen : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      aria-hidden="true"
-                    >
-                      ▾
-                    </span>
-                  </button>
-
-                  {moreMenuOpen && (
-                    <div
-                      id="rn-more-menu"
-                      className={styles.moreMenu}
-                      aria-label="Additional navigation"
-                    >
-                      <span className={styles.menuSectionLabel}>
-                        YOUR LEARNING
-                      </span>
-
-                      <Link
-                        href="/account/profile"
-                        className={styles.menuLink}
-                        onClick={closeMenus}
-                      >
-                        <span className={styles.menuIcon}>
-                          ◉
-                        </span>
-
-                        <span>
-                          <strong>My Profile</strong>
-                          <small>
-                            Manage your account details
-                          </small>
-                        </span>
-                      </Link>
-
-                      <Link
-                        href="/student/scan"
-                        className={styles.menuLink}
-                        onClick={closeMenus}
-                      >
-                        <span className={styles.menuIcon}>
-                          ▦
-                        </span>
-
-                        <span>
-                          <strong>Scan &amp; Learn</strong>
-                          <small>
-                            Access learning resources
-                          </small>
-                        </span>
-                      </Link>
-
-                      <Link
-                        href="/student/labs"
-                        className={styles.menuLink}
-                        onClick={closeMenus}
-                      >
-                        <span className={styles.menuIcon}>
-                          ✦
-                        </span>
-
-                        <span>
-                          <strong>Practical Labs</strong>
-                          <small>
-                            Work through applied exercises
-                          </small>
-                        </span>
-                      </Link>
-
-                      <Link
-                        href="/student/ai-drafts"
-                        className={styles.menuLink}
-                        onClick={closeMenus}
-                      >
-                        <span className={styles.menuIcon}>
-                          ✧
-                        </span>
-
-                        <span>
-                          <strong>My AI Drafts</strong>
-                          <small>
-                            Return to your saved drafts
-                          </small>
-                        </span>
-                      </Link>
-
-                      <div className={styles.menuDivider} />
-
-                      <span className={styles.menuSectionLabel}>
-                        PROGRESS &amp; RECORDS
-                      </span>
-
-                      <Link
-                        href="/student/payments"
-                        className={styles.menuLink}
-                        onClick={closeMenus}
-                      >
-                        <span className={styles.menuIcon}>
-                          ₦
-                        </span>
-
-                        <span>
-                          <strong>Payment History</strong>
-                          <small>
-                            Review your transactions
-                          </small>
-                        </span>
-                      </Link>
-
-                      <Link
-                        href="/student/assessment/results"
-                        className={styles.menuLink}
-                        onClick={closeMenus}
-                      >
-                        <span className={styles.menuIcon}>
-                          ✓
-                        </span>
-
-                        <span>
-                          <strong>Assessment Results</strong>
-                          <small>
-                            Review assessment performance
-                          </small>
-                        </span>
-                      </Link>
-
-                      <Link
-                        href="/student/certificates"
-                        className={styles.menuLink}
-                        onClick={closeMenus}
-                      >
-                        <span className={styles.menuIcon}>
-                          ▤
-                        </span>
-
-                        <span>
-                          <strong>Certificates</strong>
-                          <small>
-                            View and verify credentials
-                          </small>
-                        </span>
-                      </Link>
-
-                      {(role === "instructor" ||
-                        role === "admin") && (
-                        <>
-                          <div className={styles.menuDivider} />
-
-                          <span className={styles.menuSectionLabel}>
-                            MANAGEMENT
-                          </span>
-
-                          <Link
-                            href="/admin/lms"
-                            className={styles.menuLink}
-                            onClick={closeMenus}
-                          >
-                            <span className={styles.menuIcon}>
-                              ◫
-                            </span>
-
-                            <span>
-                              <strong>
-                                {role === "admin"
-                                  ? "Admin Workspace"
-                                  : "Instructor Workspace"}
-                              </strong>
-
-                              <small>
-                                Manage learning activities
-                              </small>
-                            </span>
-                          </Link>
-
-                          <Link
-                            href="/admin/labs"
-                            className={styles.menuLink}
-                            onClick={closeMenus}
-                          >
-                            <span className={styles.menuIcon}>
-                              ◈
-                            </span>
-
-                            <span>
-                              <strong>Review Labs</strong>
-                              <small>
-                                Review practical lab work
-                              </small>
-                            </span>
-                          </Link>
-
-                          {role === "admin" && (
-                            <Link
-                              href="/admin/practical-work"
-                              className={styles.menuLink}
-                              onClick={closeMenus}
-                            >
-                              <span className={styles.menuIcon}>
-                                ☷
-                              </span>
-
-                              <span>
-                                <strong>
-                                  Practical Work Review
-                                </strong>
-
-                                <small>
-                                  Review learner submissions
-                                </small>
-                              </span>
-                            </Link>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-
+            {authenticated && (
+              <div className={styles.moreWrapper} ref={moreRef}>
                 <button
                   type="button"
                   className={[
-                    styles.navLink,
-                    styles.signOut,
-                  ].join(" ")}
-                  onClick={handleSignOut}
-                  disabled={signingOut}
-                  aria-busy={signingOut}
+                    styles.moreButton,
+                    menuSections.some((section) =>
+                      section.items.some((item) =>
+                        isActivePath(pathname, item.href),
+                      ),
+                    )
+                      ? styles.activeLink
+                      : "",
+                    moreOpen ? styles.moreButtonOpen : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  aria-expanded={moreOpen}
+                  aria-haspopup="true"
+                  onClick={() => setMoreOpen((open) => !open)}
                 >
-                  {signingOut
-                    ? "Signing out…"
-                    : "Sign out"}
+                  More
+                  <span
+                    className={[
+                      styles.chevron,
+                      moreOpen ? styles.chevronUp : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    aria-hidden="true"
+                  />
                 </button>
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  className={navLinkClass("/login")}
-                  onClick={closeMenus}
-                >
-                  Log in
-                </Link>
 
-                <Link
-                  href="/signup"
-                  className={navLinkClass(
-                    "/signup",
-                    styles.signUp,
-                  )}
-                  onClick={closeMenus}
-                >
-                  Create Account
-                </Link>
-              </>
+                {moreOpen && (
+                  <div className={styles.moreMenu}>
+                    {menuSections.map((section) => (
+                      <div
+                        className={styles.menuSection}
+                        key={section.heading}
+                      >
+                        <p className={styles.menuHeading}>
+                          {section.heading}
+                        </p>
+
+                        {section.items.map((item) => {
+                          const active = isActivePath(
+                            pathname,
+                            item.href,
+                          );
+
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              className={[
+                                styles.menuItem,
+                                active
+                                  ? styles.menuItemActive
+                                  : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                              aria-current={
+                                active ? "page" : undefined
+                              }
+                              onClick={closeMenus}
+                            >
+                              <span className={styles.menuItemTitle}>
+                                {item.label}
+                              </span>
+
+                              {item.description && (
+                                <span
+                                  className={
+                                    styles.menuItemDescription
+                                  }
+                                >
+                                  {item.description}
+                                </span>
+                              )}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    ))}
+
+                    <div className={styles.menuFooter}>
+                      <button
+                        type="button"
+                        className={styles.menuSignOut}
+                        onClick={handleSignOut}
+                        disabled={signingOut}
+                      >
+                        {signingOut ? "Signing out…" : "Sign out"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!authenticated && authChecked && (
+              <Link
+                href="/login"
+                className={styles.signInButton}
+              >
+                Sign in
+              </Link>
+            )}
+
+            {authenticated && (
+              <button
+                type="button"
+                className={styles.desktopSignOut}
+                onClick={handleSignOut}
+                disabled={signingOut}
+              >
+                {signingOut ? "Signing out…" : "Sign out"}
+              </button>
             )}
           </nav>
-        </div>
-      </header>
 
-      {signOutError && (
-        <div
-          className={styles.signOutError}
-          role="alert"
-        >
-          Sign out failed: {signOutError}
+          <button
+            type="button"
+            className={styles.mobileToggle}
+            aria-label={
+              mobileOpen ? "Close navigation menu" : "Open navigation menu"
+            }
+            aria-expanded={mobileOpen}
+            aria-controls="ruffneck-mobile-navigation"
+            onClick={() => setMobileOpen((open) => !open)}
+          >
+            <span
+              className={[
+                styles.hamburgerLine,
+                mobileOpen ? styles.hamburgerLineTopOpen : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            />
+            <span
+              className={[
+                styles.hamburgerLine,
+                mobileOpen ? styles.hamburgerLineMiddleOpen : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            />
+            <span
+              className={[
+                styles.hamburgerLine,
+                mobileOpen ? styles.hamburgerLineBottomOpen : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            />
+          </button>
         </div>
-      )}
-    </>
+
+        {mobileOpen && (
+          <nav
+            id="ruffneck-mobile-navigation"
+            className={styles.mobilePanel}
+            aria-label="Mobile navigation"
+          >
+            <div className={styles.mobilePrimary}>
+              {primaryItems.map((item) =>
+                renderNavLink(item, true),
+              )}
+            </div>
+
+            {authenticated &&
+              menuSections.map((section) => (
+                <div
+                  className={styles.mobileSection}
+                  key={section.heading}
+                >
+                  <p className={styles.mobileSectionHeading}>
+                    {section.heading}
+                  </p>
+
+                  {section.items.map((item) =>
+                    renderNavLink(item, true),
+                  )}
+                </div>
+              ))}
+
+            <div className={styles.mobileActions}>
+              {authenticated ? (
+                <button
+                  type="button"
+                  className={styles.mobileSignOut}
+                  onClick={handleSignOut}
+                  disabled={signingOut}
+                >
+                  {signingOut ? "Signing out…" : "Sign out"}
+                </button>
+              ) : (
+                authChecked && (
+                  <Link
+                    href="/login"
+                    className={styles.mobileSignIn}
+                    onClick={closeMenus}
+                  >
+                    Sign in
+                  </Link>
+                )
+              )}
+
+              <Link
+                href="https://ruffneck-entertainment.vercel.app/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.mobileMainWebsite}
+                onClick={closeMenus}
+              >
+                Visit RuffNeck Entertainment ↗
+              </Link>
+            </div>
+          </nav>
+        )}
+      </header>
+    </div>
   );
 }
-
-export default Header;
