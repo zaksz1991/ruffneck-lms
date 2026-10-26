@@ -1,35 +1,31 @@
-# RuffNeck Learn — Certificate Export Reliability Overlay
+# RuffNeck Learn — assessment scoring repair (safe integration package)
 
-This package adds a client-side JPG exporter and a reliable browser-native PDF/print action. It intentionally does not replace certificate lookup, authorization, QR verification, revocation logic, logos, signatures, or seals.
+## What this update provides
+- One shared scoring helper for consistent percentages and summary cards.
+- Rejects attempts with a zero/missing denominator instead of counting them as 100%.
+- Prevents displayed percentages above 100%.
+- Excludes invalid attempts from average, best-score, and pass-count calculations.
+- Preserves all stored assessment rows; it does not delete or rewrite historical records.
+- Includes six focused regression tests.
 
-## Important source/dependency note
+## Important integration note
+This is a source overlay, not a deploy-ready replacement of the live page. The exact current route implementation and database schema were not available in this build session, so the helper is intentionally isolated rather than guessing at the route or modifying database queries.
 
-The supplied source excerpts show the certificate page is a server component and use one of these sheet selectors:
-- `.certificate-paper`
-- `.mc-paper`
-- `.rn-certificate-document`
+## Integration
+1. Copy `src/lib/assessment-scoring.mjs` into the matching path in the RuffNeck Learn repository.
+2. In `src/app/student/assessment/results/page.tsx`, import:
+   `import { summarizeAssessmentScores, formatAssessmentPercentage } from "@/lib/assessment-scoring";`
+3. After the existing authorized query has returned the current student's attempts, map each attempt into the helper using the actual database field names for earned points, maximum points, and legacy percentage. Do not change authentication, student filtering, or row-level security.
+4. Use `summary.average`, `summary.best`, and `summary.passed` for the metric cards. Render `null` metrics as `—`; render percentages through `formatAssessmentPercentage`.
+5. For each history row, call `normalizeAssessmentScore(attempt)` with the same normalized field mapping. If invalid, show `Score unavailable — this historical attempt has incomplete scoring data` instead of a false percentage or pass status. Keep the View Result link available so the underlying record can be investigated.
+6. Apply the same helper to individual result pages and any dashboard aggregates so they cannot disagree.
+7. Inspect the actual Supabase schema and the three legacy attempt rows before any database repair. Do not manufacture a score or overwrite records based on the visible 0/0 values alone.
 
-The latest live repository source and `package.json` could not be fetched in this session, so this is an overlay, not a claim that the current live application has been modified or verified. Do not replace the certificate page with this package.
+## Tests
+The helper is plain ESM JavaScript so its tests can run directly with Node. These tests cover the helper only; they were not run against the live application or Supabase data.
 
-## Files
-- `src/components/CertificateExportActions.tsx` — complete client component.
-- `src/components/certificate-export-reliability.css` — print and social-style page background rules.
-- `tests/certificate-export-reliability.test.mjs` — source-level regression checks.
-
-## GUI integration
-1. In the repository's file browser, add `CertificateExportActions.tsx` under `src/components/`.
-2. Add the CSS file in the same folder and import it from the app's global stylesheet entry after the existing global CSS.
-3. Ensure `html2canvas` is listed in `package.json` dependencies. If it is not, add it through the repository's package-management UI; do not guess at the current lockfile.
-4. In the existing certificate page, import `CertificateExportActions` from `@/components/CertificateExportActions`.
-5. Inside the existing certificate toolbar/action group, render:
-   `<CertificateExportActions filename={certificate.certificate_number} disabled={certificate.is_revoked} />`
-   This preserves the existing verification link and prevents export buttons for revoked credentials.
-6. Keep the existing `@media print` rules only after comparing them with the included stylesheet. Avoid duplicating conflicting selectors.
-
-## Export behavior
-- JPG: waits for fonts and all certificate `<img>` elements, renders only the certificate sheet, creates a JPEG blob, then triggers a browser download. Cross-origin images must permit CORS; an external QR image that does not permit CORS can cause export to fail rather than silently generate a blank image.
-- PDF: opens the browser print dialog. Select **Save as PDF**, **Landscape**, and **A4**. Enable background graphics if the browser offers that option.
-- Revoked credentials: buttons are disabled when `disabled` is true. Existing revoked overlay/notice remains the source of truth.
-
-## Verification status
-The included tests check the component and CSS contracts only. They do not prove live browser rendering, image export, or deployed-site behavior. Run the test file in the project's existing test workflow and verify JPG/PDF output in a browser before release.
+## Acceptance criteria
+- No score displayed above 100%.
+- 0/0 and missing-score attempts do not inflate average, best score, or pass count.
+- Existing valid 26/26 results remain 100%.
+- Existing assessment rows remain unchanged until their original data can be verified.
