@@ -1,27 +1,30 @@
-# RuffNeck Learn — Assessment Results Scoring Repair
+# RuffNeck Learn — Assessment Results Score Calculation Fix
 
-## What this package fixes
+## Diagnosis from the supplied database rows
 
-- Rejects stored percentages outside `0..100`; `767` and `833` are not silently clamped to 100.
-- Reconstructs a percentage from `earned_points / total_points` only when `total_points > 0` and the values are consistent.
-- Treats `0/0` records as invalid for score statistics instead of counting them as passed.
-- Computes average, best score and pass count from valid attempts only; pass threshold defaults to 70% inclusive.
-- Keeps invalid historical attempts visible to the UI through `normalized` and exposes their reason, without deleting or rewriting database rows.
-- Includes a read-only SQL diagnostic query for legacy records.
+The three legacy rows have `score` values of **100, 100, and 92**. In this application, `score` is already a percentage from 0 to 100. Their `total_questions` value of 12 is not the denominator for that percentage. Dividing `score` by `total_questions` and multiplying by 100 creates the exact displayed errors: 100 / 12 × 100 ≈ 833%, and 92 / 12 × 100 ≈ 767%.
 
-## Important integration boundary
+The `earned_points = 0`, `total_points = 0`, and `time_spent_seconds = 0` values show missing legacy detail; they do not invalidate the stored percentage score. Do not overwrite or delete these records based on those fields alone.
 
-This is a scoring module plus tests and a read-only diagnostic. It is **not yet wired into** `src/app/student/assessment/results/page.tsx`, any individual result page, or the deployed Vercel app. The currently available project material in this workspace does not include the latest results-page source, so replacing that page would risk breaking authentication, Supabase query handling, and existing layout. Do not claim this package has repaired the live page until the module is integrated and the page is tested.
+For the five displayed attempts (100, 100, 100, 100, 92), expected summary values are:
 
-## GUI integration checklist
+- Completed attempts: **5**
+- Exact average: **98.4%** (if the card uses whole percentages, show **98%**)
+- Best score: **100%**
+- Passed at a 70% threshold: **5**
 
-1. In the current `ruffneck-lms` project, add `src/lib/assessment-results-scoring.ts` at the path shown in this ZIP.
-2. Add `tests/assessment-results-scoring.test.mjs` to the project test suite. This test file imports TypeScript directly and may require the project's existing TypeScript test runner; if Node cannot load `.ts` directly in the project's Node version, run it through the existing test runner or compile the helper to JavaScript for tests.
-3. In `src/app/student/assessment/results/page.tsx`, normalize the existing `assessment_attempts` rows using `normalizeAssessmentAttempt` and use `summarizeAssessmentAttempts` for the metric cards. Render invalid records with a neutral “Score unavailable — legacy record needs review” state rather than a percentage or “Passed” badge.
-4. Apply the same normalizer to `/student/assessment/results/[resultId]` so history and individual detail pages agree. Keep the existing logged-in user check and `student_id` query filter unchanged.
-5. Before changing legacy rows, use the read-only SQL file to inspect the original data and determine whether old answers allow their scores to be reconstructed. Do not delete or rewrite attempts based on the displayed `0/0` alone.
-6. Run the project's full test suite and build, then check the results page and detail routes in a browser. This package does not perform deployment.
+## Contents
 
-## Verification status
+- `src/lib/assessment-results-scoring.ts`: normalizes the canonical stored percentage and computes summary statistics.
+- `tests/assessment-results-scoring.test.mjs`: seven regression tests including the exact legacy records and expected summary.
+- `supabase/diagnose-legacy-assessment-attempts.sql`: read-only query for the three supplied records.
 
-The included tests cover normalization and summary logic. They do not verify the Next.js app, Supabase schema, authentication, browser rendering, or live deployment.
+## Integration boundary
+
+This is a source update package, not a deployment. The current `src/app/student/assessment/results/page.tsx` and `src/app/student/assessment/results/[resultId]/page.tsx` have not been modified here because their current source was not supplied in this conversation. To complete the live repair, import the helper into the existing results page, use `summarizeAssessmentAttempts` for the cards, use each normalized `percentage` for row badges, and apply the same normalizer to individual result pages. Preserve the current authentication and student ownership filters.
+
+Do not recalculate `score` in the database. Do not treat `total_questions` as a score denominator. For legacy zero durations, render “Not recorded” rather than “0s”.
+
+## Test command
+
+Run these tests through the project's existing test runner. Node versions supporting TypeScript type stripping may run the `.mjs` file directly; otherwise use the project's established TypeScript test setup. The tests do not verify Next.js integration, Supabase access controls, browser rendering, or deployment.

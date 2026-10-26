@@ -1,10 +1,10 @@
 /**
- * RuffNeck Learn assessment-result normalization.
+ * RuffNeck Learn assessment score normalization.
  *
- * A stored percentage is trusted only when it is finite and within 0..100.
- * If it is missing/invalid, a percentage can be reconstructed from earned_points
- * and total_points only when total_points > 0. A 0/0 record is not a score.
- * This module does not mutate database rows.
+ * `assessment_attempts.score` is already a percentage (0..100). Prefer it
+ * even when legacy earned_points/total_points are both zero. Only derive a
+ * percentage from points when the stored score is absent and total_points > 0.
+ * This module is read-only and never mutates database records.
  */
 export type AssessmentAttemptScoreInput = {
   id?: string | null;
@@ -40,15 +40,13 @@ export function normalizeAssessmentAttempt<T extends AssessmentAttemptScoreInput
   const storedScore = finiteNumber(attempt.score);
   const earned = finiteNumber(attempt.earned_points);
   const total = finiteNumber(attempt.total_points);
-  const questions = finiteNumber(attempt.total_questions);
 
-  // Completed attempts with an explicit timestamp are expected in this view.
-  // Do not reject legacy records solely because a timestamp is absent in a
-  // caller's minimal object; reject only if a supplied timestamp is empty.
   if (attempt.completed_at === "") {
     return { attempt, percentage: null, valid: false, reason: "incomplete_attempt" };
   }
 
+  // The persisted `score` column is the canonical 0–100 percentage.
+  // Do not divide it by total_questions or total_points.
   if (storedScore !== null) {
     if (storedScore >= 0 && storedScore <= 100) {
       return {
@@ -58,11 +56,10 @@ export function normalizeAssessmentAttempt<T extends AssessmentAttemptScoreInput
         reason: "stored_percentage",
       };
     }
-    // Some legacy records have 767/833 stored in a percentage column.
-    // Never clamp these to 100: doing so would falsely award a perfect score.
     return { attempt, percentage: null, valid: false, reason: "invalid_percentage" };
   }
 
+  // Use point-based fallback only when the maximum is positive and reliable.
   if (earned !== null && total !== null) {
     if (total > 0 && earned >= 0 && earned <= total) {
       return {
@@ -72,12 +69,11 @@ export function normalizeAssessmentAttempt<T extends AssessmentAttemptScoreInput
         reason: "derived_from_points",
       };
     }
-    return { attempt, percentage: null, valid: false, reason: "invalid_points" };
+    if (total === 0) {
+      return { attempt, percentage: null, valid: false, reason: "invalid_points" };
+    }
   }
 
-  if (questions !== null && questions <= 0) {
-    return { attempt, percentage: null, valid: false, reason: "invalid_points" };
-  }
   return { attempt, percentage: null, valid: false, reason: "missing_score" };
 }
 
@@ -91,15 +87,17 @@ export function summarizeAssessmentAttempts<T extends AssessmentAttemptScoreInpu
       entry.valid && entry.percentage !== null,
   );
   const percentages = valid.map((entry) => entry.percentage);
+  const exactAverage = percentages.length
+    ? percentages.reduce((sum, score) => sum + score, 0) / percentages.length
+    : null;
+
   return {
     attemptsCount: attempts.length,
     validAttemptsCount: valid.length,
     invalidAttemptsCount: normalized.length - valid.length,
-    averageScore:
-      percentages.length > 0
-        ? Math.round(percentages.reduce((sum, score) => sum + score, 0) / percentages.length)
-        : null,
-    bestScore: percentages.length > 0 ? Math.max(...percentages) : null,
+    averageScore: exactAverage === null ? null : Math.round(exactAverage),
+    averageScoreExact: exactAverage,
+    bestScore: percentages.length ? Math.max(...percentages) : null,
     passedCount: percentages.filter((score) => score >= passThreshold).length,
     normalized,
   };
@@ -107,4 +105,14 @@ export function summarizeAssessmentAttempts<T extends AssessmentAttemptScoreInpu
 
 export function formatAssessmentPercentage(value: number | null): string {
   return value === null ? "Unavailable" : `${value}%`;
+}
+
+/** Display legacy duration safely; zero in old rows usually means unrecorded. */
+export function formatAssessmentDuration(value: number | string | null | undefined): string {
+  const seconds = finiteNumber(value);
+  if (seconds === null || seconds <= 0) return "Not recorded";
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.round(seconds % 60);
+  return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`;
 }
