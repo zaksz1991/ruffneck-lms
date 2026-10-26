@@ -20,16 +20,11 @@ type Course = {
   slug: string;
 };
 
-/**
- * New attempts use earned_points / total_points.
- * Legacy attempts store score as a percentage.
- * Never divide a stored percentage by total_questions.
- */
-function calculatePercentage(attempt: AssessmentAttempt): number {
+function calculatePercentage(attempt: AssessmentAttempt) {
   if (
     typeof attempt.earned_points === "number" &&
-    Number.isFinite(attempt.earned_points) &&
     typeof attempt.total_points === "number" &&
+    Number.isFinite(attempt.earned_points) &&
     Number.isFinite(attempt.total_points) &&
     attempt.total_points > 0
   ) {
@@ -44,31 +39,34 @@ function calculatePercentage(attempt: AssessmentAttempt): number {
     );
   }
 
+  // Legacy records store score as a percentage.
+  // Do not divide an existing percentage by total_questions.
   if (
     typeof attempt.score === "number" &&
-    Number.isFinite(attempt.score)
+    Number.isFinite(attempt.score) &&
+    attempt.score >= 0 &&
+    attempt.score <= 100
   ) {
-    // Legacy score values such as 100 and 92 are percentages.
-    if (attempt.score >= 0 && attempt.score <= 100) {
-      return Math.round(attempt.score);
-    }
+    return Math.round(attempt.score);
+  }
 
-    // Fallback for scores stored as raw question counts.
-    if (
-      typeof attempt.total_questions === "number" &&
-      Number.isFinite(attempt.total_questions) &&
-      attempt.total_questions > 0
-    ) {
-      return Math.max(
-        0,
-        Math.min(
-          100,
-          Math.round(
-            (attempt.score / attempt.total_questions) * 100
-          )
+  // Compatibility fallback for scores stored as raw question counts.
+  if (
+    typeof attempt.score === "number" &&
+    typeof attempt.total_questions === "number" &&
+    Number.isFinite(attempt.score) &&
+    Number.isFinite(attempt.total_questions) &&
+    attempt.total_questions > 0
+  ) {
+    return Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(
+          (attempt.score / attempt.total_questions) * 100
         )
-      );
-    }
+      )
+    );
   }
 
   return 0;
@@ -113,8 +111,8 @@ function formatDuration(seconds: number | null) {
 function formatPoints(attempt: AssessmentAttempt) {
   if (
     typeof attempt.earned_points !== "number" ||
-    !Number.isFinite(attempt.earned_points) ||
     typeof attempt.total_points !== "number" ||
+    !Number.isFinite(attempt.earned_points) ||
     !Number.isFinite(attempt.total_points) ||
     attempt.total_points <= 0
   ) {
@@ -128,40 +126,53 @@ export default async function AssessmentResultsPage() {
   const supabase = await createClient();
 
   const {
-    data: { user },
+    data: {
+      user,
+    },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login?next=/student/assessment/results");
+    redirect(
+      "/login?next=/student/assessment/results"
+    );
   }
 
   const { data: attemptsData, error: attemptsError } =
     await supabase
       .from("assessment_attempts")
-      .select(`
-        id,
-        course_id,
-        score,
-        total_points,
-        earned_points,
-        total_questions,
-        time_spent_seconds,
-        completed_at,
-        created_at
-      `)
+      .select(
+        `
+          id,
+          course_id,
+          score,
+          total_points,
+          earned_points,
+          total_questions,
+          time_spent_seconds,
+          completed_at,
+          created_at
+        `
+      )
       .eq("student_id", user.id)
       .not("completed_at", "is", null)
-      .order("created_at", { ascending: false });
+      .order("created_at", {
+        ascending: false,
+      });
 
   if (attemptsError) {
     throw new Error(attemptsError.message);
   }
 
   const attempts =
-    (attemptsData as unknown as AssessmentAttempt[] | null) ?? [];
+    (attemptsData as unknown as AssessmentAttempt[]) ||
+    [];
 
   const courseIds = Array.from(
-    new Set(attempts.map((attempt) => attempt.course_id))
+    new Set(
+      attempts.map(
+        (attempt) => attempt.course_id
+      )
+    )
   );
 
   let courses: Course[] = [];
@@ -178,35 +189,48 @@ export default async function AssessmentResultsPage() {
     }
 
     courses =
-      (coursesData as unknown as Course[] | null) ?? [];
+      (coursesData as unknown as Course[]) ||
+      [];
   }
 
   const courseMap = new Map(
-    courses.map((course) => [course.id, course])
+    courses.map((course) => [
+      course.id,
+      course,
+    ])
   );
 
-  const percentages = attempts.map(calculatePercentage);
+  const percentages = attempts.map(
+    calculatePercentage
+  );
 
   const averageScore =
     percentages.length > 0
       ? Math.round(
-          percentages.reduce((sum, value) => sum + value, 0) /
-            percentages.length
+          percentages.reduce(
+            (sum, value) => sum + value,
+            0
+          ) / percentages.length
         )
       : 0;
 
   const bestScore =
-    percentages.length > 0 ? Math.max(...percentages) : 0;
+    percentages.length > 0
+      ? Math.max(...percentages)
+      : 0;
 
-  const passedAttempts = percentages.filter(
-    (score) => score >= 70
-  ).length;
+  const passedAttempts =
+    percentages.filter(
+      (score) => score >= 70
+    ).length;
 
   return (
-    <main className="container rn-assessment-results-page">
+    <main className="container">
       <section
         className="rn-page-header"
-        style={{ marginBottom: 24 }}
+        style={{
+          marginBottom: 24,
+        }}
       >
         <div>
           <p
@@ -222,7 +246,11 @@ export default async function AssessmentResultsPage() {
             Learning Records
           </p>
 
-          <h1 style={{ margin: 0 }}>
+          <h1
+            style={{
+              margin: 0,
+            }}
+          >
             Assessment Results
           </h1>
 
@@ -231,20 +259,19 @@ export default async function AssessmentResultsPage() {
               marginTop: 8,
               marginBottom: 0,
               color: "var(--muted)",
-              lineHeight: 1.6,
             }}
           >
-            Review your completed assessments, scores and learning
-            performance.
+            Review your completed assessments,
+            scores and learning performance.
           </p>
         </div>
       </section>
 
       <section
-        className="rn-assessment-summary-grid"
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gridTemplateColumns:
+            "repeat(auto-fit, minmax(180px, 1fr))",
           gap: 16,
           marginBottom: 28,
         }}
@@ -394,7 +421,11 @@ export default async function AssessmentResultsPage() {
             textAlign: "center",
           }}
         >
-          <h2 style={{ marginTop: 0 }}>
+          <h2
+            style={{
+              marginTop: 0,
+            }}
+          >
             No assessment results yet
           </h2>
 
@@ -406,8 +437,8 @@ export default async function AssessmentResultsPage() {
               margin: "0 auto 20px",
             }}
           >
-            Complete a course assessment and your result will appear
-            here.
+            Complete a course assessment and
+            your result will appear here.
           </p>
 
           <Link
@@ -420,7 +451,6 @@ export default async function AssessmentResultsPage() {
       ) : (
         <section>
           <div
-            className="rn-assessment-history-header"
             style={{
               display: "flex",
               justifyContent: "space-between",
@@ -430,7 +460,11 @@ export default async function AssessmentResultsPage() {
               marginBottom: 16,
             }}
           >
-            <h2 style={{ margin: 0 }}>
+            <h2
+              style={{
+                margin: 0,
+              }}
+            >
               Assessment History
             </h2>
 
@@ -442,20 +476,31 @@ export default async function AssessmentResultsPage() {
             </Link>
           </div>
 
-          <div style={{ display: "grid", gap: 16 }}>
+          <div
+            style={{
+              display: "grid",
+              gap: 16,
+            }}
+          >
             {attempts.map((attempt) => {
-              const course = courseMap.get(attempt.course_id);
-              const percentage = calculatePercentage(attempt);
-              const passed = percentage >= 70;
+              const course =
+                courseMap.get(attempt.course_id);
+
+              const percentage =
+                calculatePercentage(attempt);
+
+              const passed =
+                percentage >= 70;
 
               return (
                 <article
                   key={attempt.id}
-                  className="rn-card rn-assessment-history-card"
-                  style={{ padding: 22, minWidth: 0 }}
+                  className="rn-card"
+                  style={{
+                    padding: 22,
+                  }}
                 >
                   <div
-                    className="rn-assessment-history-heading"
                     style={{
                       display: "flex",
                       justifyContent: "space-between",
@@ -466,7 +511,7 @@ export default async function AssessmentResultsPage() {
                   >
                     <div
                       style={{
-                        minWidth: 0,
+                        minWidth: 220,
                         flex: 1,
                       }}
                     >
@@ -486,39 +531,40 @@ export default async function AssessmentResultsPage() {
                       <h3
                         style={{
                           margin: "0 0 8px",
-                          overflowWrap: "anywhere",
                         }}
                       >
-                        {course?.title || "Course Assessment"}
+                        {course?.title ||
+                          "Course Assessment"}
                       </h3>
 
                       <div
                         style={{
                           fontSize: 13,
-                          lineHeight: 1.5,
                           color: "var(--muted)",
                         }}
                       >
-                        Completed {formatDate(attempt.completed_at)}
+                        Completed{" "}
+                        {formatDate(attempt.completed_at)}
                       </div>
                     </div>
 
                     <div
-                      className="rn-assessment-history-score"
                       style={{
                         display: "flex",
                         alignItems: "center",
                         gap: 12,
-                        flexShrink: 0,
                       }}
                     >
-                      <div style={{ textAlign: "right" }}>
+                      <div
+                        style={{
+                          textAlign: "right",
+                        }}
+                      >
                         <div
                           style={{
-                            fontSize: "clamp(24px, 5vw, 30px)",
+                            fontSize: 30,
                             fontWeight: 800,
-                            lineHeight: 1.15,
-                            whiteSpace: "nowrap",
+                            lineHeight: 1,
                           }}
                         >
                           {percentage}%
@@ -539,14 +585,15 @@ export default async function AssessmentResultsPage() {
                             fontWeight: 700,
                           }}
                         >
-                          {passed ? "Passed" : "Not passed"}
+                          {passed
+                            ? "Passed"
+                            : "Not passed"}
                         </div>
                       </div>
                     </div>
                   </div>
 
                   <div
-                    className="rn-assessment-history-details"
                     style={{
                       display: "grid",
                       gridTemplateColumns:
@@ -595,7 +642,6 @@ export default async function AssessmentResultsPage() {
                         style={{
                           marginTop: 4,
                           fontWeight: 700,
-                          overflowWrap: "anywhere",
                         }}
                       >
                         {formatPoints(attempt)}
@@ -620,12 +666,13 @@ export default async function AssessmentResultsPage() {
                           fontWeight: 700,
                         }}
                       >
-                        {formatDuration(attempt.time_spent_seconds)}
+                        {formatDuration(
+                          attempt.time_spent_seconds
+                        )}
                       </div>
                     </div>
 
                     <div
-                      className="rn-assessment-history-view"
                       style={{
                         display: "flex",
                         alignItems: "flex-end",
@@ -650,11 +697,6 @@ export default async function AssessmentResultsPage() {
       )}
 
       <style>{`
-        .rn-assessment-results-page {
-          min-width: 0;
-          max-width: 100%;
-        }
-
         .rn-assessment-result-pass {
           color: #166534;
           background: #dcfce7;
@@ -663,53 +705,6 @@ export default async function AssessmentResultsPage() {
         .rn-assessment-result-fail {
           color: #991b1b;
           background: #fee2e2;
-        }
-
-        @media (max-width: 600px) {
-          .rn-assessment-summary-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-            gap: 12px !important;
-          }
-
-          .rn-assessment-summary-grid > .rn-card {
-            padding: 16px;
-            min-width: 0;
-          }
-
-          .rn-assessment-history-card {
-            padding: 16px !important;
-          }
-
-          .rn-assessment-history-score {
-            text-align: left !important;
-          }
-
-          .rn-assessment-history-score > div {
-            text-align: left !important;
-          }
-
-          .rn-assessment-history-details {
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-          }
-
-          .rn-assessment-history-view {
-            grid-column: 1 / -1;
-          }
-
-          .rn-assessment-history-view .rn-button {
-            width: 100%;
-            justify-content: center;
-          }
-        }
-
-        @media (max-width: 360px) {
-          .rn-assessment-summary-grid {
-            grid-template-columns: minmax(0, 1fr) !important;
-          }
-
-          .rn-assessment-history-details {
-            grid-template-columns: minmax(0, 1fr) !important;
-          }
         }
       `}</style>
     </main>
