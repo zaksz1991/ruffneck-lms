@@ -16,40 +16,74 @@ type ApiResponse = {
   error?: string;
 };
 
+const VERIFICATION_API =
+  "/api/student/skill-passport/verification";
+
+async function readApiResponse(
+  response: Response,
+): Promise<ApiResponse> {
+  try {
+    const data: unknown = await response.json();
+
+    if (!data || typeof data !== "object") {
+      return {};
+    }
+
+    return data as ApiResponse;
+  } catch {
+    return {};
+  }
+}
+
+function isVerificationExpired(
+  verification: Verification | null,
+): boolean {
+  if (!verification?.expires_at) {
+    return false;
+  }
+
+  const expiryTime = new Date(
+    verification.expires_at,
+  ).getTime();
+
+  return (
+    Number.isFinite(expiryTime) &&
+    expiryTime <= Date.now()
+  );
+}
+
 export default function VerificationCard() {
   const [verification, setVerification] =
     useState<Verification | null>(null);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [origin, setOrigin] = useState("");
 
-  const [creating, setCreating] =
-    useState(false);
-
-  const [updating, setUpdating] =
-    useState(false);
-
-  const [message, setMessage] =
-    useState("");
-
-  const [error, setError] =
-    useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     let mounted = true;
 
+    setOrigin(window.location.origin);
+
     async function loadVerification() {
       try {
         const response = await fetch(
-          "/api/student/skill-passport/verification",
+          VERIFICATION_API,
           {
             method: "GET",
             cache: "no-store",
+            headers: {
+              Accept: "application/json",
+            },
           },
         );
 
-        const data =
-          (await response.json()) as ApiResponse;
+        const data = await readApiResponse(response);
 
         if (!mounted) {
           return;
@@ -57,19 +91,18 @@ export default function VerificationCard() {
 
         if (!response.ok) {
           setError(
-            data.error ??
+            data.error ||
               "Unable to load verification settings.",
           );
+
           return;
         }
 
-        setVerification(
-          data.verification ?? null,
-        );
+        setVerification(data.verification ?? null);
       } catch {
         if (mounted) {
           setError(
-            "Unable to load verification settings.",
+            "Unable to connect to the verification service. Please try again.",
           );
         }
       } finally {
@@ -79,15 +112,29 @@ export default function VerificationCard() {
       }
     }
 
-    loadVerification();
+    void loadVerification();
 
     return () => {
       mounted = false;
     };
   }, []);
 
+  const expired = isVerificationExpired(verification);
+
+  const verificationPath = verification
+    ? `/verify/${encodeURIComponent(
+        verification.verification_code,
+      )}`
+    : "";
+
+  const verificationUrl = verification
+    ? origin
+      ? `${origin}${verificationPath}`
+      : verificationPath
+    : "";
+
   async function createVerification() {
-    if (creating) {
+    if (creating || updating) {
       return;
     }
 
@@ -97,33 +144,42 @@ export default function VerificationCard() {
 
     try {
       const response = await fetch(
-        "/api/student/skill-passport/verification",
+        VERIFICATION_API,
         {
           method: "POST",
+          headers: {
+            Accept: "application/json",
+          },
         },
       );
 
-      const data =
-        (await response.json()) as ApiResponse;
+      const data = await readApiResponse(response);
 
       if (!response.ok) {
         setError(
-          data.error ??
-            "Unable to create verification.",
+          data.error ||
+            "Unable to create a verification link.",
         );
+
         return;
       }
 
-      setVerification(
-        data.verification ?? null,
-      );
+      if (!data.verification) {
+        setError(
+          "The request completed, but no verification link was returned. Reload the page before trying again.",
+        );
+
+        return;
+      }
+
+      setVerification(data.verification);
 
       setMessage(
-        "Your public Skill Passport verification link is ready.",
+        "Your Skill Passport verification link is ready.",
       );
     } catch {
       setError(
-        "Unable to create verification.",
+        "Unable to connect to the verification service. Please try again.",
       );
     } finally {
       setCreating(false);
@@ -131,7 +187,18 @@ export default function VerificationCard() {
   }
 
   async function toggleVerification() {
-    if (!verification || updating) {
+    if (!verification || updating || creating) {
+      return;
+    }
+
+    const nextActive = !verification.is_active;
+
+    if (nextActive && isVerificationExpired(verification)) {
+      setError(
+        "This verification link has expired. Create a new link before enabling public verification.",
+      );
+
+      setMessage("");
       return;
     }
 
@@ -139,17 +206,14 @@ export default function VerificationCard() {
     setError("");
     setMessage("");
 
-    const nextActive =
-      !verification.is_active;
-
     try {
       const response = await fetch(
-        "/api/student/skill-passport/verification",
+        VERIFICATION_API,
         {
           method: "PATCH",
           headers: {
-            "Content-Type":
-              "application/json",
+            "Content-Type": "application/json",
+            Accept: "application/json",
           },
           body: JSON.stringify({
             is_active: nextActive,
@@ -157,19 +221,29 @@ export default function VerificationCard() {
         },
       );
 
-      const data =
-        (await response.json()) as ApiResponse;
+      const data = await readApiResponse(response);
 
       if (!response.ok) {
         setError(
-          data.error ??
-            "Unable to update verification.",
+          data.error ||
+            "Unable to update verification settings.",
         );
+
         return;
       }
 
+      /*
+       * Some API implementations return the updated
+       * record, while others return only a success
+       * response. Preserve the existing code if the
+       * response does not include the record.
+       */
       setVerification(
-        data.verification ?? null,
+        data.verification ?? {
+          ...verification,
+          is_active: nextActive,
+          updated_at: new Date().toISOString(),
+        },
       );
 
       setMessage(
@@ -179,7 +253,7 @@ export default function VerificationCard() {
       );
     } catch {
       setError(
-        "Unable to update verification.",
+        "Unable to connect to the verification service. Please try again.",
       );
     } finally {
       setUpdating(false);
@@ -187,38 +261,81 @@ export default function VerificationCard() {
   }
 
   async function copyVerificationLink() {
-    if (!verification) {
+    if (
+      !verification ||
+      !verificationUrl ||
+      copying
+    ) {
       return;
     }
 
-    const url =
-      `${window.location.origin}/verify/` +
-      verification.verification_code;
+    if (isVerificationExpired(verification)) {
+      setError(
+        "This verification link has expired. Create a new link before sharing it.",
+      );
+
+      setMessage("");
+      return;
+    }
+
+    setCopying(true);
+    setError("");
+    setMessage("");
 
     try {
-      await navigator.clipboard.writeText(
-        url,
-      );
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(
+          `${origin}${verificationPath}`,
+        );
+      } else {
+        const textArea =
+          document.createElement("textarea");
 
-      setError("");
-      setMessage(
-        "Verification link copied.",
-      );
+        textArea.value =
+          `${origin}${verificationPath}`;
+
+        textArea.setAttribute(
+          "readonly",
+          "",
+        );
+
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        textArea.style.pointerEvents = "none";
+
+        document.body.appendChild(textArea);
+
+        textArea.select();
+
+        const copied =
+          document.execCommand("copy");
+
+        document.body.removeChild(textArea);
+
+        if (!copied) {
+          throw new Error("Clipboard copy failed.");
+        }
+      }
+
+      setMessage("Verification link copied.");
     } catch {
       setError(
-        "Unable to copy the verification link.",
+        "Unable to copy automatically. Select and copy the verification URL displayed below.",
       );
+    } finally {
+      setCopying(false);
     }
   }
 
-  const verificationUrl =
-    verification
-      ? `${typeof window !== "undefined" ? window.location.origin : ""}/verify/${verification.verification_code}`
-      : "";
-
   if (loading) {
     return (
-      <section className="card">
+      <section
+        className="card"
+        aria-busy="true"
+        style={{
+          marginBottom: "2rem",
+        }}
+      >
         <p className="muted">
           Loading verification settings...
         </p>
@@ -226,9 +343,17 @@ export default function VerificationCard() {
     );
   }
 
+  const canCreateNewLink =
+    !verification || expired;
+
+  const canPreview =
+    Boolean(verification?.is_active) &&
+    !expired;
+
   return (
     <section
       className="card"
+      aria-labelledby="skill-passport-verification-title"
       style={{
         marginBottom: "2rem",
       }}
@@ -236,40 +361,60 @@ export default function VerificationCard() {
       <div
         style={{
           display: "flex",
-          justifyContent:
-            "space-between",
+          justifyContent: "space-between",
           alignItems: "flex-start",
           gap: "1rem",
           flexWrap: "wrap",
         }}
       >
-        <div>
+        <div
+          style={{
+            flex: "1 1 18rem",
+            minWidth: 0,
+          }}
+        >
           <p className="eyebrow">
             EMPLOYER VERIFICATION
           </p>
 
-          <h2>
+          <h2
+            id="skill-passport-verification-title"
+            style={{
+              marginTop: "0.35rem",
+            }}
+          >
             Public Skill Passport
           </h2>
 
-          <p className="muted">
-            Give an employer or client a secure
-            link to verify your demonstrated
-            skills and RuffNeck Learn credentials.
+          <p
+            className="muted"
+            style={{
+              lineHeight: 1.7,
+            }}
+          >
+            Share a verification link with an
+            employer or client so they can check
+            the credentials and demonstrated skills
+            published through RuffNeck Learn.
           </p>
         </div>
 
         {verification && (
           <span
             className={
-              verification.is_active
-                ? "rn-badge rn-badge-success"
-                : "rn-badge"
+              expired
+                ? "rn-badge"
+                : verification.is_active
+                  ? "rn-badge rn-badge-success"
+                  : "rn-badge"
             }
+            role="status"
           >
-            {verification.is_active
-              ? "Verification active"
-              : "Verification disabled"}
+            {expired
+              ? "Link expired"
+              : verification.is_active
+                ? "Verification active"
+                : "Verification disabled"}
           </span>
         )}
       </div>
@@ -298,24 +443,41 @@ export default function VerificationCard() {
         </div>
       )}
 
-      {!verification ? (
+      {canCreateNewLink && (
         <div
           style={{
             marginTop: "1.25rem",
           }}
         >
+          {expired && (
+            <p
+              className="muted"
+              style={{
+                lineHeight: 1.7,
+              }}
+            >
+              Your previous verification link has
+              expired. Create a new link before
+              sharing your Skill Passport.
+            </p>
+          )}
+
           <button
             type="button"
             className="rn-button rn-button-primary"
             onClick={createVerification}
-            disabled={creating}
+            disabled={creating || updating}
           >
             {creating
-              ? "Creating..."
-              : "Create Verification Link"}
+              ? "Creating verification link..."
+              : expired
+                ? "Create New Verification Link"
+                : "Create Verification Link"}
           </button>
         </div>
-      ) : (
+      )}
+
+      {verification && (
         <div
           style={{
             marginTop: "1.25rem",
@@ -329,22 +491,44 @@ export default function VerificationCard() {
               borderRadius: 10,
               background:
                 "var(--surface-soft, #f8fafc)",
-              overflowWrap:
-                "anywhere",
             }}
           >
-            <strong>
-              Verification URL
-            </strong>
+            <strong>Verification URL</strong>
 
             <p
               style={{
                 marginTop: "0.5rem",
                 marginBottom: 0,
+                overflowWrap: "anywhere",
+                lineHeight: 1.7,
+                color: "var(--foreground, #0b1e3a)",
               }}
             >
               {verificationUrl}
             </p>
+
+            {verification.expires_at && (
+              <p
+                className="muted"
+                style={{
+                  marginTop: "0.75rem",
+                  marginBottom: 0,
+                  fontSize: "0.875rem",
+                }}
+              >
+                {expired
+                  ? "This link is expired."
+                  : `Link expiry: ${new Intl.DateTimeFormat(
+                      "en-NG",
+                      {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      },
+                    ).format(
+                      new Date(verification.expires_at),
+                    )}`}
+              </p>
+            )}
           </div>
 
           <div
@@ -359,59 +543,80 @@ export default function VerificationCard() {
               type="button"
               className="rn-button rn-button-primary"
               onClick={copyVerificationLink}
+              disabled={
+                copying ||
+                expired ||
+                !origin
+              }
             >
-              Copy Verification Link
+              {copying
+                ? "Copying..."
+                : "Copy Verification Link"}
             </button>
 
             <a
               href={
-                verification.is_active
-                  ? verificationUrl
+                canPreview
+                  ? verificationPath
                   : undefined
               }
               target="_blank"
               rel="noopener noreferrer"
               className="rn-button"
-              aria-disabled={
-                !verification.is_active
-              }
+              aria-disabled={!canPreview}
               onClick={(event) => {
-                if (
-                  !verification.is_active
-                ) {
+                if (!canPreview) {
                   event.preventDefault();
                 }
+              }}
+              style={{
+                opacity: canPreview ? 1 : 0.55,
+                cursor: canPreview
+                  ? "pointer"
+                  : "not-allowed",
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
               Preview Public Passport
             </a>
 
-            <button
-              type="button"
-              className="rn-button"
-              onClick={toggleVerification}
-              disabled={updating}
-            >
-              {updating
-                ? "Updating..."
-                : verification.is_active
-                  ? "Disable Verification"
-                  : "Enable Verification"}
-            </button>
+            {(!expired || verification.is_active) && (
+              <button
+                type="button"
+                className="rn-button"
+                onClick={toggleVerification}
+                disabled={
+                  updating ||
+                  creating ||
+                  (expired && !verification.is_active)
+                }
+              >
+                {updating
+                  ? "Updating..."
+                  : verification.is_active
+                    ? "Disable Verification"
+                    : "Enable Verification"}
+              </button>
+            )}
           </div>
 
           <p
             className="muted"
             style={{
-              marginTop: "0.9rem",
+              marginTop: "1rem",
               marginBottom: 0,
+              lineHeight: 1.7,
+              fontSize: "0.9rem",
             }}
           >
-            Only information intended for
-            public verification will be displayed.
-            Your private submissions, payment
-            information, and account details remain
-            private.
+            Public visibility depends on the
+            information returned by the verification
+            page. Private submissions, payment
+            information, and account details should
+            remain excluded from public responses.
           </p>
         </div>
       )}
