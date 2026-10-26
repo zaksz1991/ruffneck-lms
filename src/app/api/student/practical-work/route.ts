@@ -5,7 +5,8 @@ export const runtime = "nodejs";
 
 const STORAGE_BUCKET = "practical-work-evidence";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
-const MAX_TEXT_LENGTH = 50000;
+const MAX_TEXT_LENGTH = 50_000;
+
 const ALLOWED_FILE_TYPES = new Set([
   "application/pdf",
   "application/msword",
@@ -20,6 +21,28 @@ const ALLOWED_FILE_TYPES = new Set([
   "image/png",
   "image/webp",
 ]);
+
+const EXTENSIONS_BY_TYPE: Record<string, string[]> = {
+  "application/pdf": ["pdf"],
+  "application/msword": ["doc"],
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
+    "docx",
+  ],
+  "application/vnd.ms-excel": ["xls"],
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [
+    "xlsx",
+  ],
+  "application/vnd.ms-powerpoint": ["ppt"],
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": [
+    "pptx",
+  ],
+  "text/plain": ["txt"],
+  "text/csv": ["csv"],
+  "image/jpeg": ["jpg", "jpeg"],
+  "image/png": ["png"],
+  "image/webp": ["webp"],
+};
+
 type SubmissionStatus =
   | "draft"
   | "submitted"
@@ -31,13 +54,14 @@ type Enrollment = {
   course_id: string;
   enrollment_status: string;
 };
+
 type PracticalTask = {
   id: string;
   course_id: string;
   title: string;
   scenario: string;
   instructions: string;
-  expected_outcome: string;
+  expected_outcome: string | null;
   submission_type:
     | "text"
     | "document"
@@ -49,6 +73,7 @@ type PracticalTask = {
   is_published: boolean;
   skill_id: string | null;
 };
+
 type PracticalSubmission = {
   id: string;
   task_id: string;
@@ -64,9 +89,21 @@ type PracticalSubmission = {
   evidence_file_type: string | null;
   evidence_file_size: number | null;
   evidence_recorded_at: string | null;
+  created_at?: string;
 };
-function jsonError(message: string, status: number) {
-  return NextResponse.json({ error: message }, { status });
+
+type SupabaseClient = Awaited<
+  ReturnType<typeof createClient>
+>;
+
+function jsonError(
+  message: string,
+  status = 400,
+) {
+  return NextResponse.json(
+    { error: message },
+    { status },
+  );
 }
 
 async function getAuthenticatedUser() {
@@ -78,7 +115,10 @@ async function getAuthenticatedUser() {
   } = await supabase.auth.getUser();
 
   if (error) {
-    console.error("Practical work authentication error:", error);
+    console.error(
+      "Practical work authentication error:",
+      error.message,
+    );
   }
 
   return {
@@ -86,7 +126,8 @@ async function getAuthenticatedUser() {
     user: error ? null : user,
   };
 }
-function getSafeFileName(fileName: string) {
+
+function getSafeFileName(fileName: string): string {
   const cleaned = fileName
     .normalize("NFKC")
     .replace(/[\\/]/g, "-")
@@ -98,13 +139,14 @@ function getSafeFileName(fileName: string) {
   return cleaned || "evidence-file";
 }
 
-function extensionForFile(file: File) {
+function extensionForFile(file: File): string {
   const name = file.name.trim();
   const dot = name.lastIndexOf(".");
 
   if (dot <= 0 || dot === name.length - 1) {
     return "";
   }
+
   return name
     .slice(dot + 1)
     .toLowerCase()
@@ -114,12 +156,13 @@ function extensionForFile(file: File) {
 function submissionTypeAllowsFile(
   submissionType: PracticalTask["submission_type"],
   file: File,
-) {
+): boolean {
   if (submissionType === "mixed") {
     return true;
   }
 
   const type = file.type.toLowerCase();
+
   if (submissionType === "document") {
     return [
       "application/pdf",
@@ -136,6 +179,7 @@ function submissionTypeAllowsFile(
       "text/csv",
     ].includes(type);
   }
+
   if (submissionType === "presentation") {
     return [
       "application/vnd.ms-powerpoint",
@@ -151,12 +195,15 @@ function bytesStartWith(
   bytes: Uint8Array,
   signature: number[],
   offset = 0,
-) {
+): boolean {
   return signature.every(
     (byte, index) => bytes[offset + index] === byte,
   );
 }
-async function validateFileSignature(file: File) {
+
+async function validateFileSignature(
+  file: File,
+): Promise<boolean> {
   const buffer = await file
     .slice(0, Math.min(file.size, 8192))
     .arrayBuffer();
@@ -171,8 +218,11 @@ async function validateFileSignature(file: File) {
   }
 
   if (type === "image/jpeg") {
-    return bytesStartWith(bytes, [0xff, 0xd8, 0xff]);
+    return bytesStartWith(bytes, [
+      0xff, 0xd8, 0xff,
+    ]);
   }
+
   if (type === "image/png") {
     return bytesStartWith(bytes, [
       0x89, 0x50, 0x4e, 0x47,
@@ -182,8 +232,14 @@ async function validateFileSignature(file: File) {
 
   if (type === "image/webp") {
     return (
-      bytesStartWith(bytes, [0x52, 0x49, 0x46, 0x46]) &&
-      bytesStartWith(bytes, [0x57, 0x45, 0x42, 0x50], 8)
+      bytesStartWith(bytes, [
+        0x52, 0x49, 0x46, 0x46,
+      ]) &&
+      bytesStartWith(
+        bytes,
+        [0x57, 0x45, 0x42, 0x50],
+        8,
+      )
     );
   }
 
@@ -194,7 +250,9 @@ async function validateFileSignature(file: File) {
   ];
 
   if (modernOfficeTypes.includes(type)) {
-    return bytesStartWith(bytes, [0x50, 0x4b, 0x03, 0x04]);
+    return bytesStartWith(bytes, [
+      0x50, 0x4b, 0x03, 0x04,
+    ]);
   }
 
   const legacyOfficeTypes = [
@@ -210,7 +268,10 @@ async function validateFileSignature(file: File) {
     ]);
   }
 
-  if (type === "text/plain" || type === "text/csv") {
+  if (
+    type === "text/plain" ||
+    type === "text/csv"
+  ) {
     if (bytes.length === 0) {
       return false;
     }
@@ -228,47 +289,93 @@ async function validateFileSignature(file: File) {
 }
 
 async function createEvidenceSignedUrl(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: SupabaseClient,
   filePath: string | null,
-) {
+): Promise<string | null> {
   if (!filePath) {
     return null;
   }
-  const { data, error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .createSignedUrl(filePath, 60 * 60);
 
-  if (error) {
-    console.error("Evidence signed URL error:", error);
+  try {
+    const { data, error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .createSignedUrl(filePath, 60 * 60);
+
+    if (error) {
+      console.error(
+        "Evidence signed URL error:",
+        error.message,
+      );
+
+      return null;
+    }
+
+    return data?.signedUrl ?? null;
+  } catch (error) {
+    console.error(
+      "Evidence signed URL request failed:",
+      error,
+    );
+
     return null;
   }
-
-  return data?.signedUrl ?? null;
 }
 
 async function removeUploadedFile(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: SupabaseClient,
   filePath: string | null,
-) {
+): Promise<void> {
   if (!filePath) {
     return;
   }
 
-  const { error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .remove([filePath]);
-  if (error) {
-    console.error("Evidence cleanup error:", error);
+  try {
+    const { error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .remove([filePath]);
+
+    if (error) {
+      console.error(
+        "Evidence cleanup error:",
+        error.message,
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Evidence cleanup request failed:",
+      error,
+    );
   }
+}
+
+async function getFileFromFormData(
+  formData: FormData,
+): Promise<File | null> {
+  const rawFile = formData.get("evidenceFile");
+
+  if (
+    typeof File !== "undefined" &&
+    rawFile instanceof File &&
+    rawFile.size > 0
+  ) {
+    return rawFile;
+  }
+
+  return null;
 }
 
 export async function GET() {
   try {
-    const { supabase, user } = await getAuthenticatedUser();
+    const { supabase, user } =
+      await getAuthenticatedUser();
 
     if (!user) {
-      return jsonError("Authentication required.", 401);
+      return jsonError(
+        "Authentication required.",
+        401,
+      );
     }
+
     const {
       data: enrollmentData,
       error: enrollmentError,
@@ -276,21 +383,33 @@ export async function GET() {
       .from("enrollments")
       .select("course_id, enrollment_status")
       .eq("student_id", user.id)
-      .in("enrollment_status", ["active", "completed"]);
+      .in("enrollment_status", [
+        "active",
+        "completed",
+      ]);
 
     if (enrollmentError) {
       console.error(
         "Practical work enrollment error:",
-        enrollmentError,
+        enrollmentError.message,
       );
 
-      return jsonError("Unable to load your course access.", 500);
+      return jsonError(
+        "Unable to load your course access.",
+        500,
+      );
     }
-    const enrollments = (enrollmentData ?? []) as Enrollment[];
 
-    const courseIds = [
-      ...new Set(enrollments.map((item) => item.course_id)),
-    ];
+    const enrollments =
+      (enrollmentData ?? []) as Enrollment[];
+
+    const courseIds = Array.from(
+      new Set(
+        enrollments.map(
+          (item) => item.course_id,
+        ),
+      ),
+    );
 
     if (courseIds.length === 0) {
       return NextResponse.json({
@@ -298,6 +417,7 @@ export async function GET() {
         submissions: [],
       });
     }
+
     const {
       data: taskData,
       error: taskError,
@@ -318,16 +438,31 @@ export async function GET() {
       `)
       .in("course_id", courseIds)
       .eq("is_published", true)
-      .order("sort_order", { ascending: true });
+      .order("sort_order", {
+        ascending: true,
+      });
+
     if (taskError) {
-      console.error("Practical tasks load error:", taskError);
-      return jsonError("Unable to load practical tasks.", 500);
+      console.error(
+        "Practical tasks load error:",
+        taskError.message,
+      );
+
+      return jsonError(
+        "Unable to load practical tasks.",
+        500,
+      );
     }
 
-    const tasks = (taskData ?? []) as unknown as PracticalTask[];
-    const taskIds = tasks.map((task) => task.id);
+    const tasks =
+      (taskData ?? []) as unknown as PracticalTask[];
+
+    const taskIds = tasks.map(
+      (task) => task.id,
+    );
 
     let submissions: PracticalSubmission[] = [];
+
     if (taskIds.length > 0) {
       const {
         data: submissionData,
@@ -348,15 +483,23 @@ export async function GET() {
           evidence_file_name,
           evidence_file_type,
           evidence_file_size,
-          evidence_recorded_at
+          evidence_recorded_at,
+          created_at
         `)
         .eq("student_id", user.id)
         .in("task_id", taskIds)
-        .order("submitted_at", { ascending: false });
+        .order("submitted_at", {
+          ascending: false,
+          nullsFirst: false,
+        })
+        .order("created_at", {
+          ascending: false,
+        });
+
       if (submissionError) {
         console.error(
           "Practical submissions load error:",
-          submissionError,
+          submissionError.message,
         );
 
         return jsonError(
@@ -365,35 +508,53 @@ export async function GET() {
         );
       }
 
-      submissions = (submissionData ?? []) as unknown as PracticalSubmission[];
+      submissions =
+        (submissionData ?? []) as unknown as PracticalSubmission[];
     }
 
-    const submissionMap = new Map<string, PracticalSubmission>();
+    /*
+     * Return the newest record for each task.
+     * This is robust even if legacy data contains multiple
+     * submissions for one learner/task combination.
+     */
+    const submissionMap =
+      new Map<string, PracticalSubmission>();
+
     for (const submission of submissions) {
       if (!submissionMap.has(submission.task_id)) {
-        submissionMap.set(submission.task_id, submission);
+        submissionMap.set(
+          submission.task_id,
+          submission,
+        );
       }
     }
 
     const submissionsWithUrls = await Promise.all(
-      [...submissionMap.values()].map(async (submission) => ({
-        ...submission,
-        evidence_file_url: await createEvidenceSignedUrl(
-          supabase,
-          submission.evidence_file_path,
-        ),
-      })),
+      Array.from(submissionMap.values()).map(
+        async (submission) => ({
+          ...submission,
+          evidence_file_url:
+            await createEvidenceSignedUrl(
+              supabase,
+              submission.evidence_file_path,
+            ),
+        }),
+      ),
     );
+
     const finalSubmissionMap = new Map(
-      submissionsWithUrls.map((submission) => [
-        submission.task_id,
-        submission,
-      ]),
+      submissionsWithUrls.map(
+        (submission) => [
+          submission.task_id,
+          submission,
+        ],
+      ),
     );
 
     const enrichedTasks = tasks.map((task) => ({
       ...task,
-      submission: finalSubmissionMap.get(task.id) ?? null,
+      submission:
+        finalSubmissionMap.get(task.id) ?? null,
     }));
 
     return NextResponse.json({
@@ -401,7 +562,11 @@ export async function GET() {
       submissions: submissionsWithUrls,
     });
   } catch (error) {
-    console.error("Practical work GET error:", error);
+    console.error(
+      "Practical work GET error:",
+      error,
+    );
+
     return jsonError(
       "An unexpected error occurred while loading practical work.",
       500,
@@ -410,18 +575,28 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  let supabase: SupabaseClient | null = null;
   let uploadedFilePath: string | null = null;
+  let submissionSaved = false;
 
   try {
-    const { supabase, user } = await getAuthenticatedUser();
+    const auth = await getAuthenticatedUser();
 
-    if (!user) {
-      return jsonError("Authentication required.", 401);
+    supabase = auth.supabase;
+
+    if (!auth.user) {
+      return jsonError(
+        "Authentication required.",
+        401,
+      );
     }
+
+    const user = auth.user;
 
     const contentType = (
       request.headers.get("content-type") ?? ""
     ).toLowerCase();
+
     let taskId = "";
     let submissionText = "";
     let evidenceFile: File | null = null;
@@ -432,41 +607,61 @@ export async function POST(request: Request) {
       try {
         formData = await request.formData();
       } catch {
-        return jsonError("Invalid multipart request body.", 400);
+        return jsonError(
+          "Invalid multipart request body.",
+          400,
+        );
       }
 
       const rawTaskId = formData.get("taskId");
-      const rawSubmissionText = formData.get("submissionText");
-      const rawFile = formData.get("evidenceFile");
+      const rawSubmissionText =
+        formData.get("submissionText");
+
       taskId =
-        typeof rawTaskId === "string" ? rawTaskId.trim() : "";
+        typeof rawTaskId === "string"
+          ? rawTaskId.trim()
+          : "";
 
       submissionText =
         typeof rawSubmissionText === "string"
           ? rawSubmissionText.trim()
           : "";
 
-      if (rawFile instanceof File && rawFile.size > 0) {
-        evidenceFile = rawFile;
-      }
-    } else if (contentType.includes("application/json")) {
+      evidenceFile =
+        await getFileFromFormData(formData);
+    } else if (
+      contentType.includes("application/json")
+    ) {
       let body: unknown;
+
       try {
         body = await request.json();
       } catch {
-        return jsonError("Invalid request body.", 400);
+        return jsonError(
+          "Invalid request body.",
+          400,
+        );
       }
 
-      if (!body || typeof body !== "object") {
-        return jsonError("Invalid request body.", 400);
+      if (
+        !body ||
+        typeof body !== "object" ||
+        Array.isArray(body)
+      ) {
+        return jsonError(
+          "Invalid request body.",
+          400,
+        );
       }
 
-      const payload = body as Record<string, unknown>;
+      const payload =
+        body as Record<string, unknown>;
 
       taskId =
         typeof payload.taskId === "string"
           ? payload.taskId.trim()
           : "";
+
       submissionText =
         typeof payload.submissionText === "string"
           ? payload.submissionText.trim()
@@ -479,7 +674,10 @@ export async function POST(request: Request) {
     }
 
     if (!taskId) {
-      return jsonError("Task ID is required.", 400);
+      return jsonError(
+        "Task ID is required.",
+        400,
+      );
     }
 
     if (submissionText.length > MAX_TEXT_LENGTH) {
@@ -488,6 +686,7 @@ export async function POST(request: Request) {
         400,
       );
     }
+
     if (!submissionText && !evidenceFile) {
       return jsonError(
         "Enter your practical response or attach an evidence file before submitting.",
@@ -502,6 +701,7 @@ export async function POST(request: Request) {
           400,
         );
       }
+
       if (
         !ALLOWED_FILE_TYPES.has(
           evidenceFile.type.toLowerCase(),
@@ -513,7 +713,8 @@ export async function POST(request: Request) {
         );
       }
 
-      const extension = extensionForFile(evidenceFile);
+      const extension =
+        extensionForFile(evidenceFile);
 
       if (!extension) {
         return jsonError(
@@ -521,6 +722,19 @@ export async function POST(request: Request) {
           400,
         );
       }
+
+      const allowedExtensions =
+        EXTENSIONS_BY_TYPE[
+          evidenceFile.type.toLowerCase()
+        ] ?? [];
+
+      if (!allowedExtensions.includes(extension)) {
+        return jsonError(
+          "The file extension does not match its declared file type.",
+          400,
+        );
+      }
+
       const validSignature =
         await validateFileSignature(evidenceFile);
 
@@ -531,6 +745,7 @@ export async function POST(request: Request) {
         );
       }
     }
+
     const {
       data: taskData,
       error: taskError,
@@ -552,12 +767,21 @@ export async function POST(request: Request) {
       .eq("id", taskId)
       .eq("is_published", true)
       .maybeSingle();
+
     if (taskError) {
-      console.error("Practical task lookup error:", taskError);
-      return jsonError("Unable to verify the practical task.", 500);
+      console.error(
+        "Practical task lookup error:",
+        taskError.message,
+      );
+
+      return jsonError(
+        "Unable to verify the practical task.",
+        500,
+      );
     }
 
-    const task = taskData as unknown as PracticalTask | null;
+    const task =
+      taskData as unknown as PracticalTask | null;
 
     if (!task) {
       return jsonError(
@@ -565,6 +789,7 @@ export async function POST(request: Request) {
         404,
       );
     }
+
     if (
       evidenceFile &&
       !submissionTypeAllowsFile(
@@ -577,6 +802,7 @@ export async function POST(request: Request) {
         400,
       );
     }
+
     const {
       data: enrollmentData,
       error: enrollmentError,
@@ -585,21 +811,26 @@ export async function POST(request: Request) {
       .select("course_id, enrollment_status")
       .eq("student_id", user.id)
       .eq("course_id", task.course_id)
-      .in("enrollment_status", ["active", "completed"])
+      .in("enrollment_status", [
+        "active",
+        "completed",
+      ])
       .maybeSingle();
 
     if (enrollmentError) {
       console.error(
         "Practical work enrollment verification error:",
-        enrollmentError,
+        enrollmentError.message,
       );
+
       return jsonError(
         "Unable to verify your course enrollment.",
         500,
       );
     }
 
-    const enrollment = enrollmentData as Enrollment | null;
+    const enrollment =
+      enrollmentData as Enrollment | null;
 
     if (!enrollment) {
       return jsonError(
@@ -607,6 +838,12 @@ export async function POST(request: Request) {
         403,
       );
     }
+
+    /*
+     * Retrieve the newest existing submission.
+     * This avoids maybeSingle() failing merely because older duplicate
+     * records exist from previous submission flows.
+     */
     const {
       data: existingData,
       error: existingError,
@@ -626,15 +863,21 @@ export async function POST(request: Request) {
         evidence_file_name,
         evidence_file_type,
         evidence_file_size,
-        evidence_recorded_at
+        evidence_recorded_at,
+        created_at
       `)
       .eq("task_id", task.id)
       .eq("student_id", user.id)
+      .order("created_at", {
+        ascending: false,
+      })
+      .limit(1)
       .maybeSingle();
+
     if (existingError) {
       console.error(
         "Existing practical submission lookup error:",
-        existingError,
+        existingError.message,
       );
 
       return jsonError(
@@ -645,6 +888,7 @@ export async function POST(request: Request) {
 
     const existingSubmission =
       existingData as unknown as PracticalSubmission | null;
+
     if (
       existingSubmission?.status === "approved" ||
       existingSubmission?.status === "under_review"
@@ -660,6 +904,7 @@ export async function POST(request: Request) {
 
     let evidenceName =
       existingSubmission?.evidence_file_name ?? null;
+
     let evidenceType =
       existingSubmission?.evidence_file_type ?? null;
 
@@ -667,11 +912,22 @@ export async function POST(request: Request) {
       existingSubmission?.evidence_file_size ?? null;
 
     if (evidenceFile) {
-      const safeName = getSafeFileName(evidenceFile.name);
-      const extension = extensionForFile(evidenceFile);
-      const uniqueName = `${crypto.randomUUID()}.${extension}`;
-      const path = `${user.id}/${task.id}/${uniqueName}`;
-      const { error: uploadError } = await supabase.storage
+      const safeName = getSafeFileName(
+        evidenceFile.name,
+      );
+
+      const extension =
+        extensionForFile(evidenceFile);
+
+      const uniqueName =
+        `${crypto.randomUUID()}.${extension}`;
+
+      const path =
+        `${user.id}/${task.id}/${uniqueName}`;
+
+      const {
+        error: uploadError,
+      } = await supabase.storage
         .from(STORAGE_BUCKET)
         .upload(path, evidenceFile, {
           contentType: evidenceFile.type,
@@ -681,7 +937,7 @@ export async function POST(request: Request) {
       if (uploadError) {
         console.error(
           "Practical evidence upload error:",
-          uploadError,
+          uploadError.message,
         );
 
         return jsonError(
@@ -689,6 +945,7 @@ export async function POST(request: Request) {
           500,
         );
       }
+
       uploadedFilePath = path;
       evidencePath = path;
       evidenceName = safeName;
@@ -697,6 +954,7 @@ export async function POST(request: Request) {
     }
 
     const now = new Date().toISOString();
+
     const submissionPayload = {
       task_id: task.id,
       student_id: user.id,
@@ -710,7 +968,16 @@ export async function POST(request: Request) {
       evidence_file_name: evidenceName,
       evidence_file_type: evidenceType,
       evidence_file_size: evidenceSize,
+
+      /*
+       * A new or revised learner submission is not yet approved evidence.
+       * Clear any stale marker so the reviewer must record evidence again
+       * after approving the new submission.
+       */
+      evidence_recorded_at: null,
+      updated_at: now,
     };
+
     const selectFields = `
       id,
       task_id,
@@ -725,35 +992,50 @@ export async function POST(request: Request) {
       evidence_file_name,
       evidence_file_type,
       evidence_file_size,
-      evidence_recorded_at
+      evidence_recorded_at,
+      created_at
     `;
-    const saveResult = existingSubmission
-      ? await supabase
-          .from("student_practical_task_submissions")
-          .update(submissionPayload)
-          .eq("id", existingSubmission.id)
-          .select(selectFields)
-          .single()
-      : await supabase
-          .from("student_practical_task_submissions")
-          .insert(submissionPayload)
-          .select(selectFields)
-          .single();
 
-    const {
-      data: savedData,
-      error: saveError,
-    } = saveResult;
+    let savedData: unknown = null;
+    let saveError: {
+      message: string;
+      code?: string;
+    } | null = null;
+
+    if (existingSubmission) {
+      const result = await supabase
+        .from("student_practical_task_submissions")
+        .update(submissionPayload)
+        .eq("id", existingSubmission.id)
+        .eq("student_id", user.id)
+        .select(selectFields)
+        .single();
+
+      savedData = result.data;
+      saveError = result.error;
+    } else {
+      const result = await supabase
+        .from("student_practical_task_submissions")
+        .insert(submissionPayload)
+        .select(selectFields)
+        .single();
+
+      savedData = result.data;
+      saveError = result.error;
+    }
+
     if (saveError || !savedData) {
       console.error(
         "Practical submission save error:",
-        saveError,
+        saveError?.message ?? "No submission returned.",
       );
 
       await removeUploadedFile(
         supabase,
         uploadedFilePath,
       );
+
+      uploadedFilePath = null;
 
       if (saveError?.code === "23505") {
         return jsonError(
@@ -767,10 +1049,21 @@ export async function POST(request: Request) {
         500,
       );
     }
+
+    submissionSaved = true;
+
+    const submission =
+      savedData as PracticalSubmission;
+
+    /*
+     * Delete the previous storage object only after the new submission
+     * record has been saved successfully.
+     */
     if (
       evidenceFile &&
       existingSubmission?.evidence_file_path &&
-      existingSubmission.evidence_file_path !== uploadedFilePath
+      existingSubmission.evidence_file_path !==
+        uploadedFilePath
     ) {
       await removeUploadedFile(
         supabase,
@@ -778,12 +1071,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const submission = savedData as unknown as PracticalSubmission;
+    const evidenceFileUrl =
+      await createEvidenceSignedUrl(
+        supabase,
+        submission.evidence_file_path,
+      );
 
-    const evidenceFileUrl = await createEvidenceSignedUrl(
-      supabase,
-      submission.evidence_file_path,
-    );
     return NextResponse.json({
       success: true,
       submission: {
@@ -792,7 +1085,25 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    console.error("Practical work POST error:", error);
+    console.error(
+      "Practical work POST error:",
+      error,
+    );
+
+    /*
+     * Do not delete an uploaded file if its submission record has
+     * already been saved successfully.
+     */
+    if (
+      supabase &&
+      uploadedFilePath &&
+      !submissionSaved
+    ) {
+      await removeUploadedFile(
+        supabase,
+        uploadedFilePath,
+      );
+    }
 
     return jsonError(
       "An unexpected error occurred while submitting practical work.",
