@@ -92,7 +92,6 @@ async function getQrDataUrl(
 
     const image = await response.arrayBuffer();
 
-    // Refuse unexpectedly large responses.
     if (image.byteLength === 0 || image.byteLength > 1_000_000) {
       return null;
     }
@@ -101,7 +100,10 @@ async function getQrDataUrl(
 
     return `data:${contentType};base64,${base64}`;
   } catch (error) {
-    console.error("Certificate QR image could not be loaded:", error);
+    console.error(
+      "Certificate QR image could not be loaded:",
+      error,
+    );
     return null;
   }
 }
@@ -968,9 +970,13 @@ const CERTIFICATE_STYLES = `
   }
 `;
 
-export default async function CertificatePage({ params }: PageProps) {
+export default async function CertificatePage({
+  params,
+}: PageProps) {
   const routeParams = await params;
-  const certificateId = routeParams.id ?? routeParams.certificateId;
+
+  const certificateId =
+    routeParams.id ?? routeParams.certificateId;
 
   if (!certificateId) {
     notFound();
@@ -984,7 +990,9 @@ export default async function CertificatePage({ params }: PageProps) {
 
   if (!user) {
     redirect(
-      `/login?next=/student/certificates/${encodeURIComponent(certificateId)}`,
+      `/login?next=/student/certificates/${encodeURIComponent(
+        certificateId,
+      )}`,
     );
   }
 
@@ -1008,17 +1016,31 @@ export default async function CertificatePage({ params }: PageProps) {
     .maybeSingle();
 
   if (error) {
-    console.error("Certificate retrieval failed:", error);
-    throw new Error("Unable to load this certificate.");
+    console.error(
+      "Certificate retrieval failed:",
+      error,
+    );
+
+    throw new Error(
+      "Unable to load this certificate.",
+    );
   }
 
   if (!data) {
     notFound();
   }
 
-  const certificate = data as Certificate;
+  /*
+   * Fix for the reported TypeScript build error:
+   * Supabase's generated types infer this selection as GenericStringError.
+   * Cast through unknown before applying the page's Certificate shape.
+   */
+  const certificate =
+    data as unknown as Certificate;
+
   const revoked = certificate.is_revoked;
   const issuedDate = formatDate(certificate.issued_at);
+
   const verificationUrl = getVerificationUrl(
     certificate.certificate_number,
   );
@@ -1033,7 +1055,9 @@ export default async function CertificatePage({ params }: PageProps) {
 
       <div className="certificate-toolbar">
         <div className="certificate-toolbar-group">
-          <Link href="/student/certificates">← My Certificates</Link>
+          <Link href="/student/certificates">
+            ← My Certificates
+          </Link>
         </div>
 
         <div className="certificate-toolbar-group">
@@ -1086,9 +1110,16 @@ export default async function CertificatePage({ params }: PageProps) {
             />
 
             <div className="certificate-brand">
-              <h1 className="certificate-brand-name">RUFFNECK</h1>
-              <div className="certificate-brand-learn">LEARN</div>
+              <h1 className="certificate-brand-name">
+                RUFFNECK
+              </h1>
+
+              <div className="certificate-brand-learn">
+                LEARN
+              </div>
+
               <div className="certificate-brand-rule" />
+
               <div className="certificate-tagline">
                 AI · DIGITAL TRANSFORMATION · BUSINESS SOLUTIONS
               </div>
@@ -1110,7 +1141,9 @@ export default async function CertificatePage({ params }: PageProps) {
               RuffNeck Learn · Professional Development
             </p>
 
-            <h2 className="certificate-title">CERTIFICATE</h2>
+            <h2 className="certificate-title">
+              CERTIFICATE
+            </h2>
 
             <div className="certificate-title-subtitle">
               OF COMPLETION
@@ -1210,6 +1243,7 @@ export default async function CertificatePage({ params }: PageProps) {
 
             <div className="certificate-record-row">
               <span className="certificate-record-icon">D</span>
+
               <div className="certificate-record-copy">
                 <strong>Date issued</strong>
                 {issuedDate}
@@ -1218,6 +1252,7 @@ export default async function CertificatePage({ params }: PageProps) {
 
             <div className="certificate-record-row">
               <span className="certificate-record-icon">A</span>
+
               <div className="certificate-record-copy">
                 <strong>Assessment score</strong>
                 {formatScore(certificate.assessment_score)}
@@ -1226,6 +1261,7 @@ export default async function CertificatePage({ params }: PageProps) {
 
             <div className="certificate-record-row">
               <span className="certificate-record-icon">C</span>
+
               <div className="certificate-record-copy">
                 <strong>Capstone score</strong>
                 {formatScore(certificate.capstone_score)}
@@ -1245,7 +1281,9 @@ export default async function CertificatePage({ params }: PageProps) {
 
               <div className="certificate-signature-line" />
 
-              <p className="certificate-signature-name">RUFFNECK LEARN</p>
+              <p className="certificate-signature-name">
+                RUFFNECK LEARN
+              </p>
 
               <p className="certificate-signature-role">
                 LEARNING &amp; PROFESSIONAL DEVELOPMENT
@@ -1278,6 +1316,7 @@ export default async function CertificatePage({ params }: PageProps) {
 
             <div className="certificate-signature">
               <div className="certificate-signature-space" />
+
               <div className="certificate-signature-line" />
 
               <p className="certificate-signature-name">
@@ -1293,7 +1332,9 @@ export default async function CertificatePage({ params }: PageProps) {
 
         {revoked && (
           <>
-            <div className="certificate-revoked-overlay">REVOKED</div>
+            <div className="certificate-revoked-overlay">
+              REVOKED
+            </div>
 
             {certificate.revoked_reason && (
               <div className="certificate-revoked-reason">
@@ -1306,7 +1347,9 @@ export default async function CertificatePage({ params }: PageProps) {
 
       {revoked && (
         <div className="certificate-revoked-notice">
-          <strong>This certificate has been revoked.</strong>{" "}
+          <strong>
+            This certificate has been revoked.
+          </strong>{" "}
           It must not be presented as a valid credential.
           {certificate.revoked_reason
             ? ` Reason: ${certificate.revoked_reason}`
@@ -1329,9 +1372,13 @@ export default async function CertificatePage({ params }: PageProps) {
             </p>
 
             <p>
-              <Link href="/student/certificates">All Certificates</Link>
+              <Link href="/student/certificates">
+                All Certificates
+              </Link>
               {" · "}
-              <Link href="/courses">Browse Courses</Link>
+              <Link href="/courses">
+                Browse Courses
+              </Link>
             </p>
 
             {!qrDataUrl && (
