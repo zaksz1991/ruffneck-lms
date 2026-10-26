@@ -1,0 +1,276 @@
+/* RuffNeck Learn — shared professional social-style theme */
+
+:root {
+  --rn-social-bg: #f3f6f8;
+  --rn-social-surface: #ffffff;
+  --rn-social-primary: #0a66c2;
+  --rn-social-primary-hover: #004182;
+  --rn-social-navy: #0b1e3a;
+  --rn-social-text: #27364b;
+  --rn-social-muted: #64748b;
+  --rn-social-border: #dfe5eb;
+  --rn-social-radius: 12px;
+  --rn-social-shadow: 0 2px 8px rgba(11, 30, 58, 0.055);
+}
+
+/* Body and shared page foundation */
+
+html {
+  min-height: 100%;
+  background: var(--rn-social-bg);
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: var(--rn-social-bg);
+  color: var(--rn-social-text);
+}
+
+body > main {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Keep the shared header visually distinct from page content.
+   These selectors cover common site-header class names and a
+   semantic header rendered directly beneath the body. */
+
+body > header,
+header.site-header,
+header.rn-header,
+header.rn-site-header,
+header.main-header,
+.site-header,
+.rn-site-header,
+.rn-header,
+#site-header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: rgba(255, 255, 255, 0.97);
+  border-bottom: 1px solid var(--rn-social-border);
+  box-shadow: 0 1px 4px rgba(11, 30, 58, 0.045);
+  color: var(--rn-social-navy);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Header navigation */
+
+body > header nav,
+header.site-header nav,
+header.rn-header nav,
+header.rn-site-header nav,
+header.main-header nav,
+.site-header nav,
+.rn-site-header nav,
+.rn-header nav,
+#site-header nav {
+  color: var(--rn-social-navy);
+}
+
+body > header nav a,
+header.site-header nav a,
+header.rn-header nav a,
+header.rn-site-header nav a,
+header.main-header nav a,
+.site-header nav a,
+.rn-site-header nav a,
+.rn-header nav a,
+#site-header nav a {
+  color: var(--rn-social-navy);
+  text-decoration: none;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+body > header nav a:hover,
+header.site-header nav a:hover,
+header.rn-header nav a:hover,
+header.rn-site-header nav a:hover,
+header.main-header nav a:hover,
+.site-header nav a:hover,
+.rn-site-header nav a:hover,
+.rn-header nav a:hover,
+#site-header nav a:hover {
+  color: var(--rn-social-primary);
+}
+
+body > header a:focus-visible,
+body > header button:focus-visible,
+.site-header a:focus-visible,
+.site-header button:focus-visible,
+.rn-site-header a:focus-visible,
+.rn-site-header button:focus-visible,
+.rn-header a:focus-visible,
+.rn-header button:focus-visible,
+#site-header a:focus-visible,
+#site-header button:focus-visible {
+  outline: 3px solid rgba(10, 102, 194, 0.32);
+  outline-offset: 3px;
+}
+
+/* Common content cards */
+
+.card {
+  border-color: var(--rn-social-border);
+  border-radius: var(--rn-social-radius);
+  box-shadow: var(--rn-social-shadow);
+}
+
+/* Common primary and secondary buttons */
+
+.button,
+.btn,
+.rn-button {
+  border-radius: 8px;
+  font-weight: 700;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.button.primary,
+.btn-primary,
+.rn-button-primary {
+  background-color: var(--rn-social-primary);
+  border-color: var(--rn-social-primary);
+  color: #ffffff;
+}
+
+.button.primary:hover:not(:disabled),
+.btn-primary:hover:not(:disabled),
+.rn-button-primary:hover:not(:disabled) {
+  background-color: var(--rn-social-primary-hover);
+  border-color: var(--rn-social-primary-hover);
+  color: #ffffff;
+}
+
+.button.secondary,
+.btn-secondary,
+.rn-button-secondary {
+  background-color: #ffffff;
+  border-color: #cbd5e1;
+  color: var(--rn-social-navy);
+}
+
+.button.secondary:hover:not(:disabled),
+.btn-secondary:hover:not(:disabled),
+.rn-button-secondary:hover:not(:disabled) {
+  background-color: #f1f6fb;
+  border-color: #94a3b8;
+}
+
+.button:focus-visible,
+.btn:focus-visible,
+.rn-button:focus-visible {
+  outline: 3px solid rgba(10, 102, 194, 0.28);
+  outline-offset: 2px;
+}
+
+.button:disabled,
+.btn:disabled,
+.rn-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+/* Form controls */
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+select,
+textarea {
+  border-radius: 8px;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgba(10, 102, 194, 0.35);
+  outline-offset: 1px;
+}
+
+/* Shared links and muted copy */
+
+main a {
+  text-underline-offset: 3px;
+}
+
+.muted {
+  color: var(--rn-social-muted);
+}
+
+/* Footer */
+
+.rn-social-footer {
+  margin-top: 32px;
+  padding: 20px 0;
+  background: #ffffff;
+  border-top: 1px solid var(--rn-social-border);
+  color: var(--rn-social-muted);
+  font-size: 13px;
+}
+
+.rn-social-footer .container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  line-height: 1.8;
+}
+
+.rn-social-footer a {
+  color: var(--rn-social-primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.rn-social-footer a:hover {
+  color: var(--rn-social-primary-hover);
+  text-decoration: underline;
+}
+
+.rn-footer-divider {
+  color: #94a3b8;
+}
+
+/* Mobile adjustments */
+
+@media (max-width: 640px) {
+  .rn-social-footer {
+    margin-top: 22px;
+    padding: 17px 12px;
+  }
+
+  .rn-social-footer .container {
+    gap: 6px;
+    text-align: center;
+  }
+
+  .card {
+    border-radius: 10px;
+  }
+}
+
+/* Respect user motion preferences */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .button,
+  .btn,
+  .rn-button,
+  .site-header nav a,
+  .rn-site-header nav a,
+  .rn-header nav a {
+    transition: none;
+  }
+}
