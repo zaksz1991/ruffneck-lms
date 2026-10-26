@@ -44,44 +44,60 @@ type Course = {
   slug: string;
 };
 
-function calculatePercentage(
-  attempt: AssessmentAttempt
-) {
+function calculatePercentage(attempt: AssessmentAttempt): number {
   if (
     typeof attempt.earned_points === "number" &&
+    Number.isFinite(attempt.earned_points) &&
     typeof attempt.total_points === "number" &&
+    Number.isFinite(attempt.total_points) &&
     attempt.total_points > 0
   ) {
-    return Math.round(
-      (attempt.earned_points /
-        attempt.total_points) *
-        100
+    return Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(
+          (attempt.earned_points / attempt.total_points) * 100
+        )
+      )
     );
   }
 
+  // Legacy score values are already percentages.
+  // Do not divide them by total_questions.
   if (
     typeof attempt.score === "number" &&
-    typeof attempt.total_questions === "number" &&
-    attempt.total_questions > 0
+    Number.isFinite(attempt.score) &&
+    attempt.score >= 0 &&
+    attempt.score <= 100
   ) {
-    return Math.round(
-      (attempt.score /
-        attempt.total_questions) *
-        100
-    );
+    return Math.round(attempt.score);
   }
 
-  if (typeof attempt.score === "number") {
-    return Math.round(attempt.score);
+  // Compatibility fallback for a score saved as a raw question count.
+  if (
+    typeof attempt.score === "number" &&
+    Number.isFinite(attempt.score) &&
+    typeof attempt.total_questions === "number" &&
+    Number.isFinite(attempt.total_questions) &&
+    attempt.total_questions > 0
+  ) {
+    return Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(
+          (attempt.score / attempt.total_questions) * 100
+        )
+      )
+    );
   }
 
   return 0;
 }
 
 function formatDate(value: string | null) {
-  if (!value) {
-    return "Not available";
-  }
+  if (!value) return "Not available";
 
   const date = new Date(value);
 
@@ -98,7 +114,8 @@ function formatDate(value: string | null) {
 function formatDuration(seconds: number | null) {
   if (
     typeof seconds !== "number" ||
-    seconds < 0
+    !Number.isFinite(seconds) ||
+    seconds <= 0
   ) {
     return "Not recorded";
   }
@@ -113,9 +130,7 @@ function formatDuration(seconds: number | null) {
   return `${minutes}m ${remainingSeconds}s`;
 }
 
-function getQuestionText(
-  question: AssessmentQuestion
-) {
+function getQuestionText(question: AssessmentQuestion) {
   return (
     question.question?.trim() ||
     question.question_text?.trim() ||
@@ -135,6 +150,23 @@ function parseOptions(value: unknown) {
   );
 }
 
+function formatPoints(
+  earnedPoints: number | null,
+  totalPoints: number | null
+) {
+  if (
+    typeof earnedPoints !== "number" ||
+    !Number.isFinite(earnedPoints) ||
+    typeof totalPoints !== "number" ||
+    !Number.isFinite(totalPoints) ||
+    totalPoints <= 0
+  ) {
+    return "Not recorded";
+  }
+
+  return `${earnedPoints}/${totalPoints}`;
+}
+
 export default async function AssessmentResultDetailPage({
   params,
 }: {
@@ -147,9 +179,7 @@ export default async function AssessmentResultDetailPage({
   const supabase = await createClient();
 
   const {
-    data: {
-      user,
-    },
+    data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
@@ -160,37 +190,35 @@ export default async function AssessmentResultDetailPage({
     );
   }
 
-  const { data: attemptData } = await supabase
+  const { data: attemptData, error: attemptError } = await supabase
     .from("assessment_attempts")
-    .select(
-      `
-        id,
-        course_id,
-        score,
-        total_points,
-        earned_points,
-        total_questions,
-        time_spent_seconds,
-        completed_at,
-        created_at
-      `
-    )
+    .select(`
+      id,
+      course_id,
+      score,
+      total_points,
+      earned_points,
+      total_questions,
+      time_spent_seconds,
+      completed_at,
+      created_at
+    `)
     .eq("id", attemptId)
     .eq("student_id", user.id)
     .not("completed_at", "is", null)
     .maybeSingle();
 
+  if (attemptError) {
+    throw new Error(attemptError.message);
+  }
+
   if (!attemptData) {
     notFound();
   }
 
-  const attempt =
-    attemptData as unknown as AssessmentAttempt;
+  const attempt = attemptData as unknown as AssessmentAttempt;
 
-  const [
-    courseResult,
-    answersResult,
-  ] = await Promise.all([
+  const [courseResult, answersResult] = await Promise.all([
     supabase
       .from("courses")
       .select("id, title, slug")
@@ -199,38 +227,35 @@ export default async function AssessmentResultDetailPage({
 
     supabase
       .from("assessment_answers")
-      .select(
-        `
-          attempt_id,
-          question_id,
-          answer,
-          is_correct,
-          points_earned,
-          answered_at
-        `
-      )
+      .select(`
+        attempt_id,
+        question_id,
+        answer,
+        is_correct,
+        points_earned,
+        answered_at
+      `)
       .eq("attempt_id", attempt.id),
   ]);
 
-  const course =
-    courseResult.data as unknown as Course | null;
+  if (courseResult.error) {
+    throw new Error(courseResult.error.message);
+  }
+
+  const course = courseResult.data as unknown as Course | null;
 
   if (answersResult.error) {
-    throw new Error(
-      answersResult.error.message
-    );
+    throw new Error(answersResult.error.message);
   }
 
   const answers =
-    (answersResult.data as unknown as AssessmentAnswer[]) ??
+    (answersResult.data as unknown as AssessmentAnswer[] | null) ??
     [];
 
   const questionIds = Array.from(
     new Set(
       answers
-        .map(
-          (answer) => answer.question_id
-        )
+        .map((answer) => answer.question_id)
         .filter(Boolean)
     )
   );
@@ -243,56 +268,38 @@ export default async function AssessmentResultDetailPage({
       error: questionError,
     } = await supabase
       .from("assessment_questions")
-      .select(
-        `
-          id,
-          course_id,
-          skill_id,
-          question,
-          question_text,
-          options,
-          correct_answer,
-          explanation,
-          difficulty,
-          points,
-          question_type,
-          sort_order
-        `
-      )
+      .select(`
+        id,
+        course_id,
+        skill_id,
+        question,
+        question_text,
+        options,
+        correct_answer,
+        explanation,
+        difficulty,
+        points,
+        question_type,
+        sort_order
+      `)
       .in("id", questionIds)
       .eq("course_id", attempt.course_id)
-      .order("sort_order", {
-        ascending: true,
-      });
+      .order("sort_order", { ascending: true });
 
     if (questionError) {
-      throw new Error(
-        questionError.message
-      );
+      throw new Error(questionError.message);
     }
 
     questions =
-      (questionData as unknown as AssessmentQuestion[]) ??
+      (questionData as unknown as AssessmentQuestion[] | null) ??
       [];
   }
 
-  const questionMap = new Map(
-    questions.map((question) => [
-      question.id,
-      question,
-    ])
-  );
-
   const answerMap = new Map(
-    answers.map((answer) => [
-      answer.question_id,
-      answer,
-    ])
+    answers.map((answer) => [answer.question_id, answer])
   );
 
-  const percentage =
-    calculatePercentage(attempt);
-
+  const percentage = calculatePercentage(attempt);
   const passed = percentage >= 70;
 
   const earnedPoints =
@@ -314,64 +321,30 @@ export default async function AssessmentResultDetailPage({
   ).length;
 
   return (
-    <main className="container">
-      <section
-        className="rn-page-header"
-        style={{
-          marginBottom: 24,
-        }}
-      >
+    <main className="container rn-assessment-detail-page">
+      <section className="rn-page-header rn-detail-header">
         <div>
-          <p
-            style={{
-              margin: "0 0 6px",
-              fontSize: 12,
-              fontWeight: 700,
-              letterSpacing: 1.2,
-              textTransform: "uppercase",
-              color: "var(--cyan)",
-            }}
-          >
+          <p className="rn-detail-eyebrow">
             Assessment Result
           </p>
 
-          <h1
-            style={{
-              margin: 0,
-            }}
-          >
-            {course?.title ||
-              "Course Assessment"}
+          <h1 className="rn-detail-course-title">
+            {course?.title || "Course Assessment"}
           </h1>
 
-          <p
-            style={{
-              marginTop: 8,
-              marginBottom: 0,
-              color: "var(--muted)",
-            }}
-          >
-            Completed{" "}
-            {formatDate(attempt.completed_at)}
+          <p className="rn-detail-completed">
+            Completed {formatDate(attempt.completed_at)}
           </p>
         </div>
       </section>
 
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns:
-            "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: 16,
-          marginBottom: 24,
-        }}
-      >
-        <div className="rn-card">
+      <section className="rn-detail-stats">
+        <div className="rn-card rn-detail-stat-card">
           <div className="rn-assessment-stat-label">
             Score
           </div>
 
-          <div className="rn-assessment-stat-value">
+          <div className="rn-assessment-stat-value rn-assessment-stat-value-score">
             {percentage}%
           </div>
 
@@ -382,14 +355,13 @@ export default async function AssessmentResultDetailPage({
           </div>
         </div>
 
-        <div className="rn-card">
+        <div className="rn-card rn-detail-stat-card">
           <div className="rn-assessment-stat-label">
             Questions
           </div>
 
           <div className="rn-assessment-stat-value">
-            {attempt.total_questions ??
-              "—"}
+            {attempt.total_questions ?? "—"}
           </div>
 
           <div className="rn-assessment-stat-note">
@@ -397,16 +369,13 @@ export default async function AssessmentResultDetailPage({
           </div>
         </div>
 
-        <div className="rn-card">
+        <div className="rn-card rn-detail-stat-card">
           <div className="rn-assessment-stat-label">
             Points
           </div>
 
-          <div className="rn-assessment-stat-value">
-            {earnedPoints !== null &&
-            totalPoints !== null
-              ? `${earnedPoints}/${totalPoints}`
-              : "—"}
+          <div className="rn-assessment-stat-value rn-assessment-stat-value-points">
+            {formatPoints(earnedPoints, totalPoints)}
           </div>
 
           <div className="rn-assessment-stat-note">
@@ -414,15 +383,13 @@ export default async function AssessmentResultDetailPage({
           </div>
         </div>
 
-        <div className="rn-card">
+        <div className="rn-card rn-detail-stat-card">
           <div className="rn-assessment-stat-label">
             Time
           </div>
 
           <div className="rn-assessment-stat-value rn-assessment-stat-time">
-            {formatDuration(
-              attempt.time_spent_seconds
-            )}
+            {formatDuration(attempt.time_spent_seconds)}
           </div>
 
           <div className="rn-assessment-stat-note">
@@ -432,70 +399,35 @@ export default async function AssessmentResultDetailPage({
       </section>
 
       <section
-        className="rn-card"
+        className="rn-card rn-detail-result-message"
         style={{
-          marginBottom: 24,
           borderLeft: passed
             ? "4px solid #16a34a"
             : "4px solid #dc2626",
         }}
       >
-        <h2
-          style={{
-            marginTop: 0,
-            marginBottom: 8,
-          }}
-        >
-          {passed
-            ? "Assessment Passed"
-            : "Assessment Not Passed"}
+        <h2>
+          {passed ? "Assessment Passed" : "Assessment Not Passed"}
         </h2>
 
-        <p
-          style={{
-            margin: 0,
-            lineHeight: 1.7,
-            color: "var(--muted)",
-          }}
-        >
+        <p>
           {passed
             ? "You achieved the minimum passing score of 70% for this assessment."
             : "You scored below the 70% passing threshold. You can retake the assessment to improve your result."}
         </p>
       </section>
 
-      <section
-        className="rn-card"
-        style={{
-          marginBottom: 24,
-        }}
-      >
-        <h2
-          style={{
-            marginTop: 0,
-            marginBottom: 16,
-          }}
-        >
-          Assessment Information
-        </h2>
+      <section className="rn-card rn-detail-information">
+        <h2>Assessment Information</h2>
 
-        <dl
-          style={{
-            display: "grid",
-            gridTemplateColumns:
-              "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: 18,
-            margin: 0,
-          }}
-        >
+        <dl className="rn-detail-information-grid">
           <div>
             <dt className="rn-assessment-info-label">
               Course
             </dt>
 
             <dd className="rn-assessment-info-value">
-              {course?.title ||
-                "Course assessment"}
+              {course?.title || "Course assessment"}
             </dd>
           </div>
 
@@ -505,9 +437,7 @@ export default async function AssessmentResultDetailPage({
             </dt>
 
             <dd className="rn-assessment-info-value">
-              {formatDate(
-                attempt.completed_at
-              )}
+              {formatDate(attempt.completed_at)}
             </dd>
           </div>
 
@@ -529,74 +459,31 @@ export default async function AssessmentResultDetailPage({
             <dd
               className="rn-assessment-info-value"
               style={{
-                color: passed
-                  ? "#166534"
-                  : "#991b1b",
+                color: passed ? "#166534" : "#991b1b",
               }}
             >
-              {passed
-                ? "Passed"
-                : "Not passed"}
+              {passed ? "Passed" : "Not passed"}
             </dd>
           </div>
         </dl>
       </section>
 
-      <section
-        style={{
-          marginBottom: 24,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent:
-              "space-between",
-            alignItems: "flex-end",
-            gap: 16,
-            flexWrap: "wrap",
-            marginBottom: 16,
-          }}
-        >
+      <section className="rn-detail-answer-review">
+        <div className="rn-detail-answer-header">
           <div>
-            <p
-              style={{
-                margin: "0 0 5px",
-                fontSize: 12,
-                fontWeight: 700,
-                letterSpacing: 1.1,
-                textTransform: "uppercase",
-                color: "var(--cyan)",
-              }}
-            >
+            <p className="rn-detail-eyebrow">
               Answer Review
             </p>
 
-            <h2
-              style={{
-                margin: 0,
-              }}
-            >
-              Your submitted answers
-            </h2>
+            <h2>Your submitted answers</h2>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              flexWrap: "wrap",
-            }}
-          >
-            <span
-              className="rn-answer-summary-correct"
-            >
+          <div className="rn-detail-answer-summary">
+            <span className="rn-answer-summary-correct">
               {correctAnswers} correct
             </span>
 
-            <span
-              className="rn-answer-summary-incorrect"
-            >
+            <span className="rn-answer-summary-incorrect">
               {incorrectAnswers} incorrect
             </span>
           </div>
@@ -604,325 +491,183 @@ export default async function AssessmentResultDetailPage({
 
         {questions.length === 0 ? (
           <div className="rn-card">
-            <h3
-              style={{
-                marginTop: 0,
-              }}
-            >
-              No question details available
-            </h3>
+            <h3>No question details available</h3>
 
-            <p
-              style={{
-                margin: 0,
-                color: "var(--muted)",
-                lineHeight: 1.7,
-              }}
-            >
-              The assessment result was saved,
-              but the individual question review
-              data is not currently available.
+            <p className="rn-detail-no-questions-text">
+              The assessment result was saved, but the individual
+              question review data is not currently available.
             </p>
           </div>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gap: 18,
-            }}
-          >
-            {questions.map(
-              (question, index) => {
-                const answer =
-                  answerMap.get(
-                    question.id
-                  );
+          <div className="rn-detail-question-list">
+            {questions.map((question, index) => {
+              const answer = answerMap.get(question.id);
+              const options = parseOptions(question.options);
+              const isCorrect = answer?.is_correct === true;
+              const isIncorrect = answer?.is_correct === false;
 
-                const options =
-                  parseOptions(
-                    question.options
-                  );
+              return (
+                <article
+                  key={question.id}
+                  className="rn-card rn-detail-question-card"
+                  style={{
+                    borderLeft: isCorrect
+                      ? "4px solid #16a34a"
+                      : isIncorrect
+                        ? "4px solid #dc2626"
+                        : "4px solid var(--border)",
+                  }}
+                >
+                  <div className="rn-detail-question-heading">
+                    <div className="rn-detail-question-copy">
+                      <div className="rn-detail-question-number">
+                        Question {index + 1}
+                      </div>
 
-                const isCorrect =
-                  answer?.is_correct ===
-                  true;
+                      <h3>
+                        {getQuestionText(question)}
+                      </h3>
 
-                const isIncorrect =
-                  answer?.is_correct ===
-                  false;
-
-                return (
-                  <article
-                    key={question.id}
-                    className="rn-card"
-                    style={{
-                      padding: 22,
-                      borderLeft: isCorrect
-                        ? "4px solid #16a34a"
-                        : isIncorrect
-                          ? "4px solid #dc2626"
-                          : "4px solid var(--border)",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent:
-                          "space-between",
-                        alignItems:
-                          "flex-start",
-                        gap: 16,
-                        flexWrap: "wrap",
-                        marginBottom: 16,
-                      }}
-                    >
-                      <div
-                        style={{
-                          flex: 1,
-                          minWidth: 220,
-                        }}
-                      >
-                        <div
-                          style={{
-                            marginBottom: 7,
-                            fontSize: 11,
-                            fontWeight: 700,
-                            letterSpacing: 0.8,
-                            textTransform:
-                              "uppercase",
-                            color:
-                              "var(--muted)",
-                          }}
-                        >
-                          Question{" "}
-                          {index + 1}
-                        </div>
-
-                        <h3
-                          style={{
-                            margin: 0,
-                            lineHeight: 1.5,
-                          }}
-                        >
-                          {getQuestionText(
-                            question
-                          )}
-                        </h3>
-
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 8,
-                            flexWrap: "wrap",
-                            marginTop: 9,
-                          }}
-                        >
-                          {question.difficulty ? (
-                            <span className="rn-question-meta">
-                              {question.difficulty}
-                            </span>
-                          ) : null}
-
-                          {question.question_type ? (
-                            <span className="rn-question-meta">
-                              {
-                                question.question_type
-                              }
-                            </span>
-                          ) : null}
-
+                      <div className="rn-detail-question-meta-list">
+                        {question.difficulty ? (
                           <span className="rn-question-meta">
-                            {question.points}{" "}
-                            {question.points ===
-                            1
-                              ? "point"
-                              : "points"}
+                            {question.difficulty}
                           </span>
-                        </div>
-                      </div>
+                        ) : null}
 
-                      <span
-                        className={
-                          isCorrect
-                            ? "rn-answer-status rn-answer-status-correct"
-                            : isIncorrect
-                              ? "rn-answer-status rn-answer-status-incorrect"
-                              : "rn-answer-status rn-answer-status-neutral"
-                        }
-                      >
-                        {isCorrect
-                          ? "Correct"
+                        {question.question_type ? (
+                          <span className="rn-question-meta">
+                            {question.question_type}
+                          </span>
+                        ) : null}
+
+                        <span className="rn-question-meta">
+                          {question.points}{" "}
+                          {question.points === 1 ? "point" : "points"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <span
+                      className={
+                        isCorrect
+                          ? "rn-answer-status rn-answer-status-correct"
                           : isIncorrect
-                            ? "Incorrect"
-                            : "Not recorded"}
-                      </span>
-                    </div>
-
-                    {options.length > 0 ? (
-                      <div
-                        style={{
-                          display: "grid",
-                          gap: 9,
-                          marginBottom: 18,
-                        }}
-                      >
-                        {options.map(
-                          (
-                            option,
-                            optionIndex
-                          ) => {
-                            const selected =
-                              answer?.answer ===
-                              option;
-
-                            const correct =
-                              question.correct_answer ===
-                              option;
-
-                            return (
-                              <div
-                                key={`${question.id}-${optionIndex}`}
-                                className={
-                                  selected &&
-                                  correct
-                                    ? "rn-answer-option rn-answer-option-correct"
-                                    : selected
-                                      ? "rn-answer-option rn-answer-option-selected"
-                                      : correct
-                                        ? "rn-answer-option rn-answer-option-correct"
-                                        : "rn-answer-option"
-                                }
-                              >
-                                <div
-                                  style={{
-                                    display:
-                                      "flex",
-                                    alignItems:
-                                      "flex-start",
-                                    gap: 10,
-                                  }}
-                                >
-                                  <span className="rn-answer-option-marker">
-                                    {selected
-                                      ? "✓"
-                                      : correct
-                                        ? "✓"
-                                        : String(
-                                            optionIndex +
-                                              1
-                                          )}
-                                  </span>
-
-                                  <span
-                                    style={{
-                                      lineHeight:
-                                        1.5,
-                                      flex: 1,
-                                    }}
-                                  >
-                                    {option}
-                                  </span>
-                                </div>
-
-                                {selected ? (
-                                  <div className="rn-answer-option-label">
-                                    Your answer
-                                  </div>
-                                ) : null}
-
-                                {!selected &&
-                                correct ? (
-                                  <div className="rn-answer-option-label rn-answer-option-label-correct">
-                                    Correct answer
-                                  </div>
-                                ) : null}
-                              </div>
-                            );
-                          }
-                        )}
-                      </div>
-                    ) : null}
-
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "repeat(auto-fit, minmax(210px, 1fr))",
-                        gap: 12,
-                        marginBottom:
-                          question.explanation
-                            ? 16
-                            : 0,
-                      }}
+                            ? "rn-answer-status rn-answer-status-incorrect"
+                            : "rn-answer-status rn-answer-status-neutral"
+                      }
                     >
-                      <div className="rn-answer-detail-box">
-                        <div className="rn-answer-detail-label">
-                          Your response
-                        </div>
+                      {isCorrect
+                        ? "Correct"
+                        : isIncorrect
+                          ? "Incorrect"
+                          : "Not recorded"}
+                    </span>
+                  </div>
 
-                        <div className="rn-answer-detail-value">
-                          {answer?.answer ||
-                            "Not recorded"}
-                        </div>
+                  {options.length > 0 ? (
+                    <div className="rn-detail-options">
+                      {options.map((option, optionIndex) => {
+                        const selected = answer?.answer === option;
+                        const correct =
+                          question.correct_answer === option;
+
+                        const optionClass =
+                          selected && correct
+                            ? "rn-answer-option rn-answer-option-correct"
+                            : selected
+                              ? "rn-answer-option rn-answer-option-selected"
+                              : correct
+                                ? "rn-answer-option rn-answer-option-correct"
+                                : "rn-answer-option";
+
+                        return (
+                          <div
+                            key={`${question.id}-${optionIndex}`}
+                            className={optionClass}
+                          >
+                            <div className="rn-detail-option-row">
+                              <span className="rn-answer-option-marker">
+                                {selected || correct
+                                  ? "✓"
+                                  : String(optionIndex + 1)}
+                              </span>
+
+                              <span className="rn-detail-option-text">
+                                {option}
+                              </span>
+                            </div>
+
+                            {selected ? (
+                              <div className="rn-answer-option-label">
+                                Your answer
+                              </div>
+                            ) : null}
+
+                            {!selected && correct ? (
+                              <div className="rn-answer-option-label rn-answer-option-label-correct">
+                                Correct answer
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+
+                  <div className="rn-detail-answer-boxes">
+                    <div className="rn-answer-detail-box">
+                      <div className="rn-answer-detail-label">
+                        Your response
                       </div>
 
-                      <div className="rn-answer-detail-box rn-answer-detail-box-correct">
-                        <div className="rn-answer-detail-label">
-                          Correct response
-                        </div>
-
-                        <div className="rn-answer-detail-value">
-                          {
-                            question.correct_answer
-                          }
-                        </div>
-                      </div>
-
-                      <div className="rn-answer-detail-box">
-                        <div className="rn-answer-detail-label">
-                          Points earned
-                        </div>
-
-                        <div className="rn-answer-detail-value">
-                          {typeof answer?.points_earned ===
-                          "number"
-                            ? answer.points_earned
-                            : "Not recorded"}
-                          {" / "}
-                          {question.points}
-                        </div>
+                      <div className="rn-answer-detail-value">
+                        {answer?.answer || "Not recorded"}
                       </div>
                     </div>
 
-                    {question.explanation ? (
-                      <div className="rn-answer-explanation">
-                        <div className="rn-answer-explanation-title">
-                          Explanation
-                        </div>
-
-                        <p>
-                          {
-                            question.explanation
-                          }
-                        </p>
+                    <div className="rn-answer-detail-box rn-answer-detail-box-correct">
+                      <div className="rn-answer-detail-label">
+                        Correct response
                       </div>
-                    ) : null}
-                  </article>
-                );
-              }
-            )}
+
+                      <div className="rn-answer-detail-value">
+                        {question.correct_answer}
+                      </div>
+                    </div>
+
+                    <div className="rn-answer-detail-box">
+                      <div className="rn-answer-detail-label">
+                        Points earned
+                      </div>
+
+                      <div className="rn-answer-detail-value">
+                        {typeof answer?.points_earned === "number"
+                          ? answer.points_earned
+                          : "Not recorded"}
+                        {" / "}
+                        {question.points}
+                      </div>
+                    </div>
+                  </div>
+
+                  {question.explanation ? (
+                    <div className="rn-answer-explanation">
+                      <div className="rn-answer-explanation-title">
+                        Explanation
+                      </div>
+
+                      <p>{question.explanation}</p>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
           </div>
         )}
       </section>
 
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 10,
-          marginBottom: 40,
-        }}
-      >
+      <nav className="rn-detail-navigation">
         <Link
           href="/student/assessment/results"
           className="rn-button rn-button-secondary"
@@ -947,9 +692,50 @@ export default async function AssessmentResultDetailPage({
         >
           My Learning
         </Link>
-      </div>
+      </nav>
 
       <style>{`
+        .rn-assessment-detail-page {
+          min-width: 0;
+          max-width: 100%;
+        }
+
+        .rn-detail-header {
+          margin-bottom: 24px;
+        }
+
+        .rn-detail-eyebrow {
+          margin: 0 0 5px;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 1.1px;
+          text-transform: uppercase;
+          color: var(--cyan);
+        }
+
+        .rn-detail-course-title {
+          margin: 0;
+          overflow-wrap: anywhere;
+        }
+
+        .rn-detail-completed {
+          margin: 8px 0 0;
+          color: var(--muted);
+          line-height: 1.6;
+        }
+
+        .rn-detail-stats {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+          gap: 16px;
+          margin-bottom: 24px;
+        }
+
+        .rn-detail-stat-card {
+          min-width: 0;
+          overflow-wrap: anywhere;
+        }
+
         .rn-assessment-stat-label,
         .rn-assessment-info-label {
           font-size: 12px;
@@ -961,24 +747,89 @@ export default async function AssessmentResultDetailPage({
 
         .rn-assessment-stat-value {
           margin-top: 8px;
-          font-size: 32px;
+          font-size: clamp(25px, 5vw, 32px);
           font-weight: 800;
-          line-height: 1.1;
+          line-height: 1.15;
+          overflow-wrap: anywhere;
+        }
+
+        .rn-assessment-stat-value-score {
+          font-size: clamp(30px, 8vw, 42px);
+          line-height: 1.08;
+          white-space: nowrap;
+        }
+
+        .rn-assessment-stat-value-points {
+          font-size: clamp(20px, 4.5vw, 28px);
         }
 
         .rn-assessment-stat-time {
-          font-size: 26px;
+          font-size: clamp(20px, 4.5vw, 26px);
         }
 
         .rn-assessment-stat-note {
           margin-top: 5px;
           font-size: 13px;
+          line-height: 1.5;
           color: var(--muted);
+        }
+
+        .rn-detail-result-message {
+          margin-bottom: 24px;
+        }
+
+        .rn-detail-result-message h2 {
+          margin: 0 0 8px;
+        }
+
+        .rn-detail-result-message p {
+          margin: 0;
+          line-height: 1.7;
+          color: var(--muted);
+        }
+
+        .rn-detail-information {
+          margin-bottom: 24px;
+        }
+
+        .rn-detail-information h2 {
+          margin: 0 0 16px;
+        }
+
+        .rn-detail-information-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+          gap: 18px;
+          margin: 0;
         }
 
         .rn-assessment-info-value {
           margin: 5px 0 0;
           font-weight: 600;
+          overflow-wrap: anywhere;
+        }
+
+        .rn-detail-answer-review {
+          margin-bottom: 24px;
+        }
+
+        .rn-detail-answer-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-end;
+          flex-wrap: wrap;
+          gap: 16px;
+          margin-bottom: 16px;
+        }
+
+        .rn-detail-answer-header h2 {
+          margin: 0;
+        }
+
+        .rn-detail-answer-summary {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
         }
 
         .rn-answer-summary-correct,
@@ -999,6 +850,58 @@ export default async function AssessmentResultDetailPage({
         .rn-answer-summary-incorrect {
           color: #991b1b;
           background: #fee2e2;
+        }
+
+        .rn-detail-no-questions-text {
+          margin: 0;
+          color: var(--muted);
+          line-height: 1.7;
+        }
+
+        .rn-detail-question-list {
+          display: grid;
+          gap: 18px;
+        }
+
+        .rn-detail-question-card {
+          min-width: 0;
+          padding: 22px;
+        }
+
+        .rn-detail-question-heading {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          flex-wrap: wrap;
+          gap: 16px;
+          margin-bottom: 16px;
+        }
+
+        .rn-detail-question-copy {
+          flex: 1 1 220px;
+          min-width: 0;
+        }
+
+        .rn-detail-question-number {
+          margin-bottom: 7px;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.8px;
+          text-transform: uppercase;
+          color: var(--muted);
+        }
+
+        .rn-detail-question-copy h3 {
+          margin: 0;
+          line-height: 1.5;
+          overflow-wrap: anywhere;
+        }
+
+        .rn-detail-question-meta-list {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          margin-top: 9px;
         }
 
         .rn-answer-status {
@@ -1040,11 +943,20 @@ export default async function AssessmentResultDetailPage({
           background: #f8fafc;
         }
 
+        .rn-detail-options {
+          display: grid;
+          gap: 9px;
+          margin-bottom: 18px;
+          min-width: 0;
+        }
+
         .rn-answer-option {
+          min-width: 0;
           padding: 12px 13px;
           border: 1px solid var(--border);
           border-radius: 9px;
           background: #ffffff;
+          overflow-wrap: anywhere;
         }
 
         .rn-answer-option-selected {
@@ -1055,6 +967,12 @@ export default async function AssessmentResultDetailPage({
         .rn-answer-option-correct {
           border-color: #86efac;
           background: #f0fdf4;
+        }
+
+        .rn-detail-option-row {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
         }
 
         .rn-answer-option-marker {
@@ -1081,6 +999,13 @@ export default async function AssessmentResultDetailPage({
           color: #ffffff;
         }
 
+        .rn-detail-option-text {
+          flex: 1;
+          min-width: 0;
+          line-height: 1.5;
+          overflow-wrap: anywhere;
+        }
+
         .rn-answer-option-label {
           margin-top: 7px;
           margin-left: 35px;
@@ -1093,11 +1018,20 @@ export default async function AssessmentResultDetailPage({
           color: #166534;
         }
 
+        .rn-detail-answer-boxes {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+          gap: 12px;
+          margin-bottom: 16px;
+        }
+
         .rn-answer-detail-box {
+          min-width: 0;
           padding: 13px;
           border-radius: 9px;
           background: #f8fafc;
           border: 1px solid var(--border);
+          overflow-wrap: anywhere;
         }
 
         .rn-answer-detail-box-correct {
@@ -1117,6 +1051,7 @@ export default async function AssessmentResultDetailPage({
         .rn-answer-detail-value {
           line-height: 1.5;
           font-weight: 600;
+          overflow-wrap: anywhere;
         }
 
         .rn-answer-explanation {
@@ -1138,15 +1073,46 @@ export default async function AssessmentResultDetailPage({
         .rn-answer-explanation p {
           margin: 0;
           line-height: 1.7;
+          overflow-wrap: anywhere;
+        }
+
+        .rn-detail-navigation {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          margin-bottom: 40px;
         }
 
         @media (max-width: 600px) {
-          .rn-assessment-stat-value {
-            font-size: 28px;
+          .rn-detail-stats {
+            grid-template-columns: minmax(0, 1fr);
           }
 
-          .rn-assessment-stat-time {
-            font-size: 23px;
+          .rn-detail-stat-card {
+            padding: 18px;
+          }
+
+          .rn-assessment-stat-value-score {
+            font-size: clamp(28px, 9vw, 36px);
+          }
+
+          .rn-detail-information-grid,
+          .rn-detail-answer-boxes {
+            grid-template-columns: minmax(0, 1fr);
+          }
+
+          .rn-detail-question-card {
+            padding: 16px;
+          }
+
+          .rn-detail-navigation {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+          }
+
+          .rn-detail-navigation .rn-button {
+            width: 100%;
+            justify-content: center;
           }
         }
       `}</style>
