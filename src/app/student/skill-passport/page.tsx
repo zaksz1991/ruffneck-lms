@@ -50,6 +50,8 @@ type Course = {
 
 type EvidenceItem = {
   id: string;
+  taskId: string;
+  skillId: string;
   title: string;
   courseTitle: string;
   skillName: string;
@@ -99,7 +101,7 @@ function formatDate(value: string | null): string {
   }).format(date);
 }
 
-function evidenceCount(value: string | null): number {
+function countProfileEvidence(value: string | null): number {
   if (!value?.trim()) {
     return 0;
   }
@@ -128,13 +130,11 @@ const styles = `
   padding: 30px 24px 56px;
   color: #243247;
 }
-
 .sp-page *,
 .sp-page *::before,
 .sp-page *::after {
   box-sizing: border-box;
 }
-
 .sp-hero {
   display: flex;
   align-items: flex-start;
@@ -146,12 +146,10 @@ const styles = `
   background: #fff;
   box-shadow: 0 3px 12px rgb(11 30 58 / 4%);
 }
-
 .sp-hero-copy {
   min-width: 0;
   max-width: 730px;
 }
-
 .sp-eyebrow {
   display: inline-block;
   margin: 0 0 10px;
@@ -162,7 +160,6 @@ const styles = `
   line-height: 1.5;
   text-transform: uppercase;
 }
-
 .sp-hero h1 {
   margin: 0;
   color: #0b1e3a;
@@ -171,7 +168,6 @@ const styles = `
   letter-spacing: -.045em;
   line-height: 1.13;
 }
-
 .sp-intro {
   max-width: 680px;
   margin: 14px 0 0;
@@ -179,14 +175,13 @@ const styles = `
   font-size: 14px;
   line-height: 1.8;
 }
-
-.sp-actions {
+.sp-actions,
+.sp-next-actions {
   display: flex;
   flex-shrink: 0;
   flex-wrap: wrap;
   gap: 9px;
 }
-
 .sp-button {
   min-height: 40px;
   display: inline-flex;
@@ -203,43 +198,34 @@ const styles = `
   line-height: 1.4;
   text-align: center;
   text-decoration: none;
-  transition:
-    background 150ms ease,
-    border-color 150ms ease,
-    color 150ms ease;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
 }
-
 .sp-button:hover {
   border-color: #b8d4ef;
   background: #f3f8fd;
   color: #0a66c2;
 }
-
 .sp-button-primary {
   border-color: #0a66c2;
   background: #0a66c2;
   color: #fff;
 }
-
 .sp-button-primary:hover {
   border-color: #004182;
   background: #004182;
   color: #fff;
 }
-
 .sp-button:focus-visible,
 .sp-page a:focus-visible {
   outline: 3px solid rgb(10 102 194 / 30%);
   outline-offset: 3px;
 }
-
 .sp-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
   margin: 20px 0;
 }
-
 .sp-stat {
   min-width: 0;
   padding: 20px;
@@ -248,7 +234,6 @@ const styles = `
   background: #fff;
   box-shadow: 0 2px 8px rgb(11 30 58 / 3%);
 }
-
 .sp-stat-label {
   display: flex;
   align-items: flex-start;
@@ -258,7 +243,6 @@ const styles = `
   font-weight: 750;
   line-height: 1.55;
 }
-
 .sp-stat-icon {
   width: 26px;
   height: 26px;
@@ -271,7 +255,6 @@ const styles = `
   font-size: 13px;
   font-weight: 800;
 }
-
 .sp-stat-value {
   display: block;
   margin-top: 13px;
@@ -281,7 +264,6 @@ const styles = `
   letter-spacing: -.045em;
   line-height: 1.1;
 }
-
 .sp-stat-note {
   display: block;
   margin-top: 8px;
@@ -289,7 +271,6 @@ const styles = `
   font-size: 11px;
   line-height: 1.55;
 }
-
 .sp-panel {
   min-width: 0;
   margin-top: 20px;
@@ -299,7 +280,6 @@ const styles = `
   background: #fff;
   box-shadow: 0 2px 8px rgb(11 30 58 / 3%);
 }
-
 .sp-panel-heading {
   display: flex;
   align-items: flex-start;
@@ -307,7 +287,6 @@ const styles = `
   gap: 16px;
   margin-bottom: 20px;
 }
-
 .sp-panel-heading h2 {
   margin: 0;
   color: #0b1e3a;
@@ -316,7 +295,6 @@ const styles = `
   letter-spacing: -.035em;
   line-height: 1.3;
 }
-
 .sp-panel-description {
   max-width: 760px;
   margin: 9px 0 0;
@@ -324,7 +302,6 @@ const styles = `
   font-size: 13px;
   line-height: 1.75;
 }
-
 .sp-inline-link {
   flex-shrink: 0;
   color: #0a66c2;
@@ -332,15 +309,9 @@ const styles = `
   font-weight: 750;
   text-decoration: none;
 }
-
 .sp-inline-link:hover {
   text-decoration: underline;
 }
-
-.sp-verification-slot {
-  min-width: 0;
-}
-
 .sp-info-banner {
   margin-top: 14px;
   padding: 12px 14px;
@@ -351,7 +322,6 @@ const styles = `
   font-size: 12px;
   line-height: 1.7;
 }
-
 .sp-error-banner {
   margin: 16px 0;
   padding: 13px 15px;
@@ -362,12 +332,10 @@ const styles = `
   font-size: 12px;
   line-height: 1.7;
 }
-
 .sp-timeline {
   display: grid;
   gap: 12px;
 }
-
 .sp-evidence-item {
   position: relative;
   min-width: 0;
@@ -376,7 +344,6 @@ const styles = `
   border-radius: 11px;
   background: #fff;
 }
-
 .sp-evidence-item::before {
   position: absolute;
   top: 20px;
@@ -387,18 +354,15 @@ const styles = `
   background: #16805d;
   content: "";
 }
-
 .sp-evidence-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
 }
-
 .sp-evidence-copy {
   min-width: 0;
 }
-
 .sp-evidence-title {
   margin: 0;
   color: #172b46;
@@ -407,14 +371,12 @@ const styles = `
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
-
 .sp-evidence-course {
   margin: 5px 0 0;
   color: #64748b;
   font-size: 12px;
   line-height: 1.6;
 }
-
 .sp-verified-badge {
   display: inline-flex;
   flex-shrink: 0;
@@ -429,7 +391,6 @@ const styles = `
   font-weight: 800;
   line-height: 1.3;
 }
-
 .sp-evidence-meta {
   display: flex;
   flex-wrap: wrap;
@@ -439,12 +400,10 @@ const styles = `
   font-size: 11px;
   line-height: 1.6;
 }
-
 .sp-evidence-meta strong {
   color: #34445a;
   font-weight: 750;
 }
-
 .sp-evidence-file {
   display: inline-block;
   margin-top: 12px;
@@ -456,7 +415,6 @@ const styles = `
   font-size: 11px;
   overflow-wrap: anywhere;
 }
-
 .sp-empty {
   padding: 30px 22px;
   border: 1px dashed #ccd8e5;
@@ -464,7 +422,6 @@ const styles = `
   background: #f9fbfd;
   text-align: center;
 }
-
 .sp-empty-icon {
   width: 46px;
   height: 46px;
@@ -477,14 +434,12 @@ const styles = `
   font-size: 20px;
   font-weight: 800;
 }
-
 .sp-empty h3 {
   margin: 0;
   color: #1e3049;
   font-size: 17px;
   font-weight: 800;
 }
-
 .sp-empty p {
   max-width: 600px;
   margin: 9px auto 17px;
@@ -492,40 +447,32 @@ const styles = `
   font-size: 12px;
   line-height: 1.8;
 }
-
 .sp-skills {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
-
 .sp-skill-card {
   min-width: 0;
   padding: 19px;
   border: 1px solid #e1e8f0;
   border-radius: 11px;
   background: #fff;
-  transition:
-    border-color 160ms ease,
-    box-shadow 160ms ease;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
-
 .sp-skill-card:hover {
   border-color: #c8dbee;
   box-shadow: 0 4px 14px rgb(11 30 58 / 5%);
 }
-
 .sp-skill-heading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 15px;
 }
-
 .sp-skill-main {
   min-width: 0;
 }
-
 .sp-skill-category {
   display: inline-flex;
   margin-bottom: 8px;
@@ -538,7 +485,6 @@ const styles = `
   line-height: 1.35;
   text-transform: uppercase;
 }
-
 .sp-skill-name {
   margin: 0;
   color: #142a45;
@@ -548,19 +494,16 @@ const styles = `
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
-
 .sp-skill-description {
   margin: 7px 0 0;
   color: #6b7b90;
   font-size: 11px;
   line-height: 1.7;
 }
-
 .sp-skill-score {
   flex-shrink: 0;
   text-align: right;
 }
-
 .sp-skill-score strong {
   display: block;
   color: #0b1e3a;
@@ -569,7 +512,6 @@ const styles = `
   letter-spacing: -.04em;
   line-height: 1.2;
 }
-
 .sp-skill-score span {
   display: block;
   margin-top: 4px;
@@ -577,7 +519,6 @@ const styles = `
   font-size: 10px;
   font-weight: 700;
 }
-
 .sp-progress {
   height: 6px;
   margin-top: 16px;
@@ -585,14 +526,11 @@ const styles = `
   border-radius: 20px;
   background: #eaf0f6;
 }
-
 .sp-progress-fill {
   height: 100%;
   border-radius: inherit;
   background: #0a66c2;
-  transition: width 180ms ease;
 }
-
 .sp-skill-status {
   display: flex;
   align-items: flex-start;
@@ -605,19 +543,16 @@ const styles = `
   font-size: 10px;
   line-height: 1.6;
 }
-
 .sp-skill-status-verified {
   background: #effaf5;
   color: #176548;
 }
-
 .sp-skill-details {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin-top: 14px;
 }
-
 .sp-skill-detail {
   min-width: 0;
   padding: 10px 8px;
@@ -625,7 +560,6 @@ const styles = `
   border-radius: 7px;
   background: #fff;
 }
-
 .sp-skill-detail span {
   display: block;
   color: #8491a3;
@@ -633,7 +567,6 @@ const styles = `
   font-weight: 750;
   line-height: 1.45;
 }
-
 .sp-skill-detail strong {
   display: block;
   margin-top: 5px;
@@ -642,13 +575,11 @@ const styles = `
   font-weight: 800;
   line-height: 1.3;
 }
-
 .sp-evidence-text {
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid #edf0f4;
 }
-
 .sp-evidence-text h4 {
   margin: 0 0 7px;
   color: #495a70;
@@ -657,7 +588,6 @@ const styles = `
   letter-spacing: .04em;
   text-transform: uppercase;
 }
-
 .sp-evidence-text p {
   margin: 5px 0 0;
   color: #65758b;
@@ -665,14 +595,17 @@ const styles = `
   line-height: 1.75;
   overflow-wrap: anywhere;
 }
-
+.sp-muted {
+  color: #718096;
+  font-size: 12px;
+  line-height: 1.8;
+}
 .sp-lower-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
   margin-top: 20px;
 }
-
 .sp-lower-panel {
   min-width: 0;
   padding: 22px;
@@ -680,7 +613,6 @@ const styles = `
   border-radius: 13px;
   background: #fff;
 }
-
 .sp-lower-panel h2 {
   margin: 0;
   color: #0b1e3a;
@@ -689,19 +621,15 @@ const styles = `
   letter-spacing: -.03em;
   line-height: 1.35;
 }
-
 .sp-lower-panel-description {
   margin: 8px 0 17px;
   color: #718096;
   font-size: 12px;
   line-height: 1.7;
 }
-
 .sp-mini-list {
   display: grid;
-  gap: 0;
 }
-
 .sp-mini-item {
   display: flex;
   align-items: center;
@@ -710,11 +638,9 @@ const styles = `
   padding: 12px 0;
   border-top: 1px solid #edf0f4;
 }
-
 .sp-mini-item:first-child {
   border-top: 0;
 }
-
 .sp-mini-name {
   min-width: 0;
   display: flex;
@@ -725,7 +651,6 @@ const styles = `
   font-weight: 750;
   line-height: 1.5;
 }
-
 .sp-mini-check {
   width: 23px;
   height: 23px;
@@ -738,7 +663,6 @@ const styles = `
   font-size: 12px;
   font-weight: 900;
 }
-
 .sp-mini-score {
   flex-shrink: 0;
   color: #52647b;
@@ -746,23 +670,13 @@ const styles = `
   font-weight: 750;
   white-space: nowrap;
 }
-
-.sp-muted {
-  color: #718096;
-  font-size: 12px;
-  line-height: 1.8;
-}
-
 .sp-next {
   margin-top: 20px;
   padding: 27px;
   border: 1px solid #d5e4f4;
   border-radius: 14px;
-  background:
-    radial-gradient(circle at top right, rgb(10 102 194 / 9%), transparent 42%),
-    #fff;
+  background: radial-gradient(circle at top right, rgb(10 102 194 / 9%), transparent 42%), #fff;
 }
-
 .sp-next h2 {
   margin: 0;
   color: #0b1e3a;
@@ -770,7 +684,6 @@ const styles = `
   font-weight: 830;
   letter-spacing: -.035em;
 }
-
 .sp-next p {
   max-width: 720px;
   margin: 9px 0 17px;
@@ -778,13 +691,6 @@ const styles = `
   font-size: 12px;
   line-height: 1.8;
 }
-
-.sp-next-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 9px;
-}
-
 .sp-updated {
   margin: 19px 2px 0;
   color: #8390a2;
@@ -792,147 +698,113 @@ const styles = `
   line-height: 1.6;
   text-align: right;
 }
-
 @media (max-width: 940px) {
   .sp-hero {
     flex-direction: column;
     padding: 26px;
   }
-
-  .sp-actions {
-    width: 100%;
-  }
-
   .sp-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
   .sp-skills {
     grid-template-columns: 1fr;
   }
 }
-
 @media (max-width: 620px) {
   .sp-page {
     padding: 18px 13px 38px;
   }
-
   .sp-hero {
     gap: 20px;
     padding: 22px 18px;
     border-radius: 12px;
   }
-
   .sp-hero h1 {
     font-size: 29px;
   }
-
   .sp-intro {
     font-size: 12px;
-    line-height: 1.8;
   }
-
   .sp-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
+    width: 100%;
   }
-
   .sp-button {
     padding: 9px 10px;
     font-size: 11px;
   }
-
   .sp-stats {
     gap: 9px;
     margin: 13px 0;
   }
-
   .sp-stat {
     padding: 14px;
   }
-
   .sp-stat-value {
     margin-top: 10px;
     font-size: 28px;
   }
-
   .sp-stat-note {
     font-size: 10px;
   }
-
   .sp-panel {
     margin-top: 14px;
     padding: 17px 14px;
   }
-
   .sp-panel-heading {
     flex-direction: column;
     gap: 9px;
     margin-bottom: 15px;
   }
-
   .sp-evidence-item {
     padding: 16px 13px 16px 17px;
   }
-
   .sp-evidence-top {
     flex-direction: column;
     gap: 10px;
   }
-
   .sp-skill-card {
     padding: 16px 13px;
   }
-
   .sp-skill-heading {
     gap: 9px;
   }
-
   .sp-skill-name {
     font-size: 15px;
   }
-
   .sp-skill-score strong {
     font-size: 21px;
   }
-
   .sp-skill-details {
     gap: 5px;
   }
-
   .sp-skill-detail {
     padding: 8px 6px;
   }
-
   .sp-skill-detail span {
     font-size: 8px;
   }
-
   .sp-lower-grid {
     grid-template-columns: 1fr;
     gap: 13px;
     margin-top: 14px;
   }
-
   .sp-lower-panel {
     padding: 18px 15px;
   }
-
   .sp-next {
     margin-top: 14px;
     padding: 21px 17px;
   }
-
   .sp-next-actions {
     display: grid;
     grid-template-columns: 1fr;
   }
-
   .sp-updated {
     text-align: left;
   }
 }
-
 @media (prefers-reduced-motion: reduce) {
   .sp-page *,
   .sp-page *::before,
@@ -956,10 +828,7 @@ export default async function StudentSkillPassportPage() {
     redirect("/login?next=/student/skill-passport");
   }
 
-  const [
-    profilesResult,
-    submissionsResult,
-  ] = await Promise.all([
+  const [profilesResult, submissionsResult] = await Promise.all([
     supabase
       .from("learner_skill_profiles")
       .select(`
@@ -1033,16 +902,16 @@ export default async function StudentSkillPassportPage() {
     };
   });
 
-  const skillsById = new Map(
-    normalizedProfiles
-      .filter((profile) => profile.skill)
-      .map((profile) => [
-        profile.skill_id,
-        profile.skill!,
-      ]),
-  );
+  const skillsById = new Map<string, Skill>();
+
+  for (const profile of normalizedProfiles) {
+    if (profile.skill) {
+      skillsById.set(profile.skill_id, profile.skill);
+    }
+  }
 
   let evidenceItems: EvidenceItem[] = [];
+  let evidenceQueryFailed = false;
 
   if (submissions.length > 0) {
     const taskIds = Array.from(
@@ -1055,15 +924,23 @@ export default async function StudentSkillPassportPage() {
       .in("id", taskIds);
 
     if (tasksError) {
+      evidenceQueryFailed = true;
       console.error(
         "Skill Passport practical task lookup failed:",
         tasksError,
       );
     } else {
       const tasks = (taskData ?? []) as unknown as PracticalTask[];
-
       const taskById = new Map(
         tasks.map((task) => [task.id, task]),
+      );
+
+      const skillIds = Array.from(
+        new Set(
+          tasks
+            .map((task) => task.skill_id)
+            .filter((id): id is string => Boolean(id)),
+        ),
       );
 
       const courseIds = Array.from(
@@ -1074,23 +951,46 @@ export default async function StudentSkillPassportPage() {
         ),
       );
 
+      const [skillsResult, coursesResult] = await Promise.all([
+        skillIds.length > 0
+          ? supabase
+              .from("learning_skills")
+              .select("id, name, slug, category, description")
+              .in("id", skillIds)
+          : Promise.resolve({ data: [], error: null }),
+
+        courseIds.length > 0
+          ? supabase
+              .from("courses")
+              .select("id, title, slug")
+              .in("id", courseIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (skillsResult.error) {
+        console.error(
+          "Skill Passport skill lookup failed:",
+          skillsResult.error,
+        );
+      } else {
+        const practicalSkills =
+          (skillsResult.data ?? []) as unknown as Skill[];
+
+        for (const skill of practicalSkills) {
+          skillsById.set(skill.id, skill);
+        }
+      }
+
       let courses: Course[] = [];
 
-      if (courseIds.length > 0) {
-        const { data: courseData, error: coursesError } =
-          await supabase
-            .from("courses")
-            .select("id, title, slug")
-            .in("id", courseIds);
-
-        if (coursesError) {
-          console.error(
-            "Skill Passport course lookup failed:",
-            coursesError,
-          );
-        } else {
-          courses = (courseData ?? []) as unknown as Course[];
-        }
+      if (coursesResult.error) {
+        evidenceQueryFailed = true;
+        console.error(
+          "Skill Passport course lookup failed:",
+          coursesResult.error,
+        );
+      } else {
+        courses = (coursesResult.data ?? []) as unknown as Course[];
       }
 
       const courseById = new Map(
@@ -1100,23 +1000,26 @@ export default async function StudentSkillPassportPage() {
       evidenceItems = submissions.flatMap((submission) => {
         const task = taskById.get(submission.task_id);
 
-        if (!task?.skill_id || !task.course_id) {
+        if (
+          !task?.skill_id ||
+          !task.course_id ||
+          !submission.evidence_recorded_at
+        ) {
           return [];
         }
 
         const skill = skillsById.get(task.skill_id);
         const course = courseById.get(task.course_id);
 
-        // Show only approved evidence linked to an identifiable
-        // skill and course. Do not treat an unlinked submission
-        // as verified evidence on the Skill Passport.
-        if (!skill || !course || !submission.evidence_recorded_at) {
+        if (!skill || !course) {
           return [];
         }
 
         return [
           {
             id: submission.id,
+            taskId: task.id,
+            skillId: skill.id,
             title: task.title,
             courseTitle: course.title,
             skillName: skill.name,
@@ -1132,40 +1035,19 @@ export default async function StudentSkillPassportPage() {
     }
   }
 
+  /*
+   * Correct mapping: count each qualifying evidence record against
+   * the skill_id attached to its practical task. The map is based
+   * on the filtered evidence timeline, not on profile confidence.
+   */
   const evidenceCountBySkill = new Map<string, number>();
 
   for (const item of evidenceItems) {
-    const submission = submissions.find(
-      (entry) => entry.id === item.id,
+    evidenceCountBySkill.set(
+      item.skillId,
+      (evidenceCountBySkill.get(item.skillId) ?? 0) + 1,
     );
-
-    if (!submission) {
-      continue;
-    }
-
-    const task = (await Promise.resolve(null)) as null;
-    void task;
   }
-
-  /*
-   * Rebuild per-skill verified evidence counts using the practical
-   * task mappings already loaded above. This stays separate from
-   * profile confidence and assessment/profile evidence.
-   */
-  if (evidenceItems.length > 0) {
-    const taskIds = Array.from(
-      new Set(evidenceItems.map((item) => item.id)),
-    );
-    void taskIds;
-  }
-
-  const latestUpdate =
-    normalizedProfiles
-      .map((profile) => profile.updated_at)
-      .filter((value): value is string => Boolean(value))
-      .sort(
-        (a, b) => new Date(b).getTime() - new Date(a).getTime(),
-      )[0] ?? null;
 
   const strongSkills = normalizedProfiles.filter(
     (profile) => profile.score >= 80,
@@ -1185,10 +1067,13 @@ export default async function StudentSkillPassportPage() {
         )
       : 0;
 
-  const highConfidenceLabel =
-    normalizedProfiles.length === 0
-      ? "No recorded skill profiles"
-      : "Recorded confidence, not practical verification";
+  const latestUpdate =
+    normalizedProfiles
+      .map((profile) => profile.updated_at)
+      .filter((value): value is string => Boolean(value))
+      .sort(
+        (a, b) => new Date(b).getTime() - new Date(a).getTime(),
+      )[0] ?? null;
 
   return (
     <div className="sp-page">
@@ -1202,9 +1087,9 @@ export default async function StudentSkillPassportPage() {
 
           <p className="sp-intro">
             A record of your current skill profiles, assessment evidence
-            and practical work approved by a reviewer. Keep these records
-            distinct so employers can see exactly what has been assessed
-            and what has been practically verified.
+            and practical work approved by a reviewer. These records
+            distinguish profile confidence from skills with verified
+            practical evidence.
           </p>
         </div>
 
@@ -1259,7 +1144,8 @@ export default async function StudentSkillPassportPage() {
           </strong>
 
           <span className="sp-stat-note">
-            Approved submissions with recorded, linked evidence
+            Approved submissions with recorded evidence linked to a skill
+            and course
           </span>
         </article>
 
@@ -1276,7 +1162,7 @@ export default async function StudentSkillPassportPage() {
           </strong>
 
           <span className="sp-stat-note">
-            {highConfidenceLabel}
+            Recorded confidence scores of 80% or above
           </span>
         </article>
 
@@ -1298,11 +1184,13 @@ export default async function StudentSkillPassportPage() {
         </article>
       </section>
 
-      {(profilesResult.error || submissionsResult.error) && (
+      {(profilesResult.error ||
+        submissionsResult.error ||
+        evidenceQueryFailed) && (
         <div className="sp-error-banner" role="alert">
-          Some Skill Passport records could not be loaded. The
-          figures below may be incomplete. Refresh the page later
-          or contact the administrator if this continues.
+          Some Skill Passport records could not be loaded. The figures
+          may be incomplete. Try refreshing the page later if this
+          message continues.
         </div>
       )}
 
@@ -1321,15 +1209,13 @@ export default async function StudentSkillPassportPage() {
           </div>
         </div>
 
-        <div className="sp-verification-slot">
-          <VerificationCard />
-        </div>
+        <VerificationCard />
 
         <div className="sp-info-banner">
-          Profile confidence and assessment results are not the same
-          as verified practical work. Practical evidence appears in
-          the timeline below only after approval, successful evidence
-          recording, and a valid link to both a skill and a course.
+          Profile confidence and assessment results are separate from
+          verified practical work. Practical evidence appears below
+          after approval, successful evidence recording, and a valid
+          link to both a skill and a course.
         </div>
       </section>
 
@@ -1341,8 +1227,8 @@ export default async function StudentSkillPassportPage() {
             <h2>Evidence Timeline</h2>
 
             <p className="sp-panel-description">
-              Approved practical submissions with recorded evidence,
-              linked to a skill and course, appear here.
+              Approved practical submissions with successfully recorded
+              evidence, linked to a skill and course, appear here.
             </p>
           </div>
 
@@ -1364,10 +1250,9 @@ export default async function StudentSkillPassportPage() {
 
             <p>
               Your profile may already contain confidence scores and
-              assessment evidence. Practical work will appear here
-              after a reviewer approves the submission and the system
-              successfully records the evidence against a linked skill
-              and course.
+              assessment evidence. Practical work appears here after
+              a reviewer approves the submission and the system
+              records it against a linked skill and course.
             </p>
 
             <Link
@@ -1455,10 +1340,9 @@ export default async function StudentSkillPassportPage() {
             <h2>Recorded capabilities</h2>
 
             <p className="sp-panel-description">
-              These are the confidence levels, strengths, development
-              areas and profile evidence currently recorded for your
-              skills. A confidence score alone does not certify practical
-              ability.
+              Review your confidence levels, strengths, development
+              areas and recorded profile evidence. A confidence score
+              alone does not certify practical ability.
             </p>
           </div>
 
@@ -1497,9 +1381,7 @@ export default async function StudentSkillPassportPage() {
               const linkedEvidenceCount =
                 evidenceCountBySkill.get(profile.skill_id) ?? 0;
               const profileEvidenceCount =
-                evidenceCount(profile.evidence);
-              const hasVerifiedEvidence =
-                linkedEvidenceCount > 0;
+                countProfileEvidence(profile.evidence);
 
               return (
                 <article
@@ -1546,7 +1428,7 @@ export default async function StudentSkillPassportPage() {
                   <div
                     className={[
                       "sp-skill-status",
-                      hasVerifiedEvidence
+                      linkedEvidenceCount > 0
                         ? "sp-skill-status-verified"
                         : "",
                     ]
@@ -1554,11 +1436,11 @@ export default async function StudentSkillPassportPage() {
                       .join(" ")}
                   >
                     <span aria-hidden="true">
-                      {hasVerifiedEvidence ? "✓" : "ⓘ"}
+                      {linkedEvidenceCount > 0 ? "✓" : "ⓘ"}
                     </span>
 
                     <span>
-                      {hasVerifiedEvidence
+                      {linkedEvidenceCount > 0
                         ? `${linkedEvidenceCount} verified practical ${
                             linkedEvidenceCount === 1
                               ? "evidence record"
@@ -1635,9 +1517,9 @@ export default async function StudentSkillPassportPage() {
           <h2>What you know</h2>
 
           <p className="sp-lower-panel-description">
-            Skills currently recorded with confidence scores of 80%
-            or above. This list reflects profile scores, not a claim
-            that each skill has verified practical evidence.
+            Skills with recorded confidence scores of 80% or above.
+            This list reflects profile scores, not independent
+            verification of practical ability.
           </p>
 
           {strongSkills.length > 0 ? (
@@ -1663,8 +1545,8 @@ export default async function StudentSkillPassportPage() {
             </div>
           ) : (
             <p className="sp-muted">
-              No skills currently have a recorded confidence score of
-              80% or above.
+              No skills currently have a recorded confidence score
+              of 80% or above.
             </p>
           )}
         </section>
@@ -1698,8 +1580,8 @@ export default async function StudentSkillPassportPage() {
           ) : (
             <p className="sp-muted">
               No tracked skills currently fall below the 50% profile
-              confidence threshold. This does not mean that every
-              skill has been practically verified.
+              confidence threshold. This does not mean every skill
+              has been practically verified.
             </p>
           )}
         </section>
@@ -1713,8 +1595,8 @@ export default async function StudentSkillPassportPage() {
         <p>
           Continue learning, complete practical tasks, respond to
           reviewer feedback and build evidence that can be checked
-          independently. Approved work will appear in your Skill
-          Passport after the evidence is recorded successfully.
+          independently. Approved work appears in your Skill Passport
+          once the evidence is recorded successfully.
         </p>
 
         <div className="sp-next-actions">
