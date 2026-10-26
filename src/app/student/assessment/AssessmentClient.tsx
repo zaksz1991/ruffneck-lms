@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import "./assessment.css";
 
@@ -26,23 +26,35 @@ type AssessmentResult = {
   score: number;
   correctAnswers: number;
   totalQuestions: number;
+  timeSpentSeconds?: number;
+  earnedPoints?: number;
+  totalPoints?: number;
   skills: SkillResult[];
 };
 
 function safePercentage(value: number): number {
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-
+  if (!Number.isFinite(value)) return 0;
   return Math.round(Math.min(100, Math.max(0, value)));
 }
 
 function formatLevel(value: string): string {
-  if (!value) {
-    return "Not specified";
+  if (!value) return "Not specified";
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return "Less than a minute";
   }
 
-  return value.charAt(0).toUpperCase() + value.slice(1);
+  const wholeSeconds = Math.floor(seconds);
+  const minutes = Math.floor(wholeSeconds / 60);
+  const remainingSeconds = wholeSeconds % 60;
+
+  if (minutes === 0) return `${remainingSeconds} seconds`;
+  if (remainingSeconds === 0) return `${minutes} minutes`;
+
+  return `${minutes}m ${remainingSeconds}s`;
 }
 
 export default function AssessmentClient({
@@ -54,6 +66,8 @@ export default function AssessmentClient({
   courseTitle: string;
   questions: Question[];
 }) {
+  const startedAtRef = useRef(Date.now());
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -118,9 +132,7 @@ export default function AssessmentClient({
   }
 
   async function submitAssessment() {
-    if (submitting) {
-      return;
-    }
+    if (submitting) return;
 
     const unanswered = questions.filter(
       (item) =>
@@ -152,14 +164,17 @@ export default function AssessmentClient({
       `Submit your assessment for ${courseTitle}?\n\n${answeredCount} of ${questions.length} questions are answered. You cannot change answers after submission.`
     );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     setSubmitting(true);
     setError(null);
 
     try {
+      const timeSpentSeconds = Math.max(
+        0,
+        Math.floor((Date.now() - startedAtRef.current) / 1000)
+      );
+
       const response = await fetch("/api/student/assessment", {
         method: "POST",
         headers: {
@@ -168,12 +183,11 @@ export default function AssessmentClient({
         body: JSON.stringify({
           courseId,
           answers,
+          timeSpentSeconds,
         }),
       });
 
-      let data:
-        | AssessmentResult
-        | { error?: string };
+      let data: AssessmentResult | { error?: string };
 
       try {
         data = (await response.json()) as
@@ -216,9 +230,9 @@ export default function AssessmentClient({
       "Retake this assessment? Your answers on this attempt will be cleared."
     );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
+
+    startedAtRef.current = Date.now();
 
     setCurrentIndex(0);
     setAnswers({});
@@ -226,14 +240,10 @@ export default function AssessmentClient({
     setError(null);
   }
 
-  /*
-   * Submission result.
-   * The score is constrained to the valid 0–100 percentage range
-   * for display. The server response and saved attempt are unchanged.
-   */
   if (result) {
     const displayedScore = safePercentage(result.score);
     const passed = displayedScore >= 70;
+
     const skills = Array.isArray(result.skills)
       ? result.skills
       : [];
@@ -251,15 +261,19 @@ export default function AssessmentClient({
       totalQuestions - correctAnswers
     );
 
+    const elapsedSeconds =
+      typeof result.timeSpentSeconds === "number"
+        ? result.timeSpentSeconds
+        : Math.floor((Date.now() - startedAtRef.current) / 1000);
+
     return (
       <section
         className="rn-ac-result"
         aria-live="polite"
         aria-labelledby="rn-ac-result-title"
       >
-        {/* Result heading */}
         <header className="rn-ac-result-header">
-          <div className="rn-ac-result-heading-copy">
+          <div className="rn-ac-heading-copy">
             <div className="rn-ac-eyebrow">
               <span className="rn-ac-eyebrow-dot" />
               ASSESSMENT COMPLETE
@@ -273,7 +287,7 @@ export default function AssessmentClient({
               {courseTitle}
             </p>
 
-            <p className="rn-ac-result-intro">
+            <p className="rn-ac-intro">
               Your result has been recorded. Review your performance
               and the skills assessed below.
             </p>
@@ -281,9 +295,7 @@ export default function AssessmentClient({
 
           <span
             className={`rn-ac-status ${
-              passed
-                ? "rn-ac-status-passed"
-                : "rn-ac-status-review"
+              passed ? "rn-ac-passed" : "rn-ac-needs-review"
             }`}
           >
             <span aria-hidden="true">
@@ -293,10 +305,9 @@ export default function AssessmentClient({
           </span>
         </header>
 
-        {/* Score and summary */}
-        <div className="rn-ac-overview-grid">
+        <div className="rn-ac-overview">
           <section className="rn-ac-score-card">
-            <div className="rn-ac-score-caption">
+            <div className="rn-ac-score-label">
               OVERALL SCORE
             </div>
 
@@ -311,11 +322,11 @@ export default function AssessmentClient({
             <p className="rn-ac-score-description">
               {passed
                 ? "You reached the 70% passing threshold."
-                : "You scored below the 70% passing threshold."}
+                : "Your score is below the 70% passing threshold."}
             </p>
 
             <div
-              className="rn-ac-score-track"
+              className="rn-ac-progress-track"
               role="progressbar"
               aria-label="Overall assessment score"
               aria-valuemin={0}
@@ -323,92 +334,70 @@ export default function AssessmentClient({
               aria-valuenow={displayedScore}
             >
               <div
-                className={`rn-ac-score-fill ${
-                  passed ? "rn-ac-fill-passed" : "rn-ac-fill-review"
+                className={`rn-ac-progress-fill ${
+                  passed ? "rn-ac-green-fill" : "rn-ac-amber-fill"
                 }`}
-                style={{
-                  width: `${displayedScore}%`,
-                }}
+                style={{ width: `${displayedScore}%` }}
               />
             </div>
 
             <div className="rn-ac-score-scale">
               <span>0%</span>
-              <span>Passing score: 70%</span>
+              <span>Pass: 70%</span>
               <span>100%</span>
             </div>
           </section>
 
-          <section
-            className="rn-ac-performance-card"
-            aria-label="Assessment performance summary"
-          >
-            <div className="rn-ac-performance-heading">
+          <section className="rn-ac-summary-card">
+            <div className="rn-ac-summary-heading">
               <h3>Performance summary</h3>
               <p>Your results at a glance.</p>
             </div>
 
-            <div className="rn-ac-performance-grid">
+            <div className="rn-ac-metrics">
               <article className="rn-ac-metric">
-                <span className="rn-ac-metric-icon rn-ac-icon-green">
+                <span className="rn-ac-metric-icon rn-ac-green">
                   ✓
                 </span>
-
-                <div className="rn-ac-metric-copy">
-                  <span className="rn-ac-metric-label">
-                    Correct answers
-                  </span>
-
+                <div>
+                  <span>Correct answers</span>
                   <strong>{correctAnswers}</strong>
                 </div>
               </article>
 
               <article className="rn-ac-metric">
-                <span className="rn-ac-metric-icon rn-ac-icon-red">
+                <span className="rn-ac-metric-icon rn-ac-red">
                   !
                 </span>
-
-                <div className="rn-ac-metric-copy">
-                  <span className="rn-ac-metric-label">
-                    Incorrect answers
-                  </span>
-
+                <div>
+                  <span>Incorrect answers</span>
                   <strong>{incorrectAnswers}</strong>
                 </div>
               </article>
 
               <article className="rn-ac-metric">
-                <span className="rn-ac-metric-icon rn-ac-icon-blue">
+                <span className="rn-ac-metric-icon rn-ac-blue">
                   #
                 </span>
-
-                <div className="rn-ac-metric-copy">
-                  <span className="rn-ac-metric-label">
-                    Total questions
-                  </span>
-
+                <div>
+                  <span>Total questions</span>
                   <strong>{totalQuestions}</strong>
                 </div>
               </article>
 
               <article className="rn-ac-metric">
-                <span className="rn-ac-metric-icon rn-ac-icon-purple">
-                  ★
+                <span className="rn-ac-metric-icon rn-ac-purple">
+                  ◷
                 </span>
-
-                <div className="rn-ac-metric-copy">
-                  <span className="rn-ac-metric-label">
-                    Skills assessed
-                  </span>
-
-                  <strong>{skills.length}</strong>
+                <div>
+                  <span>Time spent</span>
+                  <strong>{formatDuration(elapsedSeconds)}</strong>
                 </div>
               </article>
             </div>
           </section>
         </div>
 
-        {/* Skill analysis */}
         <section className="rn-ac-skills-panel">
           <div className="rn-ac-section-header">
             <div>
@@ -424,27 +413,18 @@ export default function AssessmentClient({
               </p>
             </div>
 
-            <span className="rn-ac-section-count">
-              {skills.length}{" "}
-              {skills.length === 1 ? "skill" : "skills"}
+            <span className="rn-ac-count">
+              {skills.length} {skills.length === 1 ? "skill" : "skills"}
             </span>
           </div>
 
           {skills.length === 0 ? (
             <div className="rn-ac-no-skills">
-              <span className="rn-ac-no-skills-icon">
-                i
-              </span>
-
-              <div>
-                <strong>No skill breakdown available</strong>
-
-                <p>
-                  Your overall assessment result is available, but
-                  the server did not return individual skill results
-                  for this attempt.
-                </p>
-              </div>
+              <strong>No skill breakdown available</strong>
+              <p>
+                Your overall result is available, but individual skill
+                results were not returned for this attempt.
+              </p>
             </div>
           ) : (
             <div className="rn-ac-skill-grid">
@@ -458,29 +438,24 @@ export default function AssessmentClient({
                     className="rn-ac-skill-card"
                   >
                     <div className="rn-ac-skill-heading">
-                      <div className="rn-ac-skill-name-group">
-                        <strong className="rn-ac-skill-name">
-                          {skill.name}
-                        </strong>
-
-                        <span className="rn-ac-skill-level">
-                          {formatLevel(skill.level)}
-                        </span>
+                      <div className="rn-ac-skill-copy">
+                        <strong>{skill.name}</strong>
+                        <span>{formatLevel(skill.level)}</span>
                       </div>
 
                       <strong
-                        className={`rn-ac-skill-score ${
+                        className={
                           skillPassed
                             ? "rn-ac-skill-score-good"
                             : "rn-ac-skill-score-review"
-                        }`}
+                        }
                       >
                         {skillScore}%
                       </strong>
                     </div>
 
                     <div
-                      className="rn-ac-skill-track"
+                      className="rn-ac-progress-track rn-ac-skill-track"
                       role="progressbar"
                       aria-label={`${skill.name} score`}
                       aria-valuemin={0}
@@ -488,14 +463,12 @@ export default function AssessmentClient({
                       aria-valuenow={skillScore}
                     >
                       <div
-                        className={`rn-ac-skill-fill ${
+                        className={`rn-ac-progress-fill ${
                           skillPassed
-                            ? "rn-ac-fill-passed"
-                            : "rn-ac-fill-review"
+                            ? "rn-ac-green-fill"
+                            : "rn-ac-amber-fill"
                         }`}
-                        style={{
-                          width: `${skillScore}%`,
-                        }}
+                        style={{ width: `${skillScore}%` }}
                       />
                     </div>
 
@@ -503,11 +476,8 @@ export default function AssessmentClient({
                       <span>
                         {skill.correct} of {skill.total} correct
                       </span>
-
                       <span>
-                        {skillPassed
-                          ? "Strong result"
-                          : "Room to improve"}
+                        {skillPassed ? "Strong result" : "Room to improve"}
                       </span>
                     </div>
                   </article>
@@ -517,9 +487,8 @@ export default function AssessmentClient({
           )}
         </section>
 
-        {/* Result actions */}
         <nav
-          className="rn-ac-result-actions"
+          className="rn-ac-actions"
           aria-label="Assessment result actions"
         >
           <Link
@@ -528,8 +497,7 @@ export default function AssessmentClient({
             )}`}
             className="rn-ac-action rn-ac-action-primary"
           >
-            View Full Result
-            <span aria-hidden="true">→</span>
+            View Full Result →
           </Link>
 
           <Link
@@ -569,24 +537,22 @@ export default function AssessmentClient({
           }
 
           .rn-ac-result {
-            --rn-ac-blue: #0a66c2;
-            --rn-ac-blue-dark: #004182;
-            --rn-ac-text: #191919;
-            --rn-ac-muted: #666a70;
-            --rn-ac-border: #dfe3e8;
-            --rn-ac-green: #16834a;
+            --ac-blue: #0a66c2;
+            --ac-blue-dark: #004182;
+            --ac-text: #191919;
+            --ac-muted: #666a70;
+            --ac-border: #dfe3e8;
 
             width: 100%;
-            min-width: 0;
             max-width: 1120px;
+            min-width: 0;
             margin: 24px auto 36px;
             padding: clamp(12px, 2.8vw, 24px);
             overflow: hidden;
-            border: 1px solid var(--rn-ac-border);
+            border: 1px solid var(--ac-border);
             border-radius: 14px;
             background: #f3f5f8;
-            color: var(--rn-ac-text);
-            font-family: inherit;
+            color: var(--ac-text);
           }
 
           .rn-ac-result-header {
@@ -594,14 +560,13 @@ export default function AssessmentClient({
             align-items: flex-start;
             justify-content: space-between;
             gap: 20px;
-            min-width: 0;
             padding: 24px;
-            border: 1px solid var(--rn-ac-border);
+            border: 1px solid var(--ac-border);
             border-radius: 11px;
-            background: #ffffff;
+            background: #fff;
           }
 
-          .rn-ac-result-heading-copy {
+          .rn-ac-heading-copy {
             flex: 1;
             min-width: 0;
           }
@@ -611,7 +576,7 @@ export default function AssessmentClient({
             align-items: center;
             gap: 8px;
             margin-bottom: 10px;
-            color: var(--rn-ac-blue);
+            color: var(--ac-blue);
             font-size: 10px;
             font-weight: 800;
             letter-spacing: 1px;
@@ -622,15 +587,14 @@ export default function AssessmentClient({
             height: 8px;
             flex: 0 0 8px;
             border-radius: 50%;
-            background: var(--rn-ac-blue);
+            background: var(--ac-blue);
           }
 
-          .rn-ac-result-heading-copy h2 {
+          .rn-ac-heading-copy h2 {
             margin: 0;
-            color: var(--rn-ac-text);
             font-size: clamp(22px, 3vw, 29px);
             font-weight: 750;
-            line-height: 1.25;
+            line-height: 1.3;
             letter-spacing: -0.5px;
             overflow-wrap: anywhere;
           }
@@ -644,10 +608,10 @@ export default function AssessmentClient({
             overflow-wrap: anywhere;
           }
 
-          .rn-ac-result-intro {
+          .rn-ac-intro {
             max-width: 600px;
             margin: 8px 0 0;
-            color: var(--rn-ac-muted);
+            color: var(--ac-muted);
             font-size: 13px;
             line-height: 1.7;
           }
@@ -664,22 +628,21 @@ export default function AssessmentClient({
             font-size: 11px;
             font-weight: 750;
             line-height: 1.4;
-            white-space: nowrap;
           }
 
-          .rn-ac-status-passed {
+          .rn-ac-passed {
             background: #e8f6ed;
             color: #176b3c;
           }
 
-          .rn-ac-status-review {
+          .rn-ac-needs-review {
             background: #fff3df;
             color: #86540a;
           }
 
-          .rn-ac-overview-grid {
+          .rn-ac-overview {
             display: grid;
-            grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.35fr);
+            grid-template-columns: minmax(0, .88fr) minmax(0, 1.35fr);
             gap: 16px;
             margin-top: 16px;
           }
@@ -696,11 +659,11 @@ export default function AssessmentClient({
             background: #edf5fd;
           }
 
-          .rn-ac-score-caption {
+          .rn-ac-score-label {
             color: #4d6275;
             font-size: 10px;
             font-weight: 800;
-            letter-spacing: 0.9px;
+            letter-spacing: .9px;
           }
 
           .rn-ac-score-number {
@@ -709,17 +672,17 @@ export default function AssessmentClient({
             gap: 2px;
             max-width: 100%;
             margin-top: 10px;
-            color: var(--rn-ac-blue);
+            color: var(--ac-blue);
             font-size: clamp(38px, 5vw, 55px);
             font-weight: 800;
             letter-spacing: -1.7px;
-            line-height: 1.08;
+            line-height: 1.1;
             white-space: nowrap;
           }
 
           .rn-ac-score-number span {
-            font-size: 0.53em;
-            letter-spacing: -0.3px;
+            font-size: .53em;
+            letter-spacing: -.3px;
           }
 
           .rn-ac-score-description {
@@ -729,8 +692,7 @@ export default function AssessmentClient({
             line-height: 1.65;
           }
 
-          .rn-ac-score-track,
-          .rn-ac-skill-track {
+          .rn-ac-progress-track {
             width: 100%;
             height: 7px;
             margin-top: 19px;
@@ -739,19 +701,18 @@ export default function AssessmentClient({
             background: #dce4ec;
           }
 
-          .rn-ac-score-fill,
-          .rn-ac-skill-fill {
+          .rn-ac-progress-fill {
             height: 100%;
             max-width: 100%;
             border-radius: inherit;
             transition: width 250ms ease;
           }
 
-          .rn-ac-fill-passed {
+          .rn-ac-green-fill {
             background: #21884e;
           }
 
-          .rn-ac-fill-review {
+          .rn-ac-amber-fill {
             background: #d18b24;
           }
 
@@ -766,33 +727,32 @@ export default function AssessmentClient({
             line-height: 1.5;
           }
 
-          .rn-ac-score-scale span:nth-child(2) {
-            text-align: center;
-          }
-
-          .rn-ac-performance-card {
+          .rn-ac-summary-card,
+          .rn-ac-skills-panel {
             min-width: 0;
             padding: 22px;
-            border: 1px solid var(--rn-ac-border);
+            border: 1px solid var(--ac-border);
             border-radius: 11px;
-            background: #ffffff;
+            background: #fff;
           }
 
-          .rn-ac-performance-heading h3 {
+          .rn-ac-summary-heading h3,
+          .rn-ac-section-header h3 {
             margin: 0;
-            color: var(--rn-ac-text);
-            font-size: 16px;
+            font-size: 17px;
             font-weight: 750;
+            letter-spacing: -.3px;
           }
 
-          .rn-ac-performance-heading p {
+          .rn-ac-summary-heading p,
+          .rn-ac-section-header p {
             margin: 5px 0 0;
-            color: var(--rn-ac-muted);
-            font-size: 11px;
-            line-height: 1.6;
+            color: var(--ac-muted);
+            font-size: 12px;
+            line-height: 1.7;
           }
 
-          .rn-ac-performance-grid {
+          .rn-ac-metrics {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 18px 14px;
@@ -818,54 +778,49 @@ export default function AssessmentClient({
             font-weight: 800;
           }
 
-          .rn-ac-icon-green {
+          .rn-ac-green {
             background: #e6f5ec;
             color: #16834a;
           }
 
-          .rn-ac-icon-red {
+          .rn-ac-red {
             background: #fceaea;
             color: #b53333;
           }
 
-          .rn-ac-icon-blue {
+          .rn-ac-blue {
             background: #e8f2fc;
             color: #0a66c2;
           }
 
-          .rn-ac-icon-purple {
+          .rn-ac-purple {
             background: #f0eafd;
             color: #7550b3;
           }
 
-          .rn-ac-metric-copy {
+          .rn-ac-metric > div {
             display: flex;
             flex-direction: column;
             gap: 4px;
             min-width: 0;
           }
 
-          .rn-ac-metric-label {
-            color: var(--rn-ac-muted);
+          .rn-ac-metric > div > span {
+            color: var(--ac-muted);
             font-size: 10px;
             line-height: 1.5;
             overflow-wrap: anywhere;
           }
 
-          .rn-ac-metric-copy strong {
-            color: var(--rn-ac-text);
-            font-size: 22px;
+          .rn-ac-metric > div > strong {
+            font-size: 21px;
             font-weight: 800;
             line-height: 1.2;
+            overflow-wrap: anywhere;
           }
 
           .rn-ac-skills-panel {
-            min-width: 0;
             margin-top: 16px;
-            padding: 23px;
-            border: 1px solid var(--rn-ac-border);
-            border-radius: 11px;
-            background: #ffffff;
           }
 
           .rn-ac-section-header {
@@ -882,26 +837,10 @@ export default function AssessmentClient({
 
           .rn-ac-section-eyebrow {
             margin-bottom: 7px;
-            color: var(--rn-ac-blue);
+            color: var(--ac-blue);
             font-size: 10px;
             font-weight: 800;
-            letter-spacing: 0.9px;
-          }
-
-          .rn-ac-section-header h3 {
-            margin: 0;
-            color: var(--rn-ac-text);
-            font-size: 19px;
-            font-weight: 750;
-            letter-spacing: -0.3px;
-            line-height: 1.4;
-          }
-
-          .rn-ac-section-header p {
-            margin: 6px 0 0;
-            color: var(--rn-ac-muted);
-            font-size: 12px;
-            line-height: 1.7;
+            letter-spacing: .9px;
           }
 
           .rn-ac-section-count {
@@ -926,7 +865,7 @@ export default function AssessmentClient({
             padding: 16px;
             border: 1px solid #e1e6eb;
             border-radius: 9px;
-            background: #ffffff;
+            background: #fff;
           }
 
           .rn-ac-skill-heading {
@@ -937,32 +876,30 @@ export default function AssessmentClient({
             min-width: 0;
           }
 
-          .rn-ac-skill-name-group {
+          .rn-ac-skill-copy {
             display: flex;
             flex-direction: column;
             gap: 6px;
             min-width: 0;
           }
 
-          .rn-ac-skill-name {
-            color: #282c31;
+          .rn-ac-skill-copy strong {
             font-size: 12px;
             font-weight: 750;
             line-height: 1.55;
             overflow-wrap: anywhere;
           }
 
-          .rn-ac-skill-level {
-            color: var(--rn-ac-muted);
+          .rn-ac-skill-copy span {
+            color: var(--ac-muted);
             font-size: 10px;
-            line-height: 1.4;
           }
 
-          .rn-ac-skill-score {
+          .rn-ac-skill-score-good,
+          .rn-ac-skill-score-review {
             flex: 0 0 auto;
             font-size: 20px;
             font-weight: 800;
-            line-height: 1.2;
             white-space: nowrap;
           }
 
@@ -984,7 +921,7 @@ export default function AssessmentClient({
             justify-content: space-between;
             gap: 10px;
             margin-top: 9px;
-            color: var(--rn-ac-muted);
+            color: var(--ac-muted);
             font-size: 10px;
             line-height: 1.6;
           }
@@ -995,43 +932,24 @@ export default function AssessmentClient({
           }
 
           .rn-ac-no-skills {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            padding: 17px;
+            padding: 16px;
             border: 1px solid #e1e6eb;
             border-radius: 9px;
             background: #f8fafc;
           }
 
-          .rn-ac-no-skills-icon {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 29px;
-            height: 29px;
-            flex: 0 0 29px;
-            border-radius: 50%;
-            background: #e8f2fc;
-            color: var(--rn-ac-blue);
-            font-size: 13px;
-            font-weight: 800;
-          }
-
           .rn-ac-no-skills strong {
-            color: var(--rn-ac-text);
             font-size: 12px;
-            line-height: 1.5;
           }
 
           .rn-ac-no-skills p {
-            margin: 5px 0 0;
-            color: var(--rn-ac-muted);
+            margin: 6px 0 0;
+            color: var(--ac-muted);
             font-size: 11px;
             line-height: 1.7;
           }
 
-          .rn-ac-result-actions {
+          .rn-ac-actions {
             display: flex;
             align-items: center;
             flex-wrap: wrap;
@@ -1043,7 +961,7 @@ export default function AssessmentClient({
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 9px;
+            gap: 8px;
             min-height: 40px;
             padding: 10px 16px;
             border: 1px solid transparent;
@@ -1055,48 +973,41 @@ export default function AssessmentClient({
             text-align: center;
             text-decoration: none;
             cursor: pointer;
-            transition:
-              background 150ms ease,
-              border-color 150ms ease,
-              color 150ms ease;
+            transition: background 150ms ease, border-color 150ms ease;
           }
 
           .rn-ac-action-primary {
-            border-color: var(--rn-ac-blue);
-            background: var(--rn-ac-blue);
-            color: #ffffff;
+            border-color: var(--ac-blue);
+            background: var(--ac-blue);
+            color: #fff;
           }
 
           .rn-ac-action-primary:hover {
-            border-color: var(--rn-ac-blue-dark);
-            background: var(--rn-ac-blue-dark);
-            color: #ffffff;
+            border-color: var(--ac-blue-dark);
+            background: var(--ac-blue-dark);
+            color: #fff;
           }
 
           .rn-ac-action-secondary {
             border-color: #b7c0ca;
-            background: #ffffff;
+            background: #fff;
             color: #343a40;
           }
 
           .rn-ac-action-secondary:hover {
-            border-color: var(--rn-ac-blue);
+            border-color: var(--ac-blue);
             background: #edf5fd;
-            color: var(--rn-ac-blue);
+            color: var(--ac-blue);
           }
 
           .rn-ac-action:focus-visible {
-            outline: 3px solid rgba(10, 102, 194, 0.3);
+            outline: 3px solid rgb(10 102 194 / 30%);
             outline-offset: 3px;
           }
 
           @media (max-width: 800px) {
-            .rn-ac-overview-grid {
+            .rn-ac-overview {
               grid-template-columns: minmax(0, 1fr);
-            }
-
-            .rn-ac-score-card {
-              padding: 22px;
             }
 
             .rn-ac-score-number {
@@ -1118,23 +1029,15 @@ export default function AssessmentClient({
               padding: 18px 15px;
             }
 
-            .rn-ac-result-heading-copy h2 {
+            .rn-ac-heading-copy h2 {
               font-size: 23px;
             }
 
-            .rn-ac-course-title {
-              font-size: 13px;
-            }
-
-            .rn-ac-result-intro {
+            .rn-ac-intro {
               font-size: 12px;
             }
 
-            .rn-ac-status {
-              align-self: flex-start;
-            }
-
-            .rn-ac-overview-grid {
+            .rn-ac-overview {
               gap: 11px;
               margin-top: 11px;
             }
@@ -1152,23 +1055,16 @@ export default function AssessmentClient({
               font-size: 11px;
             }
 
-            .rn-ac-score-track {
-              margin-top: 15px;
-            }
-
             .rn-ac-score-scale {
               font-size: 8px;
             }
 
-            .rn-ac-performance-card {
-              padding: 17px 15px;
+            .rn-ac-summary-card,
+            .rn-ac-skills-panel {
+              padding: 17px 14px;
             }
 
-            .rn-ac-performance-heading h3 {
-              font-size: 15px;
-            }
-
-            .rn-ac-performance-grid {
+            .rn-ac-metrics {
               gap: 17px 10px;
               margin-top: 18px;
             }
@@ -1185,17 +1081,12 @@ export default function AssessmentClient({
               font-size: 13px;
             }
 
-            .rn-ac-metric-label {
+            .rn-ac-metric > div > span {
               font-size: 9px;
             }
 
-            .rn-ac-metric-copy strong {
-              font-size: 20px;
-            }
-
-            .rn-ac-skills-panel {
-              margin-top: 11px;
-              padding: 17px 14px;
+            .rn-ac-metric > div > strong {
+              font-size: 19px;
             }
 
             .rn-ac-section-header {
@@ -1224,15 +1115,12 @@ export default function AssessmentClient({
               padding: 14px;
             }
 
-            .rn-ac-skill-name {
-              font-size: 12px;
-            }
-
-            .rn-ac-skill-score {
+            .rn-ac-skill-score-good,
+            .rn-ac-skill-score-review {
               font-size: 19px;
             }
 
-            .rn-ac-result-actions {
+            .rn-ac-actions {
               display: grid;
               grid-template-columns: minmax(0, 1fr);
               gap: 9px;
@@ -1256,7 +1144,7 @@ export default function AssessmentClient({
               padding: 15px 12px;
             }
 
-            .rn-ac-result-heading-copy h2 {
+            .rn-ac-heading-copy h2 {
               font-size: 21px;
             }
 
@@ -1264,7 +1152,7 @@ export default function AssessmentClient({
               font-size: 32px;
             }
 
-            .rn-ac-performance-card {
+            .rn-ac-summary-card {
               padding: 15px 11px;
             }
 
@@ -1278,11 +1166,11 @@ export default function AssessmentClient({
               flex-basis: 25px;
             }
 
-            .rn-ac-metric-label {
+            .rn-ac-metric > div > span {
               font-size: 8px;
             }
 
-            .rn-ac-metric-copy strong {
+            .rn-ac-metric > div > strong {
               font-size: 18px;
             }
 
@@ -1296,7 +1184,6 @@ export default function AssessmentClient({
             .rn-ac-result *,
             .rn-ac-result *::before,
             .rn-ac-result *::after {
-              scroll-behavior: auto !important;
               transition-duration: 0.01ms !important;
               animation-duration: 0.01ms !important;
             }
@@ -1306,8 +1193,6 @@ export default function AssessmentClient({
     );
   }
 
-  // The assessment question screen retains its existing styles
-  // and behaviour.
   return (
     <section
       className="rn-assessment-card"
@@ -1331,11 +1216,7 @@ export default function AssessmentClient({
         aria-valuemax={questions.length}
         aria-valuenow={currentIndex + 1}
       >
-        <div
-          style={{
-            width: `${progress}%`,
-          }}
-        />
+        <div style={{ width: `${progress}%` }} />
       </div>
 
       <div className="rn-question-meta">
@@ -1372,13 +1253,8 @@ export default function AssessmentClient({
               onClick={() => selectAnswer(option)}
               disabled={submitting}
             >
-              <span
-                className="rn-answer-radio"
-                aria-hidden="true"
-              >
-                {selected
-                  ? "✓"
-                  : String.fromCharCode(65 + index)}
+              <span className="rn-answer-radio" aria-hidden="true">
+                {selected ? "✓" : String.fromCharCode(65 + index)}
               </span>
 
               <span className="rn-answer-copy">
@@ -1406,10 +1282,7 @@ export default function AssessmentClient({
       </p>
 
       {error ? (
-        <div
-          className="rn-assessment-error"
-          role="alert"
-        >
+        <div className="rn-assessment-error" role="alert">
           <strong>Assessment not submitted</strong>
           <span>{error}</span>
         </div>
