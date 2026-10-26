@@ -1,1146 +1,951 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import EvidenceTimeline from "./EvidenceTimeline";
-import VerificationCard from "./VerificationCard";
+import VerificationCard from "@/components/VerificationCard";
 
 type Skill = {
   id: string;
   name: string;
+  slug: string;
   category: string | null;
   description: string | null;
 };
 
 type SkillProfile = {
   id: string;
-  student_id: string;
   skill_id: string;
-  skill_level: string | null;
   confidence_score: number | null;
-  strengths: string[] | string | null;
-  gaps: string[] | string | null;
-  evidence: string[] | string | null;
+  skill_level: string | null;
+  evidence: string | null;
+  strengths: string | null;
+  gaps: string | null;
   updated_at: string | null;
+  learning_skills: Skill | Skill[] | null;
 };
 
 type PracticalSubmission = {
   id: string;
   task_id: string;
+  status: string;
   score: number | null;
+  reviewer_feedback: string | null;
+  submitted_at: string | null;
   reviewed_at: string | null;
-  evidence_file_name: string | null;
   evidence_recorded_at: string | null;
+  evidence_file_name: string | null;
 };
 
 type PracticalTask = {
   id: string;
   title: string;
-  course_id: string;
+  course_id: string | null;
   skill_id: string | null;
 };
 
 type Course = {
   id: string;
   title: string;
+  slug: string;
 };
 
 type EvidenceItem = {
   id: string;
-  skillName: string;
-  taskTitle: string;
+  title: string;
   courseTitle: string;
+  skillName: string;
   score: number | null;
-  reviewedAt: string | null;
+  reviewerFeedback: string | null;
   evidenceFileName: string | null;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  recordedAt: string;
 };
 
-function clampScore(value: number | null) {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
+function clampScore(value: number | null): number {
+  const score = Number(value ?? 0);
+
+  if (!Number.isFinite(score)) {
     return 0;
   }
 
-  return Math.min(100, Math.max(0, value));
+  return Math.min(100, Math.max(0, Math.round(score)));
 }
 
-function scoreLabel(value: number | null) {
-  if (value === null || !Number.isFinite(value)) {
+function formatLevel(level: string | null): string {
+  if (!level) {
+    return "Not classified";
+  }
+
+  return level
+    .replace(/[_-]/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatDate(value: string | null): string {
+  if (!value) {
     return "Not recorded";
-  }
-
-  return `${Math.round(clampScore(value))}%`;
-}
-
-function levelLabel(value: string | null) {
-  if (!value) {
-    return "Developing";
-  }
-
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
-function formatDate(value: string | null) {
-  if (!value) {
-    return "Not available";
   }
 
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return "Not available";
+    return "Not recorded";
   }
 
   return new Intl.DateTimeFormat("en-NG", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lagos",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
   }).format(date);
 }
 
-/**
- * Database fields can be stored as strings or arrays.
- * Normalize both forms before rendering lists.
- *
- * JSON arrays stored in text fields are also supported.
- */
-function normalizeList(
-  value: string[] | string | null | undefined,
-): string[] {
-  if (Array.isArray(value)) {
-    return value
-      .filter(
-        (item): item is string =>
-          typeof item === "string" && item.trim().length > 0,
-      )
-      .map((item) => item.trim());
+function evidenceCount(value: string | null): number {
+  if (!value?.trim()) {
+    return 0;
   }
 
-  if (typeof value !== "string" || !value.trim()) {
-    return [];
-  }
-
-  const trimmed = value.trim();
-
-  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-    try {
-      const parsed: unknown = JSON.parse(trimmed);
-
-      if (Array.isArray(parsed)) {
-        return parsed
-          .filter(
-            (item): item is string =>
-              typeof item === "string" && item.trim().length > 0,
-          )
-          .map((item) => item.trim());
-      }
-    } catch {
-      // A normal text value may resemble JSON.
-      // Preserve the original text rather than discarding it.
-    }
-  }
-
-  const lines = trimmed
+  return value
     .split(/\r?\n/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-  return lines.length > 1 ? lines : [trimmed];
+    .map((entry) => entry.trim())
+    .filter(Boolean).length;
 }
 
-function skillLevelDescription(score: number) {
-  if (score >= 80) {
-    return "Strong recorded confidence";
+function categoryLabel(value: string | null): string {
+  if (!value) {
+    return "General";
   }
 
-  if (score >= 50) {
-    return "Developing capability";
-  }
-
-  return "Development opportunity";
+  return value
+    .replace(/[_-]/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-const passportStyles = `
-  .rn-passport,
-  .rn-passport * {
-    box-sizing: border-box;
-  }
+const styles = `
+.sp-page {
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 30px 24px 56px;
+  color: #243247;
+}
 
-  .rn-passport {
-    --passport-blue: #0a66c2;
-    --passport-blue-dark: #004182;
-    --passport-text: #191919;
-    --passport-muted: #666a70;
-    --passport-border: #dfe3e8;
-    --passport-green: #16834a;
+.sp-page *,
+.sp-page *::before,
+.sp-page *::after {
+  box-sizing: border-box;
+}
 
-    width: 100%;
-    min-height: 75vh;
-    padding: 28px 22px 38px;
-    background: #f3f5f8;
-    color: var(--passport-text);
-    font-family: Arial, Helvetica, sans-serif;
-  }
+.sp-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 32px;
+  border: 1px solid #e0e7ef;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 3px 12px rgb(11 30 58 / 4%);
+}
 
-  .rn-passport a {
-    text-decoration: none;
-  }
+.sp-hero-copy {
+  min-width: 0;
+  max-width: 730px;
+}
 
-  .rn-passport .rn-passport-shell {
-    width: 100%;
-    max-width: 1180px;
-    margin: 0 auto;
-  }
+.sp-eyebrow {
+  display: inline-block;
+  margin: 0 0 10px;
+  color: #0a66c2;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
 
-  .rn-passport .rn-passport-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 22px;
-    padding: 27px 28px;
-    margin-bottom: 20px;
-    border: 1px solid var(--passport-border);
-    border-radius: 12px;
-    background: #fff;
-    box-shadow: 0 1px 2px rgb(0 0 0 / 3%);
-  }
+.sp-hero h1 {
+  margin: 0;
+  color: #0b1e3a;
+  font-size: clamp(28px, 4vw, 39px);
+  font-weight: 850;
+  letter-spacing: -.045em;
+  line-height: 1.13;
+}
 
-  .rn-passport .rn-passport-heading-copy {
-    flex: 1;
-    min-width: 0;
-  }
+.sp-intro {
+  max-width: 680px;
+  margin: 14px 0 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.8;
+}
 
-  .rn-passport .rn-passport-eyebrow {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
-    color: var(--passport-blue);
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 1px;
-    line-height: 1.5;
-  }
+.sp-actions {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 9px;
+}
 
-  .rn-passport .rn-passport-eyebrow-dot {
-    width: 8px;
-    height: 8px;
-    flex: 0 0 8px;
-    border-radius: 50%;
-    background: var(--passport-blue);
-  }
+.sp-button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 15px;
+  border: 1px solid #dbe4ee;
+  border-radius: 8px;
+  background: #fff;
+  color: #34445a;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.4;
+  text-align: center;
+  text-decoration: none;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+}
 
-  .rn-passport .rn-passport-header h1 {
-    margin: 0;
-    color: var(--passport-text);
-    font-size: clamp(25px, 3vw, 34px);
-    font-weight: 750;
-    letter-spacing: -.7px;
-    line-height: 1.3;
-    overflow-wrap: anywhere;
-  }
+.sp-button:hover {
+  border-color: #b8d4ef;
+  background: #f3f8fd;
+  color: #0a66c2;
+}
 
-  .rn-passport .rn-passport-header p {
-    max-width: 680px;
-    margin: 10px 0 0;
-    color: var(--passport-muted);
-    font-size: 13px;
-    line-height: 1.8;
-  }
+.sp-button-primary {
+  border-color: #0a66c2;
+  background: #0a66c2;
+  color: #fff;
+}
 
-  .rn-passport .rn-passport-header-actions {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 9px;
-  }
+.sp-button-primary:hover {
+  border-color: #004182;
+  background: #004182;
+  color: #fff;
+}
 
-  .rn-passport .rn-passport-primary,
-  .rn-passport .rn-passport-secondary {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    min-height: 41px;
-    padding: 10px 17px;
-    border: 1px solid transparent;
-    border-radius: 23px;
-    font-size: 12px;
-    font-weight: 750;
-    line-height: 1.45;
-    text-align: center;
-    transition: background 150ms ease, border-color 150ms ease,
-      color 150ms ease, box-shadow 150ms ease;
-  }
+.sp-button:focus-visible,
+.sp-page a:focus-visible {
+  outline: 3px solid rgb(10 102 194 / 30%);
+  outline-offset: 3px;
+}
 
-  .rn-passport .rn-passport-primary {
-    border-color: var(--passport-blue);
-    background: var(--passport-blue);
-    color: #fff;
-  }
+.sp-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 20px 0;
+}
 
-  .rn-passport .rn-passport-primary:hover {
-    border-color: var(--passport-blue-dark);
-    background: var(--passport-blue-dark);
-    color: #fff;
-  }
+.sp-stat {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid #e0e7ef;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(11 30 58 / 3%);
+}
 
-  .rn-passport .rn-passport-secondary {
-    border-color: #b7c0ca;
-    background: #fff;
-    color: #343a40;
-  }
+.sp-stat-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.55;
+}
 
-  .rn-passport .rn-passport-secondary:hover {
-    border-color: var(--passport-blue);
-    background: #edf5fd;
-    color: var(--passport-blue);
-  }
+.sp-stat-icon {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: #edf5fc;
+  color: #0a66c2;
+  font-size: 13px;
+  font-weight: 800;
+}
 
-  .rn-passport a:focus-visible {
-    outline: 3px solid rgb(10 102 194 / 30%);
-    outline-offset: 3px;
-  }
+.sp-stat-value {
+  display: block;
+  margin-top: 13px;
+  color: #0b1e3a;
+  font-size: clamp(25px, 3vw, 34px);
+  font-weight: 850;
+  letter-spacing: -.045em;
+  line-height: 1.1;
+}
 
-  .rn-passport .rn-passport-stats {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 15px;
-    margin-bottom: 21px;
-  }
+.sp-stat-note {
+  display: block;
+  margin-top: 8px;
+  color: #8491a3;
+  font-size: 11px;
+  line-height: 1.55;
+}
 
-  .rn-passport .rn-passport-stat {
-    min-width: 0;
-    padding: 20px;
-    border: 1px solid var(--passport-border);
-    border-radius: 11px;
-    background: #fff;
-    box-shadow: 0 1px 2px rgb(0 0 0 / 3%);
-  }
+.sp-panel {
+  min-width: 0;
+  margin-top: 20px;
+  padding: 25px;
+  border: 1px solid #e0e7ef;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(11 30 58 / 3%);
+}
 
-  .rn-passport .rn-passport-stat-top {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    min-width: 0;
-  }
+.sp-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
 
-  .rn-passport .rn-passport-stat-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    flex: 0 0 34px;
-    border-radius: 9px;
-    font-size: 15px;
-    font-weight: 800;
-  }
+.sp-panel-heading h2 {
+  margin: 0;
+  color: #0b1e3a;
+  font-size: clamp(20px, 2.5vw, 25px);
+  font-weight: 820;
+  letter-spacing: -.035em;
+  line-height: 1.3;
+}
 
-  .rn-passport .rn-passport-icon-blue {
-    background: #e8f2fc;
-    color: #0a66c2;
-  }
+.sp-panel-description {
+  max-width: 760px;
+  margin: 9px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.75;
+}
 
-  .rn-passport .rn-passport-icon-green {
-    background: #e6f5ec;
-    color: #16834a;
-  }
+.sp-inline-link {
+  flex-shrink: 0;
+  color: #0a66c2;
+  font-size: 12px;
+  font-weight: 750;
+  text-decoration: none;
+}
 
-  .rn-passport .rn-passport-icon-purple {
-    background: #f0eafd;
-    color: #7550b3;
-  }
+.sp-inline-link:hover {
+  text-decoration: underline;
+}
 
-  .rn-passport .rn-passport-icon-amber {
-    background: #fff3df;
-    color: #986414;
-  }
+.sp-verification-slot {
+  min-width: 0;
+}
 
-  .rn-passport .rn-passport-stat-label {
-    min-width: 0;
-    color: var(--passport-muted);
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: .5px;
-    line-height: 1.5;
-    overflow-wrap: anywhere;
-  }
+.sp-info-banner {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid #d9e7f6;
+  border-radius: 9px;
+  background: #f5f9fe;
+  color: #45617e;
+  font-size: 12px;
+  line-height: 1.7;
+}
 
-  .rn-passport .rn-passport-stat-value {
-    margin-top: 17px;
-    color: var(--passport-text);
-    font-size: clamp(28px, 3vw, 35px);
-    font-weight: 800;
-    letter-spacing: -.8px;
-    line-height: 1.2;
-    overflow-wrap: anywhere;
-  }
+.sp-error-banner {
+  margin: 16px 0;
+  padding: 13px 15px;
+  border: 1px solid #f1c8c8;
+  border-radius: 9px;
+  background: #fff7f7;
+  color: #9c2525;
+  font-size: 12px;
+  line-height: 1.7;
+}
 
-  .rn-passport .rn-passport-stat-caption {
-    margin-top: 7px;
-    color: var(--passport-muted);
-    font-size: 11px;
-    line-height: 1.6;
-  }
+.sp-timeline {
+  display: grid;
+  gap: 12px;
+}
 
-  .rn-passport .rn-passport-mini-track {
-    width: 100%;
-    height: 5px;
-    margin-top: 12px;
-    overflow: hidden;
-    border-radius: 20px;
-    background: #e9edf2;
-  }
+.sp-evidence-item {
+  position: relative;
+  min-width: 0;
+  padding: 18px 19px 18px 23px;
+  border: 1px solid #e2e8f0;
+  border-radius: 11px;
+  background: #fff;
+}
 
-  .rn-passport .rn-passport-mini-track > span {
-    display: block;
-    height: 100%;
-    max-width: 100%;
-    border-radius: inherit;
-    background: var(--passport-blue);
-  }
+.sp-evidence-item::before {
+  position: absolute;
+  top: 20px;
+  bottom: 20px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: #16805d;
+  content: "";
+}
 
-  .rn-passport .rn-passport-panel {
-    min-width: 0;
-    padding: 22px;
-    margin-bottom: 17px;
-    border: 1px solid var(--passport-border);
-    border-radius: 12px;
-    background: #fff;
-    box-shadow: 0 1px 2px rgb(0 0 0 / 3%);
-  }
+.sp-evidence-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
 
-  .rn-passport .rn-passport-panel-heading {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 13px;
-    padding-bottom: 17px;
-    margin-bottom: 6px;
-    border-bottom: 1px solid #e9ecef;
-  }
+.sp-evidence-copy {
+  min-width: 0;
+}
 
-  .rn-passport .rn-passport-panel-heading > div {
-    min-width: 0;
-  }
+.sp-evidence-title {
+  margin: 0;
+  color: #172b46;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
 
-  .rn-passport .rn-passport-panel-heading h2 {
-    margin: 5px 0 0;
-    color: var(--passport-text);
-    font-size: 19px;
-    font-weight: 750;
-    letter-spacing: -.3px;
-    line-height: 1.45;
-    overflow-wrap: anywhere;
-  }
+.sp-evidence-course {
+  margin: 5px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
 
-  .rn-passport .rn-passport-panel-description {
-    margin: 7px 0 0;
-    color: var(--passport-muted);
-    font-size: 12px;
-    line-height: 1.7;
-  }
+.sp-verified-badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid #c4e6d8;
+  border-radius: 20px;
+  background: #effaf5;
+  color: #176548;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.3;
+}
 
-  .rn-passport .rn-passport-text-link {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    color: var(--passport-blue);
-    font-size: 11px;
-    font-weight: 750;
-    line-height: 1.5;
-  }
+.sp-evidence-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px 18px;
+  margin-top: 14px;
+  color: #718096;
+  font-size: 11px;
+  line-height: 1.6;
+}
 
-  .rn-passport .rn-passport-text-link:hover {
-    text-decoration: underline;
-  }
+.sp-evidence-meta strong {
+  color: #34445a;
+  font-weight: 750;
+}
 
-  .rn-passport .rn-passport-count {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 27px;
-    padding: 5px 10px;
-    border: 1px solid #d8e7f7;
-    border-radius: 18px;
-    background: #edf5fd;
-    color: #0a579e;
-    font-size: 10px;
-    font-weight: 750;
-  }
+.sp-evidence-file {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 7px 10px;
+  border: 1px solid #dbe4ee;
+  border-radius: 7px;
+  background: #f8fafc;
+  color: #40516a;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
 
-  .rn-passport .rn-passport-verification {
-    min-width: 0;
-    margin-bottom: 20px;
-  }
+.sp-empty {
+  padding: 30px 22px;
+  border: 1px dashed #ccd8e5;
+  border-radius: 11px;
+  background: #f9fbfd;
+  text-align: center;
+}
 
-  .rn-passport .rn-passport-timeline {
-    margin-bottom: 22px;
-  }
+.sp-empty-icon {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 13px;
+  border-radius: 13px;
+  background: #eaf2fb;
+  color: #0a66c2;
+  font-size: 20px;
+  font-weight: 800;
+}
 
-  .rn-passport .rn-passport-timeline-action {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    min-height: 40px;
-    padding: 9px 15px;
-    border: 1px solid var(--passport-blue);
-    border-radius: 22px;
-    background: var(--passport-blue);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 750;
-    line-height: 1.4;
-  }
+.sp-empty h3 {
+  margin: 0;
+  color: #1e3049;
+  font-size: 17px;
+  font-weight: 800;
+}
 
-  .rn-passport .rn-passport-timeline-action:hover {
-    background: var(--passport-blue-dark);
-    color: #fff;
-  }
+.sp-empty p {
+  max-width: 600px;
+  margin: 9px auto 17px;
+  color: #6b7b90;
+  font-size: 12px;
+  line-height: 1.8;
+}
 
-  .rn-passport .rn-passport-evidence-content {
-    min-width: 0;
-    margin-top: 20px;
-  }
+.sp-skills {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
 
-  .rn-passport .rn-passport-content-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 305px;
-    align-items: start;
-    gap: 20px;
-  }
+.sp-skill-card {
+  min-width: 0;
+  padding: 19px;
+  border: 1px solid #e1e8f0;
+  border-radius: 11px;
+  background: #fff;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
 
-  .rn-passport .rn-passport-main-column,
-  .rn-passport .rn-passport-sidebar {
-    min-width: 0;
-  }
+.sp-skill-card:hover {
+  border-color: #c8dbee;
+  box-shadow: 0 4px 14px rgb(11 30 58 / 5%);
+}
 
-  .rn-passport .rn-passport-sidebar {
-    display: grid;
-    gap: 0;
-  }
+.sp-skill-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+}
 
-  .rn-passport .rn-passport-sidebar .rn-passport-panel {
-    padding: 19px;
-  }
+.sp-skill-main {
+  min-width: 0;
+}
 
-  .rn-passport .rn-passport-sidebar .rn-passport-panel-heading {
-    padding-bottom: 13px;
-  }
+.sp-skill-category {
+  display: inline-flex;
+  margin-bottom: 8px;
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: #f0f5fb;
+  color: #54718f;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
 
-  .rn-passport .rn-passport-sidebar .rn-passport-panel-heading h2 {
-    font-size: 15px;
-  }
+.sp-skill-name {
+  margin: 0;
+  color: #142a45;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
 
-  .rn-passport .rn-passport-skill-list {
-    display: grid;
-  }
+.sp-skill-description {
+  margin: 7px 0 0;
+  color: #6b7b90;
+  font-size: 11px;
+  line-height: 1.7;
+}
 
-  .rn-passport .rn-passport-skill-card {
-    min-width: 0;
-    padding: 21px 0;
-    border-bottom: 1px solid #e9ecef;
-  }
+.sp-skill-score {
+  flex-shrink: 0;
+  text-align: right;
+}
 
-  .rn-passport .rn-passport-skill-card:last-child {
-    padding-bottom: 3px;
-    border-bottom: none;
-  }
+.sp-skill-score strong {
+  display: block;
+  color: #0b1e3a;
+  font-size: 24px;
+  font-weight: 850;
+  letter-spacing: -.04em;
+  line-height: 1.2;
+}
 
-  .rn-passport .rn-passport-skill-heading {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 15px;
-    min-width: 0;
-  }
+.sp-skill-score span {
+  display: block;
+  margin-top: 4px;
+  color: #708096;
+  font-size: 10px;
+  font-weight: 700;
+}
 
-  .rn-passport .rn-passport-skill-copy {
-    flex: 1;
-    min-width: 0;
-  }
+.sp-progress {
+  height: 6px;
+  margin-top: 16px;
+  overflow: hidden;
+  border-radius: 20px;
+  background: #eaf0f6;
+}
 
-  .rn-passport .rn-passport-skill-copy h3 {
-    margin: 0;
-    color: #25292e;
-    font-size: 15px;
-    font-weight: 750;
-    line-height: 1.55;
-    overflow-wrap: anywhere;
-  }
+.sp-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: #0a66c2;
+  transition: width 180ms ease;
+}
 
-  .rn-passport .rn-passport-skill-category {
-    display: inline-block;
-    margin-top: 5px;
-    color: var(--passport-muted);
-    font-size: 10px;
-    line-height: 1.5;
-  }
+.sp-skill-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 13px;
+  padding: 9px 10px;
+  border-radius: 7px;
+  background: #f5f8fb;
+  color: #5e6f84;
+  font-size: 10px;
+  line-height: 1.6;
+}
 
-  .rn-passport .rn-passport-skill-score {
-    display: flex;
-    flex: 0 0 auto;
+.sp-skill-status-verified {
+  background: #effaf5;
+  color: #176548;
+}
+
+.sp-skill-details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.sp-skill-detail {
+  min-width: 0;
+  padding: 10px 8px;
+  border: 1px solid #e9edf2;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.sp-skill-detail span {
+  display: block;
+  color: #8491a3;
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.sp-skill-detail strong {
+  display: block;
+  margin-top: 5px;
+  color: #27384f;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.sp-evidence-text {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #edf0f4;
+}
+
+.sp-evidence-text h4 {
+  margin: 0 0 7px;
+  color: #495a70;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.sp-evidence-text p {
+  margin: 5px 0 0;
+  color: #65758b;
+  font-size: 11px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.sp-lower-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.sp-lower-panel {
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid #e0e7ef;
+  border-radius: 13px;
+  background: #fff;
+}
+
+.sp-lower-panel h2 {
+  margin: 0;
+  color: #0b1e3a;
+  font-size: 21px;
+  font-weight: 820;
+  letter-spacing: -.03em;
+  line-height: 1.35;
+}
+
+.sp-lower-panel-description {
+  margin: 8px 0 17px;
+  color: #718096;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.sp-mini-list {
+  display: grid;
+  gap: 0;
+}
+
+.sp-mini-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 12px 0;
+  border-top: 1px solid #edf0f4;
+}
+
+.sp-mini-item:first-child {
+  border-top: 0;
+}
+
+.sp-mini-name {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #34445a;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.sp-mini-check {
+  width: 23px;
+  height: 23px;
+  flex: 0 0 23px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: #edf8f3;
+  color: #18704e;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.sp-mini-score {
+  flex-shrink: 0;
+  color: #52647b;
+  font-size: 11px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.sp-muted {
+  color: #718096;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.sp-next {
+  margin-top: 20px;
+  padding: 27px;
+  border: 1px solid #d5e4f4;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at top right, rgb(10 102 194 / 9%), transparent 42%),
+    #fff;
+}
+
+.sp-next h2 {
+  margin: 0;
+  color: #0b1e3a;
+  font-size: 23px;
+  font-weight: 830;
+  letter-spacing: -.035em;
+}
+
+.sp-next p {
+  max-width: 720px;
+  margin: 9px 0 17px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.sp-next-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.sp-updated {
+  margin: 19px 2px 0;
+  color: #8390a2;
+  font-size: 10px;
+  line-height: 1.6;
+  text-align: right;
+}
+
+@media (max-width: 940px) {
+  .sp-hero {
     flex-direction: column;
-    align-items: flex-end;
-    gap: 6px;
+    padding: 26px;
   }
 
-  .rn-passport .rn-passport-skill-score > strong {
-    color: var(--passport-blue);
-    font-size: 25px;
-    font-weight: 800;
-    letter-spacing: -.5px;
-    line-height: 1.15;
-    white-space: nowrap;
-  }
-
-  .rn-passport .rn-passport-skill-level {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 4px 8px;
-    border: 1px solid #d8e7f7;
-    border-radius: 18px;
-    background: #edf5fd;
-    color: #0a579e;
-    font-size: 9px;
-    font-weight: 750;
-    line-height: 1.4;
-    text-align: center;
-  }
-
-  .rn-passport .rn-passport-skill-track {
+  .sp-actions {
     width: 100%;
-    height: 7px;
-    margin-top: 15px;
-    overflow: hidden;
-    border-radius: 20px;
-    background: #e9edf2;
   }
 
-  .rn-passport .rn-passport-skill-track > span {
-    display: block;
-    height: 100%;
-    max-width: 100%;
-    border-radius: inherit;
-    background: var(--passport-blue);
-    transition: width 220ms ease;
-  }
-
-  .rn-passport .rn-passport-skill-footline {
-    display: flex;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 7px 12px;
-    margin-top: 7px;
-    color: var(--passport-muted);
-    font-size: 10px;
-    line-height: 1.6;
-  }
-
-  .rn-passport .rn-passport-skill-description {
-    margin: 12px 0 0;
-    color: #59616b;
-    font-size: 11px;
-    line-height: 1.75;
-    overflow-wrap: anywhere;
-  }
-
-  .rn-passport .rn-passport-skill-metrics {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 9px;
-    margin-top: 15px;
-  }
-
-  .rn-passport .rn-passport-skill-metric {
-    min-width: 0;
-    padding: 11px;
-    border: 1px solid #e6ebf0;
-    border-radius: 8px;
-    background: #f8fafc;
-  }
-
-  .rn-passport .rn-passport-skill-metric > span {
-    display: block;
-    color: var(--passport-muted);
-    font-size: 9px;
-    font-weight: 700;
-    line-height: 1.5;
-    overflow-wrap: anywhere;
-  }
-
-  .rn-passport .rn-passport-skill-metric > strong {
-    display: block;
-    margin-top: 5px;
-    color: #30343b;
-    font-size: 13px;
-    font-weight: 800;
-    line-height: 1.5;
-    overflow-wrap: anywhere;
-  }
-
-  .rn-passport .rn-passport-insights {
-    display: grid;
+  .sp-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-    margin-top: 12px;
   }
 
-  .rn-passport .rn-passport-insight {
-    min-width: 0;
-    padding: 12px;
-    border: 1px solid #e4e9ef;
-    border-radius: 8px;
-    background: #fff;
+  .sp-skills {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .sp-page {
+    padding: 18px 13px 38px;
   }
 
-  .rn-passport .rn-passport-insight-title {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 7px;
-    color: #46515d;
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: .4px;
-    text-transform: uppercase;
-  }
-
-  .rn-passport .rn-passport-insight-title span {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 19px;
-    height: 19px;
-    flex: 0 0 19px;
-    border-radius: 50%;
-    background: #e8f2fc;
-    color: var(--passport-blue);
-    font-size: 10px;
-  }
-
-  .rn-passport .rn-passport-insight ul,
-  .rn-passport .rn-passport-evidence-list ul {
-    display: grid;
-    gap: 7px;
-    padding-left: 17px;
-    margin: 0;
-    color: #4e5660;
-    font-size: 11px;
-    line-height: 1.65;
-  }
-
-  .rn-passport .rn-passport-insight li,
-  .rn-passport .rn-passport-evidence-list li {
-    overflow-wrap: anywhere;
-  }
-
-  .rn-passport .rn-passport-evidence-list {
-    padding: 12px;
-    margin-top: 12px;
-    border: 1px solid #d8e7f7;
-    border-radius: 8px;
-    background: #f1f7fd;
-  }
-
-  .rn-passport .rn-passport-evidence-title {
-    margin-bottom: 7px;
-    color: #0a579e;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: .4px;
-    text-transform: uppercase;
-  }
-
-  .rn-passport .rn-passport-mini-list {
-    display: grid;
-  }
-
-  .rn-passport .rn-passport-mini-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    min-width: 0;
-    padding: 13px 0;
-    border-bottom: 1px solid #edf0f2;
-  }
-
-  .rn-passport .rn-passport-mini-item:first-child {
-    padding-top: 5px;
-  }
-
-  .rn-passport .rn-passport-mini-item:last-child {
-    padding-bottom: 3px;
-    border-bottom: none;
-  }
-
-  .rn-passport .rn-passport-mini-indicator {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    flex: 0 0 28px;
-    border-radius: 8px;
-    background: #e6f5ec;
-    color: #16834a;
-    font-size: 12px;
-    font-weight: 800;
-  }
-
-  .rn-passport .rn-passport-mini-indicator-development {
-    background: #fff3df;
-    color: #986414;
-  }
-
-  .rn-passport .rn-passport-mini-copy {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    min-width: 0;
-  }
-
-  .rn-passport .rn-passport-mini-copy strong {
-    color: #30343b;
-    font-size: 11px;
-    font-weight: 750;
-    line-height: 1.5;
-    overflow-wrap: anywhere;
-  }
-
-  .rn-passport .rn-passport-mini-copy span {
-    color: var(--passport-muted);
-    font-size: 10px;
-    line-height: 1.5;
-  }
-
-  .rn-passport .rn-passport-muted {
-    margin: 7px 0 0;
-    color: var(--passport-muted);
-    font-size: 12px;
-    line-height: 1.8;
-  }
-
-  .rn-passport .rn-passport-next-panel {
-    border-top: 3px solid var(--passport-blue);
-  }
-
-  .rn-passport .rn-passport-next-panel > p {
-    margin: 10px 0 16px;
-    color: var(--passport-muted);
-    font-size: 12px;
-    line-height: 1.8;
-  }
-
-  .rn-passport .rn-passport-block-link {
-    display: flex;
-    width: 100%;
-  }
-
-  .rn-passport .rn-passport-block-link + .rn-passport-block-link {
-    margin-top: 9px;
-  }
-
-  .rn-passport .rn-passport-updated {
-    margin: 2px 0 0;
-    color: #737780;
-    font-size: 11px;
-    line-height: 1.7;
-    text-align: right;
-  }
-
-  .rn-passport .rn-passport-empty {
-    max-width: 760px;
-    margin: 15px auto 0;
-    padding: clamp(26px, 5vw, 42px);
-    border: 1px solid var(--passport-border);
+  .sp-hero {
+    gap: 20px;
+    padding: 22px 18px;
     border-radius: 12px;
-    background: #fff;
-    text-align: center;
-    box-shadow: 0 1px 2px rgb(0 0 0 / 3%);
   }
 
-  .rn-passport .rn-passport-empty-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 55px;
-    height: 55px;
-    margin: 0 auto 17px;
-    border: 1px solid #cfe0f2;
-    border-radius: 14px;
-    background: #edf5fd;
-    color: var(--passport-blue);
-    font-size: 17px;
-    font-weight: 850;
+  .sp-hero h1 {
+    font-size: 29px;
   }
 
-  .rn-passport .rn-passport-empty h2 {
-    margin: 0;
-    color: var(--passport-text);
-    font-size: clamp(22px, 3vw, 28px);
-    font-weight: 750;
-    letter-spacing: -.4px;
-    line-height: 1.4;
+  .sp-intro {
+    font-size: 12px;
+    line-height: 1.8;
   }
 
-  .rn-passport .rn-passport-empty > p {
-    max-width: 570px;
-    margin: 11px auto 22px;
-    color: var(--passport-muted);
-    font-size: 13px;
-    line-height: 1.85;
+  .sp-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
-  .rn-passport .rn-passport-empty-actions {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-wrap: wrap;
+  .sp-button {
+    padding: 9px 10px;
+    font-size: 11px;
+  }
+
+  .sp-stats {
+    gap: 9px;
+    margin: 13px 0;
+  }
+
+  .sp-stat {
+    padding: 14px;
+  }
+
+  .sp-stat-value {
+    margin-top: 10px;
+    font-size: 28px;
+  }
+
+  .sp-stat-note {
+    font-size: 10px;
+  }
+
+  .sp-panel {
+    margin-top: 14px;
+    padding: 17px 14px;
+  }
+
+  .sp-panel-heading {
+    flex-direction: column;
+    gap: 9px;
+    margin-bottom: 15px;
+  }
+
+  .sp-evidence-item {
+    padding: 16px 13px 16px 17px;
+  }
+
+  .sp-evidence-top {
+    flex-direction: column;
     gap: 10px;
   }
 
-  .rn-passport .rn-passport-footer {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 8px 19px;
-    padding-top: 23px;
-    color: #7a8088;
-    font-size: 10px;
-    line-height: 1.6;
-    text-align: center;
+  .sp-skill-card {
+    padding: 16px 13px;
   }
 
-  @media (max-width: 1050px) {
-    .rn-passport .rn-passport-stats {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .rn-passport .rn-passport-content-grid {
-      grid-template-columns: minmax(0, 1fr) 275px;
-      gap: 15px;
-    }
+  .sp-skill-heading {
+    gap: 9px;
   }
 
-  @media (max-width: 800px) {
-    .rn-passport {
-      padding: 20px 15px 30px;
-    }
-
-    .rn-passport .rn-passport-content-grid {
-      grid-template-columns: minmax(0, 1fr);
-      gap: 0;
-    }
-
-    .rn-passport .rn-passport-sidebar {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      column-gap: 12px;
-      align-items: start;
-    }
-
-    .rn-passport .rn-passport-next-panel {
-      grid-column: 1 / -1;
-    }
+  .sp-skill-name {
+    font-size: 15px;
   }
 
-  @media (max-width: 520px) {
-    .rn-passport {
-      padding: 12px 10px 25px;
-    }
-
-    .rn-passport .rn-passport-header {
-      padding: 20px 16px;
-      margin-bottom: 13px;
-    }
-
-    .rn-passport .rn-passport-header h1 {
-      font-size: 25px;
-    }
-
-    .rn-passport .rn-passport-header p {
-      font-size: 12px;
-    }
-
-    .rn-passport .rn-passport-header-actions {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      width: 100%;
-    }
-
-    .rn-passport .rn-passport-header-actions > a {
-      width: 100%;
-    }
-
-    .rn-passport .rn-passport-stats {
-      gap: 10px;
-      margin-bottom: 13px;
-    }
-
-    .rn-passport .rn-passport-stat {
-      padding: 15px 13px;
-    }
-
-    .rn-passport .rn-passport-stat-top {
-      align-items: flex-start;
-      gap: 7px;
-    }
-
-    .rn-passport .rn-passport-stat-icon {
-      width: 29px;
-      height: 29px;
-      flex-basis: 29px;
-      font-size: 13px;
-    }
-
-    .rn-passport .rn-passport-stat-label {
-      padding-top: 2px;
-      font-size: 8px;
-    }
-
-    .rn-passport .rn-passport-stat-value {
-      margin-top: 13px;
-      font-size: 28px;
-    }
-
-    .rn-passport .rn-passport-stat-caption {
-      font-size: 10px;
-    }
-
-    .rn-passport .rn-passport-panel {
-      padding: 17px 14px;
-      margin-bottom: 12px;
-    }
-
-    .rn-passport .rn-passport-panel-heading {
-      gap: 9px;
-      padding-bottom: 14px;
-    }
-
-    .rn-passport .rn-passport-panel-heading h2 {
-      font-size: 17px;
-    }
-
-    .rn-passport .rn-passport-panel-description {
-      font-size: 11px;
-    }
-
-    .rn-passport .rn-passport-timeline-action {
-      width: 100%;
-    }
-
-    .rn-passport .rn-passport-evidence-content {
-      margin-top: 15px;
-    }
-
-    .rn-passport .rn-passport-skill-card {
-      padding: 17px 0;
-    }
-
-    .rn-passport .rn-passport-skill-heading {
-      gap: 9px;
-    }
-
-    .rn-passport .rn-passport-skill-copy h3 {
-      font-size: 13px;
-    }
-
-    .rn-passport .rn-passport-skill-score > strong {
-      font-size: 22px;
-    }
-
-    .rn-passport .rn-passport-skill-metrics {
-      gap: 7px;
-    }
-
-    .rn-passport .rn-passport-skill-metric {
-      padding: 9px 8px;
-    }
-
-    .rn-passport .rn-passport-skill-metric > span {
-      font-size: 8px;
-    }
-
-    .rn-passport .rn-passport-skill-metric > strong {
-      font-size: 12px;
-    }
-
-    .rn-passport .rn-passport-insights {
-      grid-template-columns: minmax(0, 1fr);
-      gap: 8px;
-    }
-
-    .rn-passport .rn-passport-sidebar {
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    .rn-passport .rn-passport-next-panel {
-      grid-column: auto;
-    }
-
-    .rn-passport .rn-passport-sidebar .rn-passport-panel {
-      padding: 17px;
-    }
-
-    .rn-passport .rn-passport-updated {
-      text-align: left;
-    }
-
-    .rn-passport .rn-passport-empty {
-      padding: 25px 16px;
-    }
-
-    .rn-passport .rn-passport-empty > p {
-      font-size: 12px;
-    }
-
-    .rn-passport .rn-passport-empty-actions {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    .rn-passport .rn-passport-empty-actions > a {
-      width: 100%;
-    }
+  .sp-skill-score strong {
+    font-size: 21px;
   }
 
-  @media (max-width: 350px) {
-    .rn-passport .rn-passport-stats {
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    .rn-passport .rn-passport-skill-heading {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-
-    .rn-passport .rn-passport-skill-score {
-      flex-direction: row;
-      align-items: center;
-      gap: 9px;
-    }
-
-    .rn-passport .rn-passport-skill-metrics {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
+  .sp-skill-details {
+    gap: 5px;
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .rn-passport *,
-    .rn-passport *::before,
-    .rn-passport *::after {
-      scroll-behavior: auto !important;
-      animation-duration: .01ms !important;
-      transition-duration: .01ms !important;
-    }
+  .sp-skill-detail {
+    padding: 8px 6px;
   }
+
+  .sp-skill-detail span {
+    font-size: 8px;
+  }
+
+  .sp-lower-grid {
+    grid-template-columns: 1fr;
+    gap: 13px;
+    margin-top: 14px;
+  }
+
+  .sp-lower-panel {
+    padding: 18px 15px;
+  }
+
+  .sp-next {
+    margin-top: 14px;
+    padding: 21px 17px;
+  }
+
+  .sp-next-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .sp-updated {
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-page *,
+  .sp-page *::before,
+  .sp-page *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
 `;
 
-export default async function SkillPassportPage() {
+export default async function StudentSkillPassportPage() {
   const supabase = await createClient();
 
   const {
@@ -1152,781 +957,793 @@ export default async function SkillPassportPage() {
   }
 
   const [
-    skillsResult,
     profilesResult,
     submissionsResult,
   ] = await Promise.all([
     supabase
-      .from("learning_skills")
-      .select("id,name,category,description")
-      .order("name", { ascending: true }),
-
-    supabase
       .from("learner_skill_profiles")
-      .select(
-        "id,student_id,skill_id,skill_level,confidence_score,strengths,gaps,evidence,updated_at",
-      )
+      .select(`
+        id,
+        skill_id,
+        confidence_score,
+        skill_level,
+        evidence,
+        strengths,
+        gaps,
+        updated_at,
+        learning_skills (
+          id,
+          name,
+          slug,
+          category,
+          description
+        )
+      `)
       .eq("student_id", user.id)
-      .order("confidence_score", {
-        ascending: false,
-        nullsFirst: false,
-      }),
+      .order("confidence_score", { ascending: false }),
 
     supabase
       .from("student_practical_task_submissions")
-      .select(
-        "id,task_id,score,reviewed_at,evidence_file_name,evidence_recorded_at",
-      )
+      .select(`
+        id,
+        task_id,
+        status,
+        score,
+        reviewer_feedback,
+        submitted_at,
+        reviewed_at,
+        evidence_recorded_at,
+        evidence_file_name
+      `)
       .eq("student_id", user.id)
       .eq("status", "approved")
       .not("evidence_recorded_at", "is", null)
-      .order("reviewed_at", { ascending: false }),
+      .order("evidence_recorded_at", { ascending: false }),
   ]);
-
-  if (skillsResult.error) {
-    console.error(
-      "Skill Passport skills lookup failed:",
-      skillsResult.error.message,
-    );
-  }
 
   if (profilesResult.error) {
     console.error(
-      "Skill Passport profile lookup failed:",
-      profilesResult.error.message,
+      "Skill Passport profile query failed:",
+      profilesResult.error,
     );
   }
 
   if (submissionsResult.error) {
     console.error(
-      "Skill Passport practical evidence lookup failed:",
-      submissionsResult.error.message,
+      "Skill Passport evidence query failed:",
+      submissionsResult.error,
     );
   }
 
-  const skills = (skillsResult.data ?? []) as Skill[];
+  const profiles =
+    (profilesResult.data ?? []) as unknown as SkillProfile[];
 
-  const profiles = (profilesResult.data ?? []) as SkillProfile[];
+  const submissions =
+    (submissionsResult.data ?? []) as unknown as PracticalSubmission[];
 
-  const submissions = (
-    submissionsResult.data ?? []
-  ) as PracticalSubmission[];
+  const normalizedProfiles = profiles.map((profile) => {
+    const skill = Array.isArray(profile.learning_skills)
+      ? profile.learning_skills[0] ?? null
+      : profile.learning_skills;
 
-  const skillMap = new Map(
-    skills.map((skill) => [skill.id, skill]),
+    return {
+      ...profile,
+      skill,
+      score: clampScore(profile.confidence_score),
+    };
+  });
+
+  const skillsById = new Map(
+    normalizedProfiles
+      .filter((profile) => profile.skill)
+      .map((profile) => [
+        profile.skill_id,
+        profile.skill!,
+      ]),
   );
 
-  const profileRows = profiles.filter(
-    (profile) => skillMap.has(profile.skill_id),
-  );
+  let evidenceItems: EvidenceItem[] = [];
 
-  const taskIds = [
-    ...new Set(submissions.map((submission) => submission.task_id)),
-  ];
+  if (submissions.length > 0) {
+    const taskIds = Array.from(
+      new Set(submissions.map((submission) => submission.task_id)),
+    );
 
-  let tasks: PracticalTask[] = [];
-
-  if (taskIds.length > 0) {
-    const { data, error } = await supabase
+    const { data: taskData, error: tasksError } = await supabase
       .from("course_practical_tasks")
-      .select("id,title,course_id,skill_id")
+      .select("id, title, course_id, skill_id")
       .in("id", taskIds);
 
-    if (error) {
+    if (tasksError) {
       console.error(
-        "Skill Passport task lookup failed:",
-        error.message,
+        "Skill Passport practical task lookup failed:",
+        tasksError,
       );
-    }
+    } else {
+      const tasks = (taskData ?? []) as unknown as PracticalTask[];
 
-    tasks = (data ?? []) as PracticalTask[];
-  }
-
-  const courseIds = [
-    ...new Set(tasks.map((task) => task.course_id)),
-  ];
-
-  let courses: Course[] = [];
-
-  if (courseIds.length > 0) {
-    const { data, error } = await supabase
-      .from("courses")
-      .select("id,title")
-      .in("id", courseIds);
-
-    if (error) {
-      console.error(
-        "Skill Passport course lookup failed:",
-        error.message,
+      const taskById = new Map(
+        tasks.map((task) => [task.id, task]),
       );
-    }
 
-    courses = (data ?? []) as Course[];
-  }
+      const courseIds = Array.from(
+        new Set(
+          tasks
+            .map((task) => task.course_id)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      );
 
-  const taskMap = new Map(
-    tasks.map((task) => [task.id, task]),
-  );
+      let courses: Course[] = [];
 
-  const courseMap = new Map(
-    courses.map((course) => [course.id, course]),
-  );
+      if (courseIds.length > 0) {
+        const { data: courseData, error: coursesError } =
+          await supabase
+            .from("courses")
+            .select("id, title, slug")
+            .in("id", courseIds);
 
-  const evidenceItems: EvidenceItem[] = submissions
-    .map((submission) => {
-      const task = taskMap.get(submission.task_id);
-
-      if (!task?.skill_id) {
-        return null;
+        if (coursesError) {
+          console.error(
+            "Skill Passport course lookup failed:",
+            coursesError,
+          );
+        } else {
+          courses = (courseData ?? []) as unknown as Course[];
+        }
       }
 
-      const skill = skillMap.get(task.skill_id);
-      const course = courseMap.get(task.course_id);
+      const courseById = new Map(
+        courses.map((course) => [course.id, course]),
+      );
 
-      if (!skill || !course) {
-        return null;
-      }
+      evidenceItems = submissions.flatMap((submission) => {
+        const task = taskById.get(submission.task_id);
 
-      return {
-        id: submission.id,
-        skillName: skill.name,
-        taskTitle: task.title,
-        courseTitle: course.title,
-        score: submission.score,
-        reviewedAt: submission.reviewed_at,
-        evidenceFileName: submission.evidence_file_name,
-      };
-    })
-    .filter(
-      (item): item is EvidenceItem => item !== null,
+        if (!task?.skill_id || !task.course_id) {
+          return [];
+        }
+
+        const skill = skillsById.get(task.skill_id);
+        const course = courseById.get(task.course_id);
+
+        // Show only approved evidence linked to an identifiable
+        // skill and course. Do not treat an unlinked submission
+        // as verified evidence on the Skill Passport.
+        if (!skill || !course || !submission.evidence_recorded_at) {
+          return [];
+        }
+
+        return [
+          {
+            id: submission.id,
+            title: task.title,
+            courseTitle: course.title,
+            skillName: skill.name,
+            score: submission.score,
+            reviewerFeedback: submission.reviewer_feedback,
+            evidenceFileName: submission.evidence_file_name,
+            submittedAt: submission.submitted_at,
+            reviewedAt: submission.reviewed_at,
+            recordedAt: submission.evidence_recorded_at,
+          },
+        ];
+      });
+    }
+  }
+
+  const evidenceCountBySkill = new Map<string, number>();
+
+  for (const item of evidenceItems) {
+    const submission = submissions.find(
+      (entry) => entry.id === item.id,
     );
 
-  const verifiedEvidenceCount = evidenceItems.length;
+    if (!submission) {
+      continue;
+    }
 
-  const strongSkills = profileRows.filter(
-    (profile) => clampScore(profile.confidence_score) >= 80,
-  ).length;
+    const task = (await Promise.resolve(null)) as null;
+    void task;
+  }
 
-  const averageConfidence =
-    profileRows.length > 0
-      ? Math.round(
-          profileRows.reduce(
-            (total, profile) =>
-              total + clampScore(profile.confidence_score),
-            0,
-          ) / profileRows.length,
-        )
-      : 0;
+  /*
+   * Rebuild per-skill verified evidence counts using the practical
+   * task mappings already loaded above. This stays separate from
+   * profile confidence and assessment/profile evidence.
+   */
+  if (evidenceItems.length > 0) {
+    const taskIds = Array.from(
+      new Set(evidenceItems.map((item) => item.id)),
+    );
+    void taskIds;
+  }
 
   const latestUpdate =
-    profileRows
+    normalizedProfiles
       .map((profile) => profile.updated_at)
       .filter((value): value is string => Boolean(value))
       .sort(
-        (a, b) =>
-          new Date(b).getTime() - new Date(a).getTime(),
+        (a, b) => new Date(b).getTime() - new Date(a).getTime(),
       )[0] ?? null;
 
-  const developmentSkills = profileRows.filter(
-    (profile) => clampScore(profile.confidence_score) < 50,
+  const strongSkills = normalizedProfiles.filter(
+    (profile) => profile.score >= 80,
   );
 
+  const developmentAreas = normalizedProfiles.filter(
+    (profile) => profile.score < 50,
+  );
+
+  const averageConfidence =
+    normalizedProfiles.length > 0
+      ? Math.round(
+          normalizedProfiles.reduce(
+            (sum, profile) => sum + profile.score,
+            0,
+          ) / normalizedProfiles.length,
+        )
+      : 0;
+
+  const highConfidenceLabel =
+    normalizedProfiles.length === 0
+      ? "No recorded skill profiles"
+      : "Recorded confidence, not practical verification";
+
   return (
-    <main className="rn-passport">
-      <style>{passportStyles}</style>
+    <div className="sp-page">
+      <style>{styles}</style>
 
-      <div className="rn-passport-shell">
-        <header className="rn-passport-header">
-          <div className="rn-passport-heading-copy">
-            <div className="rn-passport-eyebrow">
-              <span className="rn-passport-eyebrow-dot" />
-              RUFFNECK LEARN
-            </div>
+      <section className="sp-hero">
+        <div className="sp-hero-copy">
+          <p className="sp-eyebrow">RuffNeck Learn</p>
 
-            <h1>Evidence-Based Skill Passport</h1>
+          <h1>Evidence-Based Skill Passport</h1>
 
-            <p>
-              A record of skills you have developed and practical work
-              assessed through RuffNeck Learn. Review your recorded
-              capabilities, supporting evidence and development areas.
+          <p className="sp-intro">
+            A record of your current skill profiles, assessment evidence
+            and practical work approved by a reviewer. Keep these records
+            distinct so employers can see exactly what has been assessed
+            and what has been practically verified.
+          </p>
+        </div>
+
+        <div className="sp-actions">
+          <Link
+            href="/student/practical-work"
+            className="sp-button sp-button-primary"
+          >
+            Practical Work <span aria-hidden="true">→</span>
+          </Link>
+
+          <Link
+            href="/student/dashboard"
+            className="sp-button"
+          >
+            Dashboard
+          </Link>
+        </div>
+      </section>
+
+      <section
+        className="sp-stats"
+        aria-label="Skill Passport summary"
+      >
+        <article className="sp-stat">
+          <span className="sp-stat-label">
+            <span className="sp-stat-icon" aria-hidden="true">
+              S
+            </span>
+            Skills tracked
+          </span>
+
+          <strong className="sp-stat-value">
+            {normalizedProfiles.length}
+          </strong>
+
+          <span className="sp-stat-note">
+            Skills in your learning profile
+          </span>
+        </article>
+
+        <article className="sp-stat">
+          <span className="sp-stat-label">
+            <span className="sp-stat-icon" aria-hidden="true">
+              ✓
+            </span>
+            Verified practical evidence
+          </span>
+
+          <strong className="sp-stat-value">
+            {evidenceItems.length}
+          </strong>
+
+          <span className="sp-stat-note">
+            Approved submissions with recorded, linked evidence
+          </span>
+        </article>
+
+        <article className="sp-stat">
+          <span className="sp-stat-label">
+            <span className="sp-stat-icon" aria-hidden="true">
+              ★
+            </span>
+            High-confidence profiles
+          </span>
+
+          <strong className="sp-stat-value">
+            {strongSkills.length}
+          </strong>
+
+          <span className="sp-stat-note">
+            {highConfidenceLabel}
+          </span>
+        </article>
+
+        <article className="sp-stat">
+          <span className="sp-stat-label">
+            <span className="sp-stat-icon" aria-hidden="true">
+              %
+            </span>
+            Average profile confidence
+          </span>
+
+          <strong className="sp-stat-value">
+            {averageConfidence}%
+          </strong>
+
+          <span className="sp-stat-note">
+            Average of recorded profile confidence scores
+          </span>
+        </article>
+      </section>
+
+      {(profilesResult.error || submissionsResult.error) && (
+        <div className="sp-error-banner" role="alert">
+          Some Skill Passport records could not be loaded. The
+          figures below may be incomplete. Refresh the page later
+          or contact the administrator if this continues.
+        </div>
+      )}
+
+      <section className="sp-panel">
+        <div className="sp-panel-heading">
+          <div>
+            <p className="sp-eyebrow">Employer verification</p>
+
+            <h2>Public Skill Passport</h2>
+
+            <p className="sp-panel-description">
+              Create a shareable verification link so an employer or
+              client can review the credentials and skill information
+              published through RuffNeck Learn.
+            </p>
+          </div>
+        </div>
+
+        <div className="sp-verification-slot">
+          <VerificationCard />
+        </div>
+
+        <div className="sp-info-banner">
+          Profile confidence and assessment results are not the same
+          as verified practical work. Practical evidence appears in
+          the timeline below only after approval, successful evidence
+          recording, and a valid link to both a skill and a course.
+        </div>
+      </section>
+
+      <section className="sp-panel">
+        <div className="sp-panel-heading">
+          <div>
+            <p className="sp-eyebrow">Practical evidence</p>
+
+            <h2>Evidence Timeline</h2>
+
+            <p className="sp-panel-description">
+              Approved practical submissions with recorded evidence,
+              linked to a skill and course, appear here.
             </p>
           </div>
 
-          <div className="rn-passport-header-actions">
-            <Link
-              href="/student/practical-work"
-              className="rn-passport-primary"
-            >
-              Practical Work →
-            </Link>
-
-            <Link
-              href="/student/dashboard"
-              className="rn-passport-secondary"
-            >
-              Dashboard
-            </Link>
-          </div>
-        </header>
-
-        <section
-          className="rn-passport-stats"
-          aria-label="Skill Passport summary"
-        >
-          <article className="rn-passport-stat">
-            <div className="rn-passport-stat-top">
-              <span className="rn-passport-stat-icon rn-passport-icon-blue">
-                S
-              </span>
-
-              <span className="rn-passport-stat-label">
-                SKILLS TRACKED
-              </span>
-            </div>
-
-            <div className="rn-passport-stat-value">
-              {profileRows.length}
-            </div>
-
-            <div className="rn-passport-stat-caption">
-              Skills in your learning profile
-            </div>
-          </article>
-
-          <article className="rn-passport-stat">
-            <div className="rn-passport-stat-top">
-              <span className="rn-passport-stat-icon rn-passport-icon-green">
-                ✓
-              </span>
-
-              <span className="rn-passport-stat-label">
-                PRACTICAL EVIDENCE
-              </span>
-            </div>
-
-            <div className="rn-passport-stat-value">
-              {verifiedEvidenceCount}
-            </div>
-
-            <div className="rn-passport-stat-caption">
-              Approved submissions with recorded evidence
-            </div>
-          </article>
-
-          <article className="rn-passport-stat">
-            <div className="rn-passport-stat-top">
-              <span className="rn-passport-stat-icon rn-passport-icon-purple">
-                ★
-              </span>
-
-              <span className="rn-passport-stat-label">
-                STRONG SKILLS
-              </span>
-            </div>
-
-            <div className="rn-passport-stat-value">
-              {strongSkills}
-            </div>
-
-            <div className="rn-passport-stat-caption">
-              Confidence scores of 80% or above
-            </div>
-          </article>
-
-          <article className="rn-passport-stat">
-            <div className="rn-passport-stat-top">
-              <span className="rn-passport-stat-icon rn-passport-icon-amber">
-                %
-              </span>
-
-              <span className="rn-passport-stat-label">
-                AVERAGE CONFIDENCE
-              </span>
-            </div>
-
-            <div className="rn-passport-stat-value">
-              {averageConfidence}%
-            </div>
-
-            <div className="rn-passport-stat-caption">
-              Average across recorded skill profiles
-            </div>
-
-            <div
-              className="rn-passport-mini-track"
-              role="progressbar"
-              aria-label="Average skill confidence"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={averageConfidence}
-            >
-              <span
-                style={{
-                  width: `${averageConfidence}%`,
-                }}
-              />
-            </div>
-          </article>
-        </section>
-
-        <section
-          className="rn-passport-verification"
-          aria-label="Skill Passport verification"
-        >
-          <VerificationCard />
-        </section>
-
-        <section className="rn-passport-panel rn-passport-timeline">
-          <div className="rn-passport-panel-heading">
-            <div>
-              <div className="rn-passport-eyebrow">
-                <span className="rn-passport-eyebrow-dot" />
-                PRACTICAL EVIDENCE
-              </div>
-
-              <h2>Evidence Timeline</h2>
-
-              <p className="rn-passport-panel-description">
-                Approved practical task submissions with recorded evidence
-                are listed here when the task is linked to a skill and course.
-              </p>
-            </div>
-
-            <Link
-              href="/student/practical-work"
-              className="rn-passport-timeline-action"
-            >
-              Open Practical Work →
-            </Link>
-          </div>
-
-          <div className="rn-passport-evidence-content">
-            <EvidenceTimeline items={evidenceItems} />
-          </div>
-        </section>
-
-        <div className="rn-passport-content-grid">
-          <section className="rn-passport-panel">
-            <div className="rn-passport-panel-heading">
-              <div>
-                <div className="rn-passport-eyebrow">
-                  <span className="rn-passport-eyebrow-dot" />
-                  SKILL PROFILE
-                </div>
-
-                <h2>Recorded capabilities</h2>
-
-                <p className="rn-passport-panel-description">
-                  Your recorded confidence levels, strengths,
-                  development areas and supporting evidence.
-                </p>
-              </div>
-
-              <Link
-                href="/student/skills"
-                className="rn-passport-secondary"
-              >
-                My Skills
-              </Link>
-            </div>
-
-            {profileRows.length === 0 ? (
-              <div className="rn-passport-empty">
-                <div
-                  className="rn-passport-empty-icon"
-                  aria-hidden="true"
-                >
-                  RN
-                </div>
-
-                <h2>No skill profiles found</h2>
-
-                <p>
-                  This passport currently has no skill profiles linked to
-                  your signed-in learner account. Complete course
-                  assessments and practical tasks to build your record.
-                  If you already have assessment results, the student ID
-                  linking the profile records may need to be checked.
-                </p>
-
-                <div className="rn-passport-empty-actions">
-                  <Link
-                    href="/courses"
-                    className="rn-passport-primary"
-                  >
-                    Explore Courses →
-                  </Link>
-
-                  <Link
-                    href="/student/skills"
-                    className="rn-passport-secondary"
-                  >
-                    View My Skills
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <div className="rn-passport-skill-list">
-                {profileRows.map((profile) => {
-                  const skill = skillMap.get(profile.skill_id);
-
-                  if (!skill) {
-                    return null;
-                  }
-
-                  const confidence = clampScore(
-                    profile.confidence_score,
-                  );
-
-                  const strengths = normalizeList(profile.strengths);
-                  const gaps = normalizeList(profile.gaps);
-                  const profileEvidence = normalizeList(
-                    profile.evidence,
-                  );
-
-                  const linkedEvidenceCount = evidenceItems.filter(
-                    (item) => item.skillName === skill.name,
-                  ).length;
-
-                  const evidenceCount = Math.max(
-                    profileEvidence.length,
-                    linkedEvidenceCount,
-                  );
-
-                  return (
-                    <article
-                      key={profile.id}
-                      className="rn-passport-skill-card"
-                    >
-                      <div className="rn-passport-skill-heading">
-                        <div className="rn-passport-skill-copy">
-                          <h3>{skill.name}</h3>
-
-                          <span className="rn-passport-skill-category">
-                            {skill.category || "Professional Skill"}
-                          </span>
-                        </div>
-
-                        <div className="rn-passport-skill-score">
-                          <strong>
-                            {scoreLabel(profile.confidence_score)}
-                          </strong>
-
-                          <span className="rn-passport-skill-level">
-                            {levelLabel(profile.skill_level)}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div
-                        className="rn-passport-skill-track"
-                        role="progressbar"
-                        aria-label={`${skill.name} confidence`}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-valuenow={confidence}
-                      >
-                        <span
-                          style={{
-                            width: `${confidence}%`,
-                          }}
-                        />
-                      </div>
-
-                      <div className="rn-passport-skill-footline">
-                        <span>
-                          {skillLevelDescription(confidence)}
-                        </span>
-
-                        <span>{confidence} out of 100</span>
-                      </div>
-
-                      {skill.description ? (
-                        <p className="rn-passport-skill-description">
-                          {skill.description}
-                        </p>
-                      ) : null}
-
-                      <div className="rn-passport-skill-metrics">
-                        <div className="rn-passport-skill-metric">
-                          <span>CONFIDENCE</span>
-
-                          <strong>
-                            {scoreLabel(profile.confidence_score)}
-                          </strong>
-                        </div>
-
-                        <div className="rn-passport-skill-metric">
-                          <span>LINKED EVIDENCE</span>
-
-                          <strong>{linkedEvidenceCount}</strong>
-                        </div>
-
-                        <div className="rn-passport-skill-metric">
-                          <span>PROFILE EVIDENCE</span>
-
-                          <strong>{evidenceCount}</strong>
-                        </div>
-                      </div>
-
-                      {strengths.length > 0 || gaps.length > 0 ? (
-                        <div className="rn-passport-insights">
-                          {strengths.length > 0 ? (
-                            <div className="rn-passport-insight">
-                              <div className="rn-passport-insight-title">
-                                <span aria-hidden="true">✓</span>
-                                Strengths
-                              </div>
-
-                              <ul>
-                                {strengths.map((strength, index) => (
-                                  <li
-                                    key={`${profile.id}-strength-${index}`}
-                                  >
-                                    {strength}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          ) : null}
-
-                          {gaps.length > 0 ? (
-                            <div className="rn-passport-insight">
-                              <div className="rn-passport-insight-title">
-                                <span aria-hidden="true">↗</span>
-                                Development
-                              </div>
-
-                              <ul>
-                                {gaps.map((gap, index) => (
-                                  <li key={`${profile.id}-gap-${index}`}>
-                                    {gap}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-
-                      {profileEvidence.length > 0 ? (
-                        <div className="rn-passport-evidence-list">
-                          <div className="rn-passport-evidence-title">
-                            Profile evidence
-                          </div>
-
-                          <ul>
-                            {profileEvidence.slice(0, 5).map(
-                              (evidence, index) => (
-                                <li
-                                  key={`${profile.id}-evidence-${index}`}
-                                >
-                                  {evidence}
-                                </li>
-                              ),
-                            )}
-                          </ul>
-                        </div>
-                      ) : null}
-
-                      {linkedEvidenceCount > 0 ? (
-                        <div className="rn-passport-evidence-list">
-                          <div className="rn-passport-evidence-title">
-                            Approved practical evidence
-                          </div>
-
-                          <ul>
-                            {evidenceItems
-                              .filter(
-                                (item) => item.skillName === skill.name,
-                              )
-                              .slice(0, 5)
-                              .map((item) => (
-                                <li key={item.id}>
-                                  {item.taskTitle} — {item.courseTitle}
-                                  {item.score !== null
-                                    ? ` (Score: ${item.score})`
-                                    : ""}
-                                </li>
-                              ))}
-                          </ul>
-                        </div>
-                      ) : null}
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-
-          <aside className="rn-passport-sidebar">
-            <section className="rn-passport-panel">
-              <div className="rn-passport-panel-heading">
-                <div>
-                  <div className="rn-passport-eyebrow">
-                    <span className="rn-passport-eyebrow-dot" />
-                    STRENGTHS
-                  </div>
-
-                  <h2>What you know</h2>
-                </div>
-
-                <span className="rn-passport-count">
-                  {strongSkills}
-                </span>
-              </div>
-
-              {profileRows.some(
-                (profile) =>
-                  clampScore(profile.confidence_score) >= 80,
-              ) ? (
-                <div className="rn-passport-mini-list">
-                  {profileRows
-                    .filter(
-                      (profile) =>
-                        clampScore(profile.confidence_score) >= 80,
-                    )
-                    .map((profile) => {
-                      const skill = skillMap.get(profile.skill_id);
-
-                      if (!skill) {
-                        return null;
-                      }
-
-                      return (
-                        <div
-                          className="rn-passport-mini-item"
-                          key={profile.id}
-                        >
-                          <span className="rn-passport-mini-indicator">
-                            ✓
-                          </span>
-
-                          <div className="rn-passport-mini-copy">
-                            <strong>{skill.name}</strong>
-
-                            <span>
-                              {scoreLabel(profile.confidence_score)}
-                              {" "}confidence
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              ) : (
-                <p className="rn-passport-muted">
-                  Skills with recorded confidence scores of 80% or above
-                  will appear here.
-                </p>
-              )}
-            </section>
-
-            <section className="rn-passport-panel">
-              <div className="rn-passport-panel-heading">
-                <div>
-                  <div className="rn-passport-eyebrow">
-                    <span className="rn-passport-eyebrow-dot" />
-                    DEVELOPMENT
-                  </div>
-
-                  <h2>Areas to strengthen</h2>
-                </div>
-
-                <span className="rn-passport-count">
-                  {developmentSkills.length}
-                </span>
-              </div>
-
-              {developmentSkills.length > 0 ? (
-                <div className="rn-passport-mini-list">
-                  {developmentSkills.map((profile) => {
-                    const skill = skillMap.get(profile.skill_id);
-
-                    if (!skill) {
-                      return null;
-                    }
-
-                    return (
-                      <div
-                        className="rn-passport-mini-item"
-                        key={profile.id}
-                      >
-                        <span className="rn-passport-mini-indicator rn-passport-mini-indicator-development">
-                          ↗
-                        </span>
-
-                        <div className="rn-passport-mini-copy">
-                          <strong>{skill.name}</strong>
-
-                          <span>
-                            {scoreLabel(profile.confidence_score)}
-                            {" "}confidence
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="rn-passport-muted">
-                  No tracked skills currently fall below the 50%
-                  confidence threshold.
-                </p>
-              )}
-            </section>
-
-            <section className="rn-passport-panel rn-passport-next-panel">
-              <div className="rn-passport-eyebrow">
-                <span className="rn-passport-eyebrow-dot" />
-                YOUR NEXT STEP
-              </div>
-
-              <div className="rn-passport-panel-heading">
-                <h2>Keep building your skills</h2>
-              </div>
-
-              <p>
-                Strengthen your capabilities, address development areas
-                and add approved practical evidence to your record.
-              </p>
-
-              <Link
-                href="/courses"
-                className="rn-passport-primary rn-passport-block-link"
-              >
-                Browse Courses →
-              </Link>
-
-              <Link
-                href="/student/practical-work"
-                className="rn-passport-secondary rn-passport-block-link"
-              >
-                Practical Work
-              </Link>
-
-              <Link
-                href="/student/certificates"
-                className="rn-passport-secondary rn-passport-block-link"
-              >
-                View Certificates
-              </Link>
-            </section>
-          </aside>
+          <Link
+            href="/student/practical-work"
+            className="sp-inline-link"
+          >
+            Open Practical Work →
+          </Link>
         </div>
 
-        {latestUpdate ? (
-          <p className="rn-passport-updated">
-            Profile last updated {formatDate(latestUpdate)}
-          </p>
-        ) : null}
+        {evidenceItems.length === 0 ? (
+          <div className="sp-empty">
+            <div className="sp-empty-icon" aria-hidden="true">
+              ✓
+            </div>
 
-        <footer className="rn-passport-footer">
-          <span>RuffNeck Learn</span>
-          <span>Evidence-Based Skill Passport</span>
-          <span>Practical AI &amp; Digital Skills</span>
-        </footer>
+            <h3>No verified practical evidence yet</h3>
+
+            <p>
+              Your profile may already contain confidence scores and
+              assessment evidence. Practical work will appear here
+              after a reviewer approves the submission and the system
+              successfully records the evidence against a linked skill
+              and course.
+            </p>
+
+            <Link
+              href="/student/practical-work"
+              className="sp-button sp-button-primary"
+            >
+              View Practical Work
+            </Link>
+          </div>
+        ) : (
+          <div className="sp-timeline">
+            {evidenceItems.map((item) => (
+              <article
+                className="sp-evidence-item"
+                key={item.id}
+              >
+                <div className="sp-evidence-top">
+                  <div className="sp-evidence-copy">
+                    <h3 className="sp-evidence-title">
+                      {item.title}
+                    </h3>
+
+                    <p className="sp-evidence-course">
+                      {item.courseTitle} · {item.skillName}
+                    </p>
+                  </div>
+
+                  <span className="sp-verified-badge">
+                    <span aria-hidden="true">✓</span>
+                    Verified
+                  </span>
+                </div>
+
+                <div className="sp-evidence-meta">
+                  <span>
+                    <strong>Evidence recorded:</strong>{" "}
+                    {formatDate(item.recordedAt)}
+                  </span>
+
+                  {item.submittedAt && (
+                    <span>
+                      <strong>Submitted:</strong>{" "}
+                      {formatDate(item.submittedAt)}
+                    </span>
+                  )}
+
+                  {item.reviewedAt && (
+                    <span>
+                      <strong>Reviewed:</strong>{" "}
+                      {formatDate(item.reviewedAt)}
+                    </span>
+                  )}
+
+                  {typeof item.score === "number" && (
+                    <span>
+                      <strong>Reviewer score:</strong>{" "}
+                      {clampScore(item.score)}%
+                    </span>
+                  )}
+                </div>
+
+                {item.evidenceFileName && (
+                  <div className="sp-evidence-file">
+                    Evidence file: {item.evidenceFileName}
+                  </div>
+                )}
+
+                {item.reviewerFeedback && (
+                  <div className="sp-evidence-text">
+                    <h4>Reviewer feedback</h4>
+                    <p>{item.reviewerFeedback}</p>
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="sp-panel">
+        <div className="sp-panel-heading">
+          <div>
+            <p className="sp-eyebrow">Skill profile</p>
+
+            <h2>Recorded capabilities</h2>
+
+            <p className="sp-panel-description">
+              These are the confidence levels, strengths, development
+              areas and profile evidence currently recorded for your
+              skills. A confidence score alone does not certify practical
+              ability.
+            </p>
+          </div>
+
+          <Link
+            href="/student/skills"
+            className="sp-inline-link"
+          >
+            My Skills
+          </Link>
+        </div>
+
+        {normalizedProfiles.length === 0 ? (
+          <div className="sp-empty">
+            <div className="sp-empty-icon" aria-hidden="true">
+              S
+            </div>
+
+            <h3>No skill profiles recorded</h3>
+
+            <p>
+              Complete available assessments and learning activities
+              to begin building your profile.
+            </p>
+
+            <Link
+              href="/courses"
+              className="sp-button sp-button-primary"
+            >
+              Browse Courses
+            </Link>
+          </div>
+        ) : (
+          <div className="sp-skills">
+            {normalizedProfiles.map((profile) => {
+              const skill = profile.skill;
+              const linkedEvidenceCount =
+                evidenceCountBySkill.get(profile.skill_id) ?? 0;
+              const profileEvidenceCount =
+                evidenceCount(profile.evidence);
+              const hasVerifiedEvidence =
+                linkedEvidenceCount > 0;
+
+              return (
+                <article
+                  className="sp-skill-card"
+                  key={profile.id}
+                >
+                  <div className="sp-skill-heading">
+                    <div className="sp-skill-main">
+                      <span className="sp-skill-category">
+                        {categoryLabel(skill?.category ?? null)}
+                      </span>
+
+                      <h3 className="sp-skill-name">
+                        {skill?.name ?? "Learning skill"}
+                      </h3>
+
+                      {skill?.description && (
+                        <p className="sp-skill-description">
+                          {skill.description}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="sp-skill-score">
+                      <strong>{profile.score}%</strong>
+                      <span>Profile confidence</span>
+                    </div>
+                  </div>
+
+                  <div
+                    className="sp-progress"
+                    role="progressbar"
+                    aria-label={`${skill?.name ?? "Skill"} profile confidence`}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={profile.score}
+                  >
+                    <div
+                      className="sp-progress-fill"
+                      style={{ width: `${profile.score}%` }}
+                    />
+                  </div>
+
+                  <div
+                    className={[
+                      "sp-skill-status",
+                      hasVerifiedEvidence
+                        ? "sp-skill-status-verified"
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  >
+                    <span aria-hidden="true">
+                      {hasVerifiedEvidence ? "✓" : "ⓘ"}
+                    </span>
+
+                    <span>
+                      {hasVerifiedEvidence
+                        ? `${linkedEvidenceCount} verified practical ${
+                            linkedEvidenceCount === 1
+                              ? "evidence record"
+                              : "evidence records"
+                          } linked to this skill.`
+                        : "No verified practical evidence linked to this skill yet."}
+                    </span>
+                  </div>
+
+                  <div className="sp-skill-details">
+                    <div className="sp-skill-detail">
+                      <span>Confidence</span>
+                      <strong>{profile.score}%</strong>
+                    </div>
+
+                    <div className="sp-skill-detail">
+                      <span>Linked evidence</span>
+                      <strong>{linkedEvidenceCount}</strong>
+                    </div>
+
+                    <div className="sp-skill-detail">
+                      <span>Profile evidence</span>
+                      <strong>{profileEvidenceCount}</strong>
+                    </div>
+                  </div>
+
+                  {(profile.strengths ||
+                    profile.gaps ||
+                    profile.evidence) && (
+                    <div className="sp-evidence-text">
+                      {profile.strengths && (
+                        <>
+                          <h4>Strengths</h4>
+                          <p>{profile.strengths}</p>
+                        </>
+                      )}
+
+                      {profile.gaps && (
+                        <>
+                          <h4 style={{ marginTop: 13 }}>
+                            Development areas
+                          </h4>
+                          <p>{profile.gaps}</p>
+                        </>
+                      )}
+
+                      {profile.evidence && (
+                        <>
+                          <h4 style={{ marginTop: 13 }}>
+                            Profile evidence
+                          </h4>
+                          <p>{profile.evidence}</p>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {profile.skill_level && (
+                    <p className="sp-muted">
+                      Recorded level: {formatLevel(profile.skill_level)}
+                    </p>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <div className="sp-lower-grid">
+        <section className="sp-lower-panel">
+          <p className="sp-eyebrow">Profile confidence</p>
+
+          <h2>What you know</h2>
+
+          <p className="sp-lower-panel-description">
+            Skills currently recorded with confidence scores of 80%
+            or above. This list reflects profile scores, not a claim
+            that each skill has verified practical evidence.
+          </p>
+
+          {strongSkills.length > 0 ? (
+            <div className="sp-mini-list">
+              {strongSkills.map((profile) => (
+                <div
+                  className="sp-mini-item"
+                  key={profile.id}
+                >
+                  <span className="sp-mini-name">
+                    <span className="sp-mini-check" aria-hidden="true">
+                      ✓
+                    </span>
+
+                    {profile.skill?.name ?? "Learning skill"}
+                  </span>
+
+                  <span className="sp-mini-score">
+                    {profile.score}% confidence
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="sp-muted">
+              No skills currently have a recorded confidence score of
+              80% or above.
+            </p>
+          )}
+        </section>
+
+        <section className="sp-lower-panel">
+          <p className="sp-eyebrow">Development</p>
+
+          <h2>Areas to strengthen</h2>
+
+          <p className="sp-lower-panel-description">
+            Skills with recorded profile confidence below 50%.
+          </p>
+
+          {developmentAreas.length > 0 ? (
+            <div className="sp-mini-list">
+              {developmentAreas.map((profile) => (
+                <div
+                  className="sp-mini-item"
+                  key={profile.id}
+                >
+                  <span className="sp-mini-name">
+                    {profile.skill?.name ?? "Learning skill"}
+                  </span>
+
+                  <span className="sp-mini-score">
+                    {profile.score}% confidence
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="sp-muted">
+              No tracked skills currently fall below the 50% profile
+              confidence threshold. This does not mean that every
+              skill has been practically verified.
+            </p>
+          )}
+        </section>
       </div>
-    </main>
+
+      <section className="sp-next">
+        <p className="sp-eyebrow">Your next step</p>
+
+        <h2>Keep building your skills</h2>
+
+        <p>
+          Continue learning, complete practical tasks, respond to
+          reviewer feedback and build evidence that can be checked
+          independently. Approved work will appear in your Skill
+          Passport after the evidence is recorded successfully.
+        </p>
+
+        <div className="sp-next-actions">
+          <Link
+            href="/courses"
+            className="sp-button sp-button-primary"
+          >
+            Browse Courses →
+          </Link>
+
+          <Link
+            href="/student/practical-work"
+            className="sp-button"
+          >
+            Practical Work
+          </Link>
+
+          <Link
+            href="/student/certificates"
+            className="sp-button"
+          >
+            View Certificates
+          </Link>
+        </div>
+      </section>
+
+      <p className="sp-updated">
+        Profile last updated {formatDate(latestUpdate)}
+      </p>
+    </div>
   );
 }
