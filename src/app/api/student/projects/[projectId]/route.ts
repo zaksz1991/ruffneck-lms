@@ -6,6 +6,10 @@ type Project = {
   course_id: string;
 };
 
+type Course = {
+  id: string;
+};
+
 type SubmissionStatus =
   | "draft"
   | "submitted"
@@ -27,20 +31,39 @@ type RequestBody = {
 const MAX_SUBMISSION_TEXT_LENGTH = 50_000;
 const MAX_SUBMISSION_URL_LENGTH = 2_048;
 
-function isValidSubmissionUrl(
-  value: string
-) {
+function jsonError(message: string, status: number) {
+  return NextResponse.json(
+    { error: message },
+    { status },
+  );
+}
+
+function isValidSubmissionUrl(value: string) {
   try {
     const url = new URL(value);
 
     return (
       (url.protocol === "http:" ||
         url.protocol === "https:") &&
-      Boolean(url.hostname)
+      Boolean(url.hostname) &&
+      !url.username &&
+      !url.password
     );
   } catch {
     return false;
   }
+}
+
+function normalizeString(value: unknown): string | null {
+  if (value === undefined || value === null) {
+    return "";
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  return value.trim();
 }
 
 export async function POST(
@@ -49,90 +72,96 @@ export async function POST(
     params: Promise<{
       projectId: string;
     }>;
-  }
+  },
 ) {
   try {
     const { projectId } = await context.params;
 
-    if (!projectId) {
-      return NextResponse.json(
-        {
-          error: "Project ID is required.",
-        },
-        { status: 400 }
+    if (!projectId || !projectId.trim()) {
+      return jsonError("Project ID is required.", 400);
+    }
+
+    /*
+     * Reject oversized requests before parsing the JSON.
+     * This is a basic request-size guard; hosting platforms may
+     * also impose their own request-size limits.
+     */
+    const contentLength = Number(
+      request.headers.get("content-length") || 0,
+    );
+
+    const maximumRequestBytes =
+      MAX_SUBMISSION_TEXT_LENGTH +
+      MAX_SUBMISSION_URL_LENGTH +
+      10_000;
+
+    if (
+      Number.isFinite(contentLength) &&
+      contentLength > maximumRequestBytes
+    ) {
+      return jsonError(
+        "The submission is too large. Reduce the written work and try again.",
+        413,
       );
     }
 
-    const supabase =
-      await createClient();
+    const supabase = await createClient();
 
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser();
 
-    if (!user) {
-      return NextResponse.json(
-        {
-          error:
-            "Authentication required.",
-        },
-        { status: 401 }
-      );
+    if (authError || !user) {
+      return jsonError("Authentication required.", 401);
     }
 
     let body: RequestBody;
 
     try {
-      body =
-        (await request.json()) as RequestBody;
+      body = (await request.json()) as RequestBody;
     } catch {
-      return NextResponse.json(
-        {
-          error:
-            "Invalid request body.",
-        },
-        { status: 400 }
-      );
+      return jsonError("Invalid request body.", 400);
     }
 
     if (
       body.status !== "draft" &&
       body.status !== "submitted"
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "Invalid submission status.",
-        },
-        { status: 400 }
+      return jsonError("Invalid submission status.", 400);
+    }
+
+    const requestedStatus = body.status;
+
+    const submissionText = normalizeString(
+      body.submissionText,
+    );
+
+    const submissionUrl = normalizeString(
+      body.submissionUrl,
+    );
+
+    if (submissionText === null) {
+      return jsonError(
+        "Written submission must be text.",
+        400,
       );
     }
 
-    const status =
-      body.status;
-
-    const submissionText =
-      typeof body.submissionText ===
-      "string"
-        ? body.submissionText.trim()
-        : "";
-
-    const submissionUrl =
-      typeof body.submissionUrl ===
-      "string"
-        ? body.submissionUrl.trim()
-        : "";
+    if (submissionUrl === null) {
+      return jsonError(
+        "The supporting project URL must be text.",
+        400,
+      );
+    }
 
     if (
       submissionText.length >
       MAX_SUBMISSION_TEXT_LENGTH
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "The written submission is too long.",
-        },
-        { status: 400 }
+      return jsonError(
+        `The written submission exceeds the ${MAX_SUBMISSION_TEXT_LENGTH.toLocaleString()}-character limit.`,
+        400,
       );
     }
 
@@ -140,315 +169,315 @@ export async function POST(
       submissionUrl.length >
       MAX_SUBMISSION_URL_LENGTH
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "The supporting project link is too long.",
-        },
-        { status: 400 }
+      return jsonError(
+        "The supporting project link is too long.",
+        400,
       );
     }
 
     if (
-      status === "submitted" &&
+      requestedStatus === "submitted" &&
       !submissionText &&
       !submissionUrl
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "Provide written work or a supporting project link before submitting.",
-        },
-        { status: 400 }
+      return jsonError(
+        "Provide written work or a supporting project link before submitting.",
+        400,
       );
     }
 
     if (
       submissionUrl &&
-      !isValidSubmissionUrl(
-        submissionUrl
-      )
+      !isValidSubmissionUrl(submissionUrl)
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "Enter a valid supporting project URL using http:// or https://.",
-        },
-        { status: 400 }
+      return jsonError(
+        "Enter a valid project URL using http:// or https://. Links containing embedded usernames or passwords are not accepted.",
+        400,
       );
     }
 
+    /*
+     * Only published projects can receive submissions.
+     */
     const {
       data: projectData,
       error: projectError,
-    } =
-      await supabase
-        .from("course_projects")
-        .select(
-          "id, course_id"
-        )
-        .eq("id", projectId)
-        .eq("is_published", true)
-        .maybeSingle();
+    } = await supabase
+      .from("course_projects")
+      .select("id, course_id")
+      .eq("id", projectId)
+      .eq("is_published", true)
+      .maybeSingle();
 
     if (projectError) {
       console.error(
         "Project lookup failed:",
-        projectError
+        projectError.message,
       );
 
-      return NextResponse.json(
-        {
-          error:
-            "Unable to load the project.",
-        },
-        { status: 500 }
+      return jsonError(
+        "Unable to load the project. Please try again.",
+        500,
       );
     }
 
-    const project =
-      projectData as unknown as
-        | Project
-        | null;
+    const project = projectData as Project | null;
 
     if (!project) {
-      return NextResponse.json(
-        {
-          error:
-            "Project not found.",
-        },
-        { status: 404 }
+      return jsonError(
+        "Project not found or no longer available.",
+        404,
       );
     }
 
     /*
-     * A learner may submit project work while
-     * actively enrolled or after the course has
-     * been marked completed.
-     *
-     * Project submission does not itself complete
-     * the course. Course completion and certificate
-     * eligibility are verified separately.
+     * Keep submissions limited to courses that remain published.
+     */
+    const {
+      data: courseData,
+      error: courseError,
+    } = await supabase
+      .from("courses")
+      .select("id")
+      .eq("id", project.course_id)
+      .eq("status", "published")
+      .maybeSingle();
+
+    if (courseError) {
+      console.error(
+        "Project course lookup failed:",
+        courseError.message,
+      );
+
+      return jsonError(
+        "Unable to verify the course.",
+        500,
+      );
+    }
+
+    const course = courseData as Course | null;
+
+    if (!course) {
+      return jsonError(
+        "This course is no longer available.",
+        404,
+      );
+    }
+
+    /*
+     * Active and completed enrollments may submit project work.
+     * A project submission does not itself complete the course.
      */
     const {
       data: enrollment,
       error: enrollmentError,
-    } =
-      await supabase
-        .from("enrollments")
-        .select(
-          "id, enrollment_status"
-        )
-        .eq(
-          "student_id",
-          user.id
-        )
-        .eq(
-          "course_id",
-          project.course_id
-        )
-        .in(
-          "enrollment_status",
-          [
-            "active",
-            "completed",
-          ]
-        )
-        .maybeSingle();
+    } = await supabase
+      .from("enrollments")
+      .select("id, enrollment_status")
+      .eq("student_id", user.id)
+      .eq("course_id", project.course_id)
+      .in("enrollment_status", ["active", "completed"])
+      .maybeSingle();
 
     if (enrollmentError) {
       console.error(
         "Enrollment lookup failed:",
-        enrollmentError
+        enrollmentError.message,
       );
 
-      return NextResponse.json(
-        {
-          error:
-            "Unable to verify course enrollment.",
-        },
-        { status: 500 }
+      return jsonError(
+        "Unable to verify course enrollment.",
+        500,
       );
     }
 
     if (!enrollment) {
-      return NextResponse.json(
-        {
-          error:
-            "You must be enrolled in this course.",
-        },
-        { status: 403 }
+      return jsonError(
+        "You must be enrolled in this course to submit project work.",
+        403,
       );
     }
 
+    /*
+     * Read the learner's existing submission before deciding
+     * whether an update is permitted.
+     */
     const {
       data: existingData,
       error: existingError,
-    } =
-      await supabase
-        .from("project_submissions")
-        .select(
-          "id, status"
-        )
-        .eq(
-          "project_id",
-          projectId
-        )
-        .eq(
-          "student_id",
-          user.id
-        )
-        .maybeSingle();
+    } = await supabase
+      .from("project_submissions")
+      .select("id, status")
+      .eq("project_id", projectId)
+      .eq("student_id", user.id)
+      .maybeSingle();
 
     if (existingError) {
       console.error(
         "Existing submission lookup failed:",
-        existingError
+        existingError.message,
       );
 
-      return NextResponse.json(
-        {
-          error:
-            "Unable to check the existing submission.",
-        },
-        { status: 500 }
+      return jsonError(
+        "Unable to check the existing submission.",
+        500,
       );
     }
 
-    const existing =
-      existingData as unknown as
-        | Submission
-        | null;
+    const existing = existingData as Submission | null;
 
     /*
-     * Only drafts and explicitly returned
-     * revision_required submissions may be edited.
+     * Submitted, under-review and approved work is locked.
+     * Only a draft or a submission returned for revision is editable.
      */
     if (
       existing &&
-      ![
-        "draft",
-        "revision_required",
-      ].includes(
-        existing.status
+      !["draft", "revision_required"].includes(
+        existing.status,
       )
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "This submission is locked while it is being reviewed or after approval.",
-        },
-        { status: 409 }
+      return jsonError(
+        "This submission is locked while it is being reviewed or after approval.",
+        409,
       );
     }
 
+    const timestamp = new Date().toISOString();
+
+    const isResubmission =
+      requestedStatus === "submitted";
+
     /*
-     * A revision_required submission becomes a
-     * normal editable draft when the learner saves
-     * without submitting.
+     * Critical revision behavior:
      *
-     * Once submitted, it enters the review workflow.
+     * 1. Saving changes while revision is required preserves the
+     *    revision_required status and existing assessor feedback.
+     *
+     * 2. The learner can keep editing and saving a draft without
+     *    losing the review context.
+     *
+     * 3. Actual resubmission clears the previous score and review
+     *    fields so the new work can be evaluated independently.
      */
-    const timestamp =
-      new Date().toISOString();
+    const effectiveStatus: SubmissionStatus =
+      existing?.status === "revision_required" &&
+      requestedStatus === "draft"
+        ? "revision_required"
+        : requestedStatus;
 
-    const payload = {
-      project_id: projectId,
-      student_id: user.id,
-
-      submission_text:
-        submissionText || null,
-
-      submission_url:
-        submissionUrl || null,
-
-      status,
-
-      /*
-       * A new submission must be reviewed again.
-       * Previous review results must not survive
-       * a resubmission.
-       */
-      score: null,
-      feedback: null,
-      reviewed_at: null,
-      reviewed_by: null,
-
-      submitted_at:
-        status === "submitted"
-          ? timestamp
-          : null,
-
+    const editableFields = {
+      submission_text: submissionText || null,
+      submission_url: submissionUrl || null,
+      status: effectiveStatus,
       updated_at: timestamp,
     };
 
-    const {
-      error: submissionError,
-    } = await supabase
-      .from("project_submissions")
-      .upsert(
-        payload,
-        {
-          onConflict:
-            "project_id,student_id",
-        }
-      );
+    let submissionError: {
+      code?: string;
+      message: string;
+    } | null = null;
+
+    if (existing) {
+      const updatePayload = isResubmission
+        ? {
+            ...editableFields,
+            status: "submitted" as const,
+            score: null,
+            feedback: null,
+            reviewed_at: null,
+            reviewed_by: null,
+            submitted_at: timestamp,
+          }
+        : editableFields;
+
+      const { error } = await supabase
+        .from("project_submissions")
+        .update(updatePayload)
+        .eq("id", existing.id)
+        .eq("student_id", user.id);
+
+      submissionError = error;
+    } else {
+      const insertPayload = {
+        project_id: projectId,
+        student_id: user.id,
+        ...editableFields,
+
+        score: null,
+        feedback: null,
+        reviewed_at: null,
+        reviewed_by: null,
+
+        submitted_at: isResubmission
+          ? timestamp
+          : null,
+      };
+
+      const { error } = await supabase
+        .from("project_submissions")
+        .insert(insertPayload);
+
+      submissionError = error;
+    }
 
     if (submissionError) {
       console.error(
         "Project submission save failed:",
-        submissionError
+        submissionError.message,
       );
 
-      return NextResponse.json(
-        {
-          error:
-            "Unable to save the project submission.",
-        },
-        { status: 500 }
+      if (submissionError.code === "23505") {
+        return jsonError(
+          "A submission was created at the same time. Refresh the page to load the latest version.",
+          409,
+        );
+      }
+
+      return jsonError(
+        "Unable to save the project submission. Please try again.",
+        500,
       );
     }
 
     /*
-     * Activity logging is supplementary analytics.
-     * Failure here must not invalidate the
-     * successful project save.
+     * Activity tracking is supplementary. Failure must not invalidate
+     * a successfully saved submission.
      */
-    const {
-      error: activityError,
-    } = await supabase
+    const { error: activityError } = await supabase
       .from("learning_activity")
       .insert({
         student_id: user.id,
-        course_id:
-          project.course_id,
-        activity_type:
-          status === "submitted"
-            ? "project_submitted"
-            : "project_draft_saved",
+        course_id: project.course_id,
+        activity_type: isResubmission
+          ? "project_submitted"
+          : "project_draft_saved",
         metadata: {
           project_id: projectId,
-          status,
+          requested_status: requestedStatus,
+          saved_status: effectiveStatus,
+          is_resubmission: isResubmission,
         },
       });
 
     if (activityError) {
       console.error(
         "Project activity logging failed:",
-        activityError
+        activityError.message,
       );
     }
 
     return NextResponse.json({
-      message:
-        status === "submitted"
-          ? "Project submitted for review."
-          : "Draft saved.",
+      message: isResubmission
+        ? "Project submitted for review."
+        : existing?.status === "revision_required"
+          ? "Your draft was saved. The assessor feedback remains available until you resubmit."
+          : "Draft saved successfully.",
+      status: effectiveStatus,
     });
   } catch (error) {
     console.error(
       "Project submission API error:",
-      error
+      error,
     );
 
     return NextResponse.json(
@@ -456,7 +485,7 @@ export async function POST(
         error:
           "An unexpected error occurred while saving the project submission.",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
